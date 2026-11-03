@@ -7,12 +7,8 @@ out/
 next-env.d.ts
 *.tsbuildinfo
 
-# 動かしている間に増えるデータ（予約・カルテ・オーナーが直したルールなど）
-data/
-
-# 鍵・秘密（Claude API キー、LINE のチャネル秘密など）
-.env
-.env*.local
+# 鍵・秘密（Claude API キー、LINE のチャネル秘密、オーナー用の合言葉など）
+.env*
 
 # ログ
 npm-debug.log*

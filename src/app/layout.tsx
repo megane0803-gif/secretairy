@@ -4,9 +4,6 @@ import { TabNav } from "@/components/TabNav";
 import { getShop, getVisibleTabs } from "@/lib/settings";
 import "./globals.css";
 
-// 承認待ちの数やルールは毎回読み直す（足したルールをすぐ効かせるため）
-export const dynamic = "force-dynamic";
-
 export const metadata: Metadata = {
   title: "SecretAIry",
   description: "美容室のための AI 秘書（架空の店）",
