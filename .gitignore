@@ -1,0 +1,22 @@
+# 依存
+node_modules/
+
+# Next.js の作業物
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# 鍵・秘密（Claude API キー、LINE のチャネル秘密、オーナー用の合言葉など）
+.env*
+
+# ログ
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS・エディタ
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

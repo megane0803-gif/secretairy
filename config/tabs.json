@@ -1,0 +1,10 @@
+{
+  "home": { "visible": true },
+  "reservations": { "visible": true },
+  "karte": { "visible": true },
+  "ads": { "visible": true },
+  "accounting": { "visible": true },
+  "todo": { "visible": true },
+  "posts": { "visible": true },
+  "rules": { "visible": true }
+}

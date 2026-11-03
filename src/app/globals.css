@@ -1,0 +1,288 @@
+:root {
+  --bg: #f7f5f2;
+  --surface: #ffffff;
+  --text: #222222;
+  --muted: #6b6b6b;
+  --line: #e4e0da;
+  --accent: #b5654a;
+  --accent-soft: #f6e6df;
+  --ok: #2f7d4f;
+  --warn: #b7791f;
+  --radius: 12px;
+  --font: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1a19;
+    --surface: #262422;
+    --text: #f1eeea;
+    --muted: #a8a29b;
+    --line: #3a3633;
+    --accent: #e08b6d;
+    --accent-soft: #3b2a24;
+    --ok: #6fcf97;
+    --warn: #f2c063;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+a { color: inherit; }
+
+h1 { font-size: 1.5rem; margin: 0.5rem 0 1rem; }
+h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
+
+.num { font-variant-numeric: tabular-nums; }
+
+/* ---- 3列（PC）/ 1列（スマホ） ---- */
+
+.shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  padding: 16px;
+  min-width: 0;
+}
+
+.shell > *, .page-main, .page-right { min-width: 0; }
+
+@media (min-width: 1024px) {
+  .shell { grid-template-columns: 200px 1fr; grid-template-rows: 1fr; }
+  .page {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 24px;
+    padding: 24px;
+  }
+  .page-right {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+  }
+}
+
+/* ---- 左のタブ ---- */
+
+.tabnav {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  padding: 8px 16px;
+}
+
+.tabnav-brand { display: flex; flex-direction: column; margin-bottom: 4px; }
+.tabnav-brand strong { font-size: 1.15rem; color: var(--accent); }
+.tabnav-brand span { font-size: 0.8rem; color: var(--muted); }
+
+.tabnav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.tabnav a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tabnav a[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+@media (min-width: 1024px) {
+  .tabnav {
+    border-bottom: 0;
+    border-right: 1px solid var(--line);
+    padding: 24px 12px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .tabnav-brand { margin: 0 8px 24px; }
+  .tabnav ul { flex-direction: column; overflow: visible; }
+}
+
+/* ---- 承認待ち N件 ---- */
+
+.pending {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.pending strong { font-size: 1.4rem; color: var(--text); }
+.pending.has { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.pending.has strong { color: var(--accent); }
+.pending-go { margin-left: auto; }
+
+/* ---- 部品 ---- */
+
+.bignums {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.bignum {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.bignum-label { color: var(--muted); font-size: 0.9rem; }
+.bignum-value { font-size: 2.6rem; font-weight: 700; line-height: 1.1; }
+.bignum-unit { color: var(--muted); font-size: 0.85rem; }
+
+.minibar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.minibar span { display: block; height: 100%; background: var(--accent); }
+
+.checked { color: var(--ok); margin: 4px 0; }
+
+.fold {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 8px;
+  color: var(--muted);
+}
+
+.fold summary { cursor: pointer; }
+
+.notyet {
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.inputstub { display: flex; flex-direction: column; gap: 8px; }
+
+.inputstub textarea {
+  width: 100%;
+  font: inherit;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  resize: vertical;
+}
+
+.inputstub button {
+  font: inherit;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  opacity: 0.5;
+}
+
+/* ---- 1週間の台帳 ---- */
+
+.week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .week { grid-template-columns: 1fr; }
+}
+
+.day {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.day.closed { opacity: 0.55; }
+.day-date { font-weight: 700; }
+.day-count { font-size: 1.8rem; font-weight: 700; line-height: 1; }
+.day-hours { color: var(--muted); font-size: 0.8rem; }
+
+/* ---- ルール ---- */
+
+.rules { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+
+.rule {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.rule.locked { border-color: var(--warn); }
+
+.tag {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.tag.check { background: transparent; color: var(--ok); border: 1px solid var(--ok); }
+.tag.text { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+
+.karte-headings { padding-left: 1.2rem; }
+.karte-headings small { display: block; color: var(--muted); }
