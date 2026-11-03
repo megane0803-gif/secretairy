@@ -1,0 +1,10 @@
+{
+  "headings": [
+    { "id": "visit", "label": "来店日とメニュー" },
+    { "id": "request", "label": "お客様のご希望" },
+    { "id": "done", "label": "したこと（薬剤・時間）" },
+    { "id": "next", "label": "次回のおすすめ" },
+    { "id": "selfReport", "label": "お客様が話したこと（体のこと）", "note": "お客様の言葉をそのまま書く。AI は良い悪いを判断しない" },
+    { "id": "memo", "label": "スタッフのメモ" }
+  ]
+}

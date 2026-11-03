@@ -1,0 +1,8 @@
+[
+  { "id": "cut", "name": "カット", "minutes": 60, "price": 4800 },
+  { "id": "color", "name": "カラー", "minutes": 90, "price": 6800 },
+  { "id": "cut_color", "name": "カット＋カラー", "minutes": 120, "price": 10800 },
+  { "id": "perm", "name": "パーマ", "minutes": 120, "price": 9800 },
+  { "id": "straight", "name": "縮毛矯正", "minutes": 180, "price": 15800 },
+  { "id": "headspa", "name": "ヘッドスパ", "minutes": 30, "price": 3300 }
+]

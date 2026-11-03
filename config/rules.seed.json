@@ -1,0 +1,36 @@
+[
+  {
+    "id": "seed-lead-time",
+    "level": "global",
+    "label": "予約は来店の3時間前まで",
+    "check": { "kind": "minLeadMinutes", "value": 180 }
+  },
+  {
+    "id": "seed-new-per-day",
+    "level": "tab",
+    "tab": "reservations",
+    "label": "初めてのお客様は1日4人まで",
+    "check": { "kind": "maxNewCustomersPerDay", "value": 4 }
+  },
+  {
+    "id": "seed-color-buffer",
+    "level": "menu",
+    "menuId": "color",
+    "label": "カラーの後は15分あける（片付け）",
+    "check": { "kind": "bufferAfterMinutes", "value": 15 }
+  },
+  {
+    "id": "seed-straight-lead",
+    "level": "menu",
+    "menuId": "straight",
+    "label": "縮毛矯正は前の日までに予約",
+    "check": { "kind": "minLeadMinutes", "value": 1440 }
+  },
+  {
+    "id": "seed-no-face",
+    "level": "tab",
+    "tab": "posts",
+    "label": "お客様の顔が分かる写真は載せない",
+    "check": { "kind": "text" }
+  }
+]

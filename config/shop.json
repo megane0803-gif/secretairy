@@ -1,0 +1,17 @@
+{
+  "name": "ヘアサロン こもれび（架空の店）",
+  "timezone": "Asia/Tokyo",
+  "seats": 3,
+  "slotMinutes": 30,
+  "holdExpiresHours": 24,
+  "hours": {
+    "mon": { "open": "10:00", "close": "19:00" },
+    "tue": null,
+    "wed": { "open": "10:00", "close": "19:00" },
+    "thu": { "open": "10:00", "close": "19:00" },
+    "fri": { "open": "10:00", "close": "20:00" },
+    "sat": { "open": "09:00", "close": "18:00" },
+    "sun": { "open": "09:00", "close": "18:00" }
+  },
+  "closedDates": []
+}
