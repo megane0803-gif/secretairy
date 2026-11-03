@@ -1,9 +1,11 @@
 import { TabPage } from "@/components/TabPage";
-import { InputStub, NotYet, Panel } from "@/components/parts";
+import { CustomerName, Fold, InputStub, NotYet, Panel } from "@/components/parts";
+import { getCustomers } from "@/lib/data/seed";
 import { getKarteHeadings } from "@/lib/settings";
 
 export default function KartePage() {
   const headings = getKarteHeadings();
+  const customers = getCustomers();
   return (
     <TabPage
       tab="karte"
@@ -14,16 +16,26 @@ export default function KartePage() {
         </Panel>
       }
     >
-      <h2>カルテの見出し</h2>
-      <ol className="karte-headings">
-        {headings.map((h) => (
-          <li key={h.id}>
-            {h.label}
-            {h.note && <small>{h.note}</small>}
+      <h2>お客様（{customers.length}人・みな架空）</h2>
+      <ul className="customers">
+        {customers.map((c) => (
+          <li key={c.id}>
+            <CustomerName surname={c.surname} fictional={c.fictional} />
+            {c.firstVisit && <span className="slot-first">初めての方</span>}
           </li>
         ))}
-      </ol>
+      </ul>
       <NotYet>お客様ごとのカルテがここに並びます</NotYet>
+      <Fold summary="カルテの見出し">
+        <ol className="karte-headings">
+          {headings.map((h) => (
+            <li key={h.id}>
+              {h.label}
+              {h.note && <small>{h.note}</small>}
+            </li>
+          ))}
+        </ol>
+      </Fold>
     </TabPage>
   );
 }

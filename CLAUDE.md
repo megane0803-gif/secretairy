@@ -27,6 +27,7 @@ npm run build      # 本番ビルド（push の前に通す）
 
 - メニュー・営業時間・席数・カルテの見出し・タブの表示・ルールは `config/` に置き、`src/lib/settings.ts`（ルールは `src/lib/rules/store.ts`）を通して読む。
 - 画面のコードで `config/*.json` を直接 import しない。
+- 架空のデータ（`seed/`）は `src/lib/data/seed.ts` を通して読む。日付は「何番目の営業日（0 = 今日）＋時刻」で持ち、定休日には置かない。お客様は名字だけで、画面では必ず「架空」の札を出す。
 - 例のルールは `config/rules.seed.json` だけ。作り手の考えで店の決まりを足さない。
 - 鍵つきの2つだけは仕組みの約束なのでコードに書く。
 
@@ -50,6 +51,7 @@ npm run build      # 本番ビルド（push の前に通す）
 
 ```
 config/            店ごとの設定（JSON）
+seed/              架空のデータの最初の状態（お客様・予約・広告・経理・ToDo）
 docs/SPEC.md       仕様書
 src/app/<tab>/     8つのタブの画面
 src/components/    共通の部品

@@ -1,0 +1,18 @@
+[
+  { "id": "r01", "customerId": "c01", "menuId": "cut", "day": 0, "start": "10:00", "status": "confirmed" },
+  { "id": "r02", "customerId": "c02", "menuId": "color", "day": 0, "start": "11:30", "status": "confirmed" },
+  { "id": "r03", "customerId": "c03", "menuId": "straight", "day": 0, "start": "14:00", "status": "confirmed" },
+  { "id": "r04", "customerId": "c04", "menuId": "cut_color", "day": 1, "start": "13:00", "status": "confirmed" },
+  { "id": "r05", "customerId": "c05", "menuId": "perm", "day": 2, "start": "10:30", "status": "confirmed" },
+  { "id": "r06", "customerId": "c06", "menuId": "cut", "day": 2, "start": "16:00", "status": "confirmed" },
+  { "id": "r07", "customerId": "c07", "menuId": "color", "day": 4, "start": "11:00", "status": "confirmed" },
+  { "id": "r08", "customerId": "c09", "menuId": "cut", "day": 4, "start": "15:00", "status": "confirmed" },
+  { "id": "r09", "customerId": "c08", "menuId": "straight", "day": 5, "start": "10:00", "status": "confirmed" },
+  { "id": "r10", "customerId": "c01", "menuId": "headspa", "day": 5, "start": "12:00", "status": "confirmed" },
+  { "id": "r11", "customerId": "c10", "menuId": "cut", "day": 5, "start": "17:30", "status": "confirmed" },
+  { "id": "r12", "customerId": "c02", "menuId": "headspa", "day": 6, "start": "14:30", "status": "confirmed" },
+  { "id": "r13", "customerId": "c05", "menuId": "color", "day": 7, "start": "18:00", "status": "confirmed" },
+  { "id": "r14", "customerId": "c07", "menuId": "cut", "day": 9, "start": "10:00", "status": "confirmed" },
+  { "id": "r15", "customerId": "c03", "menuId": "cut", "day": 10, "start": "13:30", "status": "confirmed" },
+  { "id": "r16", "customerId": "c08", "menuId": "headspa", "day": 11, "start": "15:00", "status": "confirmed" }
+]

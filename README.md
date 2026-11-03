@@ -37,6 +37,8 @@ http://localhost:3000 を開きます。
 | `config/tabs.json` | タブを出す・隠す |
 | `config/rules.seed.json` | 例のルール（ルールはルールのタブから変えます） |
 
+架空のお客様・予約などの最初の状態は `seed/` にあります（お客様はみな架空です）。
+
 ## 文書
 
 - [仕様書](docs/SPEC.md)
