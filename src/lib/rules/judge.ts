@@ -18,7 +18,7 @@ export type Booking = {
   menuIds: string[];
   /** 初めての方 */
   newCustomer: boolean;
-  /** だれの予約か（「同じ日に入れない組み合わせ」で、同じ方のその日のほかの予約も見るため。無くてもよい） */
+  /** だれの予約か（相手のメニューつきの「同じ日に不可」で、同じ方のその日のほかの予約も見るため。無くてもよい） */
   customerId?: string;
 };
 
@@ -178,6 +178,8 @@ export function judge(input: JudgeInput): Verdict {
         break;
       }
       case "noSameDay": {
+        // 相手のメニューのある「同じ日に不可」（組み合わせ）は下でまとめて見る
+        if (c.with) break;
         const ok = booking.date !== now.date;
         results.push({ rule, ok, reason: ok ? "来店の日より前の予約です" : "来店と同じ日の予約です" });
         break;
@@ -192,21 +194,22 @@ export function judge(input: JudgeInput): Verdict {
         break;
       }
       case "bufferAfterMinutes":
-      case "notTogether":
       case "text":
-        break; // 間を空ける・同じ日に入れない組み合わせは下でまとめて、文はプログラムでは判定しない
+        break; // 間を空けるは下でまとめて、文はプログラムでは判定しない
     }
   }
 
-  // 同じ日に入れない組み合わせ：この予約のメニューと、同じ方のその日のほかの予約のメニューを合わせて、
-  // ルールの2つのメニューがどちらも入っていて、そのどちらかがこの予約にあれば断る（どちらのメニューに付けたルールでも効く）
+  // 同じ日に不可（相手のメニューつき）：この予約のメニュー（1回の来店の組み合わせ）と、同じ方のその日のほかの予約のメニューを合わせて、
+  // ルールの2つのメニューがどちらも入っていて、そのどちらかがこの予約にあれば断る（どちらのメニューに付けたルールでも効く）。
+  // 組み合わせのメニュー（カット＋カラー など）は中身に広げてから見る。同じ組み合わせのルールは strictest.ts で1つにまとめる
   const mine = new Set(situation.menuIds);
   const sameCustomer = booking.customerId ? sameDay.filter((b) => b.customerId === booking.customerId) : [];
   const theirs = new Set(expandMenuIds(sameCustomer.flatMap((b) => b.menuIds), menus));
   const nameOf = (id: string) => menus.find((m) => m.id === id)?.name ?? id;
-  for (const rule of input.rules) {
+  const pairRules = strictest(input.rules.filter((r) => r.level === "menu" && r.check.kind === "noSameDay" && !!r.check.with));
+  for (const rule of pairRules) {
     const c = rule.check;
-    if (c.kind !== "notTogether" || rule.level !== "menu") continue;
+    if (c.kind !== "noSameDay" || !c.with || rule.level !== "menu") continue;
     const a = rule.menuId;
     const b = c.with;
     if (!mine.has(a) && !mine.has(b)) continue;

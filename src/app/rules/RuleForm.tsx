@@ -56,7 +56,8 @@ export function RuleForm({
   );
   const [unit, setUnit] = useState<Unit>(lead.unit);
   const [time, setTime] = useState(c?.kind === "lastStart" ? c.time : "18:00");
-  const [withId, setWithId] = useState(c?.kind === "notTogether" ? c.with : (menus.find((m) => m.id !== menuId)?.id ?? ""));
+  // 「同じ日に不可」の相手のメニュー（空 = 当日の予約は受けない）。メニューに付けるときだけ選べる
+  const [withId, setWithId] = useState(c?.kind === "noSameDay" ? (c.with ?? "") : "");
   const [text, setText] = useState(c?.kind === "text" ? (initial?.label ?? "") : "");
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -77,11 +78,9 @@ export function RuleForm({
       case "bufferAfterMinutes":
         return num.trim() ? { kind, value: n } : null;
       case "noSameDay":
-        return { kind };
+        return level === "menu" && withId && withId !== menuId ? { kind, with: withId } : { kind };
       case "lastStart":
         return time ? { kind, time } : null;
-      case "notTogether":
-        return withId ? { kind, with: withId } : null;
       case "text":
         return { kind };
     }
@@ -91,9 +90,7 @@ export function RuleForm({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!check) {
-      setProblem(
-        kind === "lastStart" ? "時刻を入れてください。" : kind === "notTogether" ? "いっしょに入れないメニューを選んでください。" : "数を入れてください。",
-      );
+      setProblem(kind === "lastStart" ? "時刻を入れてください。" : "数を入れてください。");
       return;
     }
     const v = validateOwnerRule(
@@ -127,8 +124,6 @@ export function RuleForm({
                   setKind(k);
                   setNum("");
                   setProblem(null);
-                  // 組み合わせのルールはメニューに付ける
-                  if (k === "notTogether") setLevel("menu");
                 }}
               />
               <span className="choice-name">{KIND_INFO[k].name}</span>
@@ -170,23 +165,7 @@ export function RuleForm({
       </fieldset>
 
       <fieldset>
-        <legend>3. {isText ? "ルールの文" : kind === "lastStart" ? "時刻" : kind === "notTogether" ? "いっしょに入れないメニュー" : "数"}</legend>
-        {kind === "notTogether" && (
-          <div className="num-row">
-            <span>{level === "menu" ? menuName(menuId) : "（2. でメニューを選ぶ）"}と</span>
-            <select value={withId} onChange={(e) => setWithId(e.target.value)} aria-label="いっしょに入れないメニュー">
-              {menus
-                .filter((m) => m.id !== menuId)
-                .map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-            </select>
-            <span>は同じ日に受けない</span>
-          </div>
-        )}
-        {kind === "notTogether" && level !== "menu" && <small className="hint">この種類は「メニュー」に付けます。</small>}
+        <legend>3. {isText ? "ルールの文" : kind === "lastStart" ? "時刻" : kind === "noSameDay" ? "いっしょに入れないメニュー" : "数"}</legend>
         {kind === "minLeadMinutes" && (
           <div className="num-row">
             <span>来店の</span>
@@ -242,7 +221,30 @@ export function RuleForm({
             <span>までに始める</span>
           </div>
         )}
-        {kind === "noSameDay" && <p className="hint">数は要りません。来店と同じ日の予約は受けません。</p>}
+        {kind === "noSameDay" && level === "menu" && (
+          <div className="num-row">
+            <span>{menuName(menuId)}と</span>
+            <select value={withId === menuId ? "" : withId} onChange={(e) => setWithId(e.target.value)} aria-label="いっしょに入れないメニュー">
+              <option value="">（選ばない：当日の予約は受けない）</option>
+              {menus
+                .filter((m) => m.id !== menuId)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+            </select>
+            <span>{withId && withId !== menuId ? "は同じ日に受けない" : ""}</span>
+          </div>
+        )}
+        {kind === "noSameDay" && (
+          <p className="hint">
+            数は要りません。メニューを選ばなければ、来店と同じ日（当日）の予約は受けません。
+            {level === "menu"
+              ? "いっしょに入れないメニューを選ぶと、その2つは同じ日に受けません（1回の来店の組み合わせにも、同じ方のその日のほかの予約にも効きます）。"
+              : "メニューの組み合わせに効かせるときは、2. で「メニュー」を選んでください。"}
+          </p>
+        )}
         {isText && (
           <>
             <textarea

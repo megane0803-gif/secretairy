@@ -87,6 +87,18 @@ describe("売上（見るだけ）", () => {
     assert.deepEqual(closed.map((d) => d.day), [6, 13, 20, 27]);
     assert.ok(closed.every((d) => d.sales === 0 && d.visits === 0 && d.label.includes("火")));
   });
+  test("1人で営業する店に合う数：来店は月100人前後・客単価は7,000円前後・売上は月70万円前後", () => {
+    assert.ok(s.visits >= 90 && s.visits <= 110, `来店 ${s.visits}人`);
+    assert.ok(s.perVisit >= 6500 && s.perVisit <= 7500, `客単価 ${s.perVisit}円`);
+    assert.ok(s.total >= 650_000 && s.total <= 750_000, `売上 ${s.total}円`);
+    // 1人で施術するので、1日の来店は多くない（営業日は1人以上）
+    for (const d of seed.sales.days) assert.ok(d.visits >= 1 && d.visits <= 7, `${d.date} の来店 ${d.visits}人`);
+    // 1日の売上も、その日の来店の数に合う（1人あたり 3,000〜16,000円の間）
+    for (const d of seed.sales.days) {
+      const pay = Object.values(d.pay).reduce((a, b) => a + b, 0);
+      assert.ok(pay >= d.visits * 3000 && pay <= d.visits * 16000, `${d.date} の売上 ${pay}円`);
+    }
+  });
   test("支払い方法の割合は3本で、合計は売上と同じ", () => {
     assert.equal(s.methods.length, 3);
     assert.equal(s.methods.reduce((a, m) => a + m.amount, 0), s.total);

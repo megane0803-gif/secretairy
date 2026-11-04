@@ -231,7 +231,7 @@ function json(x: unknown): string {
   return JSON.stringify(x);
 }
 
-/** 組み合わせそのものを受けられないとき（同じ日に入れない組み合わせ）の答え */
+/** 組み合わせそのものを受けられないとき（相手のメニューつきの「同じ日に不可」）の答え */
 function comboRefused(ctx: ToolContext, label: string, menuId: string): ToolOutcome | null {
   const why = comboRefusal(ctx, menuId);
   if (!why) return null;

@@ -226,8 +226,8 @@ describe("6. 1回の来店で複数のメニュー", () => {
     for (const c of r.candidates!) assert.ok(c.start <= "16:00", c.start);
   });
 
-  test("「同じ日に入れない組み合わせ」のルール：受けられない組み合わせは理由を1文で（候補は出さない）", async () => {
-    const own: Rule = { id: "own-nt", level: "menu", menuId: "straight", label: "縮毛矯正とパーマは同じ日に受けない", check: { kind: "notTogether", with: "perm" } };
+  test("「同じ日に不可」（相手のメニューつき）のルール：受けられない組み合わせは理由を1文で（候補は出さない）", async () => {
+    const own: Rule = { id: "own-nt", level: "menu", menuId: "straight", label: "縮毛矯正とパーマは同じ日に受けない", check: { kind: "noSameDay", with: "perm" } };
     const c2 = { ...ctx, rules: [...ctx.rules, own] };
     const r = await chat(c2, [{ role: "user", text: "縮毛矯正とパーマを11/7にお願いします" }]);
     assert.deepEqual(r.candidates, []);

@@ -44,38 +44,43 @@ export function strictnessNumber(check: RuleCheck): number {
     case "lastStart":
       return toMinutes(check.time);
     case "noSameDay":
-    case "notTogether":
     case "text":
       return 0;
   }
 }
 
+/**
+ * 「1つでもあれば効く」（any）の種類で、同じ物とみなす印。
+ * 「同じ日に不可」は相手のメニュー（with）ごとに中身がちがうので、相手ごとに1つずつ残す。
+ */
+function anyKey(r: Rule): string {
+  return r.check.kind === "noSameDay" && r.check.with && r.level === "menu"
+    ? `noSameDay|${[r.menuId, r.check.with].sort().join("|")}`
+    : r.check.kind;
+}
+
 export function strictest<R extends Rule>(rules: R[]): R[] {
   const texts: R[] = [];
-  const every: R[] = [];
-  const best = new Map<ProgramKind, R>();
+  const best = new Map<string, R>();
   for (const r of rules) {
     if (r.check.kind === "text") {
       texts.push(r);
       continue;
     }
     const kind = r.check.kind;
-    if (STRICTER[kind] === "all") {
-      every.push(r);
-      continue;
-    }
-    const cur = best.get(kind);
-    if (!cur) {
-      best.set(kind, r);
-      continue;
-    }
     const way = STRICTER[kind];
+    const key = way === "any" ? anyKey(r) : kind;
+    const cur = best.get(key);
+    if (!cur) {
+      best.set(key, r);
+      continue;
+    }
     if (way === "any") continue;
     const a = strictnessNumber(r.check);
     const b = strictnessNumber(cur.check);
-    if (way === "higher" ? a > b : a < b) best.set(kind, r);
+    if (way === "higher" ? a > b : a < b) best.set(key, r);
   }
-  return [...texts, ...best.values(), ...every];
+  return [...texts, ...best.values()];
 }
 
 /** その場面で効く、ある種類のルール（厳しい方の1つ）。無ければ undefined */
