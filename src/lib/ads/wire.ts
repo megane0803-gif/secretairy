@@ -26,9 +26,6 @@ export type AdsResponse =
   | { ok: false; code: "no-ai"; message: string }
   | { ok: false; code: "bad-request"; message: string };
 
-/** 直すときのオーナーの一言の長さ（字） */
-export const MAX_FIX_CHARS = 100;
-
 const MAX_ROWS = 40;
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object";
 const count = (x: unknown) => typeof x === "number" && Number.isInteger(x) && x >= 0 && x < 1e9;
@@ -59,7 +56,8 @@ function parseRows(x: unknown, kind: AdTableRow["kind"]): AdTableRow[] | null {
 
 type Parsed = { ok: true; value: AdsRequest } | { ok: false; reason: string };
 
-export function parseAdsRequest(body: unknown, menuIds: string[]): Parsed {
+/** maxFixChars = 直すときのオーナーの一言の長さの上限（config/ai.json の ads.maxFixChars） */
+export function parseAdsRequest(body: unknown, menuIds: string[], maxFixChars: number): Parsed {
   if (!isObj(body)) return { ok: false, reason: "形がおかしいです" };
   const mode: AdsMode = body.mode === "script" ? "script" : "ai";
   const t = body.table;
@@ -85,7 +83,7 @@ export function parseAdsRequest(body: unknown, menuIds: string[]): Parsed {
     if (!isObj(f) || typeof f.text !== "string" || !f.text.trim() || !isObj(f.current)) return { ok: false, reason: "直す一言がありません" };
     const c = f.current;
     if ((c.action !== "stop" && c.action !== "exclude") || typeof c.no !== "number") return { ok: false, reason: "いまの案がわかりません" };
-    fix = { text: f.text.trim().slice(0, MAX_FIX_CHARS), current: { action: c.action, no: c.no } };
+    fix = { text: f.text.trim().slice(0, maxFixChars), current: { action: c.action, no: c.no } };
   }
 
   return { ok: true, value: { mode, table: { keywords, searchTerms }, rules: [...LOCKED_RULES, ...own], ...(fix ? { fix } : {}) } };

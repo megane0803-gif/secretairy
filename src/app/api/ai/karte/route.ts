@@ -16,8 +16,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const MAX_BODY = 200_000;
-
 function reply(body: KarteResponse, status = 200): Response {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
@@ -28,7 +26,7 @@ export async function POST(request: Request): Promise<Response> {
   const headings = getKarteHeadings();
 
   const raw = await request.text();
-  if (raw.length > MAX_BODY) return reply({ ok: false, code: "bad-request", message: "送る物が大きすぎます" }, 413);
+  if (raw.length > ai.karte.maxRequestChars) return reply({ ok: false, code: "bad-request", message: "送る物が大きすぎます" }, 413);
   let body: unknown;
   try {
     body = JSON.parse(raw);

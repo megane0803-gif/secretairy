@@ -27,23 +27,32 @@ function hm(iso: string | undefined, timezone: string): string {
   })}`;
 }
 
-export function LinePanel({ data, headings }: { data: BookData; headings: KarteHeading[] }) {
+/** needsPasscode = 環境変数 LINE_OWNER_PASSCODE がある（つなぐときにオーナー用の合言葉を求める。中身は画面に来ない） */
+export function LinePanel({ data, headings, needsPasscode = false }: { data: BookData; headings: KarteHeading[]; needsPasscode?: boolean }) {
   const { state } = useLineState();
   const status = useLineStatus();
   const book = useBook(data);
   const settings = getLineSettings();
   const [busy, setBusy] = useState(false);
+  const [passcode, setPasscode] = useState("");
   const tz = data.shop.timezone;
 
   const start = async (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted || busy) return;
+    if (needsPasscode && !passcode.trim()) {
+      setLineStatus({ problem: "オーナー用の合言葉を入れてから押してください" });
+      return;
+    }
     setBusy(true);
-    const res = await lineApi.start(state?.token);
+    const res = await lineApi.start(state?.token, needsPasscode ? passcode.trim() : undefined);
     setBusy(false);
     if (!res.ok) {
       setLineStatus({ problem: problemText(res.code, res.message) });
+      // 合言葉そのものは日誌に書かない
+      if (res.code === "passcode") writeJournal({ who: "プログラム", text: "LINE とつなぐのを止めた（オーナー用の合言葉がちがう）" });
       return;
     }
+    setPasscode("");
     setLineStatus({ problem: null, last: null });
     updateLineState(() => newLineState(res.token, res.code, res.codeExpiresAt, state?.mode ?? "ai"));
     writeJournal({ who: "オーナー", text: `LINE とつなぐ合言葉を出した（${settings.codeMinutes}分まで）` });
@@ -108,7 +117,23 @@ export function LinePanel({ data, headings }: { data: BookData; headings: KarteH
             短い合言葉を出します。店の LINE 公式アカウント（架空の店）に、オーナーの LINE からその合言葉を送ると、この画面とつながります（
             {settings.linkHours}時間）。画面を開いている間だけ動きます。
           </p>
-          <button type="button" className="btn primary" onClick={start} disabled={busy}>
+          {needsPasscode && (
+            <label className="line-passcode">
+              オーナー用の合言葉
+              <input
+                type="password"
+                value={passcode}
+                onChange={(e) => setPasscode(e.target.value)}
+                autoComplete="current-password"
+                maxLength={200}
+                aria-describedby="line-passcode-hint"
+              />
+              <small id="line-passcode-hint" className="hint">
+                この店では、つなぐ前にオーナー用の合言葉を確かめます。
+              </small>
+            </label>
+          )}
+          <button type="button" className="btn primary" onClick={start} disabled={busy || (needsPasscode && !passcode.trim())}>
             LINE とつなぐ
           </button>
         </>

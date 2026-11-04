@@ -24,6 +24,7 @@ npm run build      # 本番ビルド（push の前に通す）
 - サーバーにファイルやデータベースで書き込む作りにしない（`data/` は作らない）。公開 URL を見た人どうしでデータが混ざらないようにするため。
 - 例外は LINE のつなぎだけ：Redis（Upstash）に「合言葉のつなぎ」と「画面が受け取りに来るまでの LINE の知らせ」を期限つきで置く。お客様の記録・台帳・日誌は置かない（仕様書 §1.9）。
 - AI を呼ぶ API はブラウザから要るデータとルールを毎回受け取り、答えを返すだけ。受け取った物を残さない。
+- AI を呼ぶ窓口は全部 `src/app/api/ai/` の下（Vercel の Firewall で `/api/ai/` を1分10回まで）。上限の数（字数・返事の長さ・道具の回数・送る通数・受け取る大きさ）は `config/` に置き、コードに直に書かない。
 
 ## 店ごとに変わる物はコードに書かない
 
@@ -68,7 +69,7 @@ src/lib/ads/       広告の数・門・道具・流れ・決まった返事・�
 src/lib/accounting/ 経理：売上の数・通販の明細の仕分け（自動のルール）・門・登録（ブラウザの中に残す形。AI は使わない）
 src/lib/line/      LINE のつなぎ（オーナー側）：署名・Redis・つなぎと預かり（bridge）・一言の振り分け（sort）・画面での入れ方（apply）
 src/app/api/line/  LINE の窓口（Webhook・つなぐ・受け取り・送る）。画面の処理と混ぜない
-src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理をまとめて戻す）
+src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理・LINE の預かりをまとめて戻す）
 ```
 
 - AI の道具は `src/lib/ai/tools.ts` の5つだけ（空きを調べる・ルールを確かめる・前回を見る・仮押さえ・仮押さえを外す）。確定の道具は足さない。「仮押さえを外す」は、この会話で作った、まだ承認されていない仮押さえだけ（プログラムで確かめる）。テストでは Claude を呼ばず `src/lib/ai/script.ts` に置きかえる。
@@ -83,4 +84,4 @@ src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理�
   - LINE のボタンで確定してよいのは、サーバーが「つないだ人・その画面の行・1回だけの印」を確かめた press の知らせだけ。一言（文）や AI の答えからは確定しない。
   - 送る通数を減らす（返事で済む時は返事。1日の上限は `config/line.json`）。鍵・LINE の人の番号は画面・日誌・ログに出さない。
   - 一言の振り分けの道具は `src/lib/line/sort.ts` の3つ（仮押さえ・ToDo・カルテのメモ）だけ。テストでは `scriptSortModel` と置きかえた LINE・`memoryStore` を使う（Claude と LINE は呼ばない）。お客さん側の LINE はまだ。
-- 秘密の鍵（Claude API キー・LINE の秘密 `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・Redis の `KV_REST_API_URL`／`KV_REST_API_TOKEN`）は `.env.local`（Vercel では環境変数）に置く。`.env` で始まるファイルはコミットしない。
+- 秘密の鍵（Claude API キー・LINE の秘密 `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・オーナー用の合言葉 `LINE_OWNER_PASSCODE`（任意）・Redis の `KV_REST_API_URL`／`KV_REST_API_TOKEN`）は `.env.local`（Vercel では環境変数）に置く。`.env` で始まるファイルはコミットしない。

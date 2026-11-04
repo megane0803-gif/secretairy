@@ -1,6 +1,8 @@
 // LINE のつなぎの、画面とサーバー（/api/line/link・/api/line/poll・/api/line/send）のあいだの形。
 // 画面に渡すのは「何が来たか」だけ。LINE の人の番号・返事の印（replyToken）・鍵は画面に渡さない。
 
+import { getLineSettings } from "../settings";
+
 /** 画面が受け取る LINE の知らせ。text = オーナーの一言 / press = 承認の箱のボタン（合言葉でつないだ LINE から押した物だけ） */
 export type ScreenEvent =
   | { id: string; at: string; kind: "text"; text: string }
@@ -43,11 +45,12 @@ export type SendResponse =
   | { ok: true; via: "reply" | "push" | "skipped" }
   | { ok: false; code: LineProblem; message: string };
 
-/** gone = つなぎが無い（期限切れ・切った） / limit = 1日の上限 / no-store = Redis が無い / no-line = LINE の鍵が無い */
-export type LineProblem = "gone" | "not-linked" | "limit" | "no-store" | "no-line" | "failed" | "bad-request";
+/** gone = つなぎが無い（期限切れ・切った） / limit = 1日の上限 / no-store = Redis が無い / no-line = LINE の鍵が無い / passcode = オーナー用の合言葉がちがう */
+export type LineProblem = "gone" | "not-linked" | "limit" | "no-store" | "no-line" | "failed" | "bad-request" | "passcode";
 
-export const MAX_OUT_TEXT = 1000;
-export const MAX_OUT_MESSAGES = 3;
+/** 画面から LINE へ送る1通の文の長さ・1回に送る数（config/line.json） */
+export const MAX_OUT_TEXT = getLineSettings().maxOutChars;
+export const MAX_OUT_MESSAGES = getLineSettings().maxOutMessages;
 const MAX_FIELD = 120;
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object";
@@ -55,7 +58,7 @@ const str = (x: unknown, max: number) => (typeof x === "string" ? x.slice(0, max
 
 export function parseScreenEvent(x: unknown): ScreenEvent | null {
   if (!isObj(x) || typeof x.id !== "string" || typeof x.at !== "string") return null;
-  if (x.kind === "text" && typeof x.text === "string") return { id: x.id, at: x.at, kind: "text", text: x.text.slice(0, 500) };
+  if (x.kind === "text" && typeof x.text === "string") return { id: x.id, at: x.at, kind: "text", text: x.text.slice(0, getLineSettings().maxTextChars) };
   if (
     x.kind === "press" &&
     typeof x.approvalId === "string" &&

@@ -47,6 +47,8 @@ export type AiSettings = {
   maxMessages: number;
   /** お客様の1回の文の長さ（字） */
   maxMessageChars: number;
+  /** 予約チャットの窓口（/api/ai/reserve）が受け取る大きさの上限（字） */
+  maxRequestChars: number;
   /** カルテ自動作成（Haiku） */
   karte: KarteAiSettings;
 };
@@ -57,6 +59,8 @@ export type KarteAiSettings = {
   maxReplyTokens: number;
   /** 施術メモの長さの上限（字） */
   maxMemoChars: number;
+  /** 窓口（/api/ai/karte）が受け取る大きさの上限（字） */
+  maxRequestChars: number;
 };
 
 export function getAiSettings(): AiSettings {
@@ -72,6 +76,11 @@ export function getAiSettings(): AiSettings {
 /** 施術メモの長さの上限（字）。画面でも使う（鍵や環境変数は読まない） */
 export function getMemoMaxChars(): number {
   return (ai as AiSettings).karte.maxMemoChars;
+}
+
+/** 予約チャットのお客様の1回の文の長さの上限（字）。画面でも使う（鍵や環境変数は読まない） */
+export function getChatMaxChars(): number {
+  return (ai as AiSettings).maxMessageChars;
 }
 
 export type KarteHeading = {
@@ -137,11 +146,22 @@ export type AdsAiSettings = {
   model: string;
   /** 1回の返事の長さの上限（トークン） */
   maxReplyTokens: number;
+  /** 案を作らせる回数の上限（1回目＋作り直し。直すときは1回だけ） */
+  maxTries: number;
+  /** 「直す」のオーナーの一言の長さの上限（字）。画面でも使う */
+  maxFixChars: number;
+  /** 窓口（/api/ai/ads）が受け取る大きさの上限（字） */
+  maxRequestChars: number;
 };
 
+/** 「直す」の一言の長さの上限（字）。画面でも使う（鍵や環境変数は読まない） */
+export function getAdsFixMaxChars(): number {
+  return (ai as { ads: { maxFixChars: number } }).ads.maxFixChars;
+}
+
 export function getAdsAiSettings(): AdsAiSettings {
-  const a = ai as { ads?: { maxReplyTokens?: number } };
-  return { model: getAiSettings().model, maxReplyTokens: a.ads?.maxReplyTokens ?? 600 };
+  const a = (ai as { ads: Omit<AdsAiSettings, "model"> }).ads;
+  return { model: getAiSettings().model, ...a };
 }
 
 /** 経理のタブの設定（config/accounting.json）。実在の会計サービスの名前は書かない */
@@ -176,6 +196,14 @@ export type LineSettings = {
   maxTextChars: number;
   /** つながっていない人が合言葉を試せる回数（10分ごと） */
   codeTries: number;
+  /** 画面から LINE へ送る1通の文の長さ（字） */
+  maxOutChars: number;
+  /** 画面から LINE へ1回に送る通の数 */
+  maxOutMessages: number;
+  /** LINE の Webhook（/api/line）が受け取る大きさの上限（字） */
+  maxWebhookChars: number;
+  /** 画面からの LINE の窓口（つなぐ・受け取り・送る）が受け取る大きさの上限（字） */
+  maxScreenRequestChars: number;
 };
 
 export function getLineSettings(): LineSettings {
@@ -183,12 +211,19 @@ export function getLineSettings(): LineSettings {
 }
 
 /** LINE の一言の振り分けで AI を呼ぶときの設定（config/ai.json の line。モデル名は ANTHROPIC_LINE_MODEL でも差しかえられる） */
-export type LineAiSettings = { model: string; maxReplyTokens: number };
+export type LineAiSettings = {
+  model: string;
+  /** 1回の返事の長さの上限（トークン） */
+  maxReplyTokens: number;
+  /** 窓口（/api/ai/line）が受け取る大きさの上限（字） */
+  maxRequestChars: number;
+};
 
 export function getLineAiSettings(): LineAiSettings {
-  const a = ai as { line?: { model?: string; maxReplyTokens?: number } };
+  const a = (ai as { line: LineAiSettings }).line;
   return {
-    model: process.env.ANTHROPIC_LINE_MODEL || a.line?.model || getAiSettings().karte.model,
-    maxReplyTokens: a.line?.maxReplyTokens ?? 300,
+    model: process.env.ANTHROPIC_LINE_MODEL || a.model,
+    maxReplyTokens: a.maxReplyTokens,
+    maxRequestChars: a.maxRequestChars,
   };
 }

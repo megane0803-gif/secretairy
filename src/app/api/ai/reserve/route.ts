@@ -14,8 +14,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const MAX_BODY = 400_000;
-
 function line(e: ReserveEvent): Uint8Array {
   return new TextEncoder().encode(JSON.stringify(e) + "\n");
 }
@@ -26,7 +24,7 @@ export async function POST(request: Request): Promise<Response> {
   const ai = getAiSettings();
 
   const raw = await request.text();
-  if (raw.length > MAX_BODY) return Response.json({ t: "error", code: "bad-request", message: "送る物が大きすぎます" }, { status: 413 });
+  if (raw.length > ai.maxRequestChars) return Response.json({ t: "error", code: "bad-request", message: "送る物が大きすぎます" }, { status: 413 });
   let body: unknown;
   try {
     body = JSON.parse(raw);

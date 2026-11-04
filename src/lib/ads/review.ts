@@ -27,14 +27,13 @@ export type ReviewInput = {
   fix?: { text: string; current: { action: AdAction; no: number } };
   model: AdsModel;
   maxTokens: number;
+  /** 案を作らせる回数の上限（config/ai.json の ads.maxTries。1回目＋作り直し） */
+  maxTries: number;
 };
 
 export type ReviewResult =
   | { ok: true; proposal: GatedProposal; checks: GateCheck[]; tries: number; steps: ReviewStep[] }
   | { ok: false; checks: GateCheck[]; problems: string[]; tries: number; steps: ReviewStep[] };
-
-/** 作り直しは1回まで（1回目＋作り直し1回）。直すときは1回だけ */
-export const MAX_TRIES = 2;
 
 /** 弾かれた案も、日誌では読める形で（道具が止める・外すで、番号が表にあれば言葉も） */
 function saidLabel(table: AdTable, call: ToolCall): string {
@@ -54,7 +53,7 @@ export async function runReview(input: ReviewInput): Promise<ReviewResult> {
       content: adsUserText(tableText(table, settings.towns), fix ? { text: fix.text, current: actionLabel(fix.current.action, fix.current.no) } : undefined),
     },
   ];
-  const tries = fix ? 1 : MAX_TRIES;
+  const tries = fix ? 1 : Math.max(1, input.maxTries);
   const steps: ReviewStep[] = [];
   let last: ReviewResult | null = null;
 

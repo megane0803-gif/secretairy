@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  const body = (await readJson(request, 1000)) as { token?: unknown } | null;
+  const body = (await readJson(request)) as { token?: unknown } | null;
   if (!body || typeof body.token !== "string") return json({ ok: false, code: "bad-request", message: "形がおかしいです" }, 400);
   try {
     return json(await pollScreen(bridgeDeps(), body.token.slice(0, 200)));

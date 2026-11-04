@@ -62,8 +62,10 @@ async function post<T>(url: string, body: unknown, fallback: T): Promise<T> {
 const offline = { ok: false as const, code: "failed" as const, message: "つながりませんでした" };
 
 export const lineApi = {
-  start: (token?: string) => post<LinkStartResponse>("/api/line/link", { action: "start", token }, offline),
+  start: (token?: string, passcode?: string) => post<LinkStartResponse>("/api/line/link", { action: "start", token, passcode }, offline),
   unlink: (token: string) => post<{ ok: boolean }>("/api/line/link", { action: "unlink", token }, { ok: false }),
+  /** 「最初に戻す」：サーバーに預けてある、まだ受け取っていない LINE の知らせを消す */
+  clear: (token: string) => post<{ ok: boolean }>("/api/line/link", { action: "clear", token }, { ok: false }),
   poll: (token: string) => post<PollResponse>("/api/line/poll", { token }, offline),
   send: (req: SendRequest) => post<SendResponse>("/api/line/send", req, offline),
   ask: (req: LineAskRequest) => post<LineAskResponse>("/api/ai/line", req, { ok: false, code: "no-ai", message: "つながりませんでした" }),
@@ -78,6 +80,8 @@ export function problemText(code: string, message: string): string {
       return "LINE の鍵がありません。Vercel の環境変数（LINE_CHANNEL_ACCESS_TOKEN）を確かめてください";
     case "limit":
       return `${message}。明日になるとまた送れます（返事はいつでも返せます）`;
+    case "passcode":
+      return `${message}。オーナー用の合言葉（Vercel の環境変数 LINE_OWNER_PASSCODE に入れた物）を入れてください`;
     case "gone":
     case "not-linked":
       return "LINE とのつながりが切れています。もう一度「LINE とつなぐ」を押してください";
