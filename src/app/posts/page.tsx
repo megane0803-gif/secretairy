@@ -1,17 +1,31 @@
 import { TabPage } from "@/components/TabPage";
-import { InputStub, NotYet, Panel } from "@/components/parts";
+import { NotYet, Panel } from "@/components/parts";
+import { getBookData } from "@/lib/book/data";
+import { getPostMemos } from "@/lib/data/seed";
+import { getPostsMaterialMaxChars, getPostsSettings } from "@/lib/settings";
+import { PostsBoard } from "./PostsBoard";
+import { PostsForm } from "./PostsForm";
 
+export const dynamic = "force-dynamic";
+
+/**
+ * 発信のタブ。お店からお客様に出す文の下書きを作る所（送信・公開はしない）。
+ * ①種類を選ぶ ②材料を入れて「下書きを作る」（右の列）③見て、手で直して「下書きを保存」（真ん中）。
+ */
 export default function PostsPage() {
+  const settings = getPostsSettings();
+  const data = getBookData();
   return (
     <TabPage
       tab="posts"
       right={
-        <Panel title="発信のお題">
-          <InputStub placeholder="例：冬におすすめのヘアケア" button="案を作る" />
+        <Panel title="下書きを作る">
+          <PostsForm data={data} settings={settings} memos={getPostMemos()} maxChars={getPostsMaterialMaxChars()} />
         </Panel>
       }
     >
-      <NotYet>SNS などに出す文の案がここに出ます。出すのは人が承認してから</NotYet>
+      <PostsBoard settings={settings} timezone={data.shop.timezone} />
+      <NotYet>段落ごとの言い換え案と、使うお店のメモを選ぶ欄はまだです</NotYet>
     </TabPage>
   );
 }

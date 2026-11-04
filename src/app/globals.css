@@ -897,3 +897,27 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .line-passcode { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .line-passcode input { width: 100%; max-width: 100%; box-sizing: border-box; padding: 6px 8px; font: inherit; }
 .chat-blocked { margin: 0; font-size: 0.85rem; color: var(--warn, #9a5b00); }
+
+/* ---- 発信 ---- */
+.posts-form { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.posts-step { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.posts-step legend { font-weight: 700; font-size: 0.95rem; padding: 0; margin-bottom: 4px; }
+.posts-step[disabled] { opacity: 0.6; }
+.posts-field, .posts-edit { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.posts-field textarea, .posts-edit textarea {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 1rem; line-height: 1.6; padding: 8px 10px; resize: vertical;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
+}
+.posts-form .btn.big { font-size: 1.05rem; padding: 10px 14px; }
+.posts-memos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; }
+.posts-memos li { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; overflow-wrap: anywhere; }
+.posts-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.posts-nosend { font-size: 0.85rem; color: var(--muted); margin-right: auto; }
+.posts-failed { border: 2px solid var(--warn); }
+.posts-group { margin-bottom: 8px; }
+.posts-saved { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.posts-row { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 12px; min-width: 0; }
+.posts-row summary { cursor: pointer; display: flex; gap: 10px; align-items: baseline; min-width: 0; }
+.posts-at { flex: none; font-weight: 700; font-size: 0.9rem; }
+.posts-first { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.posts-full { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 2px; font-size: 0.95rem; line-height: 1.7; }

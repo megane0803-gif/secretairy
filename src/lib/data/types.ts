@@ -142,6 +142,9 @@ export type AccountingSeed = {
   trial: CardStatement;
 };
 
+/** 発信の「お店のメモ」（架空）。下書きの中身は、このメモと材料にある事だけ */
+export type PostMemo = { id: string; title: string; text: string };
+
 // ---- ここから下は形だけ（中身は後日） ----
 
 /** やること */
