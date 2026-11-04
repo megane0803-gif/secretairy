@@ -23,6 +23,12 @@ npm run dev
 
 http://localhost:3000 を開きます。
 
+ルールの判定のテスト：
+
+```bash
+npm test
+```
+
 ## 店の設定
 
 店ごとに変わる物は `config/` にあります。

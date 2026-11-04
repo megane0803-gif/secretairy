@@ -39,4 +39,6 @@ export function subscribeBrowser(f: () => void): () => void {
 export const NAV_KEY = "navCollapsed";
 export const RIGHT_KEY = "rightWidth";
 export const TABS_KEY = "tabSwitches";
+/** オーナーが足した・直した・消したルール（例のルールに重ねる分） */
+export const RULES_KEY = "rules";
 export const BROWSER_PREFIX = PREFIX;

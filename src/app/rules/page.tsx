@@ -1,62 +1,46 @@
 import { TabPage } from "@/components/TabPage";
-import { Fold, InputStub, Panel } from "@/components/parts";
-import { getMenus } from "@/lib/settings";
-import { getRules } from "@/lib/rules/store";
-import type { Rule } from "@/lib/rules/types";
-import { TABS } from "@/lib/tabs";
+import { addDays, calDay, openedDate, shopToday } from "@/lib/calendar";
+import { loadBook } from "@/lib/reservations";
+import { getSeedRules } from "@/lib/rules/store";
+import { getMenus, getShop } from "@/lib/settings";
+import { RuleBoard } from "./RuleBoard";
+import { RuleSide } from "./RuleSide";
 
-function scopeTag(r: Rule, menuName: (id: string) => string): string {
-  if (r.level === "global") return "全体";
-  if (r.level === "tab") return `タブ：${TABS[r.tab].label}`;
-  return `メニュー：${menuName(r.menuId)}`;
-}
+export const dynamic = "force-dynamic";
 
-const GROUPS: { level: Rule["level"]; title: string }[] = [
-  { level: "global", title: "全体に効く" },
-  { level: "tab", title: "タブごと" },
-  { level: "menu", title: "メニューごと" },
-];
-
+/**
+ * ルールのタブ。最初の状態（鍵つき＋例のルール）をここで読み、
+ * 足した・直した・消した分は画面の側（useRules）でこのブラウザの中だけに重ねる。
+ */
 export default function RulesPage() {
-  const rules = getRules();
+  const shop = getShop();
   const menus = getMenus();
-  const menuName = (id: string) => menus.find((m) => m.id === id)?.name ?? id;
+  const seed = getSeedRules();
+  const { today } = shopToday(shop);
+  // 「ためしに確かめる」で選べる日（開いた日から2週間。お休みの日も出して、断られるのを見られるように）
+  const opened = openedDate(shop);
+  const days = Array.from({ length: 14 }, (_, i) => calDay(shop, addDays(opened, i)));
+  const booked = loadBook(shop, menus, today).all.map((r) => ({
+    date: r.date,
+    start: r.start,
+    menuIds: [r.menu.id],
+    newCustomer: r.customer.firstVisit,
+  }));
+
   return (
     <TabPage
       tab="rules"
       right={
-        <Panel title="ルールを足す">
-          <p>足したルールは、すぐ次の判定から効きます。</p>
-          <InputStub placeholder="例：日曜は新しいお客様を受けない" button="足す" />
-        </Panel>
+        <RuleSide
+          seed={seed}
+          menus={menus}
+          shop={{ timezone: shop.timezone, seats: shop.seats, slotMinutes: shop.slotMinutes }}
+          days={days}
+          booked={booked}
+        />
       }
     >
-      {GROUPS.map((g) => {
-        const list = rules.filter((r) => r.level === g.level);
-        return (
-          <section key={g.level}>
-            <h2>{g.title}</h2>
-            <ul className="rules">
-              {list.map((r) => (
-                <li key={r.id} className={r.locked ? "rule locked" : "rule"}>
-                  {r.locked && <span aria-label="鍵つき">🔒</span>}
-                  <span>{r.label}</span>
-                  <span className="tag">{scopeTag(r, menuName)}</span>
-                  {r.check.kind === "text" ? (
-                    <span className="tag text">AI が読む</span>
-                  ) : (
-                    <span className="tag check">✓ プログラムが確かめる</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-        );
-      })}
-      <Fold summary="ぶつかったときは？">
-        <p>同じことを決めるルールが2つあるときは、厳しい方を使います。</p>
-        <p>🔒 の2つは、どんなルールを足しても緩みません。</p>
-      </Fold>
+      <RuleBoard seed={seed} menus={menus.map((m) => ({ id: m.id, name: m.name }))} />
     </TabPage>
   );
 }
