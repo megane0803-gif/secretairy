@@ -13,17 +13,10 @@
     "check": { "kind": "maxNewCustomersPerDay", "value": 4 }
   },
   {
-    "id": "seed-color-buffer",
-    "level": "menu",
-    "menuId": "color",
-    "label": "カラーの後は15分あける（片付け）",
-    "check": { "kind": "bufferAfterMinutes", "value": 15 }
-  },
-  {
     "id": "seed-straight-lead",
     "level": "menu",
     "menuId": "straight",
-    "label": "縮毛矯正は前の日までに予約",
+    "label": "縮毛矯正は24時間前までに予約",
     "check": { "kind": "minLeadMinutes", "value": 1440 }
   },
   {

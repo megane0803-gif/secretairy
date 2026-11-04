@@ -1,6 +1,6 @@
 // 予約を本当の日付に直し、台帳の形にまとめる。数はここ（プログラム）が出す。AI は数を作らない。
 
-import { businessDays, toHHMM, toMinutes, weekFrom, type CalDay } from "./calendar";
+import { businessDays, lastStartOf, toHHMM, toMinutes, weekFrom, type CalDay } from "./calendar";
 import { getCustomers, getSeedReservations } from "./data/seed";
 import type { Customer, ReservationStatus, SeedReservation } from "./data/types";
 import type { Menu, ShopSettings } from "./settings";
@@ -18,10 +18,7 @@ export type Reservation = {
   customer: Customer;
 };
 
-/** 最終受付。メニューに書いてなければ「閉店 − 所要時間」 */
-export function lastStartOf(menu: Menu, close: string): string {
-  return menu.lastStart ?? toHHMM(toMinutes(close) - menu.minutes);
-}
+export { lastStartOf };
 
 /** 最初の状態の予約を、今日を起点にした本当の日付に直す */
 export function resolveReservations(

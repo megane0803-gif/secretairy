@@ -2,7 +2,7 @@
 // 最初の状態の日付は「何番目の営業日の何時」で持つので、ここで本当の日付に直す。
 // 定休日（hours が null の曜日）と休みの日（closedDates）は営業日に数えない。
 
-import type { DayKey, Hours, ShopSettings } from "./settings";
+import type { DayKey, Hours, Menu, ShopSettings } from "./settings";
 
 const KEYS: DayKey[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 const JA = ["日", "月", "火", "水", "木", "金", "土"];
@@ -18,7 +18,7 @@ export type CalDay = {
 };
 
 /** 店の時間帯での、開いた日の日付（YYYY-MM-DD） */
-export function openedDate(shop: ShopSettings, now = new Date()): string {
+export function openedDate(shop: Pick<ShopSettings, "timezone">, now = new Date()): string {
   return now.toLocaleDateString("en-CA", { timeZone: shop.timezone });
 }
 
@@ -80,4 +80,27 @@ export function toHHMM(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/** a から b まで何日か（同じ日なら 0） */
+export function dayDiff(a: string, b: string): number {
+  const [ay, am, ad] = a.split("-").map(Number);
+  const [by, bm, bd] = b.split("-").map(Number);
+  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86_400_000);
+}
+
+/** 店の時間帯での、いまの日付と時刻 */
+export function shopNow(shop: Pick<ShopSettings, "timezone">, now = new Date()): { date: string; time: string } {
+  const time = new Intl.DateTimeFormat("en-GB", {
+    timeZone: shop.timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(now);
+  return { date: openedDate(shop, now), time };
+}
+
+/** 最終受付（店の設定）。メニューに書いてなければ「閉店 − 所要時間」 */
+export function lastStartOf(menu: Pick<Menu, "minutes" | "lastStart">, close: string): string {
+  return menu.lastStart ?? toHHMM(toMinutes(close) - menu.minutes);
 }

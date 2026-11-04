@@ -8,6 +8,7 @@ SecretAIry は架空の美容室のための AI 秘書（Next.js / App Router / 
 ```bash
 npm run dev        # 開発サーバー（http://localhost:3000）
 npm run typecheck  # 型の確認
+npm test           # ルールの判定のテスト
 npm run build      # 本番ビルド（push の前に通す）
 ```
 
@@ -35,7 +36,9 @@ npm run build      # 本番ビルド（push の前に通す）
 
 - 3段：全体 / タブごと / メニューごと。どのルールにも「どこに効くか」の札を出す。
 - ぶつかったら厳しい方（`src/lib/rules/strictest.ts`）。段の上下では決めない。
-- 数のルールの種類を足すときは `STRICTER`（大きい方が厳しいか小さい方か）も必ず足す。
+- 数のルールの種類を足すときは `STRICTER`（大きい方が厳しいか小さい方か）も必ず足す。確かめ方は `judge.ts`、テスト（通る例・断る例）は `__tests__/judge.test.ts`。
+- 予約を受けてよいかはプログラム（`src/lib/rules/judge.ts`）が決める。AI は判定の結果に従うだけ。
+- 例のルールを足したら `__tests__/seed.test.ts` にも1本足す。
 - 足したルールは再起動なしで次の判定から効くこと。
 
 ## 画面の決まり
