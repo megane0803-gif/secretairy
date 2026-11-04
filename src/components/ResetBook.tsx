@@ -23,7 +23,7 @@ export function ResetBook({ data }: { data: BookData }) {
     const { lineToken } = resetAll(book.realToday.date);
     writeJournal({
       who: "オーナー",
-      text: `最初に戻した：${book.realToday.label}を起点に、予約・仮押さえ・承認の箱・足した ToDo（済みの印も）・保存したカルテ・カルテのメモと案・録音から作った文字と要点・「翌日へ」を作り直し、広告と経理（自動のルールも）・発信の下書き・「AI の仕事」の済みの印${lineToken ? "・LINE の預かり" : ""}・同じ時間に受ける人数（${data.shop.seats}人）を最初に戻した`,
+      text: `最初に戻した：${book.realToday.label}を起点に、予約・仮押さえ・承認の箱・足した ToDo（済みの印も）・保存したカルテ・人が直したカルテ（最初の状態の物も）・カルテのメモと案・録音から作った文字と要点・「翌日へ」を作り直し、広告と経理（自動のルールも）・発信の下書き・「AI の仕事」の済みの印${lineToken ? "・LINE の預かり" : ""}・同じ時間に受ける人数（${data.shop.seats}人）を最初に戻した`,
     });
     setAsking(false);
     // サーバーに預けてある LINE の知らせ（まだ受け取っていない物）も消す。つなぎは残す
@@ -35,7 +35,7 @@ export function ResetBook({ data }: { data: BookData }) {
 
   return asking ? (
     <span className="rule-buttons" role="group" aria-label="最初に戻すかどうか">
-      <span>本当の今日を起点に作り直します。仮押さえ・承認の箱・ToDo（足した物・済みの印）・保存したカルテ・カルテのメモ・録音から作った文字と要点・広告・経理（足した自動のルールも）・保存した発信の下書き・「AI の仕事」（4行とも「これから」に）・LINE の預かり・同じ時間に受ける人数（{data.shop.seats}人に）も最初に戻ります（LINE のつなぎは残します）。</span>
+      <span>本当の今日を起点に作り直します。仮押さえ・承認の箱・ToDo（足した物・済みの印）・保存したカルテ・人が直したカルテ（最初の状態の物も最初の中身に）・カルテのメモ・録音から作った文字と要点・広告・経理（足した自動のルールも）・保存した発信の下書き・「AI の仕事」（4行とも「これから」に）・LINE の預かり・同じ時間に受ける人数（{data.shop.seats}人に）も最初に戻ります（LINE のつなぎは残します）。</span>
       <button type="button" className="btn danger" onClick={onReset}>
         最初に戻す
       </button>

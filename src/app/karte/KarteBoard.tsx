@@ -3,47 +3,42 @@
 // カルテのタブの真ん中：今日の予約のお客様（架空）・カルテの案（大きいカード1枚）・前回までのカルテ。
 // カルテのお客様の名前・日付・メニューは、選んだ予約からプログラムが入れる（Claude には書かせない）。
 // 🔒 保存は人の「保存」ボタンだけ（ブラウザの本物の操作か isTrusted で確かめる）。AI・自動の処理からは保存しない。
+// 保存の前に、人が見出しごとに案を直せる（KarteDraftEditor。人が書いた行は言葉の門を通さない）。
 
 import { resolveMenu } from "@/lib/combo";
 import { CustomerName, Fold } from "@/components/parts";
 import type { BookData } from "@/lib/book/data";
 import { calDay } from "@/lib/calendar";
 import { setDesk } from "@/lib/karte/deskStore";
-import { cleanSections, type KarteSections } from "@/lib/karte/format";
-import { gateKarte, removedSentence } from "@/lib/karte/gate";
+
+import { editedLabels, sectionsToSave } from "@/lib/karte/edit";
+import { removedSentence } from "@/lib/karte/gate";
 import { kartesOf, nextTalkTitle, withKarteSaved, type SaveOutcome, type SavedKarte } from "@/lib/karte/record";
 import { writeJournal } from "@/lib/journal";
-import type { KarteHeading } from "@/lib/settings";
+import type { KarteEditSettings, KarteHeading } from "@/lib/settings";
 import { useState } from "react";
+import { CustomerList } from "./CustomerList";
+import { KarteDraftEditor } from "./KarteDraftEditor";
+import { KarteRecordBody, KarteSectionsView } from "./KarteRecordBody";
 import { useKarteToday } from "./useKarteToday";
 
-export function KarteSectionsView({ sections, headings }: { sections: KarteSections; headings: KarteHeading[] }) {
-  return (
-    <dl className="karte-sections">
-      {headings.map((h) => {
-        const lines = sections[h.id] ?? [];
-        return (
-          <div key={h.id} className={lines.length ? "karte-sec" : "karte-sec empty"}>
-            <dt>■ {h.label}</dt>
-            {lines.length ? lines.map((l, i) => <dd key={i}>・{l}</dd>) : <dd className="karte-none">（メモに無し）</dd>}
-          </div>
-        );
-      })}
-    </dl>
-  );
-}
+export { KarteSectionsView };
 
-export function KarteBoard({ data, headings }: { data: BookData; headings: KarteHeading[] }) {
+export function KarteBoard({ data, headings, editLimits }: { data: BookData; headings: KarteHeading[]; editLimits: KarteEditSettings }) {
   const { book, desk, todays, selected, key, saved, draft } = useKarteToday(data);
   const [done, setDone] = useState<string | null>(null);
+  // 人が直している見出し（開いている間は保存を押せない）
+  const [editing, setEditing] = useState<string | null>(null);
   const menuName = (id: string) => resolveMenu(data.menus, id)?.name ?? id;
 
   const save = (e: React.MouseEvent) => {
     // 人がボタンを押したときだけ（スクリプトから押したことにはできない）
-    if (!e.nativeEvent.isTrusted || !selected || !key || !draft) return;
+    if (!e.nativeEvent.isTrusted || !selected || !key || !draft || editing) return;
     const c = selected.customer;
-    // 保存する直前に、もう一度言葉の門を通す（同じ結果になる。ブラウザの中で書きかえられていても外す）
-    const sections = gateKarte(cleanSections(draft.sections, headings), draft.memo, headings).sections;
+    // 保存する直前に、AI の行はもう一度言葉の門を通す（同じ結果になる。ブラウザの中で書きかえられていても外す）。
+    // 人が直した見出しの行は人の記録なので、門を通さずそのまま入れる
+    const { sections, edited } = sectionsToSave(draft, draft.memo, headings);
+    const editedNames = editedLabels(draft, headings);
     const now = new Date().toISOString();
     const k: SavedKarte = {
       id: `k-${book.today.date}-${c.id}-${Date.now().toString(36)}`,
@@ -54,6 +49,7 @@ export function KarteBoard({ data, headings }: { data: BookData; headings: Karte
       memo: draft.memo,
       sections,
       savedAt: now,
+      ...(edited.length ? { edited, editedAt: Object.fromEntries(edited.map((id) => [id, now])) } : {}),
     };
     let out: SaveOutcome | null = null;
     book.update((s) => {
@@ -72,17 +68,22 @@ export function KarteBoard({ data, headings }: { data: BookData; headings: Karte
         : result.todoSkipped === "same"
           ? "ToDo「次回話すこと」は同じ物があるので足さなかった"
           : "次回提案が空なので ToDo には足さなかった";
-    writeJournal({ who: "オーナー", text: `人が保存：${who}のカルテ（${book.today.label} ${selected.menu.name}）。${todoText}` });
+    writeJournal({
+      who: "オーナー",
+      text: `人が保存：${who}のカルテ（${book.today.label} ${selected.menu.name}${editedNames.length ? `。人が直した見出し：${editedNames.join("・")}` : ""}）。${todoText}`,
+    });
     setDesk((s) => {
       const drafts = { ...s.drafts };
       delete drafts[key];
       return { drafts };
     });
+    setEditing(null);
     setDone(`✓ 保存しました。${todoText}`);
   };
 
   const cancel = () => {
     if (!key || !selected) return;
+    setEditing(null);
     setDesk((s) => {
       const drafts = { ...s.drafts };
       delete drafts[key];
@@ -114,6 +115,7 @@ export function KarteBoard({ data, headings }: { data: BookData; headings: Karte
                   onClick={() => {
                     setDesk(() => ({ selected: r.id, problem: null }));
                     setDone(null);
+                    setEditing(null);
                   }}
                 >
                   <span className="num karte-pick-time">{r.start}</span>
@@ -137,8 +139,15 @@ export function KarteBoard({ data, headings }: { data: BookData; headings: Karte
                 <span className="num">{book.today.label}</span>
                 <strong>{menuName(saved.menuId)}</strong>
               </header>
-              <KarteSectionsView sections={cleanSections(saved.sections, headings)} headings={headings} />
-              <p className="hint">人が保存しました。保存したメモは、この日はもう直しません。</p>
+              <KarteRecordBody
+                karte={{ ...saved, source: "saved" }}
+                data={data}
+                headings={headings}
+                editLimits={editLimits}
+                surname={selected.customer.surname}
+                onDone={setDone}
+              />
+              <p className="hint">人が保存しました。保存したカルテも、見出しごとに「直す」で直せます（人が直した日時を残します。施術のメモはもう変えません）。</p>
               <Fold summary="保存した施術のメモ">
                 <p className="karte-memo-text">{saved.memo}</p>
               </Fold>
@@ -157,7 +166,17 @@ export function KarteBoard({ data, headings }: { data: BookData; headings: Karte
                 <span aria-hidden> → </span>
                 <span className="hint">後：</span>カルテ（見出し{headings.length}つ）
               </p>
-              <KarteSectionsView sections={draft.sections} headings={headings} />
+              <KarteDraftEditor
+                key={key!}
+                draft={draft}
+                deskKey={key!}
+                headings={headings}
+                limits={editLimits}
+                who={`${selected.customer.surname}（架空）様`}
+                editing={editing}
+                setEditing={setEditing}
+              />
+              <p className="hint">保存の前に、見出しごとに「直す」で書きかえられます（人が書いた行は言葉の門を通しません。「元に戻す」で AI の案に戻ります）。</p>
               {draft.removed.length > 0 && (
                 <ul className="karte-removed" aria-label="言葉の門で外した行">
                   {draft.removed.map((r, i) => (
@@ -183,7 +202,7 @@ export function KarteBoard({ data, headings }: { data: BookData; headings: Karte
                 );
               })()}
               <div className="approval-buttons" role="group" aria-label="この案をどうするか">
-                <button type="button" className="btn primary" onClick={save}>
+                <button type="button" className="btn primary" onClick={save} disabled={editing !== null} title={editing ? "直している見出しを「決める」か「やめる」を押してから保存します" : undefined}>
                   保存
                 </button>
                 <button type="button" className="btn" onClick={cancel}>
@@ -229,12 +248,12 @@ export function KarteBoard({ data, headings }: { data: BookData; headings: Karte
                     {i === 0 ? (
                       <>
                         <p className="karte-card-head">{head}</p>
-                        <KarteSectionsView sections={cleanSections(k.sections, headings)} headings={headings} />
+                        <KarteRecordBody karte={k} data={data} headings={headings} editLimits={editLimits} surname={selected.customer.surname} onDone={setDone} />
                       </>
                     ) : (
                       <details className="fold">
                         <summary>{head}</summary>
-                        <KarteSectionsView sections={cleanSections(k.sections, headings)} headings={headings} />
+                        <KarteRecordBody karte={k} data={data} headings={headings} editLimits={editLimits} surname={selected.customer.surname} onDone={setDone} />
                       </details>
                     )}
                   </li>
@@ -242,9 +261,11 @@ export function KarteBoard({ data, headings }: { data: BookData; headings: Karte
               })}
             </ol>
           )}
-          <p className="hint">保存したカルテを新しい順に並べています（AI は使いません）。</p>
+          <p className="hint">保存したカルテを新しい順に並べています（AI は使いません）。どのカルテも見出しごとに「直す」で直せます（最初の状態のカルテを直した分は「最初に戻す」で元に戻ります）。</p>
         </section>
       )}
+
+      <CustomerList data={data} headings={headings} editLimits={editLimits} />
     </>
   );
 }

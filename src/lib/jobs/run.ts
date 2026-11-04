@@ -25,7 +25,7 @@ import { activeChat, withChatTodo, withHold, type BookState } from "../book/stat
 import { businessDayAt, calDay, demoClock } from "../calendar";
 import { resolveMenu } from "../combo";
 import type { JournalWho } from "../journal";
-import { allKartes, resolveSeedKartes, toVisits } from "../karte/record";
+import { allKartes, resolveSeedKartes, toVisits, withSeedKarteEdits } from "../karte/record";
 import { loadBook, resolveChatReservations, sortReservations } from "../reservations";
 import type { Rule } from "../rules/types";
 import type { AdSettings } from "../settings";
@@ -124,7 +124,7 @@ export function bookView(data: BookData, state: BookState, now: Date) {
     status: r.status,
     newCustomer: r.customer.firstVisit,
   }));
-  const visits = toVisits(allKartes(resolveSeedKartes(data.seedKartes, all), state.kartes));
+  const visits = toVisits(allKartes(withSeedKarteEdits(resolveSeedKartes(data.seedKartes, all), state.seedKarteEdits), state.kartes));
   return { clock, anchor, booked, visits, nowIso };
 }
 

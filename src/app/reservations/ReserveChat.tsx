@@ -6,6 +6,7 @@
 // AI は仮押さえまで。確定はオーナーが承認の箱で押す。
 
 import { useMemo, useRef, useState } from "react";
+import { NO_REAL_NAMES_NOTE } from "@/lib/notices";
 import { carryOver } from "@/lib/ai/carry";
 import { BUSY_NOTICE as BUSY_TEXT, createChatRuns, sendBlocked } from "@/lib/ai/chatRuns";
 import { buildExamples, type Example } from "@/lib/ai/examples";
@@ -399,6 +400,7 @@ export function ReserveChat({ data }: { data: BookData }) {
           送る
         </button>
       </form>
+      <p className="chat-privacy">{NO_REAL_NAMES_NOTE}</p>
       {notice && (
         <p className="chat-blocked" role="status">
           {notice}

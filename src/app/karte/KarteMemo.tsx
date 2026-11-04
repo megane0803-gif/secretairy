@@ -125,7 +125,7 @@ export function KarteMemo({
       <p id="karte-memo-count" className={over ? "karte-count over" : "karte-count"}>
         <span className="num">{length}</span>/{maxChars}字{fromRecording && "（録音の要点）"}{over && "（多すぎます。短くしてください）"}
       </p>
-      {locked && <p className="hint">このメモは保存したので、今日はもう直しません。</p>}
+      {locked && <p className="hint">このメモは保存したので変えません（カルテは、保存したカルテの見出しの「直す」で直せます）。</p>}
       <p id="karte-memo-voice" className="hint">
         スマホのキーボードの音声入力（マイクのボタン）で話して入れられます。PC では、下の「録音からメモを作る」で作った要点も入れられます。
       </p>

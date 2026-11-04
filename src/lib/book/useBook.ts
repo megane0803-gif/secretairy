@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import type { BookedRow } from "../ai/wire";
 import { BOOK_KEY, readBrowser, subscribeBrowser, writeBrowser } from "../browser";
 import { calDay, demoClock, shopToday } from "../calendar";
-import { allKartes, resolveSeedKartes, toVisits } from "../karte/record";
+import { allKartes, resolveSeedKartes, toVisits, withSeedKarteEdits } from "../karte/record";
 import {
   loadBook,
   resolveChatReservations,
@@ -90,7 +90,7 @@ export function useBook(data: BookData) {
       status: r.status,
       newCustomer: r.customer.firstVisit,
     }));
-    const kartes = allKartes(resolveSeedKartes(data.seedKartes, all), state.kartes);
+    const kartes = allKartes(withSeedKarteEdits(resolveSeedKartes(data.seedKartes, all), state.seedKarteEdits), state.kartes);
     return { anchor, book, all, booked, kartes, visits: toVisits(kartes), pending: pendingApprovals(state, nowIso) };
   }, [data, shop, state, today, nowIso]);
 

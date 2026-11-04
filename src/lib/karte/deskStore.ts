@@ -4,10 +4,13 @@
 // 画面を開いている間だけ覚える（保存したカルテはブラウザの中に残す。book/state.ts の kartes）。
 
 import { useSyncExternalStore } from "react";
+import type { KarteSections } from "./format";
 import type { KarteDraft, KarteMode } from "./wire";
 
-/** 案（どのメモから作ったかもいっしょに持つ） */
-export type DeskDraft = KarteDraft & { memo: string };
+/**
+ * 案（どのメモから作ったかもいっしょに持つ）。人が見出しを直したら、元の案を aiSections に、直した見出しを edited に持つ（edit.ts）
+ */
+export type DeskDraft = KarteDraft & { memo: string; aiSections?: KarteSections; edited?: string[] };
 
 export type DeskState = {
   /** 選んでいる予約の id */

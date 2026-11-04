@@ -1,8 +1,9 @@
 "use client";
 
-// 朝の要点（並べるだけ。AI の文章はまだ）。このブラウザの台帳・カルテから、プログラムが数えて並べる。
-// 今日の予約・そのお客様の前回メモ（次回提案）・今日の空き枠。
-// デモ用の「翌日へ」で今日を1営業日先へ（定休日は飛ばす）。「最初に戻す」で本当の今日に戻る。
+// 朝の要点。このブラウザの台帳・カルテから、プログラムが数えて並べる。
+// 今日の予約・そのお客様の前回メモ（次回提案）・今日の空き枠。AI の一言（BriefNotes）は気をつける点を数個まで（文だけ）。
+// デモ用の「翌日へ」で今日を1営業日先へ（定休日は飛ばす）。押すと前日のお知らせ（デモ・送らない）を見せる。
+// 「最初に戻す」で本当の今日に戻る。
 
 import { resolveMenu } from "@/lib/combo";
 import { BigNumber, Checked, CustomerName, MiniBar } from "@/components/parts";
@@ -10,25 +11,35 @@ import { ResetBook } from "@/components/ResetBook";
 import type { BookData } from "@/lib/book/data";
 import { withNextDay } from "@/lib/book/state";
 import { useBook } from "@/lib/book/useBook";
-import { businessDayAt, calDay } from "@/lib/calendar";
+import { addDays, businessDayAt, calDay } from "@/lib/calendar";
 import { latestBefore, nextLines } from "@/lib/karte/record";
 import { writeJournal } from "@/lib/journal";
+import { dayBeforeReminders, type Reminder } from "@/lib/reminder";
 import { freeRanges } from "@/lib/reservations";
 import { useApprovals } from "@/lib/useApprovals";
-import type { KarteHeading, TodoSettings } from "@/lib/settings";
+import type { BriefAiSettings, KarteHeading, ReminderSettings, TodoSettings } from "@/lib/settings";
 import { useTodos } from "@/lib/todo/useTodos";
 import { MemoThrow } from "@/components/MemoThrow";
 import { TodoTop } from "@/components/TodoTop";
+import { useState } from "react";
+import { BriefNotes } from "./BriefNotes";
+import { DayBeforeReminders } from "./DayBeforeReminders";
 
 export function HomeSummary({
   data,
   headings,
   todo,
+  reminder,
+  brief,
 }: {
   data: BookData;
   headings: KarteHeading[];
   /** 今やる N 件・「戻す」の秒数・メモの字数（config） */
   todo: TodoSettings & { maxMemoChars: number };
+  /** 前日のお知らせの決まった形（config/reminder.json） */
+  reminder: ReminderSettings;
+  /** AI の一言の上限（config/ai.json の brief） */
+  brief: Omit<BriefAiSettings, "model">;
 }) {
   const book = useBook(data);
   // 承認待ちは承認の箱の行と同じ数（approvals.ts）
@@ -40,12 +51,20 @@ export function HomeSummary({
   // 今日のこれからの空き（いまの時刻より前の枠は数えない）
   const free = freeRanges(book.shop, book.today, book.all, book.now.date === book.today.date ? book.now.time : undefined);
   const day = book.book.week.find((d) => d.date === book.today.date);
+  // 「翌日へ」で見せる前日のお知らせ（画面を開いている間だけ。本当には送らない）
+  const [remind, setRemind] = useState<{ dayLabel: string; sentLabel: string; list: Reminder[] } | null>(null);
 
   const nextDay = (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted) return;
     const to = businessDayAt(data.shop, book.today, 1);
     book.update(withNextDay);
-    writeJournal({ who: "オーナー", text: `デモ：翌日へ（${book.today.label} → ${to?.label ?? "次の営業日"}。定休日は飛ばす）` });
+    // その日（進めた先の今日）に確定の予約がある方へ、前日に届いたつもりのお知らせ（決まった形・AI なし・送らない）
+    const list = to ? dayBeforeReminders(book.all, to.date, reminder.template, data.shop.name) : [];
+    if (to) setRemind({ dayLabel: to.label, sentLabel: calDay(data.shop, addDays(to.date, -1)).label, list });
+    writeJournal(
+      { who: "オーナー", text: `デモ：翌日へ（${book.today.label} → ${to?.label ?? "次の営業日"}。定休日は飛ばす）` },
+      ...(to ? [{ who: "プログラム" as const, text: `デモ：前日のお知らせを${list.length}件見せた（${to.label}のご予約。決まった形・実際には送信していない）` }] : []),
+    );
   };
 
   return (
@@ -62,6 +81,18 @@ export function HomeSummary({
         <BigNumber label="承認待ち" value={approvals.count} unit="件" />
         <BigNumber label="今日の ToDo" value={todos} unit="件" />
       </div>
+
+      {remind && (
+        <DayBeforeReminders
+          reminders={remind.list}
+          dayLabel={remind.dayLabel}
+          sentLabel={remind.sentLabel}
+          demoNote={reminder.demoNote}
+          onClose={() => setRemind(null)}
+        />
+      )}
+
+      <BriefNotes data={data} headings={headings} limits={brief} />
 
       <section className="brief" aria-labelledby="brief-todo">
         <h3 id="brief-todo">今やる{todo.topCount}件</h3>

@@ -1,12 +1,12 @@
 [
-  { "id": "c01", "surname": "青木", "fictional": true, "firstVisit": false },
-  { "id": "c02", "surname": "石田", "fictional": true, "firstVisit": false },
-  { "id": "c03", "surname": "上野", "fictional": true, "firstVisit": false },
-  { "id": "c04", "surname": "江口", "fictional": true, "firstVisit": false },
-  { "id": "c05", "surname": "大橋", "fictional": true, "firstVisit": false },
-  { "id": "c06", "surname": "加藤", "fictional": true, "firstVisit": false },
-  { "id": "c07", "surname": "木村", "fictional": true, "firstVisit": false },
-  { "id": "c08", "surname": "久保", "fictional": true, "firstVisit": false },
-  { "id": "c09", "surname": "小林", "fictional": true, "firstVisit": true },
-  { "id": "c10", "surname": "佐野", "fictional": true, "firstVisit": true }
+  { "id": "c01", "surname": "青木", "kana": "あおき", "fictional": true, "firstVisit": false },
+  { "id": "c02", "surname": "石田", "kana": "いしだ", "fictional": true, "firstVisit": false },
+  { "id": "c03", "surname": "上野", "kana": "うえの", "fictional": true, "firstVisit": false },
+  { "id": "c04", "surname": "江口", "kana": "えぐち", "fictional": true, "firstVisit": false },
+  { "id": "c05", "surname": "大橋", "kana": "おおはし", "fictional": true, "firstVisit": false },
+  { "id": "c06", "surname": "加藤", "kana": "かとう", "fictional": true, "firstVisit": false },
+  { "id": "c07", "surname": "木村", "kana": "きむら", "fictional": true, "firstVisit": false },
+  { "id": "c08", "surname": "久保", "kana": "くぼ", "fictional": true, "firstVisit": false },
+  { "id": "c09", "surname": "小林", "kana": "こばやし", "fictional": true, "firstVisit": true },
+  { "id": "c10", "surname": "佐野", "kana": "さの", "fictional": true, "firstVisit": true }
 ]

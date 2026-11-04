@@ -53,5 +53,14 @@
   },
   "jobs": {
     "maxAiCallsPerPress": 4
+  },
+  "brief": {
+    "model": "claude-haiku-5-5",
+    "maxReplyTokens": 300,
+    "maxNotes": 3,
+    "maxNoteChars": 60,
+    "maxItems": 30,
+    "maxItemChars": 200,
+    "maxRequestChars": 30000
   }
 }

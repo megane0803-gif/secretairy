@@ -8,6 +8,9 @@ export type JournalWho = "AI" | "オーナー" | "プログラム" | "LINE" | "�
 
 export type JournalEntry = { id: string; at: string; who: JournalWho; text: string };
 
+/** 日誌の欄で畳まずに出す行の数（新しい方から。残りは畳む） */
+export const JOURNAL_SHOW = 5;
+
 /** 残しておく行の数（古い物から消す） */
 export const JOURNAL_MAX = 300;
 
