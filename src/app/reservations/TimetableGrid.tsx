@@ -82,6 +82,7 @@ export function TimetableGrid({ tt }: { tt: Timetable }) {
                   {b.menuName}
                   {b.status === "hold" && <span className="tag hold">仮押さえ</span>}
                   {b.fresh && <span className="tag ok">承認で確定</span>}
+                  {b.site && <span className="tag from-site">予約サイトから</span>}
                   {b.firstVisit && <span className="tt-band-first">初めての方</span>}
                 </span>
               </li>

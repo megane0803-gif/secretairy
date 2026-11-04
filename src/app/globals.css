@@ -707,6 +707,10 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .site-grid td.free { color: var(--ok); }
 .site-grid td.few { color: var(--warn); font-weight: 700; }
 .site-grid td.full { color: var(--muted); font-weight: 700; background: var(--bg); }
+.site-grid td.bysite { text-decoration: underline dotted; }
+.site-demo { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.site-demo-note { margin: 4px 0; }
+.bysite-key { text-decoration: underline dotted; }
 .site-grid td.off { color: var(--line); }
 .site-grid td.bychat { outline: 2px solid var(--accent); outline-offset: -2px; }
 .site-legend { font-size: 0.75rem; color: var(--muted); margin: 6px 0 0; }
@@ -1073,6 +1077,8 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .legend-item.actor-human::before,
 .legend-item.actor-outside::before { display: none; }
 .slot.actor-outside { border-left-color: var(--who-outside); }
+/* 予約サイト（架空）から入った予約の札（外の相手 = 藍。文字つき） */
+.tag.from-site { background: transparent; color: var(--who-outside); border: 1px solid var(--who-outside); }
 .slot.actor-human { border-left-color: var(--who-human); background: color-mix(in srgb, var(--who-human) 12%, transparent); }
 .slot.hold.actor-ai {
   border-left: 3px dashed var(--who-ai);

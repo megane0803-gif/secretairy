@@ -30,17 +30,19 @@ describe("1. だれがした事か（src/lib/actors.ts）", () => {
     assert.deepEqual(ACTOR_LABEL, { ai: "AI", human: "人", outside: "外" });
   });
 
-  test("台帳：仮押さえ = AI・承認で確定 = 人・前からの確定 = 外", () => {
+  test("台帳：仮押さえ = AI・承認で確定 = 人・最初からの確定（店が受けて確定した予約）= 人・予約サイト（架空）から = 外", () => {
     assert.equal(reservationActor({ status: "hold", source: "chat" }), "ai");
     assert.equal(reservationActor({ status: "hold", source: "seed" }), "ai");
     assert.equal(reservationActor({ status: "confirmed", source: "chat" }), "human");
-    assert.equal(reservationActor({ status: "confirmed", source: "seed" }), "outside");
+    assert.equal(reservationActor({ status: "confirmed", source: "seed" }), "human");
+    assert.equal(reservationActor({ status: "confirmed", source: "site" }), "outside");
   });
 
-  test("日誌：AI = AI・オーナー = 人・LINE = 外・プログラムはどれでもない", () => {
+  test("日誌：AI = AI・オーナー = 人・LINE = 外・予約サイト = 外・プログラムはどれでもない", () => {
     assert.equal(journalActor("AI"), "ai");
     assert.equal(journalActor("オーナー"), "human");
     assert.equal(journalActor("LINE"), "outside");
+    assert.equal(journalActor("予約サイト"), "outside");
     assert.equal(journalActor("プログラム"), null);
   });
 });
@@ -59,6 +61,7 @@ describe("2. 札は色だけに頼らず文字を出す", () => {
     assert.match(html(createElement(JournalWhoTag, { who: "AI" })), /actor-ai"[^>]*><b class="actor-mark">AI<\/b><\/span>$/);
     assert.match(html(createElement(JournalWhoTag, { who: "オーナー" })), /actor-human"[^>]*><b class="actor-mark">人<\/b> オーナー<\/span>$/);
     assert.match(html(createElement(JournalWhoTag, { who: "LINE" })), /actor-outside"[^>]*><b class="actor-mark">外<\/b> LINE<\/span>$/);
+    assert.match(html(createElement(JournalWhoTag, { who: "予約サイト" })), /actor-outside"[^>]*><b class="actor-mark">外<\/b> 予約サイト<\/span>$/);
     assert.equal(html(createElement(JournalWhoTag, { who: "プログラム" })), '<span class="tag who who-program">プログラム</span>');
   });
 });

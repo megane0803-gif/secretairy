@@ -2,7 +2,7 @@
 
 // 1週間の予約台帳（真ん中）。最初の状態に、このブラウザの仮押さえ・確定を重ねて出す。
 // 仮押さえと確定は色で分ける。数（件数・埋まり）はプログラムが出す。
-// 色はだれが入れたか（仮押さえ = AI・承認で確定 = 人・前からの確定 = 外。src/lib/actors.ts）。色だけに頼らず「AI」「人」「外」の札を添える。
+// 色はだれが入れたか（仮押さえ = AI・承認で確定と店が受けた確定 = 人・予約サイト（架空）から = 外。src/lib/actors.ts）。色だけに頼らず「AI」「人」「外」の札を添える。
 
 import { ActorTag, Checked, CustomerName, MiniBar } from "@/components/parts";
 import { reservationActor } from "@/lib/actors";
@@ -46,7 +46,7 @@ export function Ledger({ data, className }: { data: BookData; className?: string
                     {d.reservations.map((r) => (
                       <li
                         key={r.id}
-                        className={`${r.status === "hold" ? "slot hold" : r.source === "chat" ? "slot confirmed fresh" : "slot confirmed"} actor-${reservationActor(r)}`}
+                        className={`${r.status === "hold" ? "slot hold" : r.source === "chat" ? "slot confirmed fresh" : r.source === "site" ? "slot confirmed from-site" : "slot confirmed"} actor-${reservationActor(r)}`}
                       >
                         <ActorTag actor={reservationActor(r)} />
                         <span className="slot-time num">
@@ -57,6 +57,7 @@ export function Ledger({ data, className }: { data: BookData; className?: string
                           {r.menu.name}
                           {r.status === "hold" && <span className="tag hold">仮押さえ</span>}
                           {r.status === "confirmed" && r.source === "chat" && <span className="tag ok">承認で確定</span>}
+                          {r.source === "site" && <span className="tag from-site">予約サイトから</span>}
                         </span>
                         <CustomerName surname={r.customer.surname} fictional={r.customer.fictional} />
                         {r.customer.firstVisit && <span className="slot-first">初めての方</span>}
@@ -92,11 +93,11 @@ export function LedgerNotes({ book }: { book: Book }) {
         </p>
       )}
       <p className="legend">
-        <span className="legend-item confirmed actor-outside">
-          <ActorTag actor="outside" /> 確定（前からの予約）
-        </span>
         <span className="legend-item confirmed actor-human">
-          <ActorTag actor="human" /> 確定（承認で確定）
+          <ActorTag actor="human" /> 確定（店が受けた予約・承認で確定）
+        </span>
+        <span className="legend-item confirmed actor-outside">
+          <ActorTag actor="outside" /> 確定（予約サイトから）
         </span>
         <span className="legend-item hold actor-ai">
           <ActorTag actor="ai" /> 仮押さえ（承認待ち）

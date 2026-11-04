@@ -101,22 +101,34 @@ describe("1. 時間割の並べ方（src/lib/book/timetable.ts）", () => {
     if (cut && straight) assert.ok(Math.abs(straight.height - cut.height * 3) < 0.05);
   });
 
-  test("最初の状態の確定は「外」、仮押さえは「AI」、承認で確定は「人」", () => {
+  test("最初の状態の確定（店が受けた予約）は「人」、仮押さえは「AI」、承認で確定は「人」、予約サイト（架空）から入った予約だけ「外」", () => {
     for (const b of tt.columns.flatMap((c) => c.bands)) {
       if (b.status === "hold") assert.equal(b.actor, "ai");
-      else assert.equal(b.actor, "outside");
+      else assert.equal(b.actor, "human");
     }
     const t2 = timetable(
-      loadBook(shop, menus, today, today, chat([{ start: "15:00", status: "hold" }, { start: "17:00", status: "confirmed", menuId: "headspa" }])).week,
+      loadBook(
+        shop,
+        menus,
+        today,
+        today,
+        chat([
+          { start: "15:00", status: "hold" },
+          { start: "17:00", status: "confirmed", menuId: "headspa" },
+          { start: "11:00", status: "confirmed", via: "site" },
+        ]),
+      ).week,
     );
-    const mine = t2.columns[0].bands.filter((b) => b.id.startsWith("chat-"));
+    const mine = t2.columns[0].bands.filter((b) => b.id.startsWith("chat-")).sort((a, b) => a.id.localeCompare(b.id));
     assert.deepEqual(
-      mine.map((b) => [b.status, b.actor, b.fresh]),
+      mine.map((b) => [b.status, b.actor, b.fresh, b.site === true]),
       [
-        ["hold", "ai", false],
-        ["confirmed", "human", true],
+        ["hold", "ai", false, false],
+        ["confirmed", "human", true, false],
+        ["confirmed", "outside", false, true],
       ],
     );
+    assert.match(bandTitle(mine[2]), /確定（予約サイトから） ［外：外の相手］$/);
   });
 
   test("いまの線は、今日の列の今の時刻（営業時間の外・7日の外なら出さない）", () => {
@@ -159,7 +171,11 @@ describe("1. 時間割の並べ方（src/lib/book/timetable.ts）", () => {
 });
 
 describe("2. 時間割の出し方（TimetableGrid）", () => {
-  const list = chat([{ start: "15:00", status: "hold" }, { start: "17:00", status: "confirmed", menuId: "headspa" }]);
+  const list = chat([
+    { start: "15:00", status: "hold" },
+    { start: "17:00", status: "confirmed", menuId: "headspa" },
+    { start: "11:00", status: "confirmed", via: "site" },
+  ]);
   const tt = timetable(loadBook(shop, menus, today, today, list).week, { date: MONDAY, time: "12:30" });
   const html = render(tt);
 
@@ -189,6 +205,7 @@ describe("2. 時間割の出し方（TimetableGrid）", () => {
     for (const b of bands) assert.ok(html.includes(`${b.surname} 様`), b.surname);
     assert.match(html, /<span class="tag hold">仮押さえ<\/span>/);
     assert.match(html, /<span class="tag ok">承認で確定<\/span>/);
+    assert.equal(count(html, /<span class="tag from-site">予約サイトから<\/span>/g), 1, "予約サイト（架空）から入った帯に札");
   });
 
   test("帯の頭に「AI」「人」「外」の文字の札（色だけに頼らない）", () => {
