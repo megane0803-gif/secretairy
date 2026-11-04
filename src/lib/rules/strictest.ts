@@ -44,6 +44,7 @@ export function strictnessNumber(check: RuleCheck): number {
     case "lastStart":
       return toMinutes(check.time);
     case "noSameDay":
+    case "notTogether":
     case "text":
       return 0;
   }
@@ -51,11 +52,12 @@ export function strictnessNumber(check: RuleCheck): number {
 
 /**
  * 「1つでもあれば効く」（any）の種類で、同じ物とみなす印。
- * 「同じ日に不可」は相手のメニュー（with）ごとに中身がちがうので、相手ごとに1つずつ残す。
+ * 「いっしょに受けない組み合わせ」は2つのメニューごとに中身がちがうので、組み合わせごとに1つずつ残す
+ * （同じ2つなら、どちらのメニューに付けたルールでも1つにまとめる）。
  */
 function anyKey(r: Rule): string {
-  return r.check.kind === "noSameDay" && r.check.with && r.level === "menu"
-    ? `noSameDay|${[r.menuId, r.check.with].sort().join("|")}`
+  return r.check.kind === "notTogether" && r.level === "menu"
+    ? `notTogether|${[r.menuId, r.check.with].sort().join("|")}`
     : r.check.kind;
 }
 

@@ -17,10 +17,11 @@ export type RuleCheck =
   | { kind: "minLeadMinutes"; value: number } // 来店の何分前まで受けるか
   | { kind: "maxNewCustomersPerDay"; value: number } // 初めての方は1日何人まで
   | { kind: "bufferAfterMinutes"; value: number } // 施術のあと何分あけるか
-  // 同じ日に不可。with が無ければ「来店と同じ日（当日）の予約は受けない」。
-  // with があれば（メニューごとのルールだけ）「このメニューと with のメニューは同じ日に入れない」（1回の来店の組み合わせにも、同じ方のその日のほかの予約にも効く）
-  | { kind: "noSameDay"; with?: string }
+  | { kind: "noSameDay" } // 当日の予約は不可（来店と同じ日の予約は受けない）
   | { kind: "lastStart"; time: string } // この時刻（HH:MM）までに始める
+  // いっしょに受けない組み合わせ（メニューごとのルール）：このメニューと with のメニューは同じ日に受けない。
+  // 1回の来店の組み合わせにも、同じお客様のその日のほかの予約にも効く
+  | { kind: "notTogether"; with: string }
   | { kind: "text" }; // 文だけ
 
 export type RuleKind = RuleCheck["kind"];
@@ -34,6 +35,7 @@ export const PROGRAM_KINDS: ProgramKind[] = [
   "bufferAfterMinutes",
   "noSameDay",
   "lastStart",
+  "notTogether",
 ];
 
 export type Rule = RuleScope & {
@@ -48,7 +50,7 @@ export type Rule = RuleScope & {
  * ルールがぶつかったとき、どちらが「厳しい」か。種類を足すときは必ずここにも足す。
  * "higher" = 数が大きい方が厳しい / "lower" = 数が小さい方が厳しい
  * "any" = 数を持たない種類。1つでもあれば効く（どれを使っても同じ）
- *   「同じ日に不可」の相手のメニュー（with）がちがうルールは、中身がちがうので別々に使う（strictest.ts の anyKey）
+ *   「いっしょに受けない組み合わせ」は2つのメニューごとに中身がちがうので、組み合わせごとに1つずつ使う（strictest.ts の anyKey）
  *
  * 最終受付（lastStart）は時刻を分に直して比べる。早い（小さい）方が厳しい。
  */
@@ -58,4 +60,5 @@ export const STRICTER: Record<ProgramKind, "higher" | "lower" | "any"> = {
   bufferAfterMinutes: "higher",
   noSameDay: "any",
   lastStart: "lower",
+  notTogether: "any",
 };

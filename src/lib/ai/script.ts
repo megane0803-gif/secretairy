@@ -113,9 +113,10 @@ export function scriptModel(ctx: Pick<SlotContext, "menus" | "today" | "shop" | 
     const menu_ids = r.menuIds.length ? r.menuIds : fallbackMenu ? [fallbackMenu] : [];
     if (!menu_ids.length) return null;
     if (r.dates.length > 1) return call("find_openings", { menu_ids, dates: r.dates, ...(r.start ? { after: r.start } : {}) });
-    if (r.span) return call("find_openings", { menu_ids, month: r.span.month, weekday: r.span.weekday });
-    if (r.date && r.start) return call("check_rules", { menu_ids, date: r.date, start: r.start });
+    if (r.span) return call("find_openings", { menu_ids, month: r.span.month, weekday: r.span.weekday, ...(r.start ? { after: r.start } : {}) });
+    // 日を言わずに時刻だけ（「18時にずらしたい」）なら、前の日（外した仮押さえの日）のその時刻で確かめる
     const date = r.date ?? fallbackDate;
+    if (date && r.start) return call("check_rules", { menu_ids, date, start: r.start });
     return call("find_openings", { menu_ids, ...(date ? { date } : {}) });
   };
 

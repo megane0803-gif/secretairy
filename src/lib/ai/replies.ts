@@ -106,7 +106,8 @@ export const MAX_SHOWN = 4;
 /**
  * その返事でお客様に出した候補。文に出てきた順。
  * - 仮押さえができた返事 → なし
- * - 文に日付と時刻が出てきた候補（この相談で道具が出した物と、前に出した物）
+ * - 文に日付と時刻が出てきた候補（この相談で道具が出した物 pool と、前の返事で出した物 previous）。
+ *   同じ日時でメニューだけちがう物は、この相談の物を使う（「ヘッドスパに変えたい。11/6の15時で」→ ヘッドスパ）
  * - 文に出てこないが「1つ目」と番号を付けて出している → この相談で道具が出した最後の候補
  * - どれでもない（取りやめ・お礼・聞き返しなど）→ なし
  */
@@ -115,20 +116,15 @@ export function shownCandidates(
   pool: Candidate[],
   latest: Candidate[] | null,
   held: boolean,
+  previous: Candidate[] = [],
 ): Candidate[] {
   if (held) return [];
-  const seen = new Set<string>();
-  const hits: { c: Candidate; at: number }[] = [];
-  for (const c of pool) {
-    const key = `${c.menuId}|${c.date}|${c.start}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const at = mentionAt(text, c);
-    if (at >= 0) hits.push({ c, at });
-  }
-  // 同じ日時でメニューだけ違う物は、あとから出た（新しい）方を使う
+  // 前の返事の物 → この相談の物（道具を呼んだ順）の順に重ねるので、同じ日時ならあとの（新しい）方が残る
   const byTime = new Map<string, { c: Candidate; at: number }>();
-  for (const h of hits) byTime.set(`${h.c.date}|${h.c.start}`, h);
+  for (const c of [...previous, ...pool]) {
+    const at = mentionAt(text, c);
+    if (at >= 0) byTime.set(`${c.date}|${c.start}`, { c, at });
+  }
   const list = [...byTime.values()].sort((a, b) => a.at - b.at).map((h) => h.c);
   if (list.length) return list.slice(0, MAX_SHOWN);
   if (latest && latest.length && /(1|一|ひと)つ目/.test(normalizeText(text))) return latest.slice(0, MAX_SHOWN);

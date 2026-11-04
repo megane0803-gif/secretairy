@@ -250,13 +250,13 @@ export function daysInMonth(ctx: Pick<SlotContext, "today">, month: string, week
 }
 
 /**
- * 組み合わせそのものが受けられないとき（相手のメニューつきの「同じ日に不可」のルール）、理由を1文で。受けられれば null。
+ * 組み合わせそのものが受けられないとき（「いっしょに受けない組み合わせ」のルール）、理由を1文で。受けられれば null。
  * 日時に関係なく断るので、空きを探す前に見る。
  */
 export function comboRefusal(ctx: SlotContext, menuId: string): string | null {
   const mine = new Set(expandMenuIds(partsOf(ctx.menus, menuId), ctx.menus));
   for (const r of ctx.rules) {
-    if (r.level !== "menu" || r.check.kind !== "noSameDay" || !r.check.with) continue;
+    if (r.level !== "menu" || r.check.kind !== "notTogether") continue;
     if (mine.has(r.menuId) && mine.has(r.check.with))
       return `「${r.label}」という決まりがあるので、${menuName(ctx, r.menuId)}と${menuName(ctx, r.check.with)}をいっしょにはお受けできません。`;
   }

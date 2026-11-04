@@ -226,8 +226,8 @@ describe("6. 1回の来店で複数のメニュー", () => {
     for (const c of r.candidates!) assert.ok(c.start <= "16:00", c.start);
   });
 
-  test("「同じ日に不可」（相手のメニューつき）のルール：受けられない組み合わせは理由を1文で（候補は出さない）", async () => {
-    const own: Rule = { id: "own-nt", level: "menu", menuId: "straight", label: "縮毛矯正とパーマは同じ日に受けない", check: { kind: "noSameDay", with: "perm" } };
+  test("「いっしょに受けない組み合わせ」のルール：受けられない組み合わせは理由を1文で（候補は出さない）", async () => {
+    const own: Rule = { id: "own-nt", level: "menu", menuId: "straight", label: "縮毛矯正とパーマは同じ日に受けない", check: { kind: "notTogether", with: "perm" } };
     const c2 = { ...ctx, rules: [...ctx.rules, own] };
     const r = await chat(c2, [{ role: "user", text: "縮毛矯正とパーマを11/7にお願いします" }]);
     assert.deepEqual(r.candidates, []);
@@ -318,5 +318,69 @@ describe("8. 予約ではない話への返し方", () => {
   test("仮押さえの「お店から確定のご連絡をします」では ToDo を足さない", async () => {
     const { turns } = await conversation(ctxAt(now), ["11/6の15時にカット", "1つ目で"]);
     assert.ok(!turns[1].events.some((e) => e.t === "todo"));
+  });
+});
+
+describe("自動レビューの指摘（4つ）", () => {
+  test("メニューだけ変えた時：同じ日時でも、ボタンは新しいメニュー（ヘッドスパ）を選ぶ", async () => {
+    const { turns } = await conversation(ctxAt(now), ["11/6の15時にカット", "ヘッドスパに変えたいです。11/6の15時で", "1つ目で"]);
+    assert.equal(turns[0].candidates?.[0].menuId, "cut");
+    assert.match(turns[1].text, /ヘッドスパ/);
+    assert.deepEqual(turns[1].candidates?.map((c) => c.menuId), ["headspa"], "ボタンも新しいメニュー");
+    assert.equal(turns[2].holds.length, 1);
+    assert.equal(turns[2].holds[0].menuId, "headspa", "仮押さえも新しいメニュー");
+  });
+
+  test("shownCandidates：前の返事と同じ日時なら、この相談の候補を使う", async () => {
+    const { shownCandidates } = await import("../replies");
+    const prev = [{ menuId: "cut", date: "2026-11-06", start: "15:00" }];
+    const cur = [{ menuId: "headspa", date: "2026-11-06", start: "15:00" }];
+    const text = "1つ目：11/6（金） 15:00–15:30 ヘッドスパ でお取りできます。";
+    assert.deepEqual(shownCandidates(text, cur, cur, false, prev), cur);
+    assert.deepEqual(shownCandidates("11/6（金） 15:00 のカットはいかがでしょう。", [], null, false, prev), prev, "この相談で出していなければ前の物");
+  });
+
+  test("「11/6か11/7（土）」：（土）は 11/7 の曜日。聞き返さずに2日とも探す", async () => {
+    const r = await chat(ctxAt(now), [{ role: "user", text: "11/6か11/7（土）にカットをお願いします" }]);
+    assert.ok(!r.steps.some((s) => s.kind === "ask"), r.text);
+    assert.deepEqual(
+      r.candidates!.map((c) => c.date),
+      ["2026-11-06", "2026-11-07"],
+    );
+  });
+
+  test("「11/6（土）か11/7」：（土）は 11/6 の曜日で食い違うので、聞き返す", async () => {
+    const r = await chat(ctxAt(now), [{ role: "user", text: "11/6（土）か11/7にカット" }]);
+    assert.ok(r.steps.some((s) => s.kind === "ask"));
+    assert.match(r.text, /11\/6は金曜日/);
+  });
+
+  test("時刻だけでずらす（「18時にずらしたい」）：前の仮押さえを外し、同じ日の18:00 で確かめる", async () => {
+    const { turns } = await conversation(ctxAt(now), ["11/6の15時にカット", "1つ目で", "18時にずらしたいです"]);
+    const shift = turns[2];
+    assert.ok(shift.events.some((e) => e.t === "release"), "前の仮押さえを外す");
+    assert.ok(shift.steps.some((s) => s.text.startsWith("ルールを確かめる：11/6（金） 18:00")), shift.steps.map((s) => s.text).join("\n"));
+    assert.deepEqual(shift.candidates, [{ menuId: "cut", date: "2026-11-06", start: "18:00" }]);
+  });
+
+  test("決まった返事で試し直す時も、この会話の仮押さえを引きつぐ（「やめたい」で外れる）", async () => {
+    const { carryOver } = await import("../carry");
+    const cur = { candidates: [{ menuId: "cut", date: "2026-11-06", start: "15:00" }], holds: ["h-1"] };
+    assert.deepEqual(carryOver(false, cur), cur, "やり直し（同じ会話）は引きつぐ");
+    assert.deepEqual(carryOver(true, cur), { candidates: [], holds: [] }, "新しい会話だけ空にする");
+    // 引きついだ仮押さえがあれば、決まった返事の「やめたい」で外れる
+    const { turns, ctx } = await conversation(ctxAt(now), ["11/6の15時にカット", "1つ目で"]);
+    const hold = turns[1].holds[0];
+    const retried = carryOver(false, { candidates: ctx.shown, holds: ctx.convHolds });
+    const r = await chat({ ...ctx, shown: retried.candidates, convHolds: retried.holds }, [{ role: "user", text: "やっぱりやめたいです" }]);
+    assert.ok(r.events.some((e) => e.t === "release" && e.holdId === hold.id));
+  });
+
+  test("画面のやり直し（trySample）は新しい会話にしない：fresh を付けるのは別の方に切りかえる時だけ", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("../../../app/reservations/ReserveChat.tsx", import.meta.url), "utf8");
+    assert.match(src, /carryOver\(over\?\.fresh === true/);
+    assert.equal((src.match(/fresh: true/g) ?? []).length, 1, "fresh: true は例文で別の方に切りかえる所だけ");
+    assert.doesNotMatch(src, /holds: over\?\.msgs \? \[\]/);
   });
 });

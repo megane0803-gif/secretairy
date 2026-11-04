@@ -69,9 +69,12 @@ export function findDates(today: string, raw: string): DateMention[] {
   return out.sort((a, b) => a.index - b.index);
 }
 
-/** 文の中の曜日（「金曜」「（金）」「金曜日」）。日付のすぐ後ろのかっこも読む */
-function weekdayNear(t: string, from: number): { w: number; index: number } | null {
-  const rest = t.slice(from, from + 12);
+/**
+ * 文の中の曜日（「金曜」「（金）」「金曜日」）。日付のすぐ後ろのかっこも読む。
+ * until（次の日付の位置）より先は見ない（「11/6か11/7（土）」の（土）は 11/7 の物で、11/6 の物ではない）
+ */
+function weekdayNear(t: string, from: number, until = Infinity): { w: number; index: number } | null {
+  const rest = t.slice(from, Math.min(from + 12, until));
   const m = rest.match(/^[^。、]*?[（(]([月火水木金土日])[）)]/) ?? rest.match(/^[^。、]{0,4}?([月火水木金土日])曜/);
   if (!m) return null;
   return { w: JA.indexOf(m[1]), index: from + (m.index ?? 0) };
@@ -117,7 +120,8 @@ export function dateConflict(shop: ShopSettings, today: string, raw: string): Da
 
   // 1. 日付と曜日：「11/6（木）」で11/6が金曜
   for (const d of dates) {
-    const near = weekdayNear(t, d.index + d.text.length);
+    const next = dates.find((x) => x.index > d.index)?.index;
+    const near = weekdayNear(t, d.index + d.text.length, next);
     if (!near || near.w < 0) continue;
     const real = weekdayIndex(d.date);
     if (real === near.w) continue;
@@ -139,7 +143,9 @@ export function dateConflict(shop: ShopSettings, today: string, raw: string): Da
     if (!d) continue;
     const { from, to } = weekRange(today, n);
     if (d.date >= from && d.date <= to) continue;
-    const near = weekdayNear(t, d.index + d.text.length) ?? weekdayNear(t, i + word.length);
+    const next = dates.find((x) => x.index > d.index)?.index;
+    const near =
+      weekdayNear(t, d.index + d.text.length, next) ?? (i < d.index ? weekdayNear(t, i + word.length, d.index) : null);
     const w = near && near.w >= 0 ? near.w : weekdayIndex(d.date);
     const inWeek = addDays(from, (w + 6) % 7);
     const actual = Math.floor(dayDiff(mondayOf(today), mondayOf(d.date)) / 7);

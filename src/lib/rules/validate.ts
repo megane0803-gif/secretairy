@@ -111,20 +111,20 @@ export function validateOwnerRule(raw: unknown, menuIds?: string[]): Checked<Rul
         return { ok: false, reason: `数は ${lim.min} から ${lim.max} までの整数で入れてください。` };
       return { ok: true, value: { ...base, label, check: { kind: check.kind, value: check.value } } };
     }
-    case "noSameDay": {
-      if (check.with === undefined || check.with === null || check.with === "")
-        return { ok: true, value: { ...base, label, check: { kind: "noSameDay" } } };
-      // 相手のメニューを付ける（組み合わせに効かせる）のは、メニューごとのルールだけ
-      if (scope.level !== "menu") return { ok: false, reason: "いっしょに入れないメニューを付けるときは、「メニュー」に付けてください。" };
-      if (typeof check.with !== "string") return { ok: false, reason: "いっしょに入れないメニューを選んでください。" };
-      if (check.with === scope.menuId) return { ok: false, reason: "ちがうメニューを選んでください。" };
-      if (menuIds && !menuIds.includes(check.with)) return { ok: false, reason: "そのメニューは見つかりません。" };
-      return { ok: true, value: { ...base, label, check: { kind: "noSameDay", with: check.with } } };
-    }
+    case "noSameDay":
+      return { ok: true, value: { ...base, label, check: { kind: "noSameDay" } } };
     case "lastStart":
       if (typeof check.time !== "string" || !HHMM.test(check.time))
         return { ok: false, reason: "時刻は 18:00 のように入れてください。" };
       return { ok: true, value: { ...base, label, check: { kind: "lastStart", time: check.time } } };
+    case "notTogether": {
+      // 2つのメニューを選ぶ：1つ目はどこに効くか（メニュー）、2つ目は with
+      if (scope.level !== "menu") return { ok: false, reason: "この種類は「メニュー」に付けて、2つのメニューを選んでください。" };
+      if (typeof check.with !== "string" || !check.with) return { ok: false, reason: "いっしょに受けないメニューを選んでください。" };
+      if (check.with === scope.menuId) return { ok: false, reason: "ちがう2つのメニューを選んでください。" };
+      if (menuIds && !menuIds.includes(check.with)) return { ok: false, reason: "そのメニューは見つかりません。" };
+      return { ok: true, value: { ...base, label, check: { kind: "notTogether", with: check.with } } };
+    }
     case "text":
       return { ok: true, value: { ...base, label, check: { kind: "text" } } };
     default:

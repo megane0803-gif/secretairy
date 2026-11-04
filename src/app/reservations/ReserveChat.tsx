@@ -6,6 +6,7 @@
 // AI は仮押さえまで。確定はオーナーが承認の箱で押す。
 
 import { useMemo, useRef, useState } from "react";
+import { carryOver } from "@/lib/ai/carry";
 import { buildExamples, type Example } from "@/lib/ai/examples";
 import { candidateLabel, previousVisit, type SlotContext } from "@/lib/ai/slots";
 import { addStep, markFailed, startConsultation } from "@/lib/ai/stepsStore";
@@ -75,7 +76,8 @@ export function ReserveChat({ data }: { data: BookData }) {
     setConvHolds([]);
   };
 
-  async function send(raw: string, over?: { mode?: ChatMode; msgs?: Msg[]; customerId?: string }) {
+  /** over.fresh = 新しい会話（候補・この会話の仮押さえを引きつがない）。やり直し（trySample）は fresh にしない */
+  async function send(raw: string, over?: { mode?: ChatMode; msgs?: Msg[]; customerId?: string; fresh?: boolean }) {
     const t = raw.trim().slice(0, MAX_CHARS);
     const customer = data.customers.find((c) => c.id === (over?.customerId ?? customerId));
     if (!t || busy || !customer) return;
@@ -95,14 +97,13 @@ export function ReserveChat({ data }: { data: BookData }) {
     const body: ReserveRequest = {
       mode: useMode,
       messages: history,
-      candidates: over?.msgs ? [] : candidates,
+      ...carryOver(over?.fresh === true, { candidates, holds: convHolds }),
       customer: { id: customer.id, surname: customer.surname, firstVisit: customer.firstVisit },
       booked: book.booked,
       rules: rules.filter((r) => !r.locked),
       // そのお客様のカルテの日付とメニューだけ（中身は送らない）
       visits: book.visits.filter((v) => v.customerId === customer.id),
       dayOffset: book.dayOffset,
-      holds: over?.msgs ? [] : convHolds,
     };
     // この相談の中で増えた・外した仮押さえ（画面の側でも、この会話の物かを確かめる）
     const mine = new Set(body.holds);
@@ -236,7 +237,7 @@ export function ReserveChat({ data }: { data: BookData }) {
       setMsgs(fresh);
       setCandidates([]);
       setConvHolds([]);
-      void send(ex.text, { msgs: fresh, customerId: withPast.id });
+      void send(ex.text, { msgs: fresh, customerId: withPast.id, fresh: true });
       return;
     }
     void send(ex.text);

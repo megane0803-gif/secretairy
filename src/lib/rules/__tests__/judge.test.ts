@@ -72,7 +72,7 @@ describe("間を空ける（bufferAfterMinutes）", () => {
   });
 });
 
-describe("同じ日に不可（noSameDay）", () => {
+describe("当日の予約は不可（noSameDay）", () => {
   const r = rule({ kind: "noSameDay" });
   test("通る：前の日に予約する", () => {
     const v = run([r], { date: "2026-11-05" });
@@ -131,8 +131,8 @@ describe("店の設定で確かめる所", () => {
   });
 });
 
-describe("同じ日に不可：相手のメニューつき（組み合わせに効く。noSameDay の with）", () => {
-  const r = rule({ kind: "noSameDay", with: "m90" }, { level: "menu", menuId: "m60" });
+describe("いっしょに受けない組み合わせ（notTogether）", () => {
+  const r = rule({ kind: "notTogether", with: "m90" }, { level: "menu", menuId: "m60" });
   const seats = { seats: 3 };
   test("通る：60分のメニューだけ", () => {
     const v = run([r], { menuIds: ["m60"] }, seats);
@@ -143,51 +143,73 @@ describe("同じ日に不可：相手のメニューつき（組み合わせに�
     const v = run([r], { menuIds: ["m60"], customerId: "a" }, { ...seats, existing: [{ date: "2026-11-05", start: "10:00", menuIds: ["m90"], newCustomer: false, customerId: "b" }] });
     assert.equal(v.ok, true);
   });
+  test("通る：同じ方でも、ちがう日なら受ける", () => {
+    const existing = [{ date: "2026-11-06", start: "10:00", menuIds: ["m90"], newCustomer: false, customerId: "a" }];
+    const v = run([r], { menuIds: ["m60"], customerId: "a" }, { ...seats, existing });
+    assert.equal(v.ok, true);
+  });
   test("断る：1回の来店で60分と90分のメニュー", () => {
     const v = run([r], { menuIds: ["m60", "m90"] }, seats);
     assert.equal(resultOf(v, r)?.ok, false);
     assert.equal(v.ok, false);
   });
-  test("断る：同じ方がその日に90分のメニューを入れている（どちらに付けたルールでも効く）", () => {
+  test("断る：同じ方がその日に相手のメニューを入れている（どちらに付けたルールでも効く）", () => {
     const existing = [{ date: "2026-11-05", start: "10:00", menuIds: ["m60"], newCustomer: false, customerId: "a" }];
     const v = run([r], { menuIds: ["m90"], start: "15:00", customerId: "a" }, { ...seats, existing });
     assert.equal(resultOf(v, r)?.ok, false);
     assert.match(resultOf(v, r)!.reason, /同じ日に/);
   });
-  test("同じ組み合わせのルールは1つにまとめる（どちらのメニューに付けても同じ）", () => {
-    const r2 = rule({ kind: "noSameDay", with: "m60" }, { level: "menu", menuId: "m90" });
+  test("断る：組み合わせのメニュー（中に2つとも入っている）", () => {
+    const menus = [...MENUS, { id: "combo", name: "組み合わせ", minutes: 150, includes: ["m60", "m90"] }];
+    const v = run([r], { menuIds: ["combo"] }, { ...seats, menus });
+    assert.equal(resultOf(v, r)?.ok, false);
+  });
+  test("同じ2つのルールは1つにまとめる（どちらのメニューに付けても同じ）", () => {
+    const r2 = rule({ kind: "notTogether", with: "m60" }, { level: "menu", menuId: "m90" });
     const v = run([r, r2], { menuIds: ["m60", "m90"] }, seats);
     assert.equal(v.results.filter((x) => !x.ok).length, 1);
   });
-  test("相手のちがう組み合わせのルールは、ぜんぶ使う", () => {
+  test("ちがう2つのルールは、ぜんぶ使う", () => {
     const menus = [...MENUS, { id: "m30", name: "30分のメニュー", minutes: 30 }];
-    const r3 = rule({ kind: "noSameDay", with: "m30" }, { level: "menu", menuId: "m60" });
+    const r3 = rule({ kind: "notTogether", with: "m30" }, { level: "menu", menuId: "m60" });
     const v = run([r, r3], { menuIds: ["m60", "m90", "m30"] }, { ...seats, menus });
     assert.equal(v.results.filter((x) => !x.ok).length, 2);
   });
-  test("相手のメニューの無い「同じ日に不可」（当日の予約は受けない）はそのまま：相手つきと別に効く", () => {
+  test("「当日の予約は不可」とは別の種類：当日の判定には関係しない", () => {
     const today = rule({ kind: "noSameDay" }, { level: "menu", menuId: "m60" });
     const v = run([r, today], { date: "2026-11-04", start: "15:00", menuIds: ["m60"] }, seats);
     assert.equal(resultOf(v, today)?.ok, false, "当日の予約は断る");
-    assert.equal(resultOf(v, r)?.ok, true, "組み合わせではないので相手つきは通る");
+    assert.equal(resultOf(v, r)?.ok, true, "組み合わせではないので通る");
+    const v2 = run([r, today], { menuIds: ["m60", "m90"] }, seats);
+    assert.equal(resultOf(v2, today)?.ok, true, "前の日の予約なので当日不可は通る");
+    assert.equal(resultOf(v2, r)?.ok, false, "組み合わせは断る");
   });
-  test("当日不可のメニューごとのルールは、そのメニューを含む組み合わせのメニューにも効く", () => {
+});
+
+describe("「当日の予約は不可」は組み合わせのメニューにも効く", () => {
+  test("メニューごとの当日不可は、そのメニューを含む組み合わせにも効く", () => {
     const menus = [...MENUS, { id: "combo", name: "組み合わせ", minutes: 150, includes: ["m60", "m90"] }];
     const today = rule({ kind: "noSameDay" }, { level: "menu", menuId: "m90" });
-    const v = run([today], { date: "2026-11-04", start: "15:00", menuIds: ["combo"] }, { ...seats, menus });
+    const v = run([today], { date: "2026-11-04", start: "15:00", menuIds: ["combo"] }, { seats: 3, menus });
     assert.equal(resultOf(v, today)?.ok, false);
   });
 });
 
-describe("同じ日に不可（相手のメニューつき）を足すときの確かめ（validate.ts）", () => {
-  test("メニューに付ければ受け付ける・全体やタブには付けられない・同じメニューどうしは受け付けない", async () => {
+describe("いっしょに受けない組み合わせを足すときの確かめ（validate.ts）", () => {
+  test("メニューに付けて2つのメニューを選べば受け付ける・全体やタブには付けられない・同じメニューどうしは受け付けない", async () => {
     const { validateOwnerRule } = await import("../validate");
     const base = { id: "own-x", label: "縮毛矯正とパーマは同じ日に受けない" };
-    const ok = validateOwnerRule({ ...base, level: "menu", menuId: "straight", check: { kind: "noSameDay", with: "perm" } }, ["straight", "perm"]);
-    assert.ok(ok.ok && ok.value.check.kind === "noSameDay" && ok.value.check.with === "perm");
-    assert.equal(validateOwnerRule({ ...base, level: "global", check: { kind: "noSameDay", with: "perm" } }, ["straight", "perm"]).ok, false);
-    assert.equal(validateOwnerRule({ ...base, level: "menu", menuId: "perm", check: { kind: "noSameDay", with: "perm" } }, ["straight", "perm"]).ok, false);
-    const plain = validateOwnerRule({ ...base, level: "global", check: { kind: "noSameDay" } }, ["straight", "perm"]);
-    assert.ok(plain.ok && plain.value.check.kind === "noSameDay" && !("with" in plain.value.check));
+    const ok = validateOwnerRule({ ...base, level: "menu", menuId: "straight", check: { kind: "notTogether", with: "perm" } }, ["straight", "perm"]);
+    assert.ok(ok.ok && ok.value.check.kind === "notTogether" && ok.value.check.with === "perm");
+    assert.equal(validateOwnerRule({ ...base, level: "global", check: { kind: "notTogether", with: "perm" } }, ["straight", "perm"]).ok, false);
+    assert.equal(validateOwnerRule({ ...base, level: "menu", menuId: "perm", check: { kind: "notTogether", with: "perm" } }, ["straight", "perm"]).ok, false);
+    assert.equal(validateOwnerRule({ ...base, level: "menu", menuId: "straight", check: { kind: "notTogether" } }, ["straight", "perm"]).ok, false);
+    const plain = validateOwnerRule({ ...base, label: "来店と同じ日の予約は受けない", level: "global", check: { kind: "noSameDay", with: "perm" } }, ["straight", "perm"]);
+    assert.ok(plain.ok && plain.value.check.kind === "noSameDay" && !("with" in plain.value.check), "当日の予約は不可に相手のメニューは付かない");
+  });
+  test("ルールのタブの名前は「当日の予約は不可」と「いっしょに受けない組み合わせ」", async () => {
+    const { KIND_INFO } = await import("../describe");
+    assert.equal(KIND_INFO.noSameDay.name, "当日の予約は不可");
+    assert.equal(KIND_INFO.notTogether.name, "いっしょに受けない組み合わせ");
   });
 });

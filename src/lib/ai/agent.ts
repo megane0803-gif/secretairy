@@ -151,7 +151,7 @@ export async function runReserve({ ctx, history, model, limits, emit }: RunOptio
   }
 
   // 候補のボタン：この返事の文に出てきた候補だけ（数も同じ）。仮押さえの後・取りやめた後は出さない
-  emit({ t: "candidates", list: shownCandidates(said, [...pool, ...ctx.shown], latest, held) });
+  emit({ t: "candidates", list: shownCandidates(said, pool, latest, held, ctx.shown) });
 
   // 「お店に確かめてご連絡します」と言ったら、言うだけで終わらせず ToDo に足す（用件はお客様の言葉の1行）
   if (!held && promisesShop(said)) {
