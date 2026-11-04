@@ -47,7 +47,7 @@ export function ApprovalBox({ data, compact = false }: { data: BookData; compact
       writeJournal({ who: "オーナー", text: `承認：${what} を確定し、台帳に入れた` });
       setDone(`✓ 確定しました：${what}`);
     } else {
-      book.update((s) => withReleased(s, row.approval.id, how, surname, new Date().toISOString()));
+      book.update((s) => withReleased(s, row.approval.id, how, surname, new Date().toISOString(), book.today.date));
       writeJournal({
         who: "オーナー",
         text: `${how === "fixed" ? "直す" : "見送り"}：${what} の仮押さえを外し、ToDo に「${surname}（架空）様に別の日時を案内」を足した（お客様の了解なしに時間は変えない）`,

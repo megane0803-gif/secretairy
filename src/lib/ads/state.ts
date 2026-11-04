@@ -7,6 +7,7 @@
 import { addDays, calDay } from "../calendar";
 import type { AdWeek } from "../data/types";
 import { withTodo, type AddedTodo, type BookState } from "../book/state";
+import { adKey } from "../todo/keys";
 import type { JournalWho } from "../journal";
 import type { AdSettings, ShopSettings } from "../settings";
 import type { GateCheck, GatedProposal } from "./gate";
@@ -236,7 +237,15 @@ export function approveAd(
   const p = ads.proposals.find((x) => x.id === id && x.state === "pending");
   if (!p) return { ads, book, journal: [] };
   const due = checkDueDate(ctx.shop, ctx.today, ctx.settings.checkAfterDays);
-  const todo: AddedTodo = { id: `${AD_TODO_PREFIX}${p.id}`, title: adTodoTitle(p.no, ctx.settings.checkAfterDays), createdAt: ctx.nowIso, done: false, due };
+  const todo: AddedTodo = {
+    id: `${AD_TODO_PREFIX}${p.id}`,
+    title: adTodoTitle(p.no, ctx.settings.checkAfterDays),
+    createdAt: ctx.nowIso,
+    done: false,
+    due,
+    source: "ad",
+    key: adKey(p.no),
+  };
   const label = calDay(ctx.shop, due).label;
   return {
     ads: withAdApproved(ads, id, ctx.nowIso),

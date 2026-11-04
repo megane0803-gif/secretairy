@@ -197,7 +197,7 @@ export function ReserveChat({ data }: { data: BookData }) {
           // 言うだけで終わらせない：ToDo に「○○（架空）様：用件の1行」を足し、日誌に1行
           let line: string | null = null;
           book.update((s) => {
-            const out = withChatTodo(s, e.todo, customer.surname, new Date().toISOString());
+            const out = withChatTodo(s, e.todo, customer.surname, new Date().toISOString(), book.today.date);
             line = out.journal;
             return out.state;
           });

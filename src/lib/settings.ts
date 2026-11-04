@@ -10,6 +10,7 @@ import ai from "@config/ai.json";
 import ads from "@config/ads.json";
 import accounting from "@config/accounting.json";
 import line from "@config/line.json";
+import todo from "@config/todo.json";
 import posts from "@config/posts.json";
 import { TAB_IDS, TABS, type TabDef, type TabId } from "./tabs";
 
@@ -227,6 +228,40 @@ export function getLineAiSettings(): LineAiSettings {
     maxReplyTokens: a.maxReplyTokens,
     maxRequestChars: a.maxRequestChars,
   };
+}
+
+/** ToDo のメモを短いタスクの文に直すときの設定（config/ai.json の todo。モデル名は ANTHROPIC_TODO_MODEL でも差しかえられる） */
+export type TodoAiSettings = {
+  model: string;
+  /** 1回の返事の長さの上限（トークン） */
+  maxReplyTokens: number;
+  /** 投げるメモの長さの上限（字）。画面の入力欄も同じ数 */
+  maxMemoChars: number;
+  /** タスクの文の長さの上限（字）。超えたらプログラムがメモから作る */
+  maxTitleChars: number;
+  /** 窓口（/api/ai/todo）が受け取る大きさの上限（字） */
+  maxRequestChars: number;
+};
+
+export function getTodoAiSettings(): TodoAiSettings {
+  const a = (ai as { todo: TodoAiSettings }).todo;
+  return { ...a, model: process.env.ANTHROPIC_TODO_MODEL || a.model };
+}
+
+/** ToDo の画面の設定（config/todo.json）：「済にしました　戻す」を出す秒数・ホームの「今やる」の数 */
+export type TodoSettings = {
+  undoSeconds: number;
+  topCount: number;
+};
+
+export function getTodoSettings(): TodoSettings {
+  return todo as TodoSettings;
+}
+
+/** 画面で使う ToDo の上限（鍵や環境変数は読まない） */
+export function getTodoLimits(): { maxMemoChars: number; maxTitleChars: number } & TodoSettings {
+  const a = (ai as { todo: TodoAiSettings }).todo;
+  return { maxMemoChars: a.maxMemoChars, maxTitleChars: a.maxTitleChars, ...getTodoSettings() };
 }
 
 /** 発信のタブ：下書きの種類（config/posts.json の kinds）。種類が違っても仕組みは1本で、変わるのは指示文と材料だけ */

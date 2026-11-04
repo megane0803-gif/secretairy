@@ -15,14 +15,26 @@ import { latestBefore, nextLines } from "@/lib/karte/record";
 import { writeJournal } from "@/lib/journal";
 import { freeRanges } from "@/lib/reservations";
 import { useApprovals } from "@/lib/useApprovals";
-import type { KarteHeading } from "@/lib/settings";
+import type { KarteHeading, TodoSettings } from "@/lib/settings";
+import { useTodos } from "@/lib/todo/useTodos";
+import { MemoThrow } from "@/components/MemoThrow";
+import { TodoTop } from "@/components/TodoTop";
 
-export function HomeSummary({ data, seedTodos, headings }: { data: BookData; seedTodos: number; headings: KarteHeading[] }) {
+export function HomeSummary({
+  data,
+  headings,
+  todo,
+}: {
+  data: BookData;
+  headings: KarteHeading[];
+  /** 今やる N 件・「戻す」の秒数・メモの字数（config） */
+  todo: TodoSettings & { maxMemoChars: number };
+}) {
   const book = useBook(data);
   // 承認待ちは承認の箱の行と同じ数（approvals.ts）
   const approvals = useApprovals();
-  // 期限の先の ToDo（広告の「効いたか見る」など）は、その日まで今日の数に入れない
-  const todos = seedTodos + book.state.todos.filter((t) => !t.done && (!t.due || t.due <= book.today.date)).length;
+  // 今日の ToDo：ToDo のタブと同じ一覧から（期限の先の物＝広告の「効いたか見る」などは、その日まで今日の数に入れない）
+  const todos = useTodos(data).todayCount;
   const todays = book.all.filter((r) => r.date === book.today.date);
   const menuName = (id: string) => resolveMenu(data.menus, id)?.name ?? id;
   // 今日のこれからの空き（いまの時刻より前の枠は数えない）
@@ -50,6 +62,12 @@ export function HomeSummary({ data, seedTodos, headings }: { data: BookData; see
         <BigNumber label="承認待ち" value={approvals.count} unit="件" />
         <BigNumber label="今日の ToDo" value={todos} unit="件" />
       </div>
+
+      <section className="brief" aria-labelledby="brief-todo">
+        <h3 id="brief-todo">今やる{todo.topCount}件</h3>
+        <TodoTop data={data} count={todo.topCount} undoSeconds={todo.undoSeconds} link />
+        <MemoThrow data={data} maxChars={todo.maxMemoChars} />
+      </section>
 
       <section className="brief" aria-labelledby="brief-res">
         <h3 id="brief-res">今日の予約と、前回のメモ（次回提案）</h3>
