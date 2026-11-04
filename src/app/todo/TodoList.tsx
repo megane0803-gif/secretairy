@@ -58,7 +58,7 @@ export function TodoList({ seed }: { seed: Todo[] }) {
         <>
           {talks.length > 0 && <h3 className="todo-group">ほかのやること</h3>}
           <ul className="todos">
-            {added.map((t) => row(t, t.id.startsWith("td-line-") ? "LINE から" : "承認の箱から"))}
+            {added.map((t) => row(t, t.id.startsWith("td-line-") ? "LINE から" : t.id.startsWith("td-chat-") ? "予約チャットから" : t.id.startsWith("td-ad-") ? "広告の承認から" : "承認の箱から"))}
             {seed.map((t) => (
               <li key={t.id} className={t.done ? "todo done" : "todo"}>
                 <span>{t.title}</span>

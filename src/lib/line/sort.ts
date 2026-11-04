@@ -5,6 +5,7 @@
 // テストでは Claude を呼ばず、決まった返事（scriptSortModel）に置きかえる。
 
 import { readRequest } from "../ai/script";
+import { comboIdOf } from "../combo";
 import type { CalDay } from "../calendar";
 import { lastStartOf } from "../calendar";
 import { instructionsFor } from "../rules/prompt";
@@ -39,7 +40,7 @@ export const SORT_TOOLS: SortToolDef[] = [
     input_schema: {
       type: "object",
       properties: {
-        menu_id: { type: "string", description: "メニューの id（指示のメニュー一覧の id）。わからなければ空" },
+        menu_id: { type: "string", description: "メニューの id（指示のメニュー一覧の id）。2つ以上なら id を + でつなぐ（例 cut+headspa）。わからなければ空" },
         date: { type: "string", description: "日付 YYYY-MM-DD（今日の日付は指示にある）。わからなければ空" },
         start: { type: "string", description: "始まる時刻 HH:MM（24時間）。わからなければ空" },
       },
@@ -128,7 +129,8 @@ export function readPick(pick: SortPick, menus: Menu[]): Sorted {
   if (pick.name !== "hold_request") return { kind: "unknown" };
   const r = (pick.input && typeof pick.input === "object" ? pick.input : {}) as Record<string, unknown>;
   const s = (k: string) => (typeof r[k] === "string" ? (r[k] as string).trim() : "");
-  const menuId = menus.some((m) => m.id === s("menu_id")) ? s("menu_id") : "";
+  // 知らないメニューは使わない（2つ以上は + でつないだ id。組み合わせの決め方は予約チャットと同じ combo.ts）
+  const menuId = s("menu_id") ? (comboIdOf(menus, [s("menu_id")]) ?? "") : "";
   const date = DATE_RE.test(s("date")) ? s("date") : "";
   const start = TIME_RE.test(s("start")) ? s("start") : "";
   return { kind: "hold", menuId, date, start };
@@ -147,8 +149,9 @@ export function scriptSortModel(ctx: Pick<SortContext, "menus" | "today">): Sort
   return {
     async pick({ text }) {
       const r = readRequest(ctx, text);
-      if (/仮押さえ|予約/.test(text) || (r.menuId && r.start))
-        return { name: "hold_request", input: { menu_id: r.menuId ?? "", date: r.date ?? "", start: r.start ?? "" } };
+      const menuId = r.menuIds.length ? (comboIdOf(ctx.menus, r.menuIds) ?? "") : "";
+      if (/仮押さえ|予約/.test(text) || (menuId && r.start))
+        return { name: "hold_request", input: { menu_id: menuId, date: r.date ?? "", start: r.start ?? "" } };
       if (/カルテ|メモ/.test(text)) return { name: "karte_memo", input: {} };
       return { name: "add_todo", input: {} };
     },

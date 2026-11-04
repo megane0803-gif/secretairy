@@ -5,7 +5,7 @@
 import { useConsultations } from "@/lib/ai/stepsStore";
 import { Fold } from "./parts";
 
-const KIND: Record<string, string> = { tool: "🔎", reject: "✗", hold: "📌", limit: "⏹" };
+const KIND: Record<string, string> = { tool: "🔎", reject: "✗", hold: "📌", limit: "⏹", ask: "❓", release: "↩", todo: "📝" };
 
 export function AiSteps() {
   const list = useConsultations();

@@ -37,7 +37,7 @@ npm run build      # 本番ビルド（push の前に通す）
 
 - 3段：全体 / タブごと / メニューごと。どのルールにも「どこに効くか」の札を出す。
 - ぶつかったら厳しい方（`src/lib/rules/strictest.ts`）。段の上下では決めない。
-- 数のルールの種類を足すときは `STRICTER`（大きい方が厳しいか小さい方か）も必ず足す。確かめ方は `judge.ts`、テスト（通る例・断る例）は `__tests__/judge.test.ts`。
+- 数のルールの種類を足すときは `STRICTER`（大きい方が厳しいか小さい方か）も必ず足す。数を持たない種類（`any`）で、中身がルールごとに違う物（「いっしょに受けない組み合わせ」の2つのメニュー）は、`strictest.ts` の `anyKey` で中身ごとに分ける。確かめ方は `judge.ts`、テスト（通る例・断る例）は `__tests__/judge.test.ts`。
 - 予約を受けてよいかはプログラム（`src/lib/rules/judge.ts`）が決める。AI は判定の結果に従うだけ。
 - 例のルールを足したら `__tests__/seed.test.ts` にも1本足す。
 - 足したルールは再起動なしで次の判定から効くこと。
@@ -71,7 +71,10 @@ src/app/api/line/  LINE の窓口（Webhook・つなぐ・受け取り・送る�
 src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理をまとめて戻す）
 ```
 
-- AI の道具は `src/lib/ai/tools.ts` の4つだけ。確定の道具は足さない。テストでは Claude を呼ばず `src/lib/ai/script.ts` に置きかえる。
+- AI の道具は `src/lib/ai/tools.ts` の5つだけ（空きを調べる・ルールを確かめる・前回を見る・仮押さえ・仮押さえを外す）。確定の道具は足さない。「仮押さえを外す」は、この会話で作った、まだ承認されていない仮押さえだけ（プログラムで確かめる）。テストでは Claude を呼ばず `src/lib/ai/script.ts` に置きかえる。
+- 予約チャットでプログラムが決めること：週と日付の食い違いの聞き返し（`dates.ts`）・候補のボタン（返事の文に出た候補だけ）・「お店に確かめてご連絡します」の ToDo（`replies.ts`）。AI に任せない。
+- 承認待ちの数は、承認の箱の行（`src/lib/approvals.ts` の `approvalQueue`。画面は `useApprovals`）から出す。ほかの所で数えない。
+- 1回の来店で複数のメニューは `src/lib/combo.ts`（設定に無い組み合わせは id を「+」でつなぐ）を通す。
 - カルテの AI は下書きまで。プログラムの言葉の門（`src/lib/karte/gate.ts`。言葉は `locked.ts` の `KARTE_GATE_WORDS`。減らさない）を通し、保存は人の「保存」ボタンだけ。お客様の名前は AI に送らない。テストでは `scriptKarteWriter` に置きかえる。
 - 広告の見直しの道具は `src/lib/ads/tools.ts` の2つ（止める・外す）だけ。言葉を足す道具は足さない。案は門（`src/lib/ads/gate.ts`）を通してから承認の箱へ。テストでは `src/lib/ads/script.ts` に置きかえる。
 

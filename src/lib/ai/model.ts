@@ -2,6 +2,7 @@
 // テストでは Claude を呼ばず、決まった返事（script.ts）に置きかえる。
 
 import type Anthropic from "@anthropic-ai/sdk";
+import type { ConvHold } from "./reservePrompt";
 import type { ToolDef } from "./tools";
 import type { Candidate } from "./wire";
 
@@ -15,6 +16,8 @@ export type ModelRequest = {
   maxTokens: number;
   /** 直前にお客様へ出した候補（決まった返事が「1つ目で」を読むのに使う。Claude には system に書いてある） */
   candidates: Candidate[];
+  /** この会話の仮押さえ（決まった返事が「ずらしたい」「やめたい」を読むのに使う。Claude には system に書いてある） */
+  holds: ConvHold[];
 };
 
 export type ModelTurn = {

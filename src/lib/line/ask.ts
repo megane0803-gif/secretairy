@@ -89,6 +89,7 @@ export async function runLineAsk(opts: {
       rules: req.rules,
       visits: [],
       dayOffset: req.dayOffset,
+      holds: [],
     },
     shop,
     menus,

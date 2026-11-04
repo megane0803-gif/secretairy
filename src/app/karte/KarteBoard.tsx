@@ -4,6 +4,7 @@
 // カルテのお客様の名前・日付・メニューは、選んだ予約からプログラムが入れる（Claude には書かせない）。
 // 🔒 保存は人の「保存」ボタンだけ（ブラウザの本物の操作か isTrusted で確かめる）。AI・自動の処理からは保存しない。
 
+import { resolveMenu } from "@/lib/combo";
 import { CustomerName, Fold } from "@/components/parts";
 import type { BookData } from "@/lib/book/data";
 import { calDay } from "@/lib/calendar";
@@ -35,7 +36,7 @@ export function KarteSectionsView({ sections, headings }: { sections: KarteSecti
 export function KarteBoard({ data, headings }: { data: BookData; headings: KarteHeading[] }) {
   const { book, desk, todays, selected, key, saved, draft } = useKarteToday(data);
   const [done, setDone] = useState<string | null>(null);
-  const menuName = (id: string) => data.menus.find((m) => m.id === id)?.name ?? id;
+  const menuName = (id: string) => resolveMenu(data.menus, id)?.name ?? id;
 
   const save = (e: React.MouseEvent) => {
     // 人がボタンを押したときだけ（スクリプトから押したことにはできない）

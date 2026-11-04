@@ -6,6 +6,7 @@
 // AI は仮押さえまで。確定はオーナーが承認の箱で押す。
 
 import { useMemo, useRef, useState } from "react";
+import { carryOver } from "@/lib/ai/carry";
 import { buildExamples, type Example } from "@/lib/ai/examples";
 import { candidateLabel, previousVisit, type SlotContext } from "@/lib/ai/slots";
 import { addStep, markFailed, startConsultation } from "@/lib/ai/stepsStore";
@@ -19,7 +20,7 @@ import {
   type ReserveRequest,
 } from "@/lib/ai/wire";
 import type { BookData } from "@/lib/book/data";
-import { withHold } from "@/lib/book/state";
+import { withChatTodo, withGuestReleased, withHold } from "@/lib/book/state";
 import { useBook } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
@@ -44,6 +45,8 @@ export function ReserveChat({ data }: { data: BookData }) {
   const [mode, setMode] = useState<ChatMode>("ai");
   const [noAi, setNoAi] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  // この会話で作った仮押さえ（「ずらしたい」「やめたい」で外せるのは、この中の承認待ちの物だけ）
+  const [convHolds, setConvHolds] = useState<string[]>([]);
   const logRef = useRef<HTMLOListElement>(null);
 
   const ctx: SlotContext | null = useMemo(
@@ -70,9 +73,11 @@ export function ReserveChat({ data }: { data: BookData }) {
     setCustomerId(id);
     setMsgs(greeting());
     setCandidates([]);
+    setConvHolds([]);
   };
 
-  async function send(raw: string, over?: { mode?: ChatMode; msgs?: Msg[]; customerId?: string }) {
+  /** over.fresh = 新しい会話（候補・この会話の仮押さえを引きつがない）。やり直し（trySample）は fresh にしない */
+  async function send(raw: string, over?: { mode?: ChatMode; msgs?: Msg[]; customerId?: string; fresh?: boolean }) {
     const t = raw.trim().slice(0, MAX_CHARS);
     const customer = data.customers.find((c) => c.id === (over?.customerId ?? customerId));
     if (!t || busy || !customer) return;
@@ -92,7 +97,7 @@ export function ReserveChat({ data }: { data: BookData }) {
     const body: ReserveRequest = {
       mode: useMode,
       messages: history,
-      candidates: over?.msgs ? [] : candidates,
+      ...carryOver(over?.fresh === true, { candidates, holds: convHolds }),
       customer: { id: customer.id, surname: customer.surname, firstVisit: customer.firstVisit },
       booked: book.booked,
       rules: rules.filter((r) => !r.locked),
@@ -100,6 +105,8 @@ export function ReserveChat({ data }: { data: BookData }) {
       visits: book.visits.filter((v) => v.customerId === customer.id),
       dayOffset: book.dayOffset,
     };
+    // この相談の中で増えた・外した仮押さえ（画面の側でも、この会話の物かを確かめる）
+    const mine = new Set(body.holds);
 
     let aiText = "";
     let gotAny = false;
@@ -131,8 +138,10 @@ export function ReserveChat({ data }: { data: BookData }) {
         case "step":
           addStep(cid, e.step);
           // 仮押さえは下の hold で1行書く
+          // 仮押さえ・外した・ToDo は下の hold・release・todo で1行書く
           if (e.step.kind === "reject" || e.step.kind === "limit")
             writeJournal({ who: "プログラム", text: `${e.step.kind === "reject" ? "弾いた" : "止めた"}（${who}の相談）：${e.step.text}` });
+          else if (e.step.kind === "ask") writeJournal({ who: "プログラム", text: `聞き返した（${who}の相談）：${e.step.text}` });
           else if (e.step.kind === "tool") writeJournal({ who: "AI", text: `道具を呼んだ（${who}の相談）：${e.step.text}` });
           break;
         case "candidates":
@@ -142,7 +151,30 @@ export function ReserveChat({ data }: { data: BookData }) {
           const h = parseHoldOffer(e.hold);
           if (!h || h.customerId !== customer.id) break;
           book.update((s) => withHold(s, h));
+          mine.add(h.id);
+          setConvHolds((l) => (l.includes(h.id) ? l : [...l, h.id]));
           writeJournal({ who: "AI", text: `仮押さえした：${who} ${candidateLabel(data, h)}（承認の箱へ）` });
+          break;
+        }
+        case "release": {
+          // この会話で作った、まだ承認待ちの仮押さえだけ外す（withGuestReleased でもう一度確かめる）
+          if (typeof e.holdId !== "string" || !mine.has(e.holdId)) break;
+          const r = book.state.chat.find((x) => x.id === e.holdId);
+          book.update((s) => withGuestReleased(s, e.holdId, customer.id, new Date().toISOString()));
+          mine.delete(e.holdId);
+          setConvHolds((l) => l.filter((x) => x !== e.holdId));
+          writeJournal({ who: "AI", text: `仮押さえを外した（${who}の頼み）：${r ? candidateLabel(data, r) : e.holdId}（承認の箱から外した）` });
+          break;
+        }
+        case "todo": {
+          // 言うだけで終わらせない：ToDo に「○○（架空）様：用件の1行」を足し、日誌に1行
+          let line: string | null = null;
+          book.update((s) => {
+            const out = withChatTodo(s, e.todo, customer.surname, new Date().toISOString());
+            line = out.journal;
+            return out.state;
+          });
+          if (line) writeJournal({ who: "プログラム", text: line });
           break;
         }
         case "error":
@@ -204,7 +236,8 @@ export function ReserveChat({ data }: { data: BookData }) {
       setCustomerId(withPast.id);
       setMsgs(fresh);
       setCandidates([]);
-      void send(ex.text, { msgs: fresh, customerId: withPast.id });
+      setConvHolds([]);
+      void send(ex.text, { msgs: fresh, customerId: withPast.id, fresh: true });
       return;
     }
     void send(ex.text);

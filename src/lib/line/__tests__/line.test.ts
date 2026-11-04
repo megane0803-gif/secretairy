@@ -495,6 +495,14 @@ describe("一言の振り分け（決まった返事で。Claude と LINE は呼
       start: "",
     });
     assert.deepEqual(readPick(null, menus), { kind: "unknown" });
+    // 2つ以上のメニューは + でつなぐ（予約チャットと同じ決め方。設定の組み合わせにはまとめる）
+    assert.deepEqual(readPick({ name: "hold_request", input: { menu_id: "cut+headspa", date: "2026-11-05", start: "15:00" } }, menus), {
+      kind: "hold",
+      menuId: "cut+headspa",
+      date: "2026-11-05",
+      start: "15:00",
+    });
+    assert.equal((readPick({ name: "hold_request", input: { menu_id: "cut+color", date: "", start: "" } }, menus) as { menuId: string }).menuId, "cut_color");
   });
 });
 

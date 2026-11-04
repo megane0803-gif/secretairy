@@ -60,6 +60,7 @@ export function ctxAt(now: Date, over: Partial<ToolContext> = {}, customerId = "
         rules: getRules(),
         visits: visitsAt(now, saved),
         dayOffset: 0,
+        holds: [],
       },
       shop,
       menus,
@@ -90,4 +91,34 @@ export async function twoTurns(ctx: ToolContext, first: string, second = "1つ�
     { role: "user", text: second },
   ]);
   return { a, b, shown };
+}
+
+/**
+ * 何回かのやりとりを、画面（ブラウザ）と同じように続ける。
+ * 候補は前の返事の物を渡し、仮押さえは台帳とこの会話の仮押さえに足し、外したら消す。
+ */
+export async function conversation(ctx: ToolContext, texts: string[], model?: (c: ToolContext) => ReplyModel) {
+  let cur: ToolContext = { ...ctx };
+  const history: ChatTurn[] = [];
+  const turns: Awaited<ReturnType<typeof chat>>[] = [];
+  for (const text of texts) {
+    history.push({ role: "user", text });
+    const r = await chat(cur, [...history], model ? model(cur) : undefined);
+    turns.push(r);
+    history.push({ role: "assistant", text: r.text });
+    let booked = cur.booked;
+    let convHolds = cur.convHolds;
+    for (const e of r.events) {
+      if (e.t === "hold") {
+        booked = [...booked, { id: e.hold.id, customerId: e.hold.customerId, menuId: e.hold.menuId, date: e.hold.date, start: e.hold.start, status: "hold", newCustomer: cur.customer.firstVisit }];
+        convHolds = [...convHolds, e.hold.id];
+      }
+      if (e.t === "release") {
+        booked = booked.filter((b) => b.id !== e.holdId);
+        convHolds = convHolds.filter((id) => id !== e.holdId);
+      }
+    }
+    cur = { ...cur, booked, convHolds, shown: r.candidates ?? [] };
+  }
+  return { turns, ctx: cur };
 }

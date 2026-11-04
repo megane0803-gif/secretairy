@@ -56,6 +56,8 @@ export function RuleForm({
   );
   const [unit, setUnit] = useState<Unit>(lead.unit);
   const [time, setTime] = useState(c?.kind === "lastStart" ? c.time : "18:00");
+  // 「いっしょに受けない組み合わせ」の2つ目のメニュー（1つ目はどこに効くかのメニュー）
+  const [withId, setWithId] = useState(c?.kind === "notTogether" ? c.with : "");
   const [text, setText] = useState(c?.kind === "text" ? (initial?.label ?? "") : "");
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -64,8 +66,11 @@ export function RuleForm({
   const tabValue = tabChoices.includes(tab) ? tab : tabChoices[0];
   const menuName = (id: string) => menus.find((m) => m.id === id)?.name ?? id;
 
+  // 「いっしょに受けない組み合わせ」は2つのメニューを選ぶ種類なので、いつもメニューに付ける（1つ目のメニュー）
+  const isPair = kind === "notTogether";
+  const pairWith = withId && withId !== menuId ? withId : (menus.find((m) => m.id !== menuId)?.id ?? "");
   const scope: RuleScope =
-    level === "global" ? { level } : level === "tab" ? { level, tab: tabValue } : { level, menuId };
+    isPair || level === "menu" ? { level: "menu", menuId } : level === "global" ? { level } : { level, tab: tabValue };
 
   const n = Number(num);
   const check: RuleCheck | null = (() => {
@@ -77,6 +82,8 @@ export function RuleForm({
         return num.trim() ? { kind, value: n } : null;
       case "noSameDay":
         return { kind };
+      case "notTogether":
+        return pairWith ? { kind, with: pairWith } : null;
       case "lastStart":
         return time ? { kind, time } : null;
       case "text":
@@ -88,7 +95,7 @@ export function RuleForm({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!check) {
-      setProblem(kind === "lastStart" ? "時刻を入れてください。" : "数を入れてください。");
+      setProblem(kind === "lastStart" ? "時刻を入れてください。" : isPair ? "2つのメニューを選んでください。" : "数を入れてください。");
       return;
     }
     const v = validateOwnerRule(
@@ -133,6 +140,9 @@ export function RuleForm({
 
       <fieldset>
         <legend>2. どこに効くか</legend>
+        {isPair && <p className="hint">メニューごとのルールです（下の 3. で選ぶ1つ目のメニューに付けます）。2つのどちらを頼まれたときにも効きます。</p>}
+        {!isPair && (
+        <>
         <div className="scope-row">
           {(["global", "tab", "menu"] as const).map((lv) => (
             <label key={lv} className={lv === level ? "pill on" : "pill"}>
@@ -160,10 +170,37 @@ export function RuleForm({
             ))}
           </select>
         )}
+        </>
+        )}
       </fieldset>
 
       <fieldset>
-        <legend>3. {isText ? "ルールの文" : kind === "lastStart" ? "時刻" : "数"}</legend>
+        <legend>3. {isText ? "ルールの文" : kind === "lastStart" ? "時刻" : isPair ? "2つのメニュー" : kind === "noSameDay" ? "数は要りません" : "数"}</legend>
+        {isPair && (
+          <div className="num-row">
+            <select value={menuId} onChange={(e) => setMenuId(e.target.value)} aria-label="1つ目のメニュー">
+              {menus.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+            <span>と</span>
+            <select value={pairWith} onChange={(e) => setWithId(e.target.value)} aria-label="2つ目のメニュー">
+              {menus
+                .filter((m) => m.id !== menuId)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+            </select>
+            <span>は同じ日に受けない</span>
+          </div>
+        )}
+        {isPair && (
+          <p className="hint">1回の来店の組み合わせにも、同じお客様のその日のほかの予約にも効きます。</p>
+        )}
         {kind === "minLeadMinutes" && (
           <div className="num-row">
             <span>来店の</span>
@@ -219,7 +256,7 @@ export function RuleForm({
             <span>までに始める</span>
           </div>
         )}
-        {kind === "noSameDay" && <p className="hint">数は要りません。来店と同じ日の予約は受けません。</p>}
+        {kind === "noSameDay" && <p className="hint">来店と同じ日（当日）の予約は受けません。メニューに付けると、そのメニューを含む組み合わせにも効きます。</p>}
         {isText && (
           <>
             <textarea

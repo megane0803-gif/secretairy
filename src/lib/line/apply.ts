@@ -7,7 +7,7 @@
 
 import { approveAd, pendingAd, withAdSkipped, type AdProposal, type AdsState } from "../ads/state";
 import { proposalLabel } from "../ads/gate";
-import { candidateLabel, judgeSlot, type SlotContext } from "../ai/slots";
+import { candidateLabel, judgeSlot, menuName, type SlotContext } from "../ai/slots";
 import { parseHoldOffer } from "../ai/wire";
 import { pendingApprovals, withApproved, withHold, withReleased, withTodo, type BookState, type PendingRow } from "../book/state";
 import { savedOn } from "../karte/record";
@@ -44,7 +44,7 @@ const who = (customers: Customer[], id: string) => `${customers.find((c) => c.id
 /** 承認待ちの予約の行を、LINE に届ける形（何を・いつ・理由）にする */
 export function reservationCard(row: PendingRow, ctx: Pick<ApplyContext, "shop" | "menus" | "customers">, check?: boolean): ApprovalCard {
   const r = row.reservation;
-  const menu = ctx.menus.find((m) => m.id === r.menuId)?.name ?? r.menuId;
+  const menu = menuName(ctx, r.menuId);
   return {
     approvalId: row.approval.id,
     target: "reservation",

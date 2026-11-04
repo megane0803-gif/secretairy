@@ -206,7 +206,7 @@ describe("「前と同じで」は保存したカルテのメニューで", () =
   test("カルテの無い方は「前回の記録なし」", async () => {
     const r = await chat(ctxAt(now, {}, "c03"), [{ role: "user", text: "前と同じでお願いします" }]);
     assert.ok(r.steps.some((s) => s.text.includes("前回の記録なし")));
-    assert.equal(r.candidates, null);
+    assert.deepEqual(r.candidates, [], "候補は出さない（ボタンも出ない）");
     assert.match(r.text, /前回の記録なし/);
   });
 
