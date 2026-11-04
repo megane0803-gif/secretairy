@@ -6,6 +6,7 @@ import { getBookData } from "@/lib/book/data";
 import { getKarteHeadings } from "@/lib/settings";
 import { getTodos } from "@/lib/data/seed";
 import { HomeSummary } from "./HomeSummary";
+import { LinePanel } from "./LinePanel";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,9 @@ export default function HomePage() {
         <>
           <Panel title="承認の箱" id="approvals">
             <ApprovalBox data={data} />
+          </Panel>
+          <Panel title="LINE とつなぐ" id="line">
+            <LinePanel data={data} headings={getKarteHeadings()} />
           </Panel>
           <Panel title="日誌">
             <JournalList timezone={data.shop.timezone} />

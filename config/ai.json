@@ -11,5 +11,9 @@
   },
   "ads": {
     "maxReplyTokens": 600
+  },
+  "line": {
+    "model": "claude-haiku-5-5",
+    "maxReplyTokens": 300
   }
 }

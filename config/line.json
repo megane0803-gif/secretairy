@@ -1,0 +1,11 @@
+{
+  "codeMinutes": 10,
+  "linkHours": 12,
+  "pollSeconds": 5,
+  "aliveSeconds": 30,
+  "inboxSeconds": 120,
+  "replySeconds": 50,
+  "dailyPushLimit": 6,
+  "maxTextChars": 200,
+  "codeTries": 5
+}
