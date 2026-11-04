@@ -105,7 +105,7 @@ export function fillMarks(note: string, labels: Record<string, string>): string 
   return ok ? out : null;
 }
 
-/** 同じ材料なら同じ鍵（同じ材料で何回も AI を呼ばないため） */
-export function briefKey(items: BriefItem[]): string {
-  return JSON.stringify(items.map((i) => [i.mark, i.text]));
+/** 同じ材料・同じルールなら同じ鍵（同じ物で何回も AI を呼ばないため。ルールを変えたら呼びなおす） */
+export function briefKey(items: BriefItem[], rules: unknown[] = []): string {
+  return JSON.stringify([items.map((i) => [i.mark, i.text]), rules]);
 }

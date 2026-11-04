@@ -14,5 +14,5 @@
     },
     { "id": "talk", "label": "会話メモ", "hints": ["話", "最近"] }
   ],
-  "edit": { "maxLines": 20, "maxLineChars": 80 }
+  "edit": { "maxLines": 8, "maxLineChars": 80 }
 }

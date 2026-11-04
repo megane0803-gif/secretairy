@@ -46,7 +46,8 @@ export function BriefNotes({ data, headings, limits }: { data: BookData; heading
       }),
     [book.today.date, book.all, book.kartes, headings, approvals, todos, data, limits],
   );
-  const key = material.items.length ? briefKey(material.items) : "";
+  const ownerRules = rules.filter((r) => !r.locked);
+  const key = material.items.length ? briefKey(material.items, ownerRules) : "";
   const [result, setResult] = useState<{ key: string; value: BriefResult | null } | null>(null);
 
   useEffect(() => {
@@ -63,7 +64,7 @@ export function BriefNotes({ data, headings, limits }: { data: BookData; heading
         const res = await fetch("/api/ai/brief", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode: "ai", items: material.items, rules: rules.filter((r) => !r.locked) }),
+          body: JSON.stringify({ mode: "ai", items: material.items, rules: ownerRules }),
         });
         const out = (await res.json()) as BriefResponse;
         value = out.ok ? { mode: out.mode, notes: out.notes, dropped: out.dropped } : null;

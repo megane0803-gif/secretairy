@@ -110,6 +110,10 @@ describe("材料（名前は送らない）と印の置きかえ", () => {
 
   test("同じ材料なら同じ鍵（同じ材料で AI を何回も呼ばない）", () => {
     assert.equal(briefKey(material().m.items), briefKey(material().m.items));
+    // オーナーのルールを変えたら、鍵も変わる（前の答えを使わずに呼びなおす）
+    const rule = { id: "r-x", level: "tab", tab: "home", label: "朝は短く", check: { kind: "text" } };
+    assert.notEqual(briefKey(material().m.items, []), briefKey(material().m.items, [rule]));
+    assert.equal(briefKey(material().m.items, [rule]), briefKey(material().m.items, [{ ...rule }]));
   });
 
   test("窓口の形：印の形・種類・数を確かめる", () => {

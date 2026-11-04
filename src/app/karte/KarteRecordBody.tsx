@@ -55,6 +55,8 @@ export function KarteRecordBody({
 }) {
   return (
     <SavedKarteEditor
+      // カルテが変わったら、開いている欄と打ちかけの文を持ちこさない（別の方のカルテに書かないため）
+      key={karte.id}
       karte={{ ...karte, sections: cleanSections(karte.sections, headings) }}
       headings={headings}
       limits={editLimits}

@@ -18,7 +18,7 @@ import { karteKey, todoKey } from "../../todo/keys";
 import { filterCustomers, kanaRowOf, toHiragana } from "../customers";
 import { editedLabels, humanLines, isEdited, sectionsToSave, withHumanEdit, withKarteEdited, withReverted, withSavedKarteEdited } from "../edit";
 import type { DeskDraft } from "../deskStore";
-import { emptySections } from "../format";
+import { cleanSections, emptySections, MAX_LINE_CHARS, MAX_LINES_PER_HEADING } from "../format";
 import { resolveSeedKartes, withKarteSaved, withSeedKarteEdits, type SavedKarte } from "../record";
 import { runKarte } from "../run";
 import { scriptKarteWriter } from "../writer";
@@ -241,6 +241,25 @@ describe("最初の状態のカルテも、保存したカルテと同じよう�
     const body = readFileSync(join(__dirname, "../../../app/karte/KarteRecordBody.tsx"), "utf8");
     assert.doesNotMatch(body, /source !== "saved"/);
     assert.match(readFileSync(join(__dirname, "../../../app/karte/KarteDraftEditor.tsx"), "utf8"), /withKarteEdited\(/);
+  });
+});
+
+describe("レビューの指摘の直し", () => {
+  test("人が直す上限は、カルテを出す・保存するときの上限と同じ（打った行が黙って消えない）", () => {
+    assert.equal(limits.maxLines, MAX_LINES_PER_HEADING);
+    assert.equal(limits.maxLineChars, MAX_LINE_CHARS);
+    const text = Array.from({ length: limits.maxLines }, (_, i) => `行${i + 1}`).join("\n");
+    const d: DeskDraft = { mode: "script", sections: emptySections(headings), removed: [], cut: false, memo: "x" };
+    const out = sectionsToSave(withHumanEdit(d, "talk", text, limits), "x", headings);
+    assert.equal(out.sections.talk.length, limits.maxLines);
+    assert.equal(cleanSections(out.sections, headings).talk.length, limits.maxLines, "出すときにも消えない");
+  });
+
+  test("直す欄はカルテごと（別の方のカルテに切りかえたら、開いた欄・打ちかけの文を持ちこさない）", () => {
+    const body = readFileSync(join(__dirname, "../../../app/karte/KarteRecordBody.tsx"), "utf8");
+    assert.match(body, /<SavedKarteEditor[\s\S]*?key=\{karte\.id\}/);
+    const board = readFileSync(join(__dirname, "../../../app/karte/KarteBoard.tsx"), "utf8");
+    assert.match(board, /<KarteDraftEditor\s+key=\{key!\}/);
   });
 });
 

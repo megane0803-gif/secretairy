@@ -167,6 +167,7 @@ export function KarteBoard({ data, headings, editLimits }: { data: BookData; hea
                 <span className="hint">後：</span>カルテ（見出し{headings.length}つ）
               </p>
               <KarteDraftEditor
+                key={key!}
                 draft={draft}
                 deskKey={key!}
                 headings={headings}
