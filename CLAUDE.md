@@ -75,7 +75,6 @@ src/app/api/line/  LINE の窓口（Webhook・つなぐ・受け取り・送る�
 src/lib/jobs/      ホームの「AI の仕事」：これから来る物4行の流れ（run.ts。今の /api/ai/ の窓口をそのまま使う）・済みの印（ブラウザの中に残す形）
 src/lib/brief/     朝の要点の「AI の一言」：材料と印（items.ts。名前は送らない・印を日時とお名前に置きかえる）・門・指示文・流れ・決まった返事（scriptBriefWriter）
 src/lib/reminder.ts 「翌日へ」の前日のお知らせ（決まった形・AI なし・送らない）
-src/lib/who.ts     だれがしたかの札（AI・人・外・プログラム）。色は globals.css の --who-ai・--who-human・--who-outside（台帳・AI の手順・日誌の札だけ）
 src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理・LINE の預かりをまとめて戻す）
 ```
 

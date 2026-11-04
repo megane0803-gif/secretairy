@@ -1,11 +1,13 @@
 "use client";
 
 // 日誌：道具を呼んだ・ルールで弾かれた・人が押した・ルールを足した／直した／消した、を時刻つきで新しい順に。
-// 新しい5行だけを出し、残りは畳む。行の頭に、だれがしたかの札（AI・人・プログラム・外）を付ける（色だけに頼らず文字で）。
+// 新しい5行だけを出し、残りは畳む（JOURNAL_SHOW）。行の頭に、だれがしたかの札を付ける：
+// AI = 青緑「AI」・オーナー = 琥珀「人」・LINE = 藍「外」（src/lib/actors.ts）。プログラムは今までどおりの灰色の札「プログラム」。
 
-import { JOURNAL_SHOW, journalWhoKind } from "@/lib/journal";
+import { journalActor } from "@/lib/actors";
+import { JOURNAL_SHOW, type JournalEntry } from "@/lib/journal";
 import { useJournal } from "@/lib/useJournal";
-import { Fold, WhoMark } from "./parts";
+import { ActorTag, Fold } from "./parts";
 
 function when(iso: string, timezone: string): string {
   const d = new Date(iso);
@@ -14,14 +16,19 @@ function when(iso: string, timezone: string): string {
   return `${md} ${hm}`;
 }
 
-const TITLE = { AI: "AI がした事", オーナー: "人（オーナー）がした事", プログラム: "プログラムがした事", LINE: "外の相手（LINE）から来た事" } as const;
+/** 日誌の「だれ」の札。AI・人・外は色と文字の両方で（「AI」「人 オーナー」「外 LINE」）、プログラムは今までどおり */
+export function JournalWhoTag({ who }: { who: JournalEntry["who"] }) {
+  const actor = journalActor(who);
+  if (!actor) return <span className="tag who who-program">{who}</span>;
+  return <ActorTag actor={actor}>{actor === "ai" ? null : who}</ActorTag>;
+}
 
 function Rows({ list, timezone }: { list: ReturnType<typeof useJournal>; timezone: string }) {
   return (
     <ol className="journal">
       {list.map((e) => (
         <li key={e.id}>
-          <WhoMark who={journalWhoKind(e.who)} title={TITLE[e.who]} />
+          <JournalWhoTag who={e.who} />
           <time className="num" dateTime={e.at}>
             {when(e.at, timezone)}
           </time>
@@ -43,7 +50,7 @@ export function JournalList({ timezone }: { timezone: string }) {
           <Rows list={list.slice(JOURNAL_SHOW)} timezone={timezone} />
         </Fold>
       )}
-      <p className="hint">日誌はこのブラウザの中だけに残ります。札：AI＝AI がした事・人＝人が押した事・プログラム＝プログラムがした事・外＝外の相手（LINE）から来た事。</p>
+      <p className="hint">日誌はこのブラウザの中だけに残ります。札：AI＝AI がした事・人＝人が押した事・外＝外の相手（LINE）から来た事・プログラム＝プログラムがした事。</p>
     </>
   );
 }

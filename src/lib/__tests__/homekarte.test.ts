@@ -1,16 +1,17 @@
 // ホームとカルテの直しのテスト。Claude・LINE は呼ばない（決まった返事・置きかえた LINE）。
 // 1. 「翌日へ」の前日のお知らせ（決まった形・AI なし・送らない）
-// 4. 日誌は新しい5行・だれがしたかの札（AI・人・プログラム・外）／色の3つの変数（台帳・AI の手順・日誌の札だけ）
+// 4. 日誌は新しい5行・行の頭にだれがしたかの札（AI・人・外は色つき。プログラムは灰色。色の作りは actors.ts・actors.test.ts）
 // 5. 「本名や連絡先は入れない」の1行（予約チャット・LINE の友だち追加）
 
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, test } from "node:test";
 import reminderJson from "../../../config/reminder.json";
 import { at, menus, shop } from "../ai/__tests__/helpers";
 import { businessDayAt, shopToday } from "../calendar";
-import { JOURNAL_SHOW, journalWhoKind, withEntries } from "../journal";
+import { journalActor } from "../actors";
+import { JOURNAL_SHOW, withEntries } from "../journal";
 import { handleWebhook, type BridgeDeps } from "../line/bridge";
 import type { LineMessage } from "../line/api";
 import { LINE_TEXT } from "../line/messages";
@@ -19,19 +20,9 @@ import { NO_REAL_NAMES_NOTE } from "../notices";
 import { dayBeforeReminders, reminderText } from "../reminder";
 import { loadBook, type Reservation } from "../reservations";
 import { getLineSettings, getReminderSettings } from "../settings";
-import { reservationWho, stepWho } from "../who";
 
 const ROOT = join(__dirname, "../../..");
 const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
-function walk(dir: string, out: string[] = []): string[] {
-  for (const name of readdirSync(dir)) {
-    const p = join(dir, name);
-    if (statSync(p).isDirectory()) walk(p, out);
-    else out.push(p);
-  }
-  return out;
-}
-
 describe("1. 「翌日へ」の前日のお知らせ（デモ）", () => {
   const now = at("2026-11-04", "09:00");
   const { today } = shopToday(shop, now);
@@ -89,45 +80,17 @@ describe("4. 日誌：新しい5行・だれがしたかの札", () => {
     assert.match(read("src/components/JournalList.tsx"), /slice\(0, JOURNAL_SHOW\)[\s\S]*Fold[\s\S]*slice\(JOURNAL_SHOW\)/);
   });
 
-  test("札：AI = AI・オーナー = 人・プログラム = プログラム・LINE = 外", () => {
-    assert.equal(journalWhoKind("AI"), "ai");
-    assert.equal(journalWhoKind("オーナー"), "human");
-    assert.equal(journalWhoKind("プログラム"), "program");
-    assert.equal(journalWhoKind("LINE"), "outside");
-  });
-
-  test("札には必ず文字（AI・人・外）を出す（色だけに頼らない）", () => {
-    const parts = read("src/components/parts.tsx");
-    assert.match(parts, /ai: "AI", human: "人", outside: "外"/);
-    assert.match(parts, /\{WHO_TEXT\[who\]\}/);
-  });
-});
-
-describe("色の意味は3つの変数（台帳・AI の手順・日誌の札だけ）", () => {
-  const css = read("src/app/globals.css");
-  test("AI＝青緑・人＝琥珀・外＝藍を :root（と暗い画面）に持つ", () => {
-    for (const v of ["--who-ai", "--who-human", "--who-outside"]) assert.equal(css.match(new RegExp(`${v}:`, "g"))?.length, 2, v);
-  });
-
-  test("変数を使うのは札（.who-mark）だけ。札を出すのは台帳・AI の手順・日誌だけ", () => {
-    const uses = css.split("\n").filter((l) => /var\(--who-/.test(l));
-    assert.ok(uses.length > 0);
-    for (const l of uses) assert.match(l, /^\.who-mark\./, l);
-    const files = walk(join(ROOT, "src"))
-      .filter((p) => p.endsWith(".tsx"))
-      .map((p) => relative(ROOT, p).split("\\").join("/"))
-      .filter((f) => /<WhoMark\b/.test(read(f)));
-    assert.deepEqual(files.sort(), ["src/app/reservations/Ledger.tsx", "src/components/AiSteps.tsx", "src/components/JournalList.tsx"]);
-  });
-
-  test("台帳：仮押さえ = AI・承認で確定 = 人・最初の状態の予約 = 外。AI の手順：道具 = AI・弾いた = プログラム", () => {
-    assert.equal(reservationWho({ status: "hold", source: "chat" }).who, "ai");
-    assert.equal(reservationWho({ status: "confirmed", source: "chat" }).who, "human");
-    assert.equal(reservationWho({ status: "confirmed", source: "seed" }).who, "outside");
-    assert.equal(stepWho("tool"), "ai");
-    assert.equal(stepWho("hold"), "ai");
-    assert.equal(stepWho("reject"), "program");
-    assert.equal(stepWho("limit"), "program");
+  test("行の頭に、だれがしたかの札：AI = AI・オーナー = 人・LINE = 外（色の3つ）・プログラム = 灰色の「プログラム」", () => {
+    assert.equal(journalActor("AI"), "ai");
+    assert.equal(journalActor("オーナー"), "human");
+    assert.equal(journalActor("LINE"), "outside");
+    assert.equal(journalActor("プログラム"), null);
+    const ui = read("src/components/JournalList.tsx");
+    // 札（JournalWhoTag）が時刻より前＝行の頭
+    const row = ui.slice(ui.indexOf("<li key={e.id}>"));
+    assert.ok(row.indexOf("<JournalWhoTag") < row.indexOf("<time"), "札は行の頭");
+    // 色だけに頼らず文字を出す（ActorTag は ACTOR_LABEL の文字を必ず出す）
+    assert.match(read("src/components/parts.tsx"), /\{ACTOR_LABEL\[actor\]\}/);
   });
 });
 

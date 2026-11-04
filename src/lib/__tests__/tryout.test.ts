@@ -124,13 +124,18 @@ describe("A3. 作りかけの札は画面に出さず、仕様書の「まだ」
     }
   });
 
-  test("仕様書の §9.3「まだ」には残っている", () => {
+  test("仕様書の §9.3「まだ」には作っていない物だけが残る（作った物は本文へ）", () => {
     const spec = read("docs/SPEC.md");
     const notYet = spec.slice(spec.indexOf("### 9.3"));
-    assert.match(notYet, /朝の要点の AI の一言/);
-    assert.match(notYet, /カルテ：お客様の一覧/);
-    assert.match(notYet, /カルテ：「手で直す」/);
     assert.match(notYet, /発信：段落ごとの言い換え案。使うお店のメモを選ぶ欄/);
+    // 1.4 で作った：朝の要点の AI の一言・カルテのお客様一覧・カルテを人が直す
+    assert.doesNotMatch(notYet, /^- 朝の要点の AI の一言（文章）。$/m);
+    assert.doesNotMatch(notYet, /カルテ：お客様の一覧/);
+    assert.doesNotMatch(notYet, /カルテ：「手で直す」/);
+    const body = spec.slice(0, spec.indexOf("### 9.3"));
+    assert.match(body, /\*\*AI の一言\*\*/);
+    assert.match(body, /### 1\.5\.2 カルテを人が直す/);
+    assert.match(body, /### 1\.5\.3 お客様一覧/);
   });
 });
 

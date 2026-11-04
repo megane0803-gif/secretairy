@@ -2,7 +2,7 @@
 // 数字は大きく、棒は小さく、確認は ✓、細かい所は畳む。
 
 import type { ReactNode } from "react";
-import type { WhoKind } from "@/lib/who";
+import { ACTOR_LABEL, ACTOR_MEANING, type Actor } from "@/lib/actors";
 
 export function BigNumber({ label, value, unit }: { label: string; value: number; unit?: string }) {
   return (
@@ -93,15 +93,15 @@ export function CustomerName({ surname, fictional }: { surname: string; fictiona
   );
 }
 
-/** だれがしたか（台帳・AI の手順・日誌の札）。色（globals.css の --who-ai・--who-human・--who-outside）だけに頼らず、必ず文字を出す */
-export type { WhoKind };
-
-export const WHO_TEXT: Record<WhoKind, string> = { ai: "AI", human: "人", outside: "外", program: "プログラム" };
-
-export function WhoMark({ who, title }: { who: WhoKind; title?: string }) {
+/**
+ * だれがしたかの札（AI＝青緑・人＝琥珀・外＝藍）。色だけに頼らず「AI」「人」「外」の文字を必ず出す。
+ * children を渡すと、文字のあとに添える（「人 オーナー」など）。使うのは台帳・AI の手順・日誌だけ（src/lib/actors.ts）。
+ */
+export function ActorTag({ actor, children }: { actor: Actor; children?: ReactNode }) {
   return (
-    <span className={`who-mark ${who}`} title={title}>
-      {WHO_TEXT[who]}
+    <span className={`tag actor actor-${actor}`} title={ACTOR_MEANING[actor]}>
+      <b className="actor-mark">{ACTOR_LABEL[actor]}</b>
+      {children && <> {children}</>}
     </span>
   );
 }
