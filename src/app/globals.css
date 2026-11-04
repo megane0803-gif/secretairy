@@ -894,3 +894,6 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .line-mode label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .line-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .line-notes { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; overflow-wrap: anywhere; }
+.line-passcode { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.line-passcode input { width: 100%; max-width: 100%; box-sizing: border-box; padding: 6px 8px; font: inherit; }
+.chat-blocked { margin: 0; font-size: 0.85rem; color: var(--warn, #9a5b00); }

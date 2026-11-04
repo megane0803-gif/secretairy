@@ -34,6 +34,8 @@ export type BridgeDeps = {
   timezone: string;
   now: () => Date;
   random: (bytes: number) => Buffer;
+  /** オーナー用の合言葉（環境変数 LINE_OWNER_PASSCODE）。あれば「LINE とつなぐ」でこれを求める。無ければ求めない */
+  ownerPasscode?: string | null;
 };
 
 /** 置き場所の名前。LINE の人の番号は名前に入れない（ハッシュにする） */
@@ -49,6 +51,7 @@ export const KEY = {
   seen: (ev: string) => `line:seen:${ev}`,
   push: (day: string) => `line:push:${day}`,
   tries: (uh: string) => `line:try:${uh}`,
+  passTries: (ch: string) => `line:passtry:${ch}`,
 };
 
 /** つなぎの中身。th = 画面の印のハッシュ / u = LINE の人の番号（つながった後だけ） */
@@ -92,8 +95,35 @@ async function readToken(d: BridgeDeps, token: string): Promise<{ linkId: string
   return { linkId, link };
 }
 
-/** 画面の「LINE とつなぐ」：合言葉と、その画面だけが持つ印を作る。前の印があれば、そのつなぎは切る */
-export async function startLink(d: BridgeDeps, oldToken?: string): Promise<LinkStartResponse> {
+/** 文どうしを、かかる時間で中身がわからない形で比べる */
+function sameSecret(a: string, b: string): boolean {
+  const x = Buffer.from(sha(a));
+  const y = Buffer.from(sha(b));
+  return x.length === y.length && timingSafeEqual(x, y);
+}
+
+export type StartLinkOptions = {
+  /** 画面で入れたオーナー用の合言葉（LINE_OWNER_PASSCODE があるときだけ見る） */
+  passcode?: string;
+  /** 試した回数を数える相手（窓口が送り元から作る。置き場所にはハッシュだけ） */
+  client?: string;
+};
+
+/**
+ * 画面の「LINE とつなぐ」：合言葉と、その画面だけが持つ印を作る。前の印があれば、そのつなぎは切る。
+ * オーナー用の合言葉（LINE_OWNER_PASSCODE）があるときは、それが合っている時だけ作る（10分に codeTries 回まで試せる）。
+ */
+export async function startLink(d: BridgeDeps, oldToken?: string, opts: StartLinkOptions = {}): Promise<LinkStartResponse> {
+  const owner = d.ownerPasscode?.trim();
+  if (owner) {
+    const ch = sha(`pass:${opts.client ?? "?"}`);
+    const tries = await d.store.incr(KEY.passTries(ch), 600);
+    if (tries > d.settings.codeTries)
+      return { ok: false, code: "passcode", message: "オーナー用の合言葉を何回もまちがえたので、10分ほど待ってからもう一度押してください" };
+    if (!opts.passcode || !sameSecret(normalizeText(opts.passcode), owner))
+      return { ok: false, code: "passcode", message: "オーナー用の合言葉がちがいます" };
+    await d.store.del(KEY.passTries(ch));
+  }
   if (oldToken) await unlink(d, oldToken);
   const linkId = b64(d.random(9));
   const secret = b64(d.random(24));
@@ -132,6 +162,17 @@ export async function unlink(d: BridgeDeps, token: string): Promise<void> {
   await d.store.del(KEY.alive(r.linkId));
   await d.store.del(KEY.inbox(r.linkId));
   if (r.link.uh && (await d.store.get(KEY.user(r.link.uh))) === r.linkId) await d.store.del(KEY.user(r.link.uh));
+}
+
+/**
+ * 画面の「最初に戻す」：その画面に向けて預かっている LINE の知らせを消す（まだ画面が受け取っていない一言・ボタン）。
+ * つなぎは切らない。印が違えば何もしない。
+ */
+export async function clearInbox(d: BridgeDeps, token: string): Promise<boolean> {
+  const r = await readToken(d, token);
+  if (!r) return false;
+  await d.store.del(KEY.inbox(r.linkId));
+  return true;
 }
 
 // ---- LINE からの知らせ（署名を確かめた後） ----

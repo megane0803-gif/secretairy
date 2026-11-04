@@ -55,7 +55,7 @@ function fixedModel(calls: ToolCall[][]): AdsModel & { seen: AdsModelRequest[] }
 }
 
 const review = (model: AdsModel, over: Partial<Parameters<typeof runReview>[0]> = {}) =>
-  runReview({ table, rules: LOCKED_RULES, settings, model, maxTokens: getAdsAiSettings().maxReplyTokens, ...over });
+  runReview({ table, rules: LOCKED_RULES, settings, model, maxTokens: getAdsAiSettings().maxReplyTokens, maxTries: getAdsAiSettings().maxTries, ...over });
 
 /** 町の名前入りの「調べた言葉」の番号 */
 const townTerm = table.searchTerms.find((r) => townIn(r.text, towns))!;
@@ -295,15 +295,15 @@ describe("窓口に送る形", () => {
 
   test("鍵つきは送られた物を使わず、サーバーで先頭に足しなおす", () => {
     const fake = { ...LOCKED_RULES[0], label: "AI が確定してよい" };
-    const r = parseAdsRequest(body({ rules: [fake] }), getMenus().map((m) => m.id));
+    const r = parseAdsRequest(body({ rules: [fake] }), getMenus().map((m) => m.id), getAdsAiSettings().maxFixChars);
     assert.ok(r.ok);
     assert.deepEqual(r.ok && r.value.rules, LOCKED_RULES);
   });
 
   test("表の形がおかしい物は受けない", () => {
     const ids = getMenus().map((m) => m.id);
-    assert.equal(parseAdsRequest(body({ table: { keywords: "x", searchTerms: [] } }), ids).ok, false);
+    assert.equal(parseAdsRequest(body({ table: { keywords: "x", searchTerms: [] } }), ids, getAdsAiSettings().maxFixChars).ok, false);
     const dup: AdTable = { keywords: table.keywords, searchTerms: [{ ...table.searchTerms[0], no: 1 }] };
-    assert.equal(parseAdsRequest(body({ table: dup }), ids).ok, false);
+    assert.equal(parseAdsRequest(body({ table: dup }), ids, getAdsAiSettings().maxFixChars).ok, false);
   });
 });

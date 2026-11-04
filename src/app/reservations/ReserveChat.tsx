@@ -7,6 +7,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { carryOver } from "@/lib/ai/carry";
+import { BUSY_NOTICE as BUSY_TEXT, createChatRuns, sendBlocked } from "@/lib/ai/chatRuns";
 import { buildExamples, type Example } from "@/lib/ai/examples";
 import { candidateLabel, previousVisit, type SlotContext } from "@/lib/ai/slots";
 import { addStep, markFailed, startConsultation } from "@/lib/ai/stepsStore";
@@ -24,10 +25,12 @@ import { withChatTodo, withGuestReleased, withHold } from "@/lib/book/state";
 import { useBook } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
+import { getChatMaxChars } from "@/lib/settings";
 
 type Msg = { from: "guest" | "ai" | "note"; text: string };
 
-const MAX_CHARS = 300;
+// お客様の1回の文の長さ（config/ai.json の maxMessageChars。サーバーも同じ数で切る）
+const MAX_CHARS = getChatMaxChars();
 
 export function ReserveChat({ data }: { data: BookData }) {
   const book = useBook(data);
@@ -47,7 +50,11 @@ export function ReserveChat({ data }: { data: BookData }) {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   // この会話で作った仮押さえ（「ずらしたい」「やめたい」で外せるのは、この中の承認待ちの物だけ）
   const [convHolds, setConvHolds] = useState<string[]>([]);
+  // 送れなかったときの理由（黙って捨てない）
+  const [notice, setNotice] = useState<string | null>(null);
   const logRef = useRef<HTMLOListElement>(null);
+  // いま流れている返事（お客様を切り替えたら止める）
+  const runs = useRef(createChatRuns()).current;
 
   const ctx: SlotContext | null = useMemo(
     () =>
@@ -70,6 +77,14 @@ export function ReserveChat({ data }: { data: BookData }) {
   const scroll = () => requestAnimationFrame(() => logRef.current?.lastElementChild?.scrollIntoView({ block: "nearest" }));
 
   const reset = (id: string) => {
+    // 流れている返事は止める（前のお客様の返事・仮押さえ・ToDo を新しい会話に混ぜない）
+    const stopped = runs.stop();
+    if (stopped) {
+      setBusy(false);
+      const was = data.customers.find((c) => c.id === stopped);
+      writeJournal({ who: "プログラム", text: `お客様を切り替えたので、流れていた返事を止めた（${was ? `${was.surname}（架空）様` : "前のお客様"}の相談）` });
+    }
+    setNotice(null);
     setCustomerId(id);
     setMsgs(greeting());
     setCandidates([]);
@@ -80,7 +95,15 @@ export function ReserveChat({ data }: { data: BookData }) {
   async function send(raw: string, over?: { mode?: ChatMode; msgs?: Msg[]; customerId?: string; fresh?: boolean }) {
     const t = raw.trim().slice(0, MAX_CHARS);
     const customer = data.customers.find((c) => c.id === (over?.customerId ?? customerId));
-    if (!t || busy || !customer) return;
+    // 送れないときは黙って捨てず、理由を出す（文は入力欄に残す）
+    const blocked = sendBlocked({ text: t, busy: runs.busy(), hasCustomer: !!customer });
+    if (blocked !== null || !customer) {
+      if (blocked) setNotice(blocked);
+      return;
+    }
+    setNotice(null);
+    const run = runs.start(customer.id);
+    const live = () => runs.isCurrent(run.id);
     const useMode = over?.mode ?? mode;
     const before = over?.msgs ?? msgs;
     const history: ChatTurn[] = [
@@ -112,6 +135,7 @@ export function ReserveChat({ data }: { data: BookData }) {
     let gotAny = false;
     let aiFailed = false;
     const showAi = (d: string) => {
+      if (!live()) return;
       aiText += d;
       const shown = aiText;
       setMsgs((m) => {
@@ -123,6 +147,7 @@ export function ReserveChat({ data }: { data: BookData }) {
       scroll();
     };
     const failed = () => {
+      if (!live()) return;
       aiFailed = true;
       markFailed(cid);
       setNoAi(true);
@@ -131,6 +156,8 @@ export function ReserveChat({ data }: { data: BookData }) {
     };
 
     const onEvent = (e: ReserveEvent) => {
+      // 止めた返事（お客様を切り替えた）の知らせは使わない
+      if (!live()) return;
       switch (e.t) {
         case "text":
           showAi(e.d);
@@ -191,6 +218,7 @@ export function ReserveChat({ data }: { data: BookData }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal: run.signal,
       });
       if (!res.ok || !res.body) {
         let msg = "";
@@ -198,7 +226,7 @@ export function ReserveChat({ data }: { data: BookData }) {
           msg = ((await res.json()) as { message?: string }).message ?? "";
         } catch {}
         if (res.status >= 500 || !msg) failed();
-        else setMsgs((m) => [...m, { from: "note", text: `うまくいきませんでした。${msg}。文を短くして送ってください。` }]);
+        else if (live()) setMsgs((m) => [...m, { from: "note", text: `うまくいきませんでした。${msg}。文を短くして送ってください。` }]);
         return;
       }
       const reader = res.body.getReader();
@@ -206,7 +234,7 @@ export function ReserveChat({ data }: { data: BookData }) {
       let buf = "";
       for (;;) {
         const { value, done } = await reader.read();
-        if (done) break;
+        if (done || !live()) break;
         buf += dec.decode(value, { stream: true });
         let i: number;
         while ((i = buf.indexOf("\n")) >= 0) {
@@ -220,19 +248,27 @@ export function ReserveChat({ data }: { data: BookData }) {
           }
         }
       }
-      if (useMode === "ai" && !aiFailed) setNoAi(false);
+      if (useMode === "ai" && !aiFailed && live()) setNoAi(false);
     } catch {
-      failed();
+      // 止めた返事（お客様を切り替えた）は「つながらない」にしない
+      if (!run.signal.aborted) failed();
     } finally {
-      setBusy(false);
+      if (live()) {
+        runs.finish(run.id);
+        setBusy(false);
+      }
     }
   }
 
   const tryExample = (ex: Example) => {
-    if (busy) return;
+    if (runs.busy()) {
+      setNotice(BUSY_TEXT);
+      return;
+    }
     if (ex.id === "previous" && ctx && !previousVisit({ ...ctx, visits: book.visits }) && withPast) {
       // 前回の来店がある方に切りかえて話す
       const fresh = greeting();
+      setNotice(null);
       setCustomerId(withPast.id);
       setMsgs(fresh);
       setCandidates([]);
@@ -262,7 +298,11 @@ export function ReserveChat({ data }: { data: BookData }) {
       <div className="phone-who">
         <label>
           お客様
-          <select value={customerId} onChange={(e) => reset(e.target.value)} disabled={busy}>
+          <select
+            value={customerId}
+            onChange={(e) => reset(e.target.value)}
+            title={busy ? "切り替えると、いま作っている返事は止めます" : undefined}
+          >
             {data.customers.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.surname} 様（架空）{c.firstVisit ? "・初めて" : ""}
@@ -356,6 +396,11 @@ export function ReserveChat({ data }: { data: BookData }) {
           送る
         </button>
       </form>
+      {notice && (
+        <p className="chat-blocked" role="status">
+          {notice}
+        </p>
+      )}
       <p className="chat-note">
         お客様はみな架空の方です。AI は「仮押さえ」まで。確定はお店（承認の箱）で人が押します。
       </p>

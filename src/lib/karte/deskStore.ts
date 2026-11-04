@@ -22,7 +22,8 @@ export type DeskState = {
   problem: string | null;
 };
 
-let state: DeskState = { selected: null, memos: {}, drafts: {}, busy: false, mode: "ai", noAi: false, problem: null };
+const EMPTY_DESK: DeskState = { selected: null, memos: {}, drafts: {}, busy: false, mode: "ai", noAi: false, problem: null };
+let state: DeskState = EMPTY_DESK;
 const listeners = new Set<() => void>();
 
 export function deskKey(customerId: string, date: string): string {
@@ -31,6 +32,12 @@ export function deskKey(customerId: string, date: string): string {
 
 export function setDesk(f: (s: DeskState) => Partial<DeskState>): void {
   state = { ...state, ...f(state) };
+  listeners.forEach((l) => l());
+}
+
+/** 「最初に戻す」：施術メモ（LINE から入れたメモも）・カルテの案を消す。AI か決まった返事かの切りかえは残す */
+export function resetDesk(): void {
+  state = { ...EMPTY_DESK, mode: state.mode };
   listeners.forEach((l) => l());
 }
 

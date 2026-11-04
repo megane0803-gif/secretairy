@@ -7,5 +7,9 @@
   "replySeconds": 50,
   "dailyPushLimit": 6,
   "maxTextChars": 200,
-  "codeTries": 5
+  "codeTries": 5,
+  "maxOutChars": 1000,
+  "maxOutMessages": 3,
+  "maxWebhookChars": 100000,
+  "maxScreenRequestChars": 20000
 }

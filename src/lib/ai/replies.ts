@@ -27,7 +27,8 @@ export function openTodayLine(shop: ShopSettings, now: { date: string; time: str
   return `今日（${day.label}）は ${day.hours.open}〜${day.hours.close} で営業しています。`;
 }
 
-export const THANKS_REPLY = "うれしいお言葉をありがとうございます。スタッフにも伝えます。";
+// 1人で営業する店なので「スタッフ」とは言わない。予約や次の来店も勧めない
+export const THANKS_REPLY = "うれしいお言葉をありがとうございます。とても励みになります。";
 export const ASK_SHOP_REPLY = "お店に確かめてご連絡します。";
 export const CANCELED_REPLY = "かしこまりました。またいつでもご相談ください。";
 

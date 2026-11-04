@@ -5,6 +5,7 @@ import { Fold, NotYet, Panel } from "@/components/parts";
 import { getBookData } from "@/lib/book/data";
 import { getKarteHeadings } from "@/lib/settings";
 import { getTodos } from "@/lib/data/seed";
+import { needsOwnerPasscode } from "@/lib/line/server";
 import { HomeSummary } from "./HomeSummary";
 import { LinePanel } from "./LinePanel";
 
@@ -22,7 +23,7 @@ export default function HomePage() {
             <ApprovalBox data={data} />
           </Panel>
           <Panel title="LINE とつなぐ" id="line">
-            <LinePanel data={data} headings={getKarteHeadings()} />
+            <LinePanel data={data} headings={getKarteHeadings()} needsPasscode={needsOwnerPasscode()} />
           </Panel>
           <Panel title="日誌">
             <JournalList timezone={data.shop.timezone} />

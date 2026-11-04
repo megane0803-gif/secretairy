@@ -11,14 +11,16 @@ import { checkDraft, proposalLabel, type GateCheck } from "@/lib/ads/gate";
 import { actionVerb, yen, type AdAction } from "@/lib/ads/report";
 import { approveAd, withAdFixed, withAdFixUsed, withAdSkipped, type AdProposal } from "@/lib/ads/state";
 import { useAds } from "@/lib/ads/useAds";
-import { MAX_FIX_CHARS, type AdsMode } from "@/lib/ads/wire";
+import type { AdsMode } from "@/lib/ads/wire";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import { demoClock } from "@/lib/calendar";
 import { useBookState } from "@/lib/book/useBook";
 import { writeJournal, type JournalWho } from "@/lib/journal";
 import type { Rule } from "@/lib/rules/types";
 import { useRules } from "@/lib/rules/useRules";
-import { getShop } from "@/lib/settings";
+import { getAdsFixMaxChars, getShop } from "@/lib/settings";
+
+const MAX_FIX_CHARS = getAdsFixMaxChars();
 
 /** プログラムの確認（✓ の印を3つ） */
 export function GateChecks({ checks }: { checks: GateCheck[] }) {

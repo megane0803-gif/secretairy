@@ -35,6 +35,7 @@ export function reserveSystem(ctx: SlotContext, shown: Candidate[], holds: ConvH
   lines.push(`- お礼や感想には、お礼だけ返す（例：「${THANKS_REPLY}」）。予約や次の来店は勧めない。`);
   lines.push(`- 忘れ物の問い合わせなど予約ではない用事・道具で分からないことは「${ASK_SHOP_REPLY}」と返す（プログラムがお店の ToDo に足す）。`);
   lines.push("- 返事は短く、やさしい言葉で3文まで。お客様の名前は名字だけ。");
+  lines.push("- この店は1人（オーナー）で営業している。「スタッフ」という言葉は使わない（自分たちのことは「お店」と言う）。");
   lines.push("");
   lines.push("# いまの様子");
   lines.push(`- 今日：${ctx.today.date}（${ctx.today.label}）。いまの時刻：${ctx.now.time}（店の時間帯）`);

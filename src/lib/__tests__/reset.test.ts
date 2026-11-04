@@ -1,4 +1,4 @@
-// ホームの「最初に戻す」1回で、予約・カルテ・広告・経理（自動のルールも）が全部最初に戻る。
+// ホームの「最初に戻す」1回で、予約・カルテ・広告・経理（自動のルールも）・LINE の預かりが全部最初に戻る。
 // ブラウザの置き場所（localStorage）は、テストの中だけの物に置きかえる。
 
 import assert from "node:assert/strict";
@@ -6,9 +6,14 @@ import { after, before, describe, test } from "node:test";
 import { register, parseAccounting, EMPTY_ACCOUNTING, withChoice, withAutoNext, sortCurrent, effectiveRules } from "../accounting/state";
 import { manualItems } from "../accounting/sort";
 import { EMPTY_ADS, parseAds, type AdsState } from "../ads/state";
-import { emptyBook, parseBook, type BookState } from "../book/state";
-import { ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, BROWSER_PREFIX, JOURNAL_KEY, RULES_KEY, readBrowser, writeBrowser } from "../browser";
-import { getAccounting } from "../data/seed";
+import { emptyBook, parseBook, withHold, type BookState } from "../book/state";
+import { ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, BROWSER_PREFIX, JOURNAL_KEY, LINE_KEY, RULES_KEY, readBrowser, writeBrowser } from "../browser";
+import { getAccounting, getCustomers } from "../data/seed";
+import { deskKey, getDesk, setDesk } from "../karte/deskStore";
+import { clearInbox, handleWebhook, pollScreen, startLink, type BridgeDeps } from "../line/bridge";
+import { newLineState, parseLine, withLinked, withHandled } from "../line/state";
+import { memoryStore } from "../line/store";
+import { getLineSettings, getShop } from "../settings";
 import { resetAll, resetAllWrites } from "../reset";
 
 const store = new Map<string, string>();
@@ -73,5 +78,100 @@ describe("最初に戻す", () => {
     assert.deepEqual(w.map((x) => x.key).sort(), [ACCOUNTING_KEY, ADS_KEY, BOOK_KEY].sort());
     assert.equal(w.find((x) => x.key === ADS_KEY)!.value, null);
     assert.equal(w.find((x) => x.key === ACCOUNTING_KEY)!.value, null);
+  });
+
+  test("1回で全部：予約・カルテ（保存した物・メモ・案）・広告・経理・LINE の預かり。LINE のつなぎは残す", () => {
+    const seed = getAccounting();
+    const c = getCustomers()[0];
+    // 予約：仮押さえ（承認の箱）と保存したカルテ・翌日へ
+    const book: BookState = {
+      ...withHold(emptyBook("2026-10-01"), {
+        id: "h-1",
+        customerId: c.id,
+        menuId: "cut",
+        date: "2026-11-05",
+        start: "15:00",
+        heldAt: "2026-11-04T01:00:00.000Z",
+        expiresAt: "2026-11-05T01:00:00.000Z",
+        reason: "お客様が選んだ候補",
+      }),
+      dayOffset: 2,
+    };
+    assert.equal(book.chat.length, 1);
+    writeBrowser(BOOK_KEY, JSON.stringify(book));
+    writeBrowser(ADS_KEY, JSON.stringify({ v: 1, proposals: [], applied: [{ no: 3, action: "stop", at: "2026-10-01T00:00:00.000Z", proposalId: "p1" }] }));
+    const acct = manualItems(sortCurrent(seed)).reduce((st, i) => withChoice(seed, st, i.no, "shop"), EMPTY_ACCOUNTING);
+    writeBrowser(ACCOUNTING_KEY, JSON.stringify(acct));
+    // LINE：つないで、承認待ちを届けた印と、受け取った知らせの印がある
+    const line = withHandled(withLinked(newLineState("link1.secret1", "123456", "2026-11-04T01:10:00.000Z"), "2026-11-04T13:00:00.000Z", ["ap-h-1"]), "ev-1");
+    writeBrowser(LINE_KEY, JSON.stringify(line));
+    // カルテ：施術メモ（LINE から入れたメモも）と案（画面を開いている間だけの物）
+    setDesk(() => ({
+      memos: { [deskKey(c.id, "2026-11-04")]: "LINE から：前髪は短めに" },
+      drafts: { [deskKey(c.id, "2026-11-04")]: { sections: {}, removed: [], cut: false, memo: "x" } as never },
+      mode: "script",
+    }));
+
+    const out = resetAll("2026-11-04");
+
+    assert.deepEqual(parseBook(readBrowser(BOOK_KEY)), emptyBook("2026-11-04"), "仮押さえ・承認の箱・保存したカルテ・翌日へが消える");
+    assert.equal(readBrowser(ADS_KEY), null);
+    assert.equal(readBrowser(ACCOUNTING_KEY), null);
+    const back = parseLine(readBrowser(LINE_KEY));
+    assert.ok(back, "LINE のつなぎは残す");
+    assert.equal(back!.token, "link1.secret1");
+    assert.equal(back!.linked, true);
+    assert.deepEqual(back!.notified, [], "届けた承認待ちの印は消す（承認の箱が空に戻るので）");
+    assert.deepEqual(back!.handled, ["ev-1"], "受け取って済ませた知らせは2回使わない");
+    assert.equal(out.lineToken, "link1.secret1", "サーバーの預かり物を消すのに使う");
+    assert.deepEqual(getDesk().memos, {}, "カルテの施術メモ（LINE から入れたメモも）を消す");
+    assert.deepEqual(getDesk().drafts, {}, "カルテの案を消す");
+    assert.equal(getDesk().mode, "script", "AI か決まった返事かの切りかえは残す");
+  });
+
+  test("LINE とつないでいなければ、LINE には何も書かない", () => {
+    writeBrowser(LINE_KEY, null);
+    const out = resetAll("2026-11-04");
+    assert.equal(out.lineToken, null);
+    assert.equal(readBrowser(LINE_KEY), null);
+  });
+
+  test("サーバーの LINE の預かり：まだ画面が受け取っていない一言を消す。つなぎは残る", async () => {
+    let clock = Date.parse("2026-11-04T09:00:00+09:00");
+    let seq = 0;
+    const d: BridgeDeps = {
+      store: memoryStore(() => clock),
+      line: null,
+      settings: getLineSettings(),
+      timezone: getShop().timezone,
+      now: () => new Date(clock),
+      random: (n) => {
+        seq += 1;
+        const b = Buffer.alloc(n);
+        for (let i = 0; i < n; i++) b[i] = (seq * 13 + i * 5) & 0xff;
+        return b;
+      },
+    };
+    const ev = (text: string) => ({ type: "message", webhookEventId: `we-${++seq}`, source: { type: "user", userId: "U-owner" }, message: { type: "text", text } });
+    const s = await startLink(d);
+    assert.ok(s.ok);
+    if (!s.ok) return;
+    await handleWebhook(d, { events: [ev(s.code)] });
+    assert.ok((await pollScreen(d, s.token)).ok);
+    // 画面が受け取りに来る前に、一言が預けられた
+    await handleWebhook(d, { events: [ev("明日の15時に青木さんカット")] });
+    assert.equal(await clearInbox(d, s.token), true);
+    const p = await pollScreen(d, s.token);
+    assert.ok(p.ok);
+    if (!p.ok) return;
+    assert.equal(p.linked, true, "つなぎは残る");
+    assert.deepEqual(p.events, [], "預かっていた一言は消えた");
+    // 消した後に来た一言は、いつもどおり届く
+    await handleWebhook(d, { events: [ev("ToDo：シャンプーの発注")] });
+    const p2 = await pollScreen(d, s.token);
+    assert.ok(p2.ok && p2.events.length === 1);
+    // 違う印では何もしない
+    assert.equal(await clearInbox(d, "nope.nope"), false);
+    clock += 1;
   });
 });

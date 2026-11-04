@@ -8,15 +8,14 @@ import { handleWebhook } from "@/lib/line/bridge";
 import { bridgeDeps, noStore } from "@/lib/line/server";
 import { verifyLineSignature } from "@/lib/line/signature";
 import { NoStoreError } from "@/lib/line/store";
+import { getLineSettings } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_BODY = 100_000;
-
 export async function POST(request: Request): Promise<Response> {
   const raw = await request.text();
-  if (raw.length > MAX_BODY) return new Response(null, { status: 413 });
+  if (raw.length > getLineSettings().maxWebhookChars) return new Response(null, { status: 413 });
   // 署名の違う物・印の無い物は捨てる
   if (!verifyLineSignature(raw, request.headers.get("x-line-signature"), process.env.LINE_CHANNEL_SECRET))
     return new Response(null, { status: 401 });

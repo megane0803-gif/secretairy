@@ -9,7 +9,7 @@ export function karteSystem(headings: KarteHeading[], rules: Rule[], menuName: (
   const lines: string[] = [];
   lines.push(instructionsFor(rules, { tab: "karte", menuIds: [] }, menuName));
   lines.push("");
-  lines.push("# あなたの役目：美容室のスタッフが話した施術のメモを、カルテの下書きに分ける");
+  lines.push("# あなたの役目：美容室のオーナー（美容師）が話した施術のメモを、カルテの下書きに分ける");
   lines.push("- 下の見出しを、この順に1つずつ「■ 見出し」の行で書く。見出しの名前は変えない。");
   lines.push("- 各見出しの下に、メモに書いてあることだけを「・」で始まる短い行（25字くらいまで）で書く。");
   lines.push("- メモに無いことは書かない・足さない。推測・おすすめ・助言・改善の案を書かない。");
