@@ -13,6 +13,7 @@ export function TabFrame({
   pending,
   right,
   rightFirstOnPhone = false,
+  top,
   children,
 }: {
   tab: TabId;
@@ -21,6 +22,11 @@ export function TabFrame({
   right: ReactNode;
   /** スマホ（1列）で、右の列（そのタブの入力欄）を見出しのすぐ下・ページの上に出す */
   rightFirstOnPhone?: boolean;
+  /**
+   * PC で、承認待ち・見出しのすぐ下に横いっぱい（真ん中と右の列をまたいで）出す物（予約タブの時間割の台帳）。
+   * 渡したときだけ、承認待ち・見出しと top を真ん中の上の帯（page-top）に出す。渡さないタブは今までどおり。
+   */
+  top?: ReactNode;
   children: ReactNode;
 }) {
   const def = TABS[tab];
@@ -53,15 +59,26 @@ export function TabFrame({
     );
   }
 
+  const head = (
+    <div className="page-head">
+      <h1>
+        <span aria-hidden>{def.icon}</span> {def.label}
+      </h1>
+    </div>
+  );
+
   return (
-    <div className={rightFirstOnPhone ? "page right-first-sp" : "page"}>
+    <div className={`${rightFirstOnPhone ? "page right-first-sp" : "page"}${top ? " has-top" : ""}`}>
+      {top && (
+        <header className="page-top">
+          {pending}
+          {head}
+          {top}
+        </header>
+      )}
       <main className="page-main">
-        {pending}
-        <div className="page-head">
-          <h1>
-            <span aria-hidden>{def.icon}</span> {def.label}
-          </h1>
-        </div>
+        {!top && pending}
+        {!top && head}
         {children}
         {/* 表示スイッチは見出しの横に出さず、ページの終わりに畳んでおく（必須のタブは隠せないので出さない） */}
         {!def.required && (
