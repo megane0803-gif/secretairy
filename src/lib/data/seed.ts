@@ -8,7 +8,7 @@ import accounting from "@seed/accounting.json";
 import todo from "@seed/todo.json";
 import kartes from "@seed/kartes.json";
 import karteExamples from "@seed/karte-examples.json";
-import type { AdReport, Customer, KarteExample, MoneyEntry, SeedKarte, SeedReservation, Todo } from "./types";
+import type { AccountingSeed, AdReport, Customer, KarteExample, SeedKarte, SeedReservation, Todo } from "./types";
 
 export function getCustomers(): Customer[] {
   return customers as Customer[];
@@ -23,8 +23,9 @@ export function getAds(): AdReport {
   return ads as AdReport;
 }
 
-export function getMoneyEntries(): MoneyEntry[] {
-  return accounting as MoneyEntry[];
+/** 経理の最初の状態：架空の10月の売上・購入先・前の月までの自動のルール・未処理の通販の明細 */
+export function getAccounting(): AccountingSeed {
+  return accounting as AccountingSeed;
 }
 
 export function getTodos(): Todo[] {

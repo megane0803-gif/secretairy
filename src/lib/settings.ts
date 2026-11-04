@@ -8,6 +8,7 @@ import karte from "@config/karte.json";
 import tabs from "@config/tabs.json";
 import ai from "@config/ai.json";
 import ads from "@config/ads.json";
+import accounting from "@config/accounting.json";
 import { TAB_IDS, TABS, type TabDef, type TabId } from "./tabs";
 
 export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
@@ -140,4 +141,16 @@ export type AdsAiSettings = {
 export function getAdsAiSettings(): AdsAiSettings {
   const a = ai as { ads?: { maxReplyTokens?: number } };
   return { model: getAiSettings().model, maxReplyTokens: a.ads?.maxReplyTokens ?? 600 };
+}
+
+/** 経理のタブの設定（config/accounting.json）。実在の会計サービスの名前は書かない */
+export type AccountingSettings = {
+  /** 明細を取り込み、登録する先（画面の札。例「会計（架空）」） */
+  service: string;
+  /** 明細の出どころ（例「カード会社（架空）」） */
+  cardSource: string;
+};
+
+export function getAccountingSettings(): AccountingSettings {
+  return accounting as AccountingSettings;
 }
