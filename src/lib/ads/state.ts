@@ -12,6 +12,7 @@ import type { JournalWho } from "../journal";
 import type { AdSettings, ShopSettings } from "../settings";
 import type { GateCheck, GatedProposal } from "./gate";
 import { actionPast, totalOf, type AdAction, type AdTable } from "./report";
+import { parseJudgements, parseReports, type AdJudgement, type AdWeeklyReport } from "./results";
 import type { AdsMode } from "./wire";
 
 export type AdProposalState = "pending" | "approved" | "skipped";
@@ -42,7 +43,15 @@ export type AdProposal = {
 /** 「広告（架空）の画面」で止めた・外した言葉 */
 export type AdApplied = { no: number; action: AdAction; at: string; proposalId: string };
 
-export type AdsState = { v: 1; proposals: AdProposal[]; applied: AdApplied[] };
+export type AdsState = {
+  v: 1;
+  proposals: AdProposal[];
+  applied: AdApplied[];
+  /** 効いたかの判定（verdict.ts。無ければ持たない） */
+  judgements?: AdJudgement[];
+  /** 毎週の見直しの報告（weekly.ts。新しい順。無ければ持たない） */
+  reports?: AdWeeklyReport[];
+};
 
 export const EMPTY_ADS: AdsState = { v: 1, proposals: [], applied: [] };
 
@@ -100,7 +109,9 @@ export function parseAds(raw: string | null): AdsState {
   const applied: AdApplied[] = arr(d.applied)
     .filter((a) => a && isInt(a.no) && isAction(a.action) && isStr(a.at) && isStr(a.proposalId))
     .map((a) => ({ no: a.no as number, action: a.action as AdAction, at: a.at as string, proposalId: a.proposalId as string }));
-  return { v: 1, proposals, applied };
+  const judgements = parseJudgements(d.judgements);
+  const reports = parseReports(d.reports);
+  return { v: 1, proposals, applied, ...(judgements.length ? { judgements } : {}), ...(reports.length ? { reports } : {}) };
 }
 
 /** 承認待ちの広告の案（あれば1つ） */

@@ -18,5 +18,22 @@
     {"no": 14, "text": "ヘッドスパ 眠れる", "weeks": [{"clicks": 6, "cost": 360, "bookings": 0}, {"clicks": 7, "cost": 420, "bookings": 1}, {"clicks": 6, "cost": 360, "bookings": 0}, {"clicks": 7, "cost": 420, "bookings": 0}]},
     {"no": 15, "text": "セルフ 縮毛矯正 やり方", "weeks": [{"clicks": 5, "cost": 400, "bookings": 0}, {"clicks": 6, "cost": 480, "bookings": 0}, {"clicks": 5, "cost": 400, "bookings": 0}, {"clicks": 6, "cost": 480, "bookings": 0}]},
     {"no": 16, "text": "カット 上手い 口コミ", "weeks": [{"clicks": 5, "cost": 300, "bookings": 0}, {"clicks": 4, "cost": 240, "bookings": 0}, {"clicks": 5, "cost": 300, "bookings": 0}, {"clicks": 5, "cost": 300, "bookings": 1}]}
+  ],
+  "after": [
+    {"no": 1, "weeks": [{"clicks": 108, "cost": 5750, "bookings": 2}, {"clicks": 107, "cost": 5700, "bookings": 1}, {"clicks": 108, "cost": 5750, "bookings": 2}]},
+    {"no": 2, "weeks": [{"clicks": 102, "cost": 5400, "bookings": 2}, {"clicks": 102, "cost": 5400, "bookings": 1}, {"clicks": 102, "cost": 5400, "bookings": 2}]},
+    {"no": 3, "weeks": [{"clicks": 110, "cost": 5900, "bookings": 3}, {"clicks": 108, "cost": 5850, "bookings": 4}, {"clicks": 112, "cost": 6050, "bookings": 3}]},
+    {"no": 4, "weeks": [{"clicks": 118, "cost": 6500, "bookings": 2}, {"clicks": 120, "cost": 6600, "bookings": 2}, {"clicks": 119, "cost": 6550, "bookings": 1}]},
+    {"no": 5, "weeks": [{"clicks": 118, "cost": 6250, "bookings": 2}, {"clicks": 119, "cost": 6300, "bookings": 2}, {"clicks": 121, "cost": 6400, "bookings": 2}]},
+    {"no": 6, "weeks": [{"clicks": 127, "cost": 6900, "bookings": 3}, {"clicks": 126, "cost": 6850, "bookings": 3}, {"clicks": 128, "cost": 6950, "bookings": 3}]},
+    {"no": 7, "weeks": [{"clicks": 112, "cost": 6550, "bookings": 3}, {"clicks": 113, "cost": 6600, "bookings": 3}, {"clicks": 115, "cost": 6550, "bookings": 3}]},
+    {"no": 8, "weeks": [{"clicks": 125, "cost": 6800, "bookings": 3}, {"clicks": 126, "cost": 6850, "bookings": 3}, {"clicks": 127, "cost": 6900, "bookings": 2}]},
+    {"no": 10, "weeks": [{"clicks": 120, "cost": 6500, "bookings": 3}, {"clicks": 121, "cost": 6550, "bookings": 2}, {"clicks": 123, "cost": 6600, "bookings": 4}]},
+    {"no": 11, "weeks": [{"clicks": 122, "cost": 6750, "bookings": 3}, {"clicks": 124, "cost": 6800, "bookings": 3}, {"clicks": 125, "cost": 6850, "bookings": 3}]},
+    {"no": 12, "weeks": [{"clicks": 130, "cost": 7050, "bookings": 3}, {"clicks": 128, "cost": 6950, "bookings": 3}, {"clicks": 131, "cost": 7100, "bookings": 3}]},
+    {"no": 13, "weeks": [{"clicks": 128, "cost": 6900, "bookings": 3}, {"clicks": 126, "cost": 6850, "bookings": 3}, {"clicks": 129, "cost": 6950, "bookings": 3}]},
+    {"no": 14, "weeks": [{"clicks": 129, "cost": 7000, "bookings": 3}, {"clicks": 130, "cost": 7050, "bookings": 2}, {"clicks": 131, "cost": 7100, "bookings": 3}]},
+    {"no": 15, "weeks": [{"clicks": 128, "cost": 6950, "bookings": 3}, {"clicks": 129, "cost": 7000, "bookings": 3}, {"clicks": 130, "cost": 7050, "bookings": 3}]},
+    {"no": 16, "weeks": [{"clicks": 131, "cost": 7100, "bookings": 3}, {"clicks": 132, "cost": 7150, "bookings": 3}, {"clicks": 130, "cost": 7050, "bookings": 3}]}
   ]
 }

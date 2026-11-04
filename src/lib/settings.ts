@@ -150,6 +150,16 @@ export type AdSettings = {
   checkAfterDays: number;
   /** 案は何日に1つまでか */
   oncePerDays: number;
+  /**
+   * 効いたかの判定（プログラム。src/lib/ads/verdict.ts）。
+   * minWordClicks = 止めた言葉の、前の週の押された回数がこれより少なければ「まだ分からない」
+   * minBookings = 前と後の予約を足してこれより少なければ「まだ分からない」
+   */
+  judge: { minWordClicks: number; minBookings: number };
+  /** 毎週の見直しの報告。maxKeptWords = 「止めなかった言葉」に出す数 / listCount = 前の週の報告を残す数 */
+  report: { maxKeptWords: number; listCount: number };
+  /** 広告の言葉の門：AI の文（案の理由・一言のまとめ）に入れない言葉（だれかを責める言い方・言い切り） */
+  gateWords: string[];
 };
 
 export function getAdSettings(): AdSettings {
@@ -172,6 +182,21 @@ export type AdsAiSettings = {
 /** 「直す」の一言の長さの上限（字）。画面でも使う（鍵や環境変数は読まない） */
 export function getAdsFixMaxChars(): number {
   return (ai as { ads: { maxFixChars: number } }).ads.maxFixChars;
+}
+
+/** 広告の判定と報告の「一言のまとめ」で AI（Haiku）を呼ぶときの上限（config/ai.json の adsNote） */
+export type AdsNoteAiSettings = {
+  model: string;
+  /** 1回の返事の長さの上限（トークン） */
+  maxReplyTokens: number;
+  /** 1文の長さの上限（字） */
+  maxNoteChars: number;
+  /** 窓口（/api/ai/ads/note）が受け取る大きさの上限（字） */
+  maxRequestChars: number;
+};
+
+export function getAdsNoteAiSettings(): AdsNoteAiSettings {
+  return (ai as { adsNote: AdsNoteAiSettings }).adsNote;
 }
 
 export function getAdsAiSettings(): AdsAiSettings {

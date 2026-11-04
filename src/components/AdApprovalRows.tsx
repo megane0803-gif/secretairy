@@ -19,6 +19,8 @@ import { writeJournal, type JournalWho } from "@/lib/journal";
 import type { Rule } from "@/lib/rules/types";
 import { useRules } from "@/lib/rules/useRules";
 import { getAdsFixMaxChars, getShop } from "@/lib/settings";
+import { pendingRevert } from "@/lib/ads/verdict";
+import { AdRevertRow } from "./AdRevertRow";
 
 const MAX_FIX_CHARS = getAdsFixMaxChars();
 
@@ -218,10 +220,25 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
     </li>
   ) : null;
 
-  if (!standalone) return row;
+  // 効いたかの判定の「戻す案」も、同じ箱の行として出す（AdRevertRow。無ければ何も出さない）
+  const revert = pendingRevert(ads.state);
+  if (!standalone)
+    return (
+      <>
+        {row}
+        <AdRevertRow onDone={setDone} />
+      </>
+    );
   return (
     <>
-      {row ? <ul className="approvals compact">{row}</ul> : <p className="checked">✓ 広告の案の承認待ちはありません</p>}
+      {row || revert ? (
+        <ul className="approvals compact">
+          {row}
+          <AdRevertRow onDone={setDone} />
+        </ul>
+      ) : (
+        <p className="checked">✓ 広告の案の承認待ちはありません</p>
+      )}
       {done && !row && (
         <p className="hint" role="status">
           {done}

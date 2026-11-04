@@ -15,6 +15,7 @@ import { sortTrial, type AccountingState } from "../accounting/state";
 import { checkDraft, proposalLabel } from "../ads/gate";
 import { buildTable } from "../ads/report";
 import { canPropose, offNos, withProposal, type AdsState } from "../ads/state";
+import { buildWeeklyReport, withReport } from "../ads/weekly";
 import type { AdsRequest, AdsResponse } from "../ads/wire";
 import { candidateLabel } from "../ai/slots";
 import { NO_AI_MESSAGE, parseHoldOffer, type Candidate, type HoldOffer, type ReserveEvent, type ReserveRequest } from "../ai/wire";
@@ -320,10 +321,25 @@ async function adsJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
   env.journal({ who: "オーナー", text: `AI の仕事を動かした：広告の見直し（${env.mode === "script" ? "決まった返事・AI なし" : "AI"}）` });
   const table = buildTable(env.adReport ?? getAds(), env.adSettings, offNos(env.store.ads()));
   const res = await env.ask.ads({ mode: env.mode, table, rules: env.rules.filter((r) => !r.locked) });
+  // 見直しを1回するたびに、広告タブに報告を1枚残す（広告タブと同じ。数はプログラムが表から入れる）
+  const weekly = (x: Pick<Parameters<typeof buildWeeklyReport>[0], "proposal" | "failed">) =>
+    buildWeeklyReport({
+      id: `rp-${x.proposal?.id ?? `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`}`,
+      nowIso,
+      today: demoClock(env.data.shop, env.now(), env.store.book().dayOffset).today.date,
+      table,
+      shop: env.data.shop,
+      settings: env.adSettings,
+      mode: env.mode,
+      fromJobs: true,
+      ...(res.ok || res.code === "gate" ? { rejected: res.rejected } : {}),
+      ...x,
+    });
   if (!res.ok) {
     if (res.code === "no-ai") return { kind: "no-ai" };
     if (res.code === "bad-request") return { kind: "failed", note: res.message };
     env.journal(...res.steps);
+    env.store.setAds((s) => withReport(s, weekly({ failed: `案はプログラムの確認を通らなかったので、出しませんでした（${res.problems.join("。")}）` }), env.adSettings));
     return { kind: "done", result: "案は出ませんでした（門を通らず）", tab: "ads" };
   }
   // 受け取った案を、画面でももう一度門で確かめてから承認の箱に入れる（広告タブと同じ）
@@ -336,6 +352,7 @@ async function adsJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
   });
   if (!again.ok) {
     env.journal(...res.steps, { who: "プログラム", text: `画面の確認で弾いた：${again.problems.join("。")}（案は出さなかった）` });
+    env.store.setAds((s) => withReport(s, weekly({ failed: `案は画面の確認を通らなかったので、出しませんでした（${again.problems.join("。")}）` }), env.adSettings));
     return { kind: "done", result: "案は出ませんでした（門を通らず）", tab: "ads" };
   }
   const id = env.newId?.() ?? `ad-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -343,7 +360,7 @@ async function adsJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
   env.store.setAds((s) => {
     const next = withProposal(s, again.proposal, table, { id, checks: again.checks, nowIso, mode: env.mode }, env.adSettings);
     added = next !== s;
-    return next;
+    return added ? withReport(next, weekly({ proposal: { ...again.proposal, id } }), env.adSettings) : next;
   });
   if (!added) return { kind: "skip", note: ALREADY_THIS_WEEK };
   env.journal(...res.steps, { who: "プログラム", text: `承認の箱に入れた：広告の案「${proposalLabel(again.proposal)}」` });

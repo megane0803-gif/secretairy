@@ -6,7 +6,7 @@ import type { Rule } from "../rules/types";
 import { validateOwnerRule } from "../rules/validate";
 import type { GateCheck, GatedProposal } from "./gate";
 import type { AdAction, AdTable, AdTableRow } from "./report";
-import type { ReviewStep } from "./review";
+import type { RejectedDraft, ReviewStep } from "./review";
 
 /** ai = Claude に聞く / script = 決まった返事（AI なし。テストと、AI につながらないときのお試し用） */
 export type AdsMode = "ai" | "script";
@@ -21,8 +21,8 @@ export type AdsRequest = {
 };
 
 export type AdsResponse =
-  | { ok: true; proposal: GatedProposal; checks: GateCheck[]; tries: number; steps: ReviewStep[] }
-  | { ok: false; code: "gate"; checks: GateCheck[]; problems: string[]; tries: number; steps: ReviewStep[] }
+  | { ok: true; proposal: GatedProposal; checks: GateCheck[]; tries: number; steps: ReviewStep[]; rejected?: RejectedDraft[] }
+  | { ok: false; code: "gate"; checks: GateCheck[]; problems: string[]; tries: number; steps: ReviewStep[]; rejected?: RejectedDraft[] }
   | { ok: false; code: "no-ai"; message: string }
   | { ok: false; code: "bad-request"; message: string };
 

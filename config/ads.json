@@ -3,5 +3,14 @@
   "featuredMenus": ["straight", "headspa"],
   "towns": ["もちの木町", "白玉台", "きなこ坂", "あんこ橋", "みたらし川"],
   "checkAfterDays": 21,
-  "oncePerDays": 7
+  "oncePerDays": 7,
+  "judge": {
+    "minWordClicks": 30,
+    "minBookings": 6
+  },
+  "report": {
+    "maxKeptWords": 5,
+    "listCount": 8
+  },
+  "gateWords": ["のせい", "責任", "失敗", "ミス", "悪い", "下手", "ダメ", "だめ", "怠", "絶対", "必ず", "確実", "代行", "業者"]
 }

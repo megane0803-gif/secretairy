@@ -82,7 +82,15 @@ export type AdReport = {
   keywords: AdKeyword[];
   /** お客さんが調べた言葉（多い順に8つ。外せる） */
   searchTerms: AdRow[];
+  /**
+   * 効いたかの判定に使う「後の数」（架空）。その言葉を止めた（外した）あとの週ごとの、広告を出す言葉みんなの数（古い順）。
+   * 判定日（承認の checkAfterDays 日後）に、前の同じ週の数（weeks の最後の週から）と比べる（src/lib/ads/verdict.ts）。
+   */
+  after?: AdAfter[];
 };
+
+/** 止めた（外した）言葉の番号と、その後の週ごとの数（架空） */
+export type AdAfter = { no: number; weeks: AdWeek[] };
 
 // ---- 経理（売上・通販の明細） ----
 

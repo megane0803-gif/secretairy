@@ -85,6 +85,7 @@ src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理�
 - カルテの AI は下書きまで。プログラムの言葉の門（`src/lib/karte/gate.ts`。言葉は `locked.ts` の `KARTE_GATE_WORDS`。減らさない）を通し、保存は人の「保存」ボタンだけ。お客様の名前は AI に送らない。テストでは `scriptKarteWriter` に置きかえる。
 - 録音からメモを作る（仕様書 §1.5.1）：声はブラウザの外に出さない（文字にするのは Web Worker の Whisper）。送るのは文字だけで、名字は〔お客様〕に置きかえる。要点にも言葉の門（`gateLine`）を通し、メモに入れるのも保存も人のボタン。テストでは作った音・決まった文字起こし・`scriptNotesWriter` を使う（Whisper と Claude は呼ばない）。
 - 広告の見直しの道具は `src/lib/ads/tools.ts` の2つ（止める・外す）だけ。言葉を足す道具は足さない。案は門（`src/lib/ads/gate.ts`）を通してから承認の箱へ。テストでは `src/lib/ads/script.ts` に置きかえる。
+- 広告の効いたかの判定はプログラム（`src/lib/ads/verdict.ts`。後の数は `seed/ads.json` の `after`）。戻す案は承認の箱へ（戻すのは人の「承認」だけ）。毎週の見直しの報告は `src/lib/ads/weekly.ts`（数はプログラム）。AI の文は広告の言葉の門（`src/lib/ads/words.ts`）を通す。一言のまとめ（`/api/ai/ads/note`・Haiku）は数字なし・AI が使えない時は出さない。テストでは決まった文を返す物に置きかえる（`src/lib/ads/__tests__/results.test.ts`）。
 
 - 発信の下書きは `src/lib/posts/`（窓口は `/api/ai/posts`。Sonnet）。種類が違っても仕組みは1本で、変わるのは `config/posts.json` の指示文と材料だけ。Claude には日時と数字を書かせない（空き枠・お休みは画面が台帳と設定から入れる。ブログのリンクは印だけ）。言葉の門（`gate.ts`）に当たったら1回だけ作り直し、2回とも当たったら保存しない。保存はオーナーのボタンだけ（承認の箱は通さない）。送信・公開はしない。テストでは `scriptPostsModel` か決まった文を返す物に置きかえる。
 

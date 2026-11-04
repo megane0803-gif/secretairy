@@ -9,6 +9,11 @@ import { GateChecks } from "@/components/AdApprovalRows";
 import { askAdsReview } from "@/lib/ads/client";
 import { checkDraft, proposalLabel, type GateCheck } from "@/lib/ads/gate";
 import { canPropose, resetAds, withProposal } from "@/lib/ads/state";
+import { buildWeeklyReport, withReport } from "@/lib/ads/weekly";
+import type { GatedProposal } from "@/lib/ads/gate";
+import type { RejectedDraft } from "@/lib/ads/review";
+import { demoClock } from "@/lib/calendar";
+import { getShop } from "@/lib/settings";
 import { useAds } from "@/lib/ads/useAds";
 import type { AdsMode } from "@/lib/ads/wire";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
@@ -44,8 +49,23 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
     setBusy(true);
     setShown(null);
     writeJournal({ who: "オーナー", text: `広告の見直しを頼んだ（${useMode === "script" ? "決まった返事・AI なし" : "AI"}）` });
-    const res = await askAdsReview({ mode: useMode, table: ads.table, rules: rules.filter((r) => !r.locked) });
+    const table = ads.table;
+    const res = await askAdsReview({ mode: useMode, table, rules: rules.filter((r) => !r.locked) });
     setBusy(false);
+    // 見直しを1回するたびに、報告を1枚残す（数はプログラムが表から入れる。weekly.ts）
+    const report = (x: { proposal?: GatedProposal & { id: string }; failed?: string; rejected?: RejectedDraft[] }) => {
+      const shop = getShop();
+      return buildWeeklyReport({
+        id: `rp-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+        nowIso: new Date().toISOString(),
+        today: demoClock(shop, new Date(), book.state.dayOffset).today.date,
+        table,
+        shop,
+        settings: ads.settings,
+        mode: useMode,
+        ...x,
+      });
+    };
     if (!res.ok) {
       if (res.code === "no-ai") {
         writeJournal({ who: "プログラム", text: `${NO_AI_MESSAGE}でした。広告の案は出していません` });
@@ -58,6 +78,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
         return;
       }
       writeJournal(...res.steps);
+      ads.update((s) => withReport(s, report({ failed: `案はプログラムの確認を通らなかったので、出しませんでした（${res.problems.join("。")}）`, rejected: res.rejected }), ads.settings));
       setShown({ kind: "gate", problems: res.problems, checks: res.checks });
       return;
     }
@@ -72,13 +93,18 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
     });
     if (!again.ok) {
       writeJournal(...res.steps, { who: "プログラム", text: `画面の確認で弾いた：${again.problems.join("。")}（案は出さなかった）` });
+      ads.update((s) => withReport(s, report({ failed: `案は画面の確認を通らなかったので、出しませんでした（${again.problems.join("。")}）`, rejected: res.rejected }), ads.settings));
       setShown({ kind: "gate", problems: again.problems, checks: again.checks });
       return;
     }
     const nowIso = new Date().toISOString();
     const id = `ad-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-    ads.update((s) => withProposal(s, again.proposal, ads.table, { id, checks: again.checks, nowIso, mode: useMode }, ads.settings));
-    writeJournal(...res.steps, { who: "プログラム", text: `承認の箱に入れた：広告の案「${proposalLabel(again.proposal)}」` });
+    const weekly = report({ proposal: { ...again.proposal, id }, rejected: res.rejected });
+    ads.update((s) => {
+      const next = withProposal(s, again.proposal, table, { id, checks: again.checks, nowIso, mode: useMode }, ads.settings);
+      return next === s ? s : withReport(next, weekly, ads.settings);
+    });
+    writeJournal(...res.steps, { who: "プログラム", text: `承認の箱に入れた：広告の案「${proposalLabel(again.proposal)}」（見直しの報告も広告タブに残した）` });
     setShown({ kind: "ok", text: proposalLabel(again.proposal), checks: again.checks, tries: res.tries });
   }
 
@@ -91,7 +117,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
       return out.book;
     });
     ads.update(() => nextAds);
-    writeJournal({ who: "オーナー", text: "広告（架空）を最初に戻した（止めた・外した言葉と広告の案、広告から足した ToDo を消した）" });
+    writeJournal({ who: "オーナー", text: "広告（架空）を最初に戻した（止めた・外した言葉と広告の案、効いたかの判定・見直しの報告、広告から足した ToDo を消した）" });
     setShown({ kind: "note", text: "広告（架空）を最初に戻しました。" });
   };
 
@@ -177,7 +203,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
         <button type="button" className="btn small" onClick={reset}>
           広告（架空）を最初に戻す
         </button>
-        <small className="hint">止めた・外した言葉と案を消します（日誌には残ります）</small>
+        <small className="hint">止めた・外した言葉と案・判定・報告を消します（日誌には残ります）</small>
       </div>
     </div>
   );

@@ -18,6 +18,12 @@
     "maxFixChars": 100,
     "maxRequestChars": 200000
   },
+  "adsNote": {
+    "model": "claude-haiku-5-5",
+    "maxReplyTokens": 200,
+    "maxNoteChars": 60,
+    "maxRequestChars": 20000
+  },
   "line": {
     "model": "claude-haiku-5-5",
     "maxReplyTokens": 300,

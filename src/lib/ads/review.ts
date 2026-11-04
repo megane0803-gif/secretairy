@@ -12,7 +12,7 @@ import type { ToolCall } from "../ai/model";
 import { draftFrom, gate, proposalLabel, type GateCheck, type GatedProposal } from "./gate";
 import type { AdsModel } from "./model";
 import { adsSystem, adsUserText } from "./prompt";
-import { actionLabel, actionVerb, findRow, tableText, type AdAction, type AdTable } from "./report";
+import { actionFor, actionLabel, actionVerb, findRow, tableText, type AdAction, type AdTable } from "./report";
 import { AD_TOOL_DEFS } from "./tools";
 
 /** 日誌に書く1行（書くのは画面の側） */
@@ -31,9 +31,12 @@ export type ReviewInput = {
   maxTries: number;
 };
 
+/** 門で弾いた案（表にある番号の物だけ。毎週の見直しの報告の「止めなかった言葉」に出す） */
+export type RejectedDraft = { no: number; action: AdAction; problems: string[] };
+
 export type ReviewResult =
-  | { ok: true; proposal: GatedProposal; checks: GateCheck[]; tries: number; steps: ReviewStep[] }
-  | { ok: false; checks: GateCheck[]; problems: string[]; tries: number; steps: ReviewStep[] };
+  | { ok: true; proposal: GatedProposal; checks: GateCheck[]; tries: number; steps: ReviewStep[]; rejected?: RejectedDraft[] }
+  | { ok: false; checks: GateCheck[]; problems: string[]; tries: number; steps: ReviewStep[]; rejected?: RejectedDraft[] };
 
 /** 弾かれた案も、日誌では読める形で（道具が止める・外すで、番号が表にあれば言葉も） */
 function saidLabel(table: AdTable, call: ToolCall): string {
@@ -55,6 +58,7 @@ export async function runReview(input: ReviewInput): Promise<ReviewResult> {
   ];
   const tries = fix ? 1 : Math.max(1, input.maxTries);
   const steps: ReviewStep[] = [];
+  const rejected: RejectedDraft[] = [];
   let last: ReviewResult | null = null;
 
   for (let i = 1; i <= tries; i++) {
@@ -77,9 +81,14 @@ export async function runReview(input: ReviewInput): Promise<ReviewResult> {
 
     if (r.ok) {
       steps.push({ who: "プログラム", text: `門を通した：${r.checks.map((c) => `✓ ${c.label}`).join("・")}` });
-      return { ok: true, proposal: r.proposal, checks: r.checks, tries: i, steps };
+      return { ok: true, proposal: r.proposal, checks: r.checks, tries: i, steps, ...(rejected.length ? { rejected } : {}) };
     }
-    last = { ok: false, checks: r.checks, problems: r.problems, tries: i, steps };
+    if (said) {
+      const d = draftFrom(said);
+      const row = typeof d.no === "number" ? findRow(table, d.no) : null;
+      if (row && !rejected.some((x) => x.no === row.no)) rejected.push({ no: row.no, action: d.action ?? actionFor(row.kind), problems: r.problems });
+    }
+    last = { ok: false, checks: r.checks, problems: r.problems, tries: i, steps, ...(rejected.length ? { rejected } : {}) };
     const more = i < tries;
     steps.push({ who: "プログラム", text: `門で弾いた：${r.problems.join("。")}${more ? "（理由を渡して作り直しを頼んだ）" : ""}` });
     if (!more) break;
