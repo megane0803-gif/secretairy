@@ -49,6 +49,8 @@ export const ADS_KEY = "ads";
 export const ACCOUNTING_KEY = "accounting";
 /** LINE のつなぎ（line/state.ts）。その画面だけが持つ印と、届けた・受け取った物の id（LINE の人の番号は持たない） */
 export const LINE_KEY = "line";
+/** カルテの「録音からメモを作る」を出す・隠す（最初の状態は config/recording.json の visible） */
+export const RECORDING_SWITCH_KEY = "recordingVisible";
 /** 発信：保存した下書き（posts/state.ts） */
 export const POSTS_KEY = "posts";
 /** 日誌（journal.ts） */

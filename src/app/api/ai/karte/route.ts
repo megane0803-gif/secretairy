@@ -33,7 +33,7 @@ export async function POST(request: Request): Promise<Response> {
   } catch {
     return reply({ ok: false, code: "bad-request", message: "形がおかしいです" }, 400);
   }
-  const parsed = parseKarteRequest(body, ai.karte.maxMemoChars, menus.map((m) => m.id));
+  const parsed = parseKarteRequest(body, ai.karte.maxMemoChars, menus.map((m) => m.id), ai.karte.maxRecordingMemoChars);
   if (!parsed.ok) return reply({ ok: false, code: "bad-request", message: parsed.reason }, 400);
   const req = parsed.value;
 
