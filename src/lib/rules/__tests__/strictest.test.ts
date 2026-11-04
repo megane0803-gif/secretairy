@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { formatMinutes } from "../describe";
 import { effective, strictest } from "../strictest";
 import { PROGRAM_KINDS, STRICTER } from "../types";
 import { resultOf, rule, run } from "./helpers";
@@ -59,5 +60,14 @@ describe("厳しい方を使う", () => {
   test("ほかのタブのルールは予約の判定に入らない", () => {
     const r = rule({ kind: "minLeadMinutes", value: 9999 }, { level: "tab", tab: "posts" });
     assert.equal(run([r]).results.length, 0);
+  });
+});
+
+describe("時間の書き方", () => {
+  test("1日ちょうどは「24時間」、2日からは「N日」", () => {
+    assert.equal(formatMinutes(1440), "24時間");
+    assert.equal(formatMinutes(2880), "2日");
+    assert.equal(formatMinutes(180), "3時間");
+    assert.equal(formatMinutes(90), "1時間30分");
   });
 });

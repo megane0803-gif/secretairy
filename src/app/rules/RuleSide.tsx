@@ -166,8 +166,10 @@ function TryPanel({ seed, menus, shop, days, booked }: Props) {
               </li>
             ))}
           </ul>
-          {verdict.texts.length > 0 && (
-            <p className="hint">文のルール {verdict.texts.length} 本は、プログラムでは確かめず AI への指示に入れます。</p>
+          {verdict.texts.some((r) => !r.locked) && (
+            <p className="hint">
+              文のルール {verdict.texts.filter((r) => !r.locked).length} 本は、プログラムでは確かめず AI への指示に入れます。
+            </p>
           )}
           <p className="hint">ルールを足す・直す・消すと、この結果もすぐ変わります。</p>
           <Fold summary="AI（Claude）に渡す指示を見る">

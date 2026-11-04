@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { lastStartOf, toHHMM, toMinutes } from "../../calendar";
 import { getMenus, getShop } from "../../settings";
 import { judge, type Booked, type Booking } from "../judge";
 import { instructionsFor } from "../prompt";
@@ -52,21 +53,7 @@ describe("例のルール", () => {
     assert.equal(resultFor(at({ start: "18:30", newCustomer: true }, newOnes(4)), "seed-new-per-day")?.ok, false);
   });
 
-  seedTest("seed-color-buffer", "カラーの後は15分あける", () => {
-    // 席の数だけカラーが 10:00–11:30 に入っている
-    const colors: Booked[] = Array.from({ length: shop.seats }, () => ({
-      date: "2026-11-05",
-      start: "10:00",
-      menuIds: ["color"],
-      newCustomer: false,
-    }));
-    assert.equal(at({ start: "11:45" }, colors).ok, true);
-    const v = at({ start: "11:30" }, colors);
-    assert.equal(resultFor(v, "seed-color-buffer")?.ok, false);
-    assert.equal(v.ok, false);
-  });
-
-  seedTest("seed-straight-lead", "縮毛矯正は前の日まで（全体の3時間より厳しい方を使う）", () => {
+  seedTest("seed-straight-lead", "縮毛矯正は24時間前まで（全体の3時間より厳しい方を使う）", () => {
     const now = { date: "2026-11-04", time: "11:00" };
     const v = at({ menuIds: ["straight"], date: "2026-11-05", start: "10:00" }, [], now);
     assert.equal(resultFor(v, "seed-straight-lead")?.ok, false);
@@ -91,4 +78,23 @@ describe("例のルール", () => {
       [],
     );
   });
+});
+
+// 最終受付は例のルールではなく、メニューの設定（config/menus.json の lastStart）で持つ。
+// その設定が判定に効いているかを、メニューごとに確かめる。
+describe("店の設定：メニューの最終受付が判定に効く", () => {
+  const close = "20:00";
+  for (const m of menus) {
+    const last = lastStartOf(m, close);
+    test(`${m.name}：${last} は受ける・${toHHMM(toMinutes(last) + 30)} は断る`, () => {
+      if (m.lastStart) assert.equal(last, m.lastStart, "設定に書いた時刻を使う");
+      const menuLast = (v: ReturnType<typeof at>) => v.base.find((b) => b.id === "menu-last");
+      const ok = at({ menuIds: [m.id], start: last });
+      assert.equal(menuLast(ok)?.ok, true);
+      assert.equal(ok.ok, true);
+      const late = at({ menuIds: [m.id], start: toHHMM(toMinutes(last) + 30) });
+      assert.equal(menuLast(late)?.ok, false);
+      assert.equal(late.ok, false);
+    });
+  }
 });

@@ -17,7 +17,8 @@ type Unit = "分" | "時間" | "日";
 const UNIT_MIN: Record<Unit, number> = { 分: 1, 時間: 60, 日: 1440 };
 
 function splitLead(m: number): { num: string; unit: Unit } {
-  if (m % 1440 === 0) return { num: String(m / 1440), unit: "日" };
+  // 表の文（formatMinutes）と同じく、1日ちょうどは「24時間」で出す
+  if (m >= 2880 && m % 1440 === 0) return { num: String(m / 1440), unit: "日" };
   if (m % 60 === 0) return { num: String(m / 60), unit: "時間" };
   return { num: String(m), unit: "分" };
 }

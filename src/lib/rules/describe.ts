@@ -12,9 +12,9 @@ export const KIND_INFO: Record<RuleKind, { name: string; example: string }> = {
   text: { name: "文（AI が読む）", example: "お客様の顔が分かる写真は載せない" },
 };
 
-/** 180 → 「3時間」、1440 → 「1日」、45 → 「45分」 */
+/** 180 → 「3時間」、1440 → 「24時間」、2880 → 「2日」、45 → 「45分」 */
 export function formatMinutes(m: number): string {
-  if (m >= 1440 && m % 1440 === 0) return `${m / 1440}日`;
+  if (m >= 2880 && m % 1440 === 0) return `${m / 1440}日`;
   if (m >= 60) {
     const h = Math.floor(m / 60);
     const r = m % 60;
