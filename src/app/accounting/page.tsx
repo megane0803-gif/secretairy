@@ -4,6 +4,7 @@ import { CARD_GATE_LABELS } from "@/lib/accounting/sort";
 import { CARD_FIELDS } from "@/lib/data/types";
 import { getAccountingSettings } from "@/lib/settings";
 import { CardStatement } from "./CardStatement";
+import { JobStatement } from "./JobStatement";
 import { RegisterPanel } from "./RegisterPanel";
 import { SalesReport } from "./SalesReport";
 
@@ -24,6 +25,7 @@ export default function AccountingPage() {
       }
     >
       <SalesReport />
+      <JobStatement />
       <CardStatement />
       <Fold summary="くわしく（プログラムの確認と、明細の形）">
         <p>登録の前に、プログラムが2つ確かめます。どちらも ✓ になるまで登録のボタンは押せません。</p>

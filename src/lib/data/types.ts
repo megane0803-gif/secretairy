@@ -193,3 +193,14 @@ export const TODO_FIELDS: FieldNote[] = [
   { key: "key", label: "同じ物を2回足さない鍵（メモ:番号・カルテ:番号・語句:番号・予約:お客様＠日時 など。最初の例は「例:」で始める）" },
   { key: "memo", label: "投げたメモの元の文（プログラムがそのまましまう）" },
 ];
+
+/**
+ * ホームの「AI の仕事」で、これから来る物（最初の状態。seed/jobs.json）。1行ずつ上から順に並べる。
+ * reserve = 予約の相談（架空のお客様の文。日は「何番目の営業日」と時刻で持ち、文は画面がその日の言い方で作る）
+ * card = 新しい明細（経理の「次の明細（試し）」の架空の明細）/ ads = 広告の見直し / memo = メモ1件（ToDo へ）
+ */
+export type JobSeed =
+  | { id: "reserve"; customerId: string; menuId: string; day: BusinessDay; start: string }
+  | { id: "card" }
+  | { id: "ads" }
+  | { id: "memo"; text: string };

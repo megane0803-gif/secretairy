@@ -7,7 +7,7 @@ import { register, parseAccounting, EMPTY_ACCOUNTING, withChoice, withAutoNext, 
 import { manualItems } from "../accounting/sort";
 import { EMPTY_ADS, parseAds, type AdsState } from "../ads/state";
 import { emptyBook, parseBook, withHold, type BookState } from "../book/state";
-import { ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, BROWSER_PREFIX, JOURNAL_KEY, LINE_KEY, POSTS_KEY, RULES_KEY, readBrowser, writeBrowser } from "../browser";
+import { ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, BROWSER_PREFIX, JOBS_KEY, JOURNAL_KEY, LINE_KEY, POSTS_KEY, RULES_KEY, readBrowser, writeBrowser } from "../browser";
 import { getAccounting, getCustomers } from "../data/seed";
 import { deskKey, getDesk, setDesk } from "../karte/deskStore";
 import { clearInbox, handleWebhook, pollScreen, startLink, type BridgeDeps } from "../line/bridge";
@@ -75,10 +75,11 @@ describe("最初に戻す", () => {
     assert.ok(store.has(BROWSER_PREFIX + RULES_KEY), "ルールのタブの変更は残す");
   });
 
-  test("書く物：予約は今日を起点に作り直し、広告と経理と発信の下書きは消す", () => {
+  test("書く物：予約は今日を起点に作り直し、広告と経理と発信の下書き・「AI の仕事」の済みの印は消す", () => {
     const w = resetAllWrites("2026-11-04");
-    assert.deepEqual(w.map((x) => x.key).sort(), [ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, POSTS_KEY].sort());
+    assert.deepEqual(w.map((x) => x.key).sort(), [ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, JOBS_KEY, POSTS_KEY].sort());
     assert.equal(w.find((x) => x.key === POSTS_KEY)!.value, null);
+    assert.equal(w.find((x) => x.key === JOBS_KEY)!.value, null);
     assert.equal(w.find((x) => x.key === ADS_KEY)!.value, null);
     assert.equal(w.find((x) => x.key === ACCOUNTING_KEY)!.value, null);
   });

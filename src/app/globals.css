@@ -986,3 +986,15 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .posts-at { flex: none; font-weight: 700; font-size: 0.9rem; }
 .posts-first { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .posts-full { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 2px; font-size: 0.95rem; line-height: 1.7; }
+
+/* ---- ホームの「AI の仕事」 ---- */
+
+.ai-jobs .page-head h2 { margin: 0; }
+.ai-jobs-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0; }
+.ai-jobs-list { margin-top: 8px; }
+.ai-job.done { border-left-color: var(--ok); }
+.ai-job-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; }
+.ai-job-what { min-width: 0; overflow-wrap: anywhere; }
+.ai-job-what .arrow { color: var(--muted); }
+.ai-job-state { margin: 4px 0 0; font-size: 0.9rem; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.ai-job .hint { margin-top: 2px; }

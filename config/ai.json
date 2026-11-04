@@ -44,5 +44,8 @@
     "maxNoteChars": 60,
     "maxRequestChars": 100000,
     "minIntervalSeconds": 7
+  },
+  "jobs": {
+    "maxAiCallsPerPress": 4
   }
 }

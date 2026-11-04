@@ -13,6 +13,7 @@ import line from "@config/line.json";
 import recording from "@config/recording.json";
 import todo from "@config/todo.json";
 import posts from "@config/posts.json";
+import jobs from "@config/jobs.json";
 import { TAB_IDS, TABS, type TabDef, type TabId } from "./tabs";
 
 export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
@@ -422,4 +423,18 @@ export function getPostsAiSettings(): PostsAiSettings {
 /** 材料の1つの欄の長さの上限（字）。画面でも使う（鍵や環境変数は読まない） */
 export function getPostsMaterialMaxChars(): number {
   return (ai as { posts: { maxMaterialChars: number } }).posts.maxMaterialChars;
+}
+
+/**
+ * ホームの「AI の仕事」：欄を出すか（最初の状態。画面で切りかえた分はブラウザの中だけ）と、
+ * 1回押した時に AI の窓口（/api/ai/）を呼ぶ回数の上限（config/ai.json の jobs.maxAiCallsPerPress）。
+ */
+export type JobsSettings = {
+  visible: boolean;
+  maxAiCallsPerPress: number;
+};
+
+export function getJobsSettings(): JobsSettings {
+  const a = (ai as { jobs: { maxAiCallsPerPress: number } }).jobs;
+  return { visible: (jobs as { visible: boolean }).visible !== false, maxAiCallsPerPress: a.maxAiCallsPerPress };
 }

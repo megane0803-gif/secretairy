@@ -53,6 +53,10 @@ export const LINE_KEY = "line";
 export const RECORDING_SWITCH_KEY = "recordingVisible";
 /** 発信：保存した下書き（posts/state.ts） */
 export const POSTS_KEY = "posts";
+/** ホームの「AI の仕事」：済んだ行と結果（jobs/state.ts）。「最初に戻す」で消える */
+export const JOBS_KEY = "jobs";
+/** ホームの「AI の仕事」の表示スイッチ（画面で変えた分。「最初に戻す」では消さない） */
+export const JOBS_SWITCH_KEY = "jobsSwitch";
 /** 日誌（journal.ts） */
 export const JOURNAL_KEY = "journal";
 export const BROWSER_PREFIX = PREFIX;

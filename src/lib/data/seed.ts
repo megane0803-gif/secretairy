@@ -9,7 +9,8 @@ import todo from "@seed/todo.json";
 import kartes from "@seed/kartes.json";
 import karteExamples from "@seed/karte-examples.json";
 import postMemos from "@seed/post-memos.json";
-import type { AccountingSeed, AdReport, Customer, KarteExample, PostMemo, SeedKarte, SeedReservation, Todo } from "./types";
+import jobs from "@seed/jobs.json";
+import type { AccountingSeed, AdReport, Customer, JobSeed, KarteExample, PostMemo, SeedKarte, SeedReservation, Todo } from "./types";
 
 export function getCustomers(): Customer[] {
   return customers as Customer[];
@@ -46,4 +47,9 @@ export function getKarteExamples(): KarteExample[] {
 /** 発信の「お店のメモ」（架空・3つ）。下書きを作るときは全部 AI に渡す */
 export function getPostMemos(): PostMemo[] {
   return postMemos as PostMemo[];
+}
+
+/** ホームの「AI の仕事」で、これから来る物（上から順に4行） */
+export function getJobSeeds(): JobSeed[] {
+  return jobs as JobSeed[];
 }
