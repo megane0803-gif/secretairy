@@ -184,3 +184,34 @@ export function loadBook(
     checks: { hours: checkHours(shop, ahead), seats: checkSeats(shop, ahead) },
   };
 }
+
+export type FreeRange = { start: string; end: string; free: number };
+
+/**
+ * その日の席の空き（枠の長さごと）。同じ空きの数が続く所は1つにまとめる。満席の所は入れない。
+ * from（HH:MM）があれば、それより前に始まる枠は数えない（もう過ぎた時間）。
+ * ルール（何分前まで・間を空ける など）は見ない。受けられるかは予約チャット（judge.ts）で確かめる。
+ */
+export function freeRanges(
+  shop: ShopSettings,
+  day: CalDay,
+  reservations: Reservation[],
+  from?: string,
+): { ranges: FreeRange[]; seatSlots: number } {
+  if (!day.hours) return { ranges: [], seatSlots: 0 };
+  const step = Math.max(5, shop.slotMinutes);
+  const list = reservations.filter((r) => r.date === day.date);
+  const ranges: FreeRange[] = [];
+  let seatSlots = 0;
+  for (let t = toMinutes(day.hours.open); t + step <= toMinutes(day.hours.close); t += step) {
+    if (from && toHHMM(t) < from) continue;
+    const used = list.filter((r) => r.startMin < t + step && t < r.endMin).length;
+    const free = Math.max(0, shop.seats - used);
+    seatSlots += free;
+    const last = ranges[ranges.length - 1];
+    if (free === 0) continue;
+    if (last && last.end === toHHMM(t) && last.free === free) last.end = toHHMM(t + step);
+    else ranges.push({ start: toHHMM(t), end: toHHMM(t + step), free });
+  }
+  return { ranges, seatSlots };
+}

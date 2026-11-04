@@ -1,7 +1,8 @@
 // 予約チャットのテストの道具。Claude は呼ばず、決まった返事（script.ts）に置きかえる。
 
 import { shopToday } from "../../calendar";
-import { getCustomers } from "../../data/seed";
+import { getCustomers, getSeedKartes } from "../../data/seed";
+import { resolveSeedKartes, toVisits, type SavedKarte, allKartes } from "../../karte/record";
 import { loadBook } from "../../reservations";
 import { getRules } from "../../rules/store";
 import { getAiSettings, getMenus, getShop } from "../../settings";
@@ -24,8 +25,7 @@ export function at(date: string, time: string): Date {
 
 /** その時刻に初めて開いたブラウザの台帳（起点 = 今日） */
 export function bookedAt(now: Date): BookedRow[] {
-  const { today } = shopToday(shop, now);
-  return loadBook(shop, menus, today).all.map((r) => ({
+  return loadAt(now).all.map((r) => ({
     id: r.id,
     customerId: r.customer.id,
     menuId: r.menu.id,
@@ -36,7 +36,17 @@ export function bookedAt(now: Date): BookedRow[] {
   }));
 }
 
-export function ctxAt(now: Date, over: Partial<ToolContext> = {}, customerId = "c04"): ToolContext {
+function loadAt(now: Date) {
+  const { today } = shopToday(shop, now);
+  return loadBook(shop, menus, today);
+}
+
+/** その時刻に初めて開いたブラウザのカルテ（最初の状態の前回までのカルテ＋保存した物）の日付とメニュー */
+export function visitsAt(now: Date, saved: SavedKarte[] = []) {
+  return toVisits(allKartes(resolveSeedKartes(getSeedKartes(), loadAt(now).all), saved));
+}
+
+export function ctxAt(now: Date, over: Partial<ToolContext> = {}, customerId = "c04", saved: SavedKarte[] = []): ToolContext {
   const c = customers.find((x) => x.id === customerId)!;
   let n = 0;
   return {
@@ -48,6 +58,8 @@ export function ctxAt(now: Date, over: Partial<ToolContext> = {}, customerId = "
         customer: { id: c.id, surname: c.surname, firstVisit: c.firstVisit },
         booked: bookedAt(now),
         rules: getRules(),
+        visits: visitsAt(now, saved),
+        dayOffset: 0,
       },
       shop,
       menus,

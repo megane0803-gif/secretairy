@@ -1,32 +1,28 @@
 import { TabPage } from "@/components/TabPage";
-import { CustomerName, Fold, InputStub, NotYet, Panel } from "@/components/parts";
-import { getCustomers } from "@/lib/data/seed";
-import { getKarteHeadings } from "@/lib/settings";
+import { Fold, NotYet, Panel } from "@/components/parts";
+import { getBookData } from "@/lib/book/data";
+import { getKarteExamples } from "@/lib/data/seed";
+import { getKarteHeadings, getMemoMaxChars } from "@/lib/settings";
+import { KarteBoard } from "./KarteBoard";
+import { KarteMemo } from "./KarteMemo";
+
+export const dynamic = "force-dynamic";
 
 export default function KartePage() {
+  const data = getBookData();
   const headings = getKarteHeadings();
-  const customers = getCustomers();
   return (
     <TabPage
       tab="karte"
       right={
         <Panel title="施術のメモ">
-          <p>メモを書くと、AI がカルテの案を作ります。人が承認するまで保存しません。</p>
-          <InputStub placeholder="例：前回より1トーン明るく。根元5cm。" button="カルテの案を作る" />
+          <KarteMemo data={data} examples={getKarteExamples()} maxChars={getMemoMaxChars()} />
         </Panel>
       }
     >
-      <h2>お客様（{customers.length}人・みな架空）</h2>
-      <ul className="customers">
-        {customers.map((c) => (
-          <li key={c.id}>
-            <CustomerName surname={c.surname} fictional={c.fictional} />
-            {c.firstVisit && <span className="slot-first">初めての方</span>}
-          </li>
-        ))}
-      </ul>
-      <NotYet>お客様ごとのカルテがここに並びます</NotYet>
-      <Fold summary="カルテの見出し">
+      <KarteBoard data={data} headings={headings} />
+      <NotYet>お客様の一覧（全員）と、カルテを「手で直す」はまだです</NotYet>
+      <Fold summary="カルテの見出し（設定：config/karte.json）">
         <ol className="karte-headings">
           {headings.map((h) => (
             <li key={h.id}>
@@ -35,6 +31,12 @@ export default function KartePage() {
             </li>
           ))}
         </ol>
+      </Fold>
+      <Fold summary="くわしく（言葉の門）">
+        <p>
+          AI の下書きを1行ずつプログラムが見て、頭皮・肌・病・受診・薬・おすすめ・改善などの言葉や数字がメモに無ければ、その1行だけ載せません（日誌にも書きます）。
+          メモにある言葉（例：「頭皮が赤かった」）は記録として残します。頭皮や肌の良し悪しの判断・助言はしません。
+        </p>
       </Fold>
     </TabPage>
   );

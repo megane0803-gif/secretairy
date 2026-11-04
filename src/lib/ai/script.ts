@@ -115,7 +115,7 @@ export function scriptModel(ctx: Pick<SlotContext, "menus" | "today">): ReplyMod
       switch (tool.name) {
         case "previous_visit":
           if (d.found && typeof d.menu_id === "string") return call("find_openings", { menu_id: d.menu_id });
-          return say("前回の記録が見つかりませんでした。ご希望のメニューを教えてください。", onText);
+          return say("前回の記録なし（カルテが見つかりませんでした）。ご希望のメニューを教えてください。", onText);
         case "find_openings":
           if (list.length === 0) return say("あいにく空きが見つかりませんでした。別の日をお知らせください。", onText);
           return say(`${d.menu}は、${listText(list)} が空いています。${pick}`, onText);

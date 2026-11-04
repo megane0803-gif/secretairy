@@ -30,6 +30,29 @@ export type SeedReservation = {
   status: ReservationStatus;
 };
 
+/**
+ * 前回までのカルテ（最初の状態）。日付・メニュー・お客様は、その予約（前回の来店）から取る。
+ * こうしておくと、カルテの日付とメニューがいつも予約の「前回」とそろう。
+ */
+export type SeedKarte = {
+  id: string;
+  /** どの予約（前回の来店）のカルテか */
+  reservationId: string;
+  /** 見出しの id（config/karte.json）ごとの短い行 */
+  sections: Record<string, string[]>;
+};
+
+/**
+ * カルテの「例文を入れる」。今日のお客様1人に1つ、話し言葉の施術メモ。
+ * scripted は「決まった返事（AI なし）」でカルテにしたときの下書き（テストと同じ物）。
+ * AI の書きすぎ（メモに無い言葉・数字）をわざと1行まぜてある例があり、言葉の門で外れることを見せる。
+ */
+export type KarteExample = {
+  customerId: string;
+  memo: string;
+  scripted: string;
+};
+
 // ---- ここから下は形だけ（中身は後日） ----
 
 /** 広告の案。AI の案は「前 → 後」と理由1文 */

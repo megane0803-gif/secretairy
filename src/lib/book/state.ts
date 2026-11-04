@@ -8,6 +8,8 @@
 // AI・サーバー・自動の処理からは呼ばない。サーバーが出せるのは仮押さえ（HoldOffer）まで。
 
 import type { HoldOffer } from "../ai/wire";
+import { MAX_DAY_OFFSET } from "../calendar";
+import type { SavedKarte } from "../karte/record";
 import type { ChatReservation } from "../reservations";
 
 export type ApprovalState = "pending" | "approved" | "fixed" | "skipped";
@@ -23,8 +25,8 @@ export type ReservationApproval = {
   decidedAt?: string;
 };
 
-/** 承認の箱から足した ToDo */
-export type AddedTodo = { id: string; title: string; createdAt: string; done: boolean };
+/** 承認の箱・カルテの保存から足した ToDo。next-talk = カルテの「次回話すこと」 */
+export type AddedTodo = { id: string; title: string; createdAt: string; done: boolean; kind?: "next-talk" };
 
 export type BookState = {
   v: 1;
@@ -33,10 +35,14 @@ export type BookState = {
   chat: ChatReservation[];
   approvals: ReservationApproval[];
   todos: AddedTodo[];
+  /** 人が「保存」を押したカルテ */
+  kartes: SavedKarte[];
+  /** デモの「翌日へ」で進めた営業日の数（「最初に戻す」で 0 に戻る） */
+  dayOffset: number;
 };
 
 export function emptyBook(anchor: string): BookState {
-  return { v: 1, anchor, chat: [], approvals: [], todos: [] };
+  return { v: 1, anchor, chat: [], approvals: [], todos: [], kartes: [], dayOffset: 0 };
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -92,8 +98,53 @@ export function parseBook(raw: string | null): BookState | null {
     }));
   const todos: AddedTodo[] = arr(d.todos)
     .filter((t) => t && isStr(t.id) && isStr(t.title) && isStr(t.createdAt))
-    .map((t) => ({ id: t.id as string, title: t.title as string, createdAt: t.createdAt as string, done: t.done === true }));
-  return { v: 1, anchor: d.anchor, chat, approvals, todos };
+    .map((t) => ({
+      id: t.id as string,
+      title: t.title as string,
+      createdAt: t.createdAt as string,
+      done: t.done === true,
+      ...(t.kind === "next-talk" ? { kind: "next-talk" as const } : {}),
+    }));
+  const kartes: SavedKarte[] = arr(d.kartes)
+    .filter(
+      (k) =>
+        k &&
+        isStr(k.id) &&
+        isStr(k.customerId) &&
+        isStr(k.date) &&
+        DATE.test(k.date) &&
+        isStr(k.menuId) &&
+        isStr(k.memo) &&
+        isStr(k.savedAt) &&
+        k.sections !== null &&
+        typeof k.sections === "object",
+    )
+    .map((k) => ({
+      id: k.id as string,
+      customerId: k.customerId as string,
+      date: k.date as string,
+      menuId: k.menuId as string,
+      ...(isStr(k.reservationId) ? { reservationId: k.reservationId } : {}),
+      memo: (k.memo as string).slice(0, 4000),
+      sections: looseSections(k.sections),
+      savedAt: k.savedAt as string,
+    }));
+  const off = d.dayOffset;
+  const dayOffset = typeof off === "number" && Number.isInteger(off) && off > 0 ? Math.min(off, MAX_DAY_OFFSET) : 0;
+  return { v: 1, anchor: d.anchor, chat, approvals, todos, kartes, dayOffset };
+}
+
+/** 見出しの id ごとの行（文字の並び）だけを残す。見出しが設定にあるかは画面で読むときに確かめる */
+function looseSections(x: unknown): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [k, v] of Object.entries(x as Record<string, unknown>))
+    if (Array.isArray(v)) out[k] = v.filter(isStr).slice(0, 20);
+  return out;
+}
+
+/** デモの「翌日へ」：今日を1営業日先へ（定休日は飛ばす）。「最初に戻す」で戻る */
+export function withNextDay(s: BookState): BookState {
+  return { ...s, dayOffset: Math.min(MAX_DAY_OFFSET, s.dayOffset + 1) };
 }
 
 /** 期限が過ぎた仮押さえか（承認を待っている間に holdExpiresHours を過ぎた） */
