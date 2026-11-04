@@ -3,13 +3,15 @@
 // 上限：1回の返事の長さ（maxReplyTokens）と、1回の相談で道具を呼ぶ回数（maxToolCalls）。
 // プログラムが先に見ること：週と日付・日付と曜日が食い違う言い方は、決めずに聞き返す（dates.ts）。
 // プログラムが後で決めること：候補のボタン（その返事の文に出た候補だけ。仮押さえの後はなし）と、
-// 「お店に確かめてご連絡します」と言ったときの ToDo（replies.ts）。
+// 「お店に確かめてご連絡します」と言ったときの ToDo（replies.ts）・料金の答え（店の設定の値段。prices.ts）・
+// 「?」を全角の「？」にそろえる。
 // サーバーはここで受け取った物を残さない。答えは emit で流して返すだけ。
 
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AiSettings } from "../settings";
 import { dateConflict } from "./dates";
 import type { ReplyModel } from "./model";
+import { alsoBooking, priceAnswer } from "./prices";
 import { errandLine, promisesShop, shownCandidates } from "./replies";
 import { reserveSystem, type ConvHold } from "./reservePrompt";
 import { candidateLabel } from "./slots";
@@ -46,7 +48,14 @@ export function convHoldsOf(ctx: ToolContext): ConvHold[] {
   });
 }
 
-export async function runReserve({ ctx, history, model, limits, emit }: RunOptions): Promise<void> {
+/** 日本語の返事の「?」は全角の「？」にそろえる（英数字にはさまれた物はそのまま） */
+export function fullWidthQuestion(text: string): string {
+  return text.replace(/\?/g, (q, i: number, all: string) => (/[A-Za-z0-9]/.test(all[i - 1] ?? "") && /[A-Za-z0-9]/.test(all[i + 1] ?? "") ? q : "？"));
+}
+
+export async function runReserve({ ctx, history, model, limits, emit: send }: RunOptions): Promise<void> {
+  // お客様に流す文は、どれも「？」をそろえてから（AI の文も、プログラムの決まった文も）
+  const emit = (e: ReserveEvent) => send(e.t === "text" ? { ...e, d: fullWidthQuestion(e.d) } : e);
   const messages = toMessages(history);
   const lastUser = [...history].reverse().find((t) => t.role === "user")?.text ?? "";
 
@@ -60,19 +69,34 @@ export async function runReserve({ ctx, history, model, limits, emit }: RunOptio
     return;
   }
 
-  // この相談の中で変わる物（仮押さえを外した・押さえた）は、写しを持って次の道具に効かせる
-  const local: ToolContext = { ...ctx, booked: [...ctx.booked], convHolds: [...ctx.convHolds], released: [...ctx.released] };
-  const holds = convHoldsOf(local);
-  const system = reserveSystem(local, ctx.shown, holds);
-  let calls = 0;
-  let latest: Candidate[] | null = null;
-  const pool: Candidate[] = [];
-  let held = false;
+  // 料金は AI に書かせない：店の設定のメニューの値段をプログラムが返す（設定に無い物だけ「お店に確かめます」）
+  const price = priceAnswer(ctx.menus, lastUser);
   let said = "";
   const say = (d: string) => {
     said += d;
     emit({ t: "text", d });
   };
+  if (price) {
+    emit({ t: "step", step: { kind: "price", text: price.step } });
+    say(price.text);
+    if (!alsoBooking(lastUser)) {
+      // 料金だけの相談は、ここで終わり（AI は呼ばない）
+      emit({ t: "candidates", list: [] });
+      if (price.askShop) addShopTodo();
+      emit({ t: "done" });
+      return;
+    }
+    say("\n");
+  }
+
+  // この相談の中で変わる物（仮押さえを外した・押さえた）は、写しを持って次の道具に効かせる
+  const local: ToolContext = { ...ctx, booked: [...ctx.booked], convHolds: [...ctx.convHolds], released: [...ctx.released] };
+  const holds = convHoldsOf(local);
+  const system = reserveSystem(local, ctx.shown, holds) + (price ? `\n- 料金はプログラムがもう答えた（${price.text}）。値段は書かない・くり返さない。` : "");
+  let calls = 0;
+  let latest: Candidate[] | null = null;
+  const pool: Candidate[] = [];
+  let held = false;
 
   // 道具を呼ぶ回数の上限＋最後に答える1回まで。それ以上は回さない
   for (let round = 0; round <= limits.maxToolCalls + 1; round++) {
@@ -154,10 +178,12 @@ export async function runReserve({ ctx, history, model, limits, emit }: RunOptio
   emit({ t: "candidates", list: shownCandidates(said, pool, latest, held, ctx.shown) });
 
   // 「お店に確かめてご連絡します」と言ったら、言うだけで終わらせず ToDo に足す（用件はお客様の言葉の1行）
-  if (!held && promisesShop(said)) {
+  if (!held && promisesShop(said)) addShopTodo();
+  emit({ t: "done" });
+
+  function addShopTodo() {
     const title = `${ctx.customer.surname}（架空）様：${errandLine(lastUser)}`;
     emit({ t: "step", step: { kind: "todo", text: `ToDo に足した：${title}` } });
     emit({ t: "todo", todo: { id: `td-chat-${ctx.newId()}`, title } });
   }
-  emit({ t: "done" });
 }

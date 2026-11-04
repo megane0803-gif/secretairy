@@ -1,7 +1,7 @@
 import { ApprovalBox } from "@/components/ApprovalBox";
 import { JournalList } from "@/components/JournalList";
 import { TabPage } from "@/components/TabPage";
-import { Fold, NotYet, Panel } from "@/components/parts";
+import { Fold, Panel } from "@/components/parts";
 import { getBookData } from "@/lib/book/data";
 import { getJobsSettings, getKarteHeadings, getTodoLimits } from "@/lib/settings";
 import { needsOwnerPasscode } from "@/lib/line/server";
@@ -33,7 +33,6 @@ export default function HomePage() {
     >
       <HomeSummary data={data} headings={getKarteHeadings()} todo={todo} />
       <AiJobs data={data} settings={getJobsSettings()} />
-      <NotYet>AI の一言（今日の気をつける点を3つまで）はまだです。今はプログラムが並べるだけです</NotYet>
       <Fold summary="くわしく">
         <p>朝の要点は、予約・承認待ち・ToDo・保存したカルテの次回提案・席の空きから、プログラムが並べます。AI は数を変えません。</p>
         <p>「今やる{todo.topCount}件」は ToDo のタブと同じ並べ方の上から{todo.topCount}つです（済んだ物は出しません）。「メモを投げる」は AI が短いタスクの文に直し、ToDo の「投げたメモ」に入ります。</p>

@@ -9,7 +9,7 @@ const KIND: Record<string, string> = { tool: "🔎", reject: "✗", hold: "📌"
 
 export function AiSteps() {
   const list = useConsultations();
-  if (list.length === 0) return <p className="empty">まだ相談はありません。右の予約チャットで送ると、ここに手順が出ます。</p>;
+  if (list.length === 0) return <p className="empty">まだ相談はありません。予約チャットで送ると、ここに手順が出ます。</p>;
   const [latest, ...older] = list;
   const one = (c: (typeof list)[number]) => (
     <>

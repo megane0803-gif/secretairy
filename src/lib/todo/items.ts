@@ -191,11 +191,11 @@ export function nextMemoNo(items: Pick<TodoItem, "key">[]): number {
   return max + 1;
 }
 
-/** 投げたメモを ToDo に足す。文は Claude（か決まった返事）が直した物、元のメモはプログラムがそのまましまう */
+/** 投げたメモを ToDo に足す。文は Claude（か決まった返事）が直した物、元のメモはプログラムがそのまましまう。期限はプログラムが読んだ物（due） */
 export function withMemoTodo(
   s: BookState,
   seedItems: TodoItem[],
-  input: { title: string; memo: string },
+  input: { title: string; memo: string; due?: string | null },
   nowIso: string,
   shop: Pick<ShopSettings, "timezone">,
 ): { state: BookState; todo: AddedTodo | null } {
@@ -203,7 +203,18 @@ export function withMemoTodo(
   if (!title) return { state: s, todo: null };
   // 最初の例のメモの鍵は「例:メモ:番号」なので数えない（本物のメモは 1 から）
   const no = nextMemoNo(todoItems(seedItems, s, shop));
-  const todo: AddedTodo = { id: `td-memo-${no}`, title, createdAt: nowIso, done: false, source: "memo", key: memoKey(no), memo: input.memo.trim() };
+  // 期限はメモの「金曜までに」などからプログラムが読んだ物だけ（todo/due.ts。読めなければ期限なし）
+  const due = input.due && /^\d{4}-\d{2}-\d{2}$/.test(input.due) ? input.due : undefined;
+  const todo: AddedTodo = {
+    id: `td-memo-${no}`,
+    title,
+    createdAt: nowIso,
+    done: false,
+    source: "memo",
+    key: memoKey(no),
+    memo: input.memo.trim(),
+    ...(due ? { due } : {}),
+  };
   const next = withTodo(s, todo);
   return next === s ? { state: s, todo: null } : { state: next, todo };
 }

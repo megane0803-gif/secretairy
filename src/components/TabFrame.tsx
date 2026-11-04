@@ -12,12 +12,15 @@ export function TabFrame({
   baseSwitches,
   pending,
   right,
+  rightFirstOnPhone = false,
   children,
 }: {
   tab: TabId;
   baseSwitches: TabSwitches;
   pending: ReactNode;
   right: ReactNode;
+  /** スマホ（1列）で、右の列（そのタブの入力欄）を見出しのすぐ下・ページの上に出す */
+  rightFirstOnPhone?: boolean;
   children: ReactNode;
 }) {
   const def = TABS[tab];
@@ -51,16 +54,22 @@ export function TabFrame({
   }
 
   return (
-    <div className="page">
+    <div className={rightFirstOnPhone ? "page right-first-sp" : "page"}>
       <main className="page-main">
         {pending}
         <div className="page-head">
           <h1>
             <span aria-hidden>{def.icon}</span> {def.label}
           </h1>
-          {toggle}
         </div>
         {children}
+        {/* 表示スイッチは見出しの横に出さず、ページの終わりに畳んでおく（必須のタブは隠せないので出さない） */}
+        {!def.required && (
+          <details className="fold tab-switch-fold">
+            <summary>このタブの表示</summary>
+            <div>{toggle}</div>
+          </details>
+        )}
       </main>
       <Splitter />
       <aside className="page-right">{right}</aside>
@@ -93,7 +102,7 @@ function TabSwitch({
       <span className="switch-track" aria-hidden>
         <span className="switch-knob" />
       </span>
-      <span className="switch-text">{locked ? "いつも出す（必須）" : on ? "出している" : "隠している"}</span>
+      <span className="switch-text">左のタブに「{label}」を出す</span>
     </label>
   );
 }

@@ -20,14 +20,19 @@ export function normalizeText(s: string): string {
 
 const KANJI_DIGIT: Record<string, number> = { 〇: 0, 零: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
 const KANJI_UNIT: Record<string, number> = { 十: 10, 百: 100, 千: 1000 };
-const KANJI_RUN = /[〇零一二三四五六七八九十百千万]+/g;
+export const KANJI_RUN = /[〇零一二三四五六七八九十百千万]+/g;
 
 /**
  * 漢数字が数ではない言葉（「一緒」「一応」など）。前後に漢数字が続かないときだけ、数として見ないで外す。
  * 数の言い方（「一度」「三センチ」「二か月」など）と、数とも読める「十分」（10分）はここに入れない（門は厳しい方に倒す）。
  */
-const NOT_NUMBER_WORDS = ["一緒", "一般", "一応", "一旦", "一気", "一層", "一斉", "統一", "唯一", "同一", "万一"];
-const NOT_NUMBER_RE = new RegExp(`(?<![〇零一二三四五六七八九十百千万])(${NOT_NUMBER_WORDS.join("|")})(?![〇零一二三四五六七八九十百千万])`, "g");
+export const NOT_NUMBER_WORDS = ["一緒", "一般", "一応", "一旦", "一気", "一層", "一斉", "統一", "唯一", "同一", "万一"];
+const NOT_NUMBER_RE = notNumberRe(NOT_NUMBER_WORDS);
+
+/** 数ではない言葉を外すための形（前後に漢数字が続かないときだけ外す）。発信の門も同じやり方で使う */
+export function notNumberRe(words: string[]): RegExp {
+  return new RegExp(`(?<![〇零一二三四五六七八九十百千万])(${words.join("|")})(?![〇零一二三四五六七八九十百千万])`, "g");
+}
 
 /** 漢数字の1つの並び（例「三」「二十」「百五十」「一万二千」「二〇二六」）を数にする。読めなければ null */
 export function kanjiNumber(run: string): number | null {

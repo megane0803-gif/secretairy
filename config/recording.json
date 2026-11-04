@@ -29,7 +29,7 @@
       "label": "Whisper large-v3-turbo",
       "device": "webgpu",
       "dtype": { "encoder_model": "fp16", "decoder_model_merged": "q4" },
-      "approxMB": 1400
+      "approxMB": 1500
     },
     "wasm": {
       "id": "onnx-community/whisper-base",

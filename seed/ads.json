@@ -1,22 +1,22 @@
 {
   "keywords": [
-    {"no": 1, "text": "美容室 omochi", "weeks": [{"clicks": 38, "cost": 1520, "bookings": 5}, {"clicks": 41, "cost": 1640, "bookings": 6}, {"clicks": 36, "cost": 1440, "bookings": 5}, {"clicks": 44, "cost": 1760, "bookings": 7}]},
-    {"no": 2, "text": "縮毛矯正 くせ毛", "menuId": "straight", "weeks": [{"clicks": 52, "cost": 4160, "bookings": 3}, {"clicks": 58, "cost": 4640, "bookings": 4}, {"clicks": 61, "cost": 4880, "bookings": 4}, {"clicks": 66, "cost": 5280, "bookings": 5}]},
-    {"no": 3, "text": "美容院 安い", "weeks": [{"clicks": 70, "cost": 3500, "bookings": 0}, {"clicks": 76, "cost": 3800, "bookings": 1}, {"clicks": 81, "cost": 4050, "bookings": 0}, {"clicks": 88, "cost": 4400, "bookings": 0}]},
-    {"no": 4, "text": "ヘッドスパ 癒し", "menuId": "headspa", "weeks": [{"clicks": 30, "cost": 1800, "bookings": 2}, {"clicks": 34, "cost": 2040, "bookings": 2}, {"clicks": 29, "cost": 1740, "bookings": 3}, {"clicks": 37, "cost": 2220, "bookings": 3}]},
-    {"no": 5, "text": "カット 上手い", "weeks": [{"clicks": 45, "cost": 2700, "bookings": 2}, {"clicks": 40, "cost": 2400, "bookings": 1}, {"clicks": 47, "cost": 2820, "bookings": 2}, {"clicks": 43, "cost": 2580, "bookings": 2}]},
-    {"no": 6, "text": "パーマ 大人", "weeks": [{"clicks": 22, "cost": 1320, "bookings": 1}, {"clicks": 25, "cost": 1500, "bookings": 1}, {"clicks": 19, "cost": 1140, "bookings": 0}, {"clicks": 24, "cost": 1440, "bookings": 1}]},
-    {"no": 7, "text": "髪型 流行り", "weeks": [{"clicks": 64, "cost": 1920, "bookings": 0}, {"clicks": 59, "cost": 1770, "bookings": 0}, {"clicks": 72, "cost": 2160, "bookings": 0}, {"clicks": 68, "cost": 2040, "bookings": 1}]},
-    {"no": 8, "text": "縮毛矯正 前髪だけ", "menuId": "straight", "weeks": [{"clicks": 18, "cost": 1440, "bookings": 1}, {"clicks": 21, "cost": 1680, "bookings": 1}, {"clicks": 24, "cost": 1920, "bookings": 2}, {"clicks": 23, "cost": 1840, "bookings": 1}]}
+    {"no": 1, "text": "美容室 omochi", "weeks": [{"clicks": 24, "cost": 960, "bookings": 1}, {"clicks": 25, "cost": 1000, "bookings": 1}, {"clicks": 23, "cost": 920, "bookings": 0}, {"clicks": 27, "cost": 1080, "bookings": 1}]},
+    {"no": 2, "text": "縮毛矯正 くせ毛", "menuId": "straight", "weeks": [{"clicks": 18, "cost": 1440, "bookings": 1}, {"clicks": 20, "cost": 1600, "bookings": 0}, {"clicks": 21, "cost": 1680, "bookings": 1}, {"clicks": 22, "cost": 1760, "bookings": 1}]},
+    {"no": 3, "text": "美容院 安い", "weeks": [{"clicks": 22, "cost": 1100, "bookings": 0}, {"clicks": 24, "cost": 1200, "bookings": 0}, {"clicks": 26, "cost": 1300, "bookings": 0}, {"clicks": 28, "cost": 1400, "bookings": 0}]},
+    {"no": 4, "text": "ヘッドスパ 癒し", "menuId": "headspa", "weeks": [{"clicks": 10, "cost": 600, "bookings": 0}, {"clicks": 11, "cost": 660, "bookings": 1}, {"clicks": 10, "cost": 600, "bookings": 0}, {"clicks": 12, "cost": 720, "bookings": 1}]},
+    {"no": 5, "text": "カット 上手い", "weeks": [{"clicks": 15, "cost": 900, "bookings": 1}, {"clicks": 13, "cost": 780, "bookings": 0}, {"clicks": 16, "cost": 960, "bookings": 0}, {"clicks": 14, "cost": 840, "bookings": 1}]},
+    {"no": 6, "text": "パーマ 大人", "weeks": [{"clicks": 7, "cost": 420, "bookings": 0}, {"clicks": 8, "cost": 480, "bookings": 0}, {"clicks": 6, "cost": 360, "bookings": 0}, {"clicks": 8, "cost": 480, "bookings": 1}]},
+    {"no": 7, "text": "髪型 流行り", "weeks": [{"clicks": 20, "cost": 600, "bookings": 0}, {"clicks": 19, "cost": 570, "bookings": 0}, {"clicks": 23, "cost": 690, "bookings": 0}, {"clicks": 22, "cost": 660, "bookings": 0}]},
+    {"no": 8, "text": "縮毛矯正 前髪だけ", "menuId": "straight", "weeks": [{"clicks": 6, "cost": 480, "bookings": 0}, {"clicks": 7, "cost": 560, "bookings": 0}, {"clicks": 8, "cost": 640, "bookings": 1}, {"clicks": 8, "cost": 640, "bookings": 0}]}
   ],
   "searchTerms": [
-    {"no": 9, "text": "もちの木町 美容室", "weeks": [{"clicks": 34, "cost": 2380, "bookings": 0}, {"clicks": 37, "cost": 2590, "bookings": 0}, {"clicks": 39, "cost": 2730, "bookings": 0}, {"clicks": 42, "cost": 2940, "bookings": 0}]},
-    {"no": 10, "text": "美容院 安い 学生", "weeks": [{"clicks": 33, "cost": 1650, "bookings": 0}, {"clicks": 36, "cost": 1800, "bookings": 0}, {"clicks": 38, "cost": 1900, "bookings": 0}, {"clicks": 41, "cost": 2050, "bookings": 0}]},
-    {"no": 11, "text": "縮毛矯正 くせ毛 ひどい", "weeks": [{"clicks": 31, "cost": 2480, "bookings": 2}, {"clicks": 35, "cost": 2800, "bookings": 3}, {"clicks": 37, "cost": 2960, "bookings": 3}, {"clicks": 40, "cost": 3200, "bookings": 3}]},
-    {"no": 12, "text": "髪型 流行り 芸能人", "weeks": [{"clicks": 28, "cost": 840, "bookings": 0}, {"clicks": 25, "cost": 750, "bookings": 0}, {"clicks": 31, "cost": 930, "bookings": 0}, {"clicks": 30, "cost": 900, "bookings": 0}]},
-    {"no": 13, "text": "美容師 求人", "weeks": [{"clicks": 19, "cost": 950, "bookings": 0}, {"clicks": 22, "cost": 1100, "bookings": 0}, {"clicks": 24, "cost": 1200, "bookings": 0}, {"clicks": 23, "cost": 1150, "bookings": 0}]},
-    {"no": 14, "text": "ヘッドスパ 眠れる", "weeks": [{"clicks": 17, "cost": 1020, "bookings": 1}, {"clicks": 19, "cost": 1140, "bookings": 1}, {"clicks": 16, "cost": 960, "bookings": 2}, {"clicks": 21, "cost": 1260, "bookings": 2}]},
-    {"no": 15, "text": "セルフ 縮毛矯正 やり方", "weeks": [{"clicks": 14, "cost": 1120, "bookings": 0}, {"clicks": 16, "cost": 1280, "bookings": 0}, {"clicks": 15, "cost": 1200, "bookings": 0}, {"clicks": 18, "cost": 1440, "bookings": 0}]},
-    {"no": 16, "text": "カット 上手い 口コミ", "weeks": [{"clicks": 15, "cost": 900, "bookings": 1}, {"clicks": 12, "cost": 720, "bookings": 0}, {"clicks": 16, "cost": 960, "bookings": 1}, {"clicks": 14, "cost": 840, "bookings": 1}]}
+    {"no": 9, "text": "もちの木町 美容室", "weeks": [{"clicks": 12, "cost": 840, "bookings": 0}, {"clicks": 13, "cost": 910, "bookings": 0}, {"clicks": 13, "cost": 910, "bookings": 0}, {"clicks": 14, "cost": 980, "bookings": 0}]},
+    {"no": 10, "text": "美容院 安い 学生", "weeks": [{"clicks": 11, "cost": 550, "bookings": 0}, {"clicks": 12, "cost": 600, "bookings": 0}, {"clicks": 13, "cost": 650, "bookings": 0}, {"clicks": 14, "cost": 700, "bookings": 0}]},
+    {"no": 11, "text": "縮毛矯正 くせ毛 ひどい", "weeks": [{"clicks": 10, "cost": 800, "bookings": 1}, {"clicks": 12, "cost": 960, "bookings": 0}, {"clicks": 12, "cost": 960, "bookings": 1}, {"clicks": 13, "cost": 1040, "bookings": 0}]},
+    {"no": 12, "text": "髪型 流行り 芸能人", "weeks": [{"clicks": 10, "cost": 300, "bookings": 0}, {"clicks": 9, "cost": 270, "bookings": 0}, {"clicks": 10, "cost": 300, "bookings": 0}, {"clicks": 10, "cost": 300, "bookings": 0}]},
+    {"no": 13, "text": "美容師 求人", "weeks": [{"clicks": 7, "cost": 350, "bookings": 0}, {"clicks": 8, "cost": 400, "bookings": 0}, {"clicks": 8, "cost": 400, "bookings": 0}, {"clicks": 8, "cost": 400, "bookings": 0}]},
+    {"no": 14, "text": "ヘッドスパ 眠れる", "weeks": [{"clicks": 6, "cost": 360, "bookings": 0}, {"clicks": 7, "cost": 420, "bookings": 1}, {"clicks": 6, "cost": 360, "bookings": 0}, {"clicks": 7, "cost": 420, "bookings": 0}]},
+    {"no": 15, "text": "セルフ 縮毛矯正 やり方", "weeks": [{"clicks": 5, "cost": 400, "bookings": 0}, {"clicks": 6, "cost": 480, "bookings": 0}, {"clicks": 5, "cost": 400, "bookings": 0}, {"clicks": 6, "cost": 480, "bookings": 0}]},
+    {"no": 16, "text": "カット 上手い 口コミ", "weeks": [{"clicks": 5, "cost": 300, "bookings": 0}, {"clicks": 4, "cost": 240, "bookings": 0}, {"clicks": 5, "cost": 300, "bookings": 0}, {"clicks": 5, "cost": 300, "bookings": 1}]}
   ]
 }

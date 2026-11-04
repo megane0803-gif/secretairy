@@ -27,6 +27,7 @@ import { loadBook, resolveChatReservations, sortReservations } from "../reservat
 import type { Rule } from "../rules/types";
 import type { AdSettings } from "../settings";
 import type { TabId } from "../tabs";
+import { memoDue } from "../todo/due";
 import { resolveSeedTodos, withMemoTodo } from "../todo/items";
 import { maskNames, restoreNames } from "../todo/names";
 import type { TodoRequest, TodoResponse } from "../todo/wire";
@@ -357,7 +358,7 @@ async function memoJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
   const seedItems = resolveSeedTodos(env.data.shop, view.anchor, getTodos());
   let added: string | null = null;
   env.store.setBook((s) => {
-    const r = withMemoTodo(s, seedItems, { title, memo }, env.now().toISOString(), env.data.shop);
+    const r = withMemoTodo(s, seedItems, { title, memo, due: memoDue(memo, view.clock.today.date) }, env.now().toISOString(), env.data.shop);
     added = r.todo?.title ?? null;
     return r.state;
   });

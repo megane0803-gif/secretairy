@@ -48,6 +48,7 @@ export async function POST(request: Request): Promise<Response> {
       model,
       maxTokens: ai.maxReplyTokens,
       maxTries: ai.maxTries,
+      lengthSlack: settings.lengthSlack,
       menuName: (id) => menus.find((m) => m.id === id)?.name ?? id,
     });
     return reply(r.ok ? r : { ...r, code: "gate" });

@@ -93,8 +93,11 @@ export type KarteHeading = {
   id: string;
   label: string;
   note?: string;
-  /** next = 次回提案（保存のとき ToDo「次回話すこと」に1行目を足す・朝の要点に出す） */
-  role?: "next";
+  /**
+   * next = 次回提案（保存のとき ToDo「次回話すこと」に1行目を足す・朝の要点に出す）。
+   * request = お客様のご希望（次の来店の希望は、ここと次回提案の両方に入れる。karte/tidy.ts）
+   */
+  role?: "next" | "request";
   /** 決まった返事（AI なし）で、メモの文をこの見出しに分ける手がかりの言葉 */
   hints?: string[];
 };
@@ -396,6 +399,10 @@ export type PostsSettings = {
   maxClosedDays: number;
   /** 保存しておける下書きの数（種類ごと） */
   maxSavedPerKind: number;
+  /** 長さの目安（targetChars）から、どれだけ長くてよいか（0.2 = 2割まで）。超えたら1回だけ短く作り直す（posts/write.ts） */
+  lengthSlack?: number;
+  /** 材料に書いた時期の言葉と、その日の幅（月-日）。空き枠・お休みをその時期の日から出す（posts/facts.ts の periodOf） */
+  periods?: { words: string[]; from: string; to: string }[];
 };
 
 export function getPostsSettings(): PostsSettings {

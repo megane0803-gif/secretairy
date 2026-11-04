@@ -169,6 +169,7 @@ export function ReserveChat({ data }: { data: BookData }) {
           if (e.step.kind === "reject" || e.step.kind === "limit")
             writeJournal({ who: "プログラム", text: `${e.step.kind === "reject" ? "弾いた" : "止めた"}（${who}の相談）：${e.step.text}` });
           else if (e.step.kind === "ask") writeJournal({ who: "プログラム", text: `聞き返した（${who}の相談）：${e.step.text}` });
+          else if (e.step.kind === "price") writeJournal({ who: "プログラム", text: `料金を答えた（${who}の相談）：${e.step.text}` });
           else if (e.step.kind === "tool") writeJournal({ who: "AI", text: `道具を呼んだ（${who}の相談）：${e.step.text}` });
           break;
         case "candidates":

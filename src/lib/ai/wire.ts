@@ -73,7 +73,7 @@ export type HoldOffer = {
  * 手順の1行。tool = 道具で調べた / reject = ルール・店の設定で外した / hold = 仮押さえした / limit = 上限で止めた
  * ask = プログラムが聞き返した（日付の食い違い） / release = 仮押さえを外した / todo = ToDo に足した
  */
-export type Step = { kind: "tool" | "reject" | "hold" | "limit" | "ask" | "release" | "todo"; text: string };
+export type Step = { kind: "tool" | "reject" | "hold" | "limit" | "ask" | "release" | "todo" | "price"; text: string };
 
 /** 別の用事で「お店に確かめてご連絡します」と言ったときに、プログラムが足す ToDo */
 export type TodoOffer = { id: string; title: string };

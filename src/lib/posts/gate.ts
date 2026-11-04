@@ -1,8 +1,10 @@
 // 発信の言葉の門（プログラム）。AI の下書きを見て、
 //   1. 使わない言葉（config/posts.json の gateWords）が無いか（全角は半角にそろえて調べる。「％」も「%」として当てる）
-//   2. 日時・数字を書いていないか（日時と数字はプログラムが台帳と設定から入れる）
+//   2. 日時・数字を書いていないか（算用数字も漢数字も。「一度」「一緒」のような数ではない言葉は数えない。日時と数字はプログラムが台帳と設定から入れる）
 //   3. リンクを書いていないか（ブログのリンクは印だけ）
 // を確かめる。当たったら理由を返す（作り直しは write.ts）。AI は使わない。
+
+import { KANJI_RUN, kanjiNumber, NOT_NUMBER_WORDS, notNumberRe } from "../karte/gate";
 
 export type PostGateId = "words" | "numbers" | "links";
 
@@ -40,10 +42,23 @@ const DIGIT = /\d+/g;
 const WEEKDAY = /[月火水木金土日]曜/g;
 const URL = /(https?:\/\/|www\.)\S*/gi;
 
-/** AI が書いた日時・数字（算用数字・全角数字・曜日） */
+/**
+ * 漢数字が数ではない言葉。カルテの門の言葉（「一緒」「一応」など）に、お知らせの文でよく使う言い方を足した物
+ * （「一度」「一番」「十分に」「七五三」など）。前後に漢数字が続かないときだけ外す（カルテの門と同じやり方）。
+ */
+export const POST_NOT_NUMBER_WORDS = [
+  ...NOT_NUMBER_WORDS,
+  "一度", "一番", "一息", "一言", "一歩", "一休み", "一人ひとり", "一人一人", "お一人", "一つひとつ", "一つ一つ", "一部", "一面", "一新",
+  "一層", "一段と", "一時的", "一生懸命", "一石二鳥", "一期一会", "十人十色", "千差万別", "万全", "万が一", "十分に", "十分な", "十分です",
+  "七五三", "三日坊主", "百貨店",
+];
+const POST_NOT_NUMBER_RE = notNumberRe(POST_NOT_NUMBER_WORDS);
+
+/** AI が書いた日時・数字（算用数字・全角数字・漢数字・曜日）。「一度」「一緒」のような数ではない言葉は数えない */
 export function numbersWritten(text: string): string[] {
   const t = withoutMarks(text);
-  return [...new Set([...(t.match(DIGIT) ?? []), ...(t.match(WEEKDAY) ?? [])])];
+  const kanji = (t.replace(POST_NOT_NUMBER_RE, "　").match(KANJI_RUN) ?? []).filter((k) => kanjiNumber(k) !== null);
+  return [...new Set([...(t.match(DIGIT) ?? []), ...kanji, ...(t.match(WEEKDAY) ?? [])])];
 }
 
 export function linksWritten(text: string): string[] {

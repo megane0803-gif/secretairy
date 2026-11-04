@@ -1,5 +1,5 @@
 import { TabPage } from "@/components/TabPage";
-import { NotYet, Panel } from "@/components/parts";
+import { Panel } from "@/components/parts";
 import { getBookData } from "@/lib/book/data";
 import { getPostMemos } from "@/lib/data/seed";
 import { getPostsMaterialMaxChars, getPostsSettings } from "@/lib/settings";
@@ -25,7 +25,6 @@ export default function PostsPage() {
       }
     >
       <PostsBoard settings={settings} timezone={data.shop.timezone} />
-      <NotYet>段落ごとの言い換え案と、使うお店のメモを選ぶ欄はまだです</NotYet>
     </TabPage>
   );
 }

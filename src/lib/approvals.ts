@@ -20,3 +20,12 @@ export function approvalQueue(book: BookState, ads: AdsState, nowIso: string): A
   const ad = pendingAd(ads);
   return { reservations, ad, count: reservations.length + (ad ? 1 : 0) };
 }
+
+/** 承認の箱のどの行を出すか。ホームは全部、予約タブは予約の行だけ（広告の案は広告タブとホームで押す） */
+export type ApprovalView = "all" | "reservations";
+
+/** その場所に出す行と、その数。数そのもの（上の帯・朝の要点）は approvalQueue の count のまま */
+export function approvalsFor(queue: ApprovalQueue, view: ApprovalView): { reservations: PendingRow[]; ad: AdProposal | null; count: number } {
+  if (view === "reservations") return { reservations: queue.reservations, ad: null, count: queue.reservations.length };
+  return { reservations: queue.reservations, ad: queue.ad, count: queue.count };
+}
