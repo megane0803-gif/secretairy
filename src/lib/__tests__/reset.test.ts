@@ -7,12 +7,14 @@ import { register, parseAccounting, EMPTY_ACCOUNTING, withChoice, withAutoNext, 
 import { manualItems } from "../accounting/sort";
 import { EMPTY_ADS, parseAds, type AdsState } from "../ads/state";
 import { emptyBook, parseBook, withHold, type BookState } from "../book/state";
-import { ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, BROWSER_PREFIX, JOURNAL_KEY, LINE_KEY, RULES_KEY, readBrowser, writeBrowser } from "../browser";
+import { ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, BROWSER_PREFIX, JOURNAL_KEY, LINE_KEY, POSTS_KEY, RULES_KEY, readBrowser, writeBrowser } from "../browser";
 import { getAccounting, getCustomers } from "../data/seed";
 import { deskKey, getDesk, setDesk } from "../karte/deskStore";
 import { clearInbox, handleWebhook, pollScreen, startLink, type BridgeDeps } from "../line/bridge";
 import { newLineState, parseLine, withLinked, withHandled } from "../line/state";
 import { memoryStore } from "../line/store";
+import { getPostsDesk, setPostsDesk } from "../posts/deskStore";
+import { EMPTY_POSTS, parsePosts, withSavedPost } from "../posts/state";
 import { getLineSettings, getShop } from "../settings";
 import { resetAll, resetAllWrites } from "../reset";
 
@@ -73,9 +75,10 @@ describe("最初に戻す", () => {
     assert.ok(store.has(BROWSER_PREFIX + RULES_KEY), "ルールのタブの変更は残す");
   });
 
-  test("書く物：予約は今日を起点に作り直し、広告と経理は消す", () => {
+  test("書く物：予約は今日を起点に作り直し、広告と経理と発信の下書きは消す", () => {
     const w = resetAllWrites("2026-11-04");
-    assert.deepEqual(w.map((x) => x.key).sort(), [ACCOUNTING_KEY, ADS_KEY, BOOK_KEY].sort());
+    assert.deepEqual(w.map((x) => x.key).sort(), [ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, POSTS_KEY].sort());
+    assert.equal(w.find((x) => x.key === POSTS_KEY)!.value, null);
     assert.equal(w.find((x) => x.key === ADS_KEY)!.value, null);
     assert.equal(w.find((x) => x.key === ACCOUNTING_KEY)!.value, null);
   });
@@ -127,6 +130,21 @@ describe("最初に戻す", () => {
     assert.deepEqual(getDesk().memos, {}, "カルテの施術メモ（LINE から入れたメモも）を消す");
     assert.deepEqual(getDesk().drafts, {}, "カルテの案を消す");
     assert.equal(getDesk().mode, "script", "AI か決まった返事かの切りかえは残す");
+  });
+
+  test("発信：保存した下書きと、画面の材料・下書きも消える（AI か決まった返事かの切りかえは残す）", () => {
+    const saved = withSavedPost(EMPTY_POSTS, { kind: "notice", text: "冬のお知らせです。", mode: "ai" }, { id: "po-1", nowIso: "2026-11-04T01:00:00.000Z", gateWords: [], maxPerKind: 30 });
+    assert.ok(saved.ok);
+    if (!saved.ok) return;
+    writeBrowser(POSTS_KEY, JSON.stringify(saved.state));
+    setPostsDesk(() => ({ kind: "notice", materials: { notice: { topic: "冬" } }, mode: "script" }));
+    resetAll("2026-11-04");
+    assert.equal(readBrowser(POSTS_KEY), null);
+    assert.deepEqual(parsePosts(readBrowser(POSTS_KEY)), EMPTY_POSTS);
+    assert.equal(getPostsDesk().kind, null);
+    assert.deepEqual(getPostsDesk().materials, {});
+    assert.equal(getPostsDesk().draft, null);
+    assert.equal(getPostsDesk().mode, "script");
   });
 
   test("LINE とつないでいなければ、LINE には何も書かない", () => {
