@@ -1,23 +1,35 @@
 import { TabPage } from "@/components/TabPage";
 import { Fold, NotYet, Panel } from "@/components/parts";
 import { getBookData } from "@/lib/book/data";
-import { getKarteExamples } from "@/lib/data/seed";
-import { getKarteHeadings, getMemoMaxChars } from "@/lib/settings";
+import { getCustomers, getKarteExamples } from "@/lib/data/seed";
+import { getKarteHeadings, getMemoMaxChars, getRecordingAiSettings, getRecordingMemoMaxChars, getRecordingSettings } from "@/lib/settings";
 import { KarteBoard } from "./KarteBoard";
 import { KarteMemo } from "./KarteMemo";
+import { RecordingPanel } from "./RecordingPanel";
 
 export const dynamic = "force-dynamic";
 
 export default function KartePage() {
   const data = getBookData();
   const headings = getKarteHeadings();
+  const recAi = getRecordingAiSettings();
   return (
     <TabPage
       tab="karte"
       right={
-        <Panel title="施術のメモ">
-          <KarteMemo data={data} examples={getKarteExamples()} maxChars={getMemoMaxChars()} />
-        </Panel>
+        <>
+          <Panel title="施術のメモ">
+            <KarteMemo data={data} examples={getKarteExamples()} maxChars={getMemoMaxChars()} recordingMaxChars={getRecordingMemoMaxChars()} />
+          </Panel>
+          <RecordingPanel
+            data={data}
+            settings={getRecordingSettings()}
+            maxTextChars={recAi.maxTextChars}
+            minIntervalSeconds={recAi.minIntervalSeconds}
+            memoMaxChars={getRecordingMemoMaxChars()}
+            surnames={getCustomers().map((c) => c.surname)}
+          />
+        </>
       }
     >
       <KarteBoard data={data} headings={headings} />
@@ -31,6 +43,16 @@ export default function KartePage() {
             </li>
           ))}
         </ol>
+      </Fold>
+      <Fold summary="くわしく（録音からメモを作る）">
+        <p>
+          右の列の「録音からメモを作る」（PC だけ）で、録音のファイル・画面の録音・録音フォルダから、施術のメモを作れます。
+          声はこの PC のブラウザの外に出しません（Whisper をブラウザの中で動かして文字にします）。文字にした中身は、要点とカルテを作るために Claude に送ります（お客様の名字は〔お客様〕に置きかえて送ります）。
+          録音は、お客様の了解を得てから行ってください。
+        </p>
+        <p>
+          録音は{Math.round(getRecordingSettings().chunkSeconds / 60)}分くらいずつに区切って読み、黙っている所や音だけの所は飛ばします。区切りごとの要点にも言葉の門を通し、全部の要点をまとめて施術のメモに入れます（この時だけメモは{getRecordingMemoMaxChars().toLocaleString("ja-JP")}字まで）。カルテにする・保存は、今までどおり人が押します。
+        </p>
       </Fold>
       <Fold summary="くわしく（言葉の門）">
         <p>

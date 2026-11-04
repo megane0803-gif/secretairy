@@ -14,6 +14,8 @@ export type KarteRequest = {
   memo: string;
   /** そのブラウザのルール（鍵つきはサーバーで先頭に足しなおす） */
   rules: Rule[];
+  /** recording = 録音から作ったメモ（要点をまとめた物）。この時だけメモの上限を広げる（config/ai.json の karte.maxRecordingMemoChars） */
+  source?: "recording";
 };
 
 export type KarteDraft = {

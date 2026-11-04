@@ -2,7 +2,7 @@
 
 // 「最初に戻す」：このブラウザの変化を1回で全部最初に戻す（src/lib/reset.ts）。
 // 予約は本当の今日を起点に作り直し（仮押さえ・承認の箱・足した ToDo・保存したカルテ・「翌日へ」も消える）、
-// 広告（案・止めた／外した言葉）と経理（選んだ印・登録・足した自動のルール）、カルテの施術メモ・案、
+// 広告（案・止めた／外した言葉）と経理（選んだ印・登録・足した自動のルール）、カルテの施術メモ・案・録音から作った文字と要点、
 // LINE の預かり（届けた印・サーバーに預けてある知らせ。つなぎは残す）も戻す。日誌には残す。
 // 台帳（予約タブ）と朝の要点（ホーム）の両方に置く。
 
@@ -23,7 +23,7 @@ export function ResetBook({ data }: { data: BookData }) {
     const { lineToken } = resetAll(book.realToday.date);
     writeJournal({
       who: "オーナー",
-      text: `最初に戻した：${book.realToday.label}を起点に、予約・仮押さえ・承認の箱・足した ToDo・保存したカルテ・カルテのメモと案・「翌日へ」を作り直し、広告と経理（自動のルールも）${lineToken ? "・LINE の預かり" : ""}を最初に戻した`,
+      text: `最初に戻した：${book.realToday.label}を起点に、予約・仮押さえ・承認の箱・足した ToDo・保存したカルテ・カルテのメモと案・録音から作った文字と要点・「翌日へ」を作り直し、広告と経理（自動のルールも）${lineToken ? "・LINE の預かり" : ""}を最初に戻した`,
     });
     setAsking(false);
     // サーバーに預けてある LINE の知らせ（まだ受け取っていない物）も消す。つなぎは残す
@@ -35,7 +35,7 @@ export function ResetBook({ data }: { data: BookData }) {
 
   return asking ? (
     <span className="rule-buttons" role="group" aria-label="最初に戻すかどうか">
-      <span>本当の今日を起点に作り直します。仮押さえ・承認の箱・足した ToDo・保存したカルテ・カルテのメモ・広告・経理（足した自動のルールも）・LINE の預かりも最初に戻ります（LINE のつなぎは残します）。</span>
+      <span>本当の今日を起点に作り直します。仮押さえ・承認の箱・足した ToDo・保存したカルテ・カルテのメモ・録音から作った文字と要点・広告・経理（足した自動のルールも）・LINE の預かりも最初に戻ります（LINE のつなぎは残します）。</span>
       <button type="button" className="btn danger" onClick={onReset}>
         最初に戻す
       </button>

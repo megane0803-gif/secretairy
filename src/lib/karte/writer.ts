@@ -74,7 +74,8 @@ export function scriptKarteWriter(examples: KarteExample[], headings: KarteHeadi
       const sections = emptySections(headings);
       const fallback = headings[headings.length - 1];
       for (const raw of req.memo.split(/[。！？!?\n]+/)) {
-        const s = raw.trim().replace(FILLER, "").trim();
+        // 録音の要点のメモは「・」で始まる行なので、その印は外して読む
+        const s = raw.trim().replace(/^[・\-]\s*/, "").replace(FILLER, "").trim();
         if (!s) continue;
         const h = headings.find((x) => (x.hints ?? []).some((w) => s.includes(w))) ?? fallback;
         if (h) sections[h.id].push(s.slice(0, MAX_LINE_CHARS));
