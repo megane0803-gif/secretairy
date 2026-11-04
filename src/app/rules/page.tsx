@@ -1,6 +1,6 @@
 import { TabPage } from "@/components/TabPage";
-import { addDays, calDay, openedDate, shopToday } from "@/lib/calendar";
-import { loadBook } from "@/lib/reservations";
+import { addDays, calDay, openedDate } from "@/lib/calendar";
+import { getBookData } from "@/lib/book/data";
 import { getSeedRules } from "@/lib/rules/store";
 import { getMenus, getShop } from "@/lib/settings";
 import { RuleBoard } from "./RuleBoard";
@@ -16,16 +16,9 @@ export default function RulesPage() {
   const shop = getShop();
   const menus = getMenus();
   const seed = getSeedRules();
-  const { today } = shopToday(shop);
   // 「ためしに確かめる」で選べる日（開いた日から2週間。お休みの日も出して、断られるのを見られるように）
   const opened = openedDate(shop);
   const days = Array.from({ length: 14 }, (_, i) => calDay(shop, addDays(opened, i)));
-  const booked = loadBook(shop, menus, today).all.map((r) => ({
-    date: r.date,
-    start: r.start,
-    menuIds: [r.menu.id],
-    newCustomer: r.customer.firstVisit,
-  }));
 
   return (
     <TabPage
@@ -36,7 +29,7 @@ export default function RulesPage() {
           menus={menus}
           shop={{ timezone: shop.timezone, seats: shop.seats, slotMinutes: shop.slotMinutes }}
           days={days}
-          booked={booked}
+          data={getBookData()}
         />
       }
     >

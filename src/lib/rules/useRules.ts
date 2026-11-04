@@ -5,6 +5,7 @@
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { readBrowser, RULES_KEY, subscribeBrowser, writeBrowser } from "../browser";
+import { writeJournal } from "../journal";
 import {
   isEmptyOverlay,
   mergeRules,
@@ -34,14 +35,46 @@ export function useRules(seed: Rule[]) {
     [seedIds],
   );
 
+  // ルールを足した・直した・消した、も日誌に書く（だれ：オーナー）
+  const labelOf = useCallback((id: string) => rules.find((r) => r.id === id)?.label ?? id, [rules]);
+
   return {
     rules,
     overlay,
     changedCount: overlay.removed.length + Object.keys(overlay.changed).length + overlay.added.length,
-    add: useCallback((r: Rule) => save((o) => withAdded(o, r)), [save]),
-    update: useCallback((r: Rule) => save((o) => withChanged(o, r, seedIds)), [save, seedIds]),
-    remove: useCallback((id: string) => save((o) => withRemoved(o, id, seedIds)), [save, seedIds]),
-    restore: useCallback((id: string) => save((o) => withRestored(o, id)), [save]),
-    resetAll: useCallback(() => writeBrowser(RULES_KEY, null), []),
+    add: useCallback(
+      (r: Rule) => {
+        save((o) => withAdded(o, r));
+        writeJournal({ who: "オーナー", text: `ルールを足した：${r.label}` });
+      },
+      [save],
+    ),
+    update: useCallback(
+      (r: Rule) => {
+        const before = labelOf(r.id);
+        save((o) => withChanged(o, r, seedIds));
+        writeJournal({ who: "オーナー", text: before === r.label ? `ルールを直した：${r.label}` : `ルールを直した：${before} → ${r.label}` });
+      },
+      [save, seedIds, labelOf],
+    ),
+    remove: useCallback(
+      (id: string) => {
+        const label = labelOf(id);
+        save((o) => withRemoved(o, id, seedIds));
+        writeJournal({ who: "オーナー", text: `ルールを消した：${label}` });
+      },
+      [save, seedIds, labelOf],
+    ),
+    restore: useCallback(
+      (id: string) => {
+        save((o) => withRestored(o, id));
+        writeJournal({ who: "オーナー", text: `ルールを例に戻した：${seed.find((r) => r.id === id)?.label ?? id}` });
+      },
+      [save, seed],
+    ),
+    resetAll: useCallback(() => {
+      writeBrowser(RULES_KEY, null);
+      writeJournal({ who: "オーナー", text: "ルールを最初の状態（例のルール）に戻した" });
+    }, []),
   };
 }

@@ -10,6 +10,21 @@ import { STRICTER } from "./types";
 
 export type Situation = { tab: TabId; menuIds: string[] };
 
+/**
+ * メニューの並びを、組み合わせに入っているメニューも足して広げる（例：cut_color → cut_color・cut・color）。
+ * メニューごとのルールは、そのメニューを含む組み合わせのメニューにも効かせるため。組み合わせの中身は config/menus.json の includes。
+ */
+export function expandMenuIds(ids: string[], menus: { id: string; includes?: string[] }[]): string[] {
+  const out = new Set<string>();
+  const add = (id: string, depth: number) => {
+    if (out.has(id) || depth > 4) return;
+    out.add(id);
+    for (const sub of menus.find((m) => m.id === id)?.includes ?? []) add(sub, depth + 1);
+  };
+  for (const id of ids) add(id, 0);
+  return [...out];
+}
+
 export function rulesFor<R extends Rule>(all: R[], s: Situation): R[] {
   return all.filter(
     (r) =>

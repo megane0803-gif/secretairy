@@ -1,0 +1,7 @@
+{
+  "model": "claude-sonnet-5-5",
+  "maxReplyTokens": 1500,
+  "maxToolCalls": 6,
+  "maxMessages": 20,
+  "maxMessageChars": 300
+}

@@ -104,3 +104,33 @@ export function shopNow(shop: Pick<ShopSettings, "timezone">, now = new Date()):
 export function lastStartOf(menu: Pick<Menu, "minutes" | "lastStart">, close: string): string {
   return menu.lastStart ?? toHHMM(toMinutes(close) - menu.minutes);
 }
+
+/** 今日から n 番目の営業日（0 = 今日・負の数は過去の営業日）。見つからなければ null */
+export function businessDayAt(shop: ShopSettings, today: CalDay, n: number): CalDay | null {
+  if (n >= 0) return businessDays(shop, today, n + 1)[n] ?? null;
+  let date = today.date;
+  let left = -n;
+  for (let i = 0; i < left * 7 + 366; i++) {
+    date = addDays(date, -1);
+    const d = calDay(shop, date);
+    if (d.open && --left === 0) return d;
+  }
+  return null;
+}
+
+/**
+ * 「11/6（金）」のような日付の札（月/日）から、日付（YYYY-MM-DD）を出す。
+ * 今日以降でいちばん近い日。少し前（60日以内）の日なら、その過ぎた日を返す（判定で「もう過ぎた」と断るため）。
+ */
+export function dateFromMonthDay(today: string, month: number, day: number): string | null {
+  if (!(month >= 1 && month <= 12 && day >= 1 && day <= 31)) return null;
+  const y = Number(today.slice(0, 4));
+  const make = (year: number) => {
+    const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) === date ? date : null;
+  };
+  const thisYear = make(y);
+  if (!thisYear) return null; // 2/30 のような無い日
+  if (thisYear >= today || dayDiff(thisYear, today) <= 60) return thisYear;
+  return make(y + 1);
+}
