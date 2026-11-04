@@ -1,4 +1,4 @@
-// ToDo のテスト（docs/SPEC.md §1.10）。Claude は呼ばず、決まった返事（scriptTodoWriter）か、決まった文を返す書き手に置きかえる。
+// ToDo のテスト（docs/SPEC.md §1.11）。Claude は呼ばず、決まった返事（scriptTodoWriter）か、決まった文を返す書き手に置きかえる。
 // 1. 並べ方  2. 同じ鍵を足さない  3. 今やる3件  4. 済みと戻す  5. 最初に戻す  6. メモを投げる（門・上限）  7. 架空の例
 
 import assert from "node:assert/strict";
@@ -36,7 +36,7 @@ import {
   withTodoMarked,
   type TodoItem,
 } from "../items";
-import { adKey, karteKey, lineKey, memoKey, reserveKey, SEED_TODO_KEYS, todoKey } from "../keys";
+import { adKey, karteKey, lineKey, memoKey, reserveKey, SEED_TODO_KEYS, seedTodoKey, todoKey } from "../keys";
 import { restoreNames, maskNames } from "../names";
 import { cleanTitle, gateTitle, runTodo, TodoRefusedError } from "../run";
 import { parseTodoRequest } from "../wire";
@@ -245,8 +245,8 @@ describe("2. 同じ鍵がもうあれば足さない", () => {
     assert.equal(todoGroup(t!, today), "none");
   });
 
-  test("投げたメモ：鍵は「メモ:番号」で、最初の状態の続きの番号", () => {
-    const seedMemoMax = Math.max(...getTodos().filter((t) => t.source === "memo").map((t) => Number(t.key!.split(":")[1])));
+  test("投げたメモ：鍵は「メモ:番号」で、このブラウザで1から（最初の例の「例:メモ:番号」とは重ならない）", () => {
+    const seedMemoMax = 0;
     const a = withMemoTodo(emptyBook(today), seedItems, { title: "シャンプーを発注", memo: "シャンプーがもう無い" }, now, shop);
     assert.equal(a.todo?.key, memoKey(seedMemoMax + 1));
     assert.equal(a.todo?.memo, "シャンプーがもう無い", "元のメモはプログラムがそのまましまう");
@@ -254,6 +254,45 @@ describe("2. 同じ鍵がもうあれば足さない", () => {
     assert.equal(b.todo?.key, memoKey(seedMemoMax + 2));
     assert.equal(nextMemoNo(todoItems(seedItems, b.state, shop)), seedMemoMax + 3);
     assert.equal(todoGroup(todoItems([], b.state, shop)[0], today), "memo");
+  });
+});
+
+describe("2-2. 最初の例の鍵は「例:」で始め、本物の鍵と重ならない", () => {
+  test("最初の例の鍵はどれも「例:」で始まる。本物の入口の鍵は「例:」で始まらない", () => {
+    assert.ok(getTodos().every((t) => t.key?.startsWith("例:")), "seed/todo.json の key は「例:」で始める");
+    for (const k of SEED_TODO_KEYS) assert.ok(k.startsWith("例:"), k);
+    for (const t of seedItems) assert.ok(t.key.startsWith("例:"), t.key);
+    for (const k of [memoKey(1), karteKey("k-p01"), adKey(6), reserveKey("c05", "2026-11-05", "15:00"), lineKey("1"), "チャット:1"]) {
+      assert.ok(!k.startsWith("例:"), k);
+      assert.ok(!SEED_TODO_KEYS.has(k), `${k} は最初の例と重ならない`);
+    }
+    assert.equal(seedTodoKey({ id: "x", key: "語句:6" }), "例:語句:6", "書き忘れても「例:」を付ける");
+    assert.equal(seedTodoKey({ id: "x", key: "例:語句:6" }), "例:語句:6");
+  });
+
+  test("最初の例に「語句:6」の判定日があっても、本物の6番の承認で ToDo が入る", () => {
+    assert.ok(SEED_TODO_KEYS.has("例:語句:6"), "最初の例に6番がある");
+    const ads = withProposal(
+      EMPTY_ADS,
+      { action: "stop", no: 6, text: "パーマ 大人", reason: "予約が少ないので止めます" },
+      { keywords: [{ no: 6, text: "パーマ 大人", weeks: [], total: { clicks: 0, cost: 0, bookings: 0 }, off: false, featured: false }], searchTerms: [] } as never,
+      { id: "p6", checks: [], nowIso: now, mode: "script" },
+      getAdSettings(),
+    );
+    const out = approveAd(ads, emptyBook(today), "p6", { nowIso: now, today, shop, settings: getAdSettings() });
+    assert.equal(out.book.todos.length, 1);
+    assert.equal(todoKey(out.book.todos[0]), adKey(6));
+    const items = todoItems(seedItems, out.book, shop);
+    assert.equal(items.filter((t) => t.title === "3週間後に効いたか見る（6番）").length, 2, "例と本物の両方が一覧に出る");
+  });
+
+  test("カルテ・予約・メモも、最初の例と同じ中身でも本物の鍵なら足せる", () => {
+    let s = withTodo(emptyBook(today), { id: "td-next-k-p01", title: "江口（架空）様：根元", createdAt: now, done: false, kind: "next-talk", source: "karte", key: karteKey("k-p01") });
+    s = withTodo(s, { id: "td-r", title: "大橋（架空）様に別の日時を案内", createdAt: now, done: false, source: "reserve", key: reserveKey("c05", "2026-11-05", "15:00"), due: today });
+    s = withMemoTodo(s, seedItems, { title: "床を拭く", memo: "床" }, now, shop).state;
+    assert.equal(s.todos.length, 3);
+    assert.deepEqual(s.todos.map((t) => todoKey(t)), [karteKey("k-p01"), reserveKey("c05", "2026-11-05", "15:00"), memoKey(1)]);
+    assert.equal(todoItems(seedItems, s, shop).length, seedItems.length + 3, "例も本物も消えずに並ぶ");
   });
 });
 

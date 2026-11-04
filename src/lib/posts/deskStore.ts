@@ -1,0 +1,66 @@
+"use client";
+
+// 発信のタブの、右の列（種類・材料）と真ん中（下書き）が分け合う物。
+// 画面を開いている間だけ覚える（保存した下書きはブラウザの中に残す。state.ts）。
+
+import { useSyncExternalStore } from "react";
+import type { PostGateCheck } from "./gate";
+import type { PostInsert } from "../settings";
+import type { PostsMode } from "./wire";
+
+export type PostDraft = {
+  kind: string;
+  /** 画面に出す文（プログラムが日時を入れた後。オーナーが手で直す） */
+  text: string;
+  /** 作ったときの文（手で直したかを見る） */
+  made: string;
+  checks: PostGateCheck[];
+  inserted: PostInsert[];
+  tries: number;
+  cut: boolean;
+  mode: PostsMode;
+  /** 前：何から作ったか（材料の1つ目） */
+  topic: string;
+};
+
+export type PostsDesk = {
+  kind: string | null;
+  /** 種類ごとの材料（key = 種類の id） */
+  materials: Record<string, Record<string, string>>;
+  draft: PostDraft | null;
+  busy: boolean;
+  mode: PostsMode;
+  noAi: boolean;
+  /** 作れなかったとき（門の理由） */
+  failed: { kind: string; problems: string[]; checks: PostGateCheck[] } | null;
+  /** うまくいかなかったときの1文 */
+  problem: string | null;
+};
+
+const EMPTY: PostsDesk = { kind: null, materials: {}, draft: null, busy: false, mode: "ai", noAi: false, failed: null, problem: null };
+let state: PostsDesk = EMPTY;
+const listeners = new Set<() => void>();
+
+export function setPostsDesk(f: (s: PostsDesk) => Partial<PostsDesk>): void {
+  state = { ...state, ...f(state) };
+  listeners.forEach((l) => l());
+}
+
+/** 「最初に戻す」：材料と下書きを消す。AI か決まった返事かの切りかえは残す */
+export function resetPostsDesk(): void {
+  state = { ...EMPTY, mode: state.mode };
+  listeners.forEach((l) => l());
+}
+
+export function getPostsDesk(): PostsDesk {
+  return state;
+}
+
+const subscribe = (f: () => void) => {
+  listeners.add(f);
+  return () => listeners.delete(f);
+};
+
+export function usePostsDesk(): PostsDesk {
+  return useSyncExternalStore(subscribe, () => state, () => state);
+}

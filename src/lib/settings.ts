@@ -11,6 +11,7 @@ import ads from "@config/ads.json";
 import accounting from "@config/accounting.json";
 import line from "@config/line.json";
 import todo from "@config/todo.json";
+import posts from "@config/posts.json";
 import { TAB_IDS, TABS, type TabDef, type TabId } from "./tabs";
 
 export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
@@ -261,4 +262,71 @@ export function getTodoSettings(): TodoSettings {
 export function getTodoLimits(): { maxMemoChars: number; maxTitleChars: number } & TodoSettings {
   const a = (ai as { todo: TodoAiSettings }).todo;
   return { maxMemoChars: a.maxMemoChars, maxTitleChars: a.maxTitleChars, ...getTodoSettings() };
+}
+
+/** 発信のタブ：下書きの種類（config/posts.json の kinds）。種類が違っても仕組みは1本で、変わるのは指示文と材料だけ */
+export type PostKindId = string;
+
+/** 下書きにプログラムが入れる物（openings = 空き枠の日時・closed = お休みの日付・blogLink = ブログのリンクの印） */
+export type PostInsert = "openings" | "closed" | "blogLink";
+
+export type PostMaterialField = { id: string; label: string; placeholder: string };
+
+export type PostKind = {
+  id: PostKindId;
+  /** 画面の名前（「LINE」の字は入れない） */
+  label: string;
+  /** その種類だけの指示文（AI への指示に入れる） */
+  instruction: string;
+  /** 長さの目安（字） */
+  targetChars: number;
+  /** 形の目安（例「5段落くらい」「見出し4つくらい」「タグ4つくらい」） */
+  shape: string;
+  /** 材料の入力欄（1つ目は必ず入れる） */
+  materials: PostMaterialField[];
+  /** 下書きに無ければプログラムが足す物 */
+  insert: PostInsert[];
+};
+
+export type PostsSettings = {
+  kinds: PostKind[];
+  /** 言葉の門で当てる言葉（全角は半角にそろえて調べる） */
+  gateWords: string[];
+  /** 空き枠を探す日数（今日から） */
+  openingDays: number;
+  /** 空き枠を入れる日の数の上限 */
+  maxOpeningDays: number;
+  /** お休みを探す日数（今日から） */
+  closedDays: number;
+  /** お休みを入れる日の数の上限 */
+  maxClosedDays: number;
+  /** 保存しておける下書きの数（種類ごと） */
+  maxSavedPerKind: number;
+};
+
+export function getPostsSettings(): PostsSettings {
+  return posts as PostsSettings;
+}
+
+/** 発信の下書きで AI を呼ぶときの上限（config/ai.json の posts。モデルは予約チャットと同じ Sonnet） */
+export type PostsAiSettings = {
+  model: string;
+  /** 1回の返事の長さの上限（トークン） */
+  maxReplyTokens: number;
+  /** 下書きを作らせる回数の上限（1回目＋作り直し） */
+  maxTries: number;
+  /** 材料の1つの欄の長さの上限（字）。画面でも使う */
+  maxMaterialChars: number;
+  /** 窓口（/api/ai/posts）が受け取る大きさの上限（字） */
+  maxRequestChars: number;
+};
+
+export function getPostsAiSettings(): PostsAiSettings {
+  const a = (ai as { posts: Omit<PostsAiSettings, "model"> }).posts;
+  return { model: getAiSettings().model, ...a };
+}
+
+/** 材料の1つの欄の長さの上限（字）。画面でも使う（鍵や環境変数は読まない） */
+export function getPostsMaterialMaxChars(): number {
+  return (ai as { posts: { maxMaterialChars: number } }).posts.maxMaterialChars;
 }

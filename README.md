@@ -83,6 +83,7 @@ npm run build      # 本番ビルド
 | `config/ads.json` | 広告の札・売りのメニュー・架空の町の名前 |
 | `config/accounting.json` | 経理の札（「会計（架空）」など） |
 | `config/line.json` | LINE のつなぎ：合言葉の期限・つながる時間・1日に送る上限など |
+| `config/posts.json` | 発信の下書きの種類（指示文・材料の欄・長さの目安）・言葉の門の言葉 |
 | `config/tabs.json` | タブを出す・隠す |
 | `config/rules.seed.json` | 例のルール（ルールはルールのタブから変えます） |
 

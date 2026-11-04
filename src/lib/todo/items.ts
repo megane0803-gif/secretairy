@@ -1,4 +1,4 @@
-// ToDo の一覧の形と並べ方（プログラムが並べる。Claude は並べない。docs/SPEC.md §1.10）。
+// ToDo の一覧の形と並べ方（プログラムが並べる。Claude は並べない。docs/SPEC.md §1.11）。
 // 最初の状態（seed/todo.json）と、このブラウザで足した分（secretairy:book の todos）を1つの一覧にする。
 // ToDo のタブ・ホームの「今やる3件」・朝の要点の「今日の ToDo」は、みなここの同じ関数を使う。
 //
@@ -14,7 +14,7 @@ import { withTodo, withTodoDone } from "../book/state";
 import { addDays, businessDayAt, calDay, openedDate, type CalDay } from "../calendar";
 import type { Todo } from "../data/types";
 import type { ShopSettings } from "../settings";
-import { CONTACT_SOURCES, memoKey, SEED_TODO_KEYS, todoKey, todoSource, type TodoSource } from "./keys";
+import { CONTACT_SOURCES, memoKey, seedTodoKey, todoKey, todoSource, type TodoSource } from "./keys";
 
 export type TodoItem = {
   id: string;
@@ -59,7 +59,7 @@ export function resolveSeedTodos(shop: ShopSettings, anchor: CalDay, seed: Todo[
     const source = todoSource({ id: `td-${t.id}`, source: t.source, kind: t.source === "karte" ? "next-talk" : undefined });
     return {
       id: t.id,
-      key: todoKey({ id: t.id, title: t.title, key: t.key, source }),
+      key: seedTodoKey(t),
       title: t.title,
       source,
       ...(due ? { due } : {}),
@@ -181,7 +181,7 @@ export function dueLabel(t: TodoItem, today: string, shop: ShopSettings): { text
   return { text: day, tone: "later" };
 }
 
-/** 次に投げるメモの番号（最初の状態と足した分の「メモ:番号」の続き） */
+/** 次に投げるメモの番号（足した分の「メモ:番号」の続き。最初の例の「例:メモ:番号」は数えない） */
 export function nextMemoNo(items: Pick<TodoItem, "key">[]): number {
   let max = 0;
   for (const t of items) {
@@ -201,8 +201,8 @@ export function withMemoTodo(
 ): { state: BookState; todo: AddedTodo | null } {
   const title = input.title.replace(/\s+/g, " ").trim();
   if (!title) return { state: s, todo: null };
-  // 最初の状態の鍵（SEED_TODO_KEYS）も数える：同じ番号の鍵は足せないので、いつも続きの番号にする
-  const no = nextMemoNo([...todoItems(seedItems, s, shop), ...[...SEED_TODO_KEYS].map((key) => ({ key }))]);
+  // 最初の例のメモの鍵は「例:メモ:番号」なので数えない（本物のメモは 1 から）
+  const no = nextMemoNo(todoItems(seedItems, s, shop));
   const todo: AddedTodo = { id: `td-memo-${no}`, title, createdAt: nowIso, done: false, source: "memo", key: memoKey(no), memo: input.memo.trim() };
   const next = withTodo(s, todo);
   return next === s ? { state: s, todo: null } : { state: next, todo };

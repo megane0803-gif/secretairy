@@ -28,5 +28,11 @@
     "maxMemoChars": 100,
     "maxTitleChars": 40,
     "maxRequestChars": 100000
+  },
+  "posts": {
+    "maxReplyTokens": 1500,
+    "maxTries": 2,
+    "maxMaterialChars": 300,
+    "maxRequestChars": 50000
   }
 }

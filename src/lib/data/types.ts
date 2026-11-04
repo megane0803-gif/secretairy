@@ -142,6 +142,9 @@ export type AccountingSeed = {
   trial: CardStatement;
 };
 
+/** 発信の「お店のメモ」（架空）。下書きの中身は、このメモと材料にある事だけ */
+export type PostMemo = { id: string; title: string; text: string };
+
 /**
  * やること（最初の状態。seed/todo.json）。期限は「何番目の営業日」（0 = 今日・負の数は過ぎた日）。
  * source はどの入口から入った物のつもりか（src/lib/todo/keys.ts の TodoSource）。key は同じ物を2回足さない鍵。
@@ -187,6 +190,6 @@ export const TODO_FIELDS: FieldNote[] = [
   { key: "due", label: "いつまで（何番目の営業日。無ければ期限なし）" },
   { key: "done", label: "済んだか" },
   { key: "source", label: "どこから入ったか（メモ・カルテ・広告・予約・LINE・チャット）" },
-  { key: "key", label: "同じ物を2回足さない鍵（メモ:番号・カルテ:番号・語句:番号・予約:お客様＠日時 など）" },
+  { key: "key", label: "同じ物を2回足さない鍵（メモ:番号・カルテ:番号・語句:番号・予約:お客様＠日時 など。最初の例は「例:」で始める）" },
   { key: "memo", label: "投げたメモの元の文（プログラムがそのまましまう）" },
 ];

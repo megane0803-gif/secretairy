@@ -101,7 +101,7 @@ describe("1. 安全の点検", () => {
       if (usesAi) assert.match(rel(r), /^src\/app\/api\/ai\//, `${rel(r)} は AI を呼ぶので /api/ai/ の下に置く`);
     }
     // 4つの AI の窓口がそろっている
-    for (const name of ["reserve", "karte", "ads", "line"]) assert.ok(routes.some((r) => rel(r) === `src/app/api/ai/${name}/route.ts`), name);
+    for (const name of ["reserve", "karte", "ads", "line", "posts"]) assert.ok(routes.some((r) => rel(r) === `src/app/api/ai/${name}/route.ts`), name);
     // LINE の窓口（/api/line）は AI を呼ばない
     for (const r of routes.filter((x) => rel(x).startsWith("src/app/api/line"))) {
       const text = readFileSync(r, "utf8");
@@ -116,6 +116,7 @@ describe("1. 安全の点検", () => {
     for (const k of ["maxReplyTokens", "maxMemoChars", "maxRequestChars"]) assert.ok(pos(ai.karte[k]), `karte.${k}`);
     for (const k of ["maxReplyTokens", "maxTries", "maxFixChars", "maxRequestChars"]) assert.ok(pos(ai.ads[k]), `ads.${k}`);
     for (const k of ["maxReplyTokens", "maxRequestChars"]) assert.ok(pos(ai.line[k]), `line.${k}`);
+    for (const k of ["maxReplyTokens", "maxTries", "maxMaterialChars", "maxRequestChars"]) assert.ok(pos(ai.posts[k]), `posts.${k}`);
     const line = lineJson as Record<string, number>;
     for (const k of ["dailyPushLimit", "maxTextChars", "codeTries", "maxOutChars", "maxOutMessages", "maxWebhookChars", "maxScreenRequestChars"]) assert.ok(pos(line[k]), k);
     // 読むのは settings.ts を通す
@@ -132,6 +133,8 @@ describe("1. 安全の点検", () => {
       ...walk(join(ROOT, "src/app/api")).filter((p) => p.endsWith("route.ts")),
       join(ROOT, "src/app/reservations/ReserveChat.tsx"),
       join(ROOT, "src/components/AdApprovalRows.tsx"),
+      join(ROOT, "src/app/posts/PostsForm.tsx"),
+      join(ROOT, "src/app/posts/PostsBoard.tsx"),
     ];
     for (const f of files) {
       const text = readFileSync(f, "utf8");

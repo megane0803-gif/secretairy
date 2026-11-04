@@ -1,5 +1,7 @@
-// ToDo の出どころと鍵。どの入口から入った ToDo も、同じ鍵がもうあれば足さない（docs/SPEC.md §1.10）。
+// ToDo の出どころと鍵。どの入口から入った ToDo も、同じ鍵がもうあれば足さない（docs/SPEC.md §1.11）。
 // 鍵：メモ:番号 / カルテ:番号 / 語句:番号 / 予約:お客様＠日時 / LINE:番号 / チャット:番号
+// 最初の例（seed/todo.json）の鍵は「例:」で始める。本物の広告・カルテ・予約・メモの鍵と重ならない
+// （例を残したままでも、本物の 6番の承認・カルテの保存・メモの番号は止まらない）。
 // 前からブラウザに残っていた ToDo（鍵を持たない物）は、id の頭から出どころと鍵を出す。
 
 import type { AddedTodo } from "../book/state";
@@ -67,7 +69,14 @@ export function todoKey(t: Pick<AddedTodo, "id" | "title" | "key" | "source" | "
   }
 }
 
-/** 最初の状態（seed/todo.json）の鍵。同じ鍵の ToDo は、入口から来ても足さない */
-export const SEED_TODO_KEYS: ReadonlySet<string> = new Set(
-  getTodos().map((t) => todoKey({ id: t.id, title: t.title, key: t.key, source: t.source, kind: t.source === "karte" ? "next-talk" : undefined })),
-);
+/** 最初の例の鍵の頭。本物の入口の鍵（メモ:・カルテ:・語句:・予約:・LINE:・チャット:）はこれで始まらない */
+export const SEED_KEY_PREFIX = "例:";
+
+/** 最初の例の鍵（「例:」で始める。書いていなければ id から作る） */
+export function seedTodoKey(t: { id: string; key?: string }): string {
+  const k = t.key ?? t.id;
+  return k.startsWith(SEED_KEY_PREFIX) ? k : `${SEED_KEY_PREFIX}${k}`;
+}
+
+/** 最初の状態（seed/todo.json）の鍵。どれも「例:」で始まるので、本物の入口の鍵とは重ならない */
+export const SEED_TODO_KEYS: ReadonlySet<string> = new Set(getTodos().map(seedTodoKey));
