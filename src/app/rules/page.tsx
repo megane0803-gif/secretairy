@@ -27,7 +27,7 @@ export default function RulesPage() {
         <RuleSide
           seed={seed}
           menus={menus}
-          shop={{ timezone: shop.timezone, seats: shop.seats, slotMinutes: shop.slotMinutes }}
+          shop={{ timezone: shop.timezone, slotMinutes: shop.slotMinutes }}
           days={days}
           data={getBookData()}
         />

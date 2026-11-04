@@ -60,7 +60,7 @@ export function ReserveChat({ data }: { data: BookData }) {
     () =>
       customer
         ? {
-            shop: data.shop,
+            shop: book.shop,
             menus: data.menus,
             rules,
             booked: book.booked,
@@ -69,7 +69,7 @@ export function ReserveChat({ data }: { data: BookData }) {
             today: book.today,
           }
         : null,
-    [data, rules, book.booked, customer, book.now, book.today],
+    [data, book.shop, rules, book.booked, customer, book.now, book.today],
   );
   // 例文は、いまの台帳・ルール・時刻でプログラムが選んだ日時で作る（どの曜日に開いても同じ働きになるように）
   const examples = useMemo(() => (ctx ? buildExamples(ctx) : []), [ctx]);
@@ -127,6 +127,8 @@ export function ReserveChat({ data }: { data: BookData }) {
       // そのお客様のカルテの日付とメニューだけ（中身は送らない）
       visits: book.visits.filter((v) => v.customerId === customer.id),
       dayOffset: book.dayOffset,
+      // 同じ時間に受ける人数（ルールのタブで変えた分）。サーバーは幅を確かめなおして使う
+      seats: book.shop.seats,
     };
     // この相談の中で増えた・外した仮押さえ（画面の側でも、この会話の物かを確かめる）
     const mine = new Set(body.holds);

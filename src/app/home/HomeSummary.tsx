@@ -38,7 +38,7 @@ export function HomeSummary({
   const todays = book.all.filter((r) => r.date === book.today.date);
   const menuName = (id: string) => resolveMenu(data.menus, id)?.name ?? id;
   // 今日のこれからの空き（いまの時刻より前の枠は数えない）
-  const free = freeRanges(data.shop, book.today, book.all, book.now.date === book.today.date ? book.now.time : undefined);
+  const free = freeRanges(book.shop, book.today, book.all, book.now.date === book.today.date ? book.now.time : undefined);
   const day = book.book.week.find((d) => d.date === book.today.date);
 
   const nextDay = (e: React.MouseEvent) => {
@@ -122,7 +122,7 @@ export function HomeSummary({
         ) : (
           <>
             <div className="bignums">
-              <BigNumber label={`空き（${data.shop.slotMinutes}分 × 席）`} value={free.seatSlots} unit="枠" />
+              <BigNumber label={`空き（${data.shop.slotMinutes}分 × ${book.shop.seats}人）`} value={free.seatSlots} unit="枠" />
             </div>
             {day && <MiniBar value={day.usedMinutes} max={day.capacityMinutes} label="今日の埋まり" />}
             {free.ranges.length === 0 ? (
@@ -139,7 +139,7 @@ export function HomeSummary({
                 ))}
               </ul>
             )}
-            <Checked>台帳（確定・仮押さえ）と席の数（{data.shop.seats}席）からプログラムが数えました</Checked>
+            <Checked>台帳（確定・仮押さえ）と同じ時間に受ける人数（{book.shop.seats}人）からプログラムが数えました</Checked>
             <p className="hint">メニューやルール（何分前まで など）で受けられるかは、予約チャットで確かめます。</p>
           </>
         )}

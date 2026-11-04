@@ -22,7 +22,13 @@ export type Hours = { open: string; close: string } | null;
 export type ShopSettings = {
   name: string;
   timezone: string;
+  /**
+   * 同じ時間に受ける人数（前は「席の数」）。予約チャット・台帳・予約サイト・朝の要点・発信の空き枠・AI の仕事が、みなこの1つの数を使う。
+   * 最初の状態はここ。オーナーがルールのタブで変えた分はブラウザの中（capacity.ts の withSeats で重ねる）
+   */
   seats: number;
+  /** ルールのタブで選べる「同じ時間に受ける人数」の幅 */
+  seatsRange?: { min: number; max: number };
   slotMinutes: number;
   holdExpiresHours: number;
   hours: Record<DayKey, Hours>;

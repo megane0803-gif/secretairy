@@ -75,7 +75,7 @@ export function ApprovalBox({
         // いまの台帳とルールで、もう一度確かめる（自分の仮押さえは数えない）
         const v = judgeSlot(
           {
-            shop: data.shop,
+            shop: book.shop,
             menus: data.menus,
             rules,
             booked: book.booked.filter((b) => b.id !== r.id),

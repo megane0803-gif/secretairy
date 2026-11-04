@@ -55,13 +55,13 @@ export function BookingSite({ data }: { data: BookData }) {
                   if (t < open || t >= close) return <td key={d.date} className="off">–</td>;
                   if (d.date === book.now.date && t + step <= nowMin) return <td key={d.date} className="off">–</td>;
                   const here = confirmed.filter((r) => r.date === d.date && r.startMin < t + step && t < r.endMin);
-                  const left = Math.max(0, data.shop.seats - here.length);
+                  const left = Math.max(0, book.shop.seats - here.length);
                   const byChat = here.some((r) => r.source === "chat");
-                  const mark = left === 0 ? "×" : left < data.shop.seats ? "△" : "○";
+                  const mark = left === 0 ? "×" : left < book.shop.seats ? "△" : "○";
                   return (
                     <td
                       key={d.date}
-                      className={[left === 0 ? "full" : left < data.shop.seats ? "few" : "free", byChat ? "bychat" : ""].join(" ").trim()}
+                      className={[left === 0 ? "full" : left < book.shop.seats ? "few" : "free", byChat ? "bychat" : ""].join(" ").trim()}
                       title={`${d.label} ${toHHMM(t)}：のこり${left}席${byChat ? "（承認で確定した予約が入っています）" : ""}`}
                     >
                       {mark}

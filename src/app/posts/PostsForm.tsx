@@ -63,7 +63,7 @@ export function PostsForm({ data, settings, memos, maxChars }: { data: BookData;
     }
     // 材料に時期（「年末」など）があれば、その時期の日から空き枠とお休みを出す
     const period = periodOf(kind.materials.map((f) => materials[f.id] ?? "").join(" "), book.today.date, settings.periods);
-    const facts = postFacts(data.shop, settings, book.today, book.now, book.all, period);
+    const facts = postFacts(book.shop, settings, book.today, book.now, book.all, period);
     const filled = fillPost(res.text, kind, facts);
     writeJournal(...res.steps, ...(filled.inserted.length ? [{ who: "プログラム" as const, text: `${kind.label}の下書きに入れた：${filled.inserted.map((i) => INSERT_JOURNAL[i]).join("・")}${period ? `（時期「${period.label}」の日から）` : ""}` }] : []));
     setPostsDesk((s) => ({

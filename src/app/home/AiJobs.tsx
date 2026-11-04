@@ -77,7 +77,8 @@ export function AiJobs({ data, settings }: { data: BookData; settings: JobsSetti
     });
     if (todo.length > 1) writeJournal({ who: "オーナー", text: `AI の仕事をまとめて動かした（${todo.length}行。上から順に${how === "script" ? "・決まった返事" : ""}）` });
     const env: JobEnv = {
-      data,
+      // 店の設定に「同じ時間に受ける人数」（ルールのタブで変えた分）を重ねた物
+      data: book.data,
       rules,
       mode: how,
       store: browserJobStore(),

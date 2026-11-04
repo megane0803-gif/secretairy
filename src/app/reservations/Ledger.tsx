@@ -79,7 +79,7 @@ export function Ledger({ data }: { data: BookData }) {
 
       <div className="checks">
         {book.book.checks.seats.ok ? (
-          <Checked>どの時間も、席の数（{data.shop.seats}席）をこえていません（仮押さえも数えます）</Checked>
+          <Checked>どの時間も、同じ時間に受ける人数（{book.shop.seats}人）をこえていません（仮押さえも数えます）</Checked>
         ) : (
           <ul className="problems">
             {book.book.checks.seats.problems.map((p) => (

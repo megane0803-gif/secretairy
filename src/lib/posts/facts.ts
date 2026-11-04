@@ -1,4 +1,4 @@
-// 下書きに入れる日時（プログラム）。空き枠の日時は台帳（確定・仮押さえ）から本当に空いている時間（だれの予約も無い所）を、
+// 下書きに入れる日時（プログラム）。空き枠の日時は台帳（確定・仮押さえ）と同じ時間に受ける人数から本当に空いている時間を、
 // お休みの日付は店の設定から出す。材料に時期（「年末」など）があれば、その時期の日から出す。
 // AI には日時を見せず、書かせない。AI が書いた印（【空き枠】【お休み】【ブログのリンク：…】）をここで置きかえ、
 // その種類に要るのに印が無ければ、下書きの終わり（SNS はタグの前）に1行足す。
@@ -17,13 +17,12 @@ export type PostFacts = {
 };
 
 /**
- * 本当に空いている時間（どの席にも予約（確定・仮押さえ）が入っていない所）を、つながりごとに1つにまとめる。
- * 1人で営業する店なので、だれかの予約が入っている時間は「空き」と案内しない。
+ * 空いている時間（同じ時間に受ける人数（shop.seats）に、まだ届いていない所）を、つながりごとに1つにまとめる。
+ * 数え方は朝の要点・予約サイト・予約チャットと同じ1つの数（1人で営業する店なら、予約の入った時間は空きと言わない）。
  */
 export function openRanges(shop: ShopSettings, day: CalDay, all: Reservation[], from?: string): { start: string; end: string }[] {
   const out: { start: string; end: string }[] = [];
   for (const r of freeRanges(shop, day, all, from).ranges) {
-    if (r.free < shop.seats) continue;
     const last = out[out.length - 1];
     if (last && last.end === r.start) last.end = r.end;
     else out.push({ start: r.start, end: r.end });

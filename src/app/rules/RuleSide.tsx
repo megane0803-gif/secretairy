@@ -14,12 +14,13 @@ import type { Rule } from "@/lib/rules/types";
 import { useRules } from "@/lib/rules/useRules";
 import type { BookData } from "@/lib/book/data";
 import { useBook } from "@/lib/book/useBook";
+import { useCapacity } from "@/lib/useCapacity";
 import { RuleForm } from "./RuleForm";
 
 type Props = {
   seed: Rule[];
   menus: JudgeMenu[];
-  shop: { timezone: string; seats: number; slotMinutes: number };
+  shop: { timezone: string; slotMinutes: number };
   days: CalDay[];
   /** 台帳（このブラウザの仮押さえ・確定も重ねる） */
   data: BookData;
@@ -30,6 +31,9 @@ export function RuleSide(props: Props) {
   const [added, setAdded] = useState<string | null>(null);
   return (
     <>
+      <Panel title="同じ時間に受ける人数">
+        <CapacityField />
+      </Panel>
       <Panel title="ルールを足す">
         <p>種類を選んで、どこに効くかと数を入れます。足したルールは、すぐ次の判定から効きます。</p>
         <RuleForm
@@ -47,6 +51,42 @@ export function RuleSide(props: Props) {
         )}
       </Panel>
       <TryPanel {...props} />
+    </>
+  );
+}
+
+/**
+ * 同じ時間に受ける人数（店の設定の数。最初は config/shop.json の seats）。オーナーが幅（seatsRange）の中で選ぶ。
+ * 変えた分はこのブラウザの中だけに残り、予約チャット・台帳・予約サイト・空き枠・AI の仕事の次の判定からすぐ効く。日誌に1行。
+ */
+function CapacityField() {
+  const { seats, range, base, setSeats } = useCapacity();
+  const choices = Array.from({ length: range.max - range.min + 1 }, (_, i) => range.min + i);
+  return (
+    <>
+      <p>
+        同じ時間に何人のお客様を受けるか。予約チャット・台帳・予約サイト（架空）・空き枠・AI の仕事が、みなこの数で数えます。
+      </p>
+      <div className="scope-row" role="radiogroup" aria-label="同じ時間に受ける人数">
+        {choices.map((n) => (
+          <label key={n} className={seats === n ? "pill on" : "pill"}>
+            <input
+              type="radio"
+              name="capacity"
+              value={n}
+              checked={seats === n}
+              onChange={(e) => {
+                // 人が選んだときだけ（スクリプトから変えたことにはしない）
+                if (e.nativeEvent.isTrusted) setSeats(n);
+              }}
+            />
+            <span className="num">{n}</span>人
+          </label>
+        ))}
+      </div>
+      <p className="hint">
+        どこに効くか：全体（店の設定）。最初は {base}人です。変えた分はこのブラウザの中だけに残り、「最初に戻す」で {base}人 に戻ります。
+      </p>
     </>
   );
 }
@@ -86,11 +126,12 @@ function TryPanel({ seed, menus, shop, days, data }: Props) {
       booking: asked.booking,
       now: asked.now,
       hours: day?.hours ?? null,
-      seats: shop.seats,
+      // 同じ時間に受ける人数（ルールのタブで変えた分も）
+      seats: book.shop.seats,
       menus,
       existing: booked,
     });
-  }, [asked, rules, days, shop.seats, menus, booked]);
+  }, [asked, rules, days, book.shop.seats, menus, booked]);
 
   const ask = (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,7 +1,7 @@
 "use client";
 
 // 予約サイト（架空）で枠が埋まった時の ToDo（プログラム。AI は使わない。docs/SPEC.md §1.11）。
-// 承認待ちの仮押さえの時間に確定の予約が席の数だけ入ったら「○○（架空）様に別の日時を案内」を今日中として足す。
+// 承認待ちの仮押さえの時間に確定の予約が「同じ時間に受ける人数」だけ入ったら「○○（架空）様に別の日時を案内」を今日中として足す。
 // どのタブでも動く（何も描かない）。同じ鍵（予約:お客様＠日時）がもうあれば足さない。仮押さえそのものは変えない。
 
 import { useEffect } from "react";
@@ -18,7 +18,7 @@ export function TodoFeeds({ data }: { data: BookData }) {
   const { all, pending, state, update, today, nowIso } = book;
 
   useEffect(() => {
-    const want = fullSlotTodos(all, pending, { seats: data.shop.seats, customers: data.customers, today: today.date, nowIso }).filter(
+    const want = fullSlotTodos(all, pending, { seats: book.shop.seats, customers: data.customers, today: today.date, nowIso }).filter(
       (t) => !hasTodoKey(state, todoKey(t)),
     );
     if (want.length === 0) return;
@@ -34,7 +34,7 @@ export function TodoFeeds({ data }: { data: BookData }) {
       }, s),
     );
     if (added.length) writeJournal(...added.map((text) => ({ who: "プログラム" as const, text })));
-  }, [all, pending, state, update, today.date, nowIso, data]);
+  }, [all, pending, state, update, today.date, nowIso, data, book.shop.seats]);
 
   return null;
 }

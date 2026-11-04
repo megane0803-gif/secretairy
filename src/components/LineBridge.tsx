@@ -133,7 +133,7 @@ export function LineBridge({ data }: { data: BookData }) {
 
   function slotCtx(L: typeof latest.current) {
     return {
-      shop: data.shop,
+      shop: L.book.shop,
       menus: data.menus,
       rules: L.rules,
       booked: L.book.booked,
@@ -146,7 +146,7 @@ export function LineBridge({ data }: { data: BookData }) {
   function applyCtx() {
     const L = latest.current;
     return {
-      shop: data.shop,
+      shop: L.book.shop,
       menus: data.menus,
       customers: data.customers,
       nowIso: new Date().toISOString(),
@@ -200,6 +200,7 @@ export function LineBridge({ data }: { data: BookData }) {
       booked: L.book.booked,
       rules: L.rules.filter((r) => !r.locked),
       dayOffset: L.book.dayOffset,
+      seats: L.book.shop.seats,
     };
     let res: LineAskResponse = await lineApi.ask({ ...body, mode });
     let note = "";

@@ -163,7 +163,7 @@ export function checkSeats(shop: ShopSettings, all: Reservation[]): CheckResult 
     for (const r of list) {
       const n = list.filter((x) => x.startMin <= r.startMin && r.startMin < x.endMin).length;
       if (n > shop.seats) {
-        problems.push(`${calDay(shop, date).label} ${r.start}：${n}件が重なっています（席は${shop.seats}つ）`);
+        problems.push(`${calDay(shop, date).label} ${r.start}：${n}件が重なっています（同じ時間に受けるのは${shop.seats}人まで）`);
         break;
       }
     }

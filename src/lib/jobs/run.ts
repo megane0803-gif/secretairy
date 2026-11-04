@@ -214,6 +214,8 @@ async function reserveJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
       rules: env.rules.filter((r) => !r.locked),
       visits: view.visits.filter((v) => v.customerId === customer.id),
       dayOffset: view.clock.dayOffset,
+      // 同じ時間に受ける人数（画面の台帳と同じ数）
+      seats: env.data.shop.seats,
     };
     const events = await env.ask.reserve(body);
     const r: ReserveRound = { reply: "", candidates: [], hold: null, todo: false, noAi: false, bad: null };

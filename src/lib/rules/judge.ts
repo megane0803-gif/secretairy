@@ -139,9 +139,9 @@ export function judge(input: JudgeInput): Verdict {
   const seatsOk = seatPeak <= seats;
   base.push({
     id: "seats",
-    label: "席",
+    label: "同じ時間に受ける人数",
     ok: seatsOk,
-    reason: seatsOk ? `いちばん混むときで${seatPeak}席（席は${seats}つ）` : `その時間は席が空いていません（席は${seats}つ）`,
+    reason: seatsOk ? `いちばん混むときで${seatPeak}人（同じ時間に受けるのは${seats}人まで）` : `その時間はもう埋まっています（同じ時間に受けるのは${seats}人まで）`,
   });
 
   // ---- ルールで確かめる（その場面で効く、厳しい方の1つずつ） ----
