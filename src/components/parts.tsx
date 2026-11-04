@@ -2,6 +2,7 @@
 // 数字は大きく、棒は小さく、確認は ✓、細かい所は畳む。
 
 import type { ReactNode } from "react";
+import type { WhoKind } from "@/lib/who";
 
 export function BigNumber({ label, value, unit }: { label: string; value: number; unit?: string }) {
   return (
@@ -88,6 +89,19 @@ export function CustomerName({ surname, fictional }: { surname: string; fictiona
   return (
     <span className="customer">
       {surname} 様{fictional && <span className="tag fictional">架空</span>}
+    </span>
+  );
+}
+
+/** だれがしたか（台帳・AI の手順・日誌の札）。色（globals.css の --who-ai・--who-human・--who-outside）だけに頼らず、必ず文字を出す */
+export type { WhoKind };
+
+export const WHO_TEXT: Record<WhoKind, string> = { ai: "AI", human: "人", outside: "外", program: "プログラム" };
+
+export function WhoMark({ who, title }: { who: WhoKind; title?: string }) {
+  return (
+    <span className={`who-mark ${who}`} title={title}>
+      {WHO_TEXT[who]}
     </span>
   );
 }

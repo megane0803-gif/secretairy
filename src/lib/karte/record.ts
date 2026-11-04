@@ -1,7 +1,7 @@
 // お客様ごとのカルテ（最初の状態の「前回までのカルテ」と、画面で人が保存した物）。
 // 保存は人のボタン（「保存」）だけ。保存すると、そのお客様の記録に入り、
 // 「次回提案」の1行目を ToDo の「次回話すこと」に1件だけ足す（同じ物があれば足さない）。
-// 保存したメモは、その日はもう直さない。AI は使わない。
+// 施術のメモは保存したら変えない（2回目の保存はしない）。保存したカルテの中身は後から人が直せる（edit.ts）。AI は使わない。
 
 import type { BookState, AddedTodo } from "../book/state";
 import type { SeedKarte } from "../data/types";
@@ -23,6 +23,10 @@ export type SavedKarte = {
   sections: KarteSections;
   /** 保存した時刻（ISO） */
   savedAt: string;
+  /** 人が直した見出しの id（保存の前に直した物も、保存の後に直した物も。無ければ AI の案のまま） */
+  edited?: string[];
+  /** 見出しの id ごとの、人が直した日時（ISO） */
+  editedAt?: Record<string, string>;
 };
 
 export type KarteRecord = Omit<SavedKarte, "memo" | "savedAt"> & {
@@ -68,7 +72,7 @@ export function kartesOf(list: KarteRecord[], customerId: string): KarteRecord[]
   return sortKartes(list.filter((k) => k.customerId === customerId));
 }
 
-/** その日にもう保存したカルテ（あれば、その日はもう直さない） */
+/** その日にもう保存したカルテ（あれば、その日は2回目の保存をしない。直すのは edit.ts の withSavedKarteEdited） */
 export function savedOn(saved: SavedKarte[], customerId: string, date: string): SavedKarte | undefined {
   return saved.find((k) => k.customerId === customerId && k.date === date);
 }
@@ -105,12 +109,12 @@ export type SaveOutcome =
 
 /**
  * 🔒 人の「保存」ボタンから呼ぶ。そのお客様の記録に入れ、ToDo「次回話すこと」に1件だけ足す。
- * 同じお客様・同じ日にもう保存していれば保存しない（その日はもう直さない）。
+ * 同じお客様・同じ日にもう保存していれば保存しない（直すのは withSavedKarteEdited）。
  * 同じ題の ToDo（まだ済んでいない物）があれば足さない。
  */
 export function withKarteSaved(s: BookState, k: SavedKarte, surname: string, headings: KarteHeading[]): SaveOutcome {
   if (savedOn(s.kartes, k.customerId, k.date))
-    return { ok: false, state: s, reason: "この日のカルテはもう保存しています（その日はもう直しません）" };
+    return { ok: false, state: s, reason: "この日のカルテはもう保存しています（直すときは、保存したカルテの見出しの「直す」で）" };
   const next: BookState = { ...s, kartes: [...s.kartes, k] };
   const title = nextTalkTitle(k, surname, headings);
   if (!title) return { ok: true, state: next, todo: null, todoSkipped: "none" };

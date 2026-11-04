@@ -2,7 +2,7 @@ import { TabPage } from "@/components/TabPage";
 import { Fold, Panel } from "@/components/parts";
 import { getBookData } from "@/lib/book/data";
 import { getCustomers, getKarteExamples } from "@/lib/data/seed";
-import { getKarteHeadings, getMemoMaxChars, getRecordingAiSettings, getRecordingMemoMaxChars, getRecordingSettings } from "@/lib/settings";
+import { getKarteEditSettings, getKarteHeadings, getMemoMaxChars, getRecordingAiSettings, getRecordingMemoMaxChars, getRecordingSettings } from "@/lib/settings";
 import { KarteBoard } from "./KarteBoard";
 import { KarteMemo } from "./KarteMemo";
 import { RecordingPanel } from "./RecordingPanel";
@@ -32,7 +32,7 @@ export default function KartePage() {
         </>
       }
     >
-      <KarteBoard data={data} headings={headings} />
+      <KarteBoard data={data} headings={headings} editLimits={getKarteEditSettings()} />
       <Fold summary="カルテの見出し（設定：config/karte.json）">
         <ol className="karte-headings">
           {headings.map((h) => (

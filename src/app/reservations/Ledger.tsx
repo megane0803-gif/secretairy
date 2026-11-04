@@ -3,7 +3,8 @@
 // 1週間の予約台帳（真ん中）。最初の状態に、このブラウザの仮押さえ・確定を重ねて出す。
 // 仮押さえと確定は色で分ける。数（件数・埋まり）はプログラムが出す。
 
-import { Checked, CustomerName, MiniBar } from "@/components/parts";
+import { Checked, CustomerName, MiniBar, WhoMark } from "@/components/parts";
+import { reservationWho } from "@/lib/who";
 import { ResetBook } from "@/components/ResetBook";
 import type { BookData } from "@/lib/book/data";
 import { useBook } from "@/lib/book/useBook";
@@ -28,6 +29,9 @@ export function Ledger({ data }: { data: BookData }) {
       <p className="legend">
         <span className="legend-item confirmed">確定</span>
         <span className="legend-item hold">仮押さえ（承認待ち）</span>
+        <span className="hint">
+          <WhoMark who="ai" />＝AI が仮押さえ・<WhoMark who="human" />＝人が承認で確定・<WhoMark who="outside" />＝お客様からの予約
+        </span>
         {holds > 0 && (
           <span className="hint">
             仮押さえ <strong className="num">{holds}</strong> 件
@@ -56,6 +60,7 @@ export function Ledger({ data }: { data: BookData }) {
                   <ul className="slots">
                     {d.reservations.map((r) => (
                       <li key={r.id} className={r.status === "hold" ? "slot hold" : r.source === "chat" ? "slot confirmed fresh" : "slot confirmed"}>
+                        <WhoMark {...reservationWho(r)} />
                         <span className="slot-time num">
                           {r.start}
                           <small>–{r.end}</small>

@@ -13,5 +13,6 @@
       "hints": ["注意", "気をつけ", "頭皮", "しみ"]
     },
     { "id": "talk", "label": "会話メモ", "hints": ["話", "最近"] }
-  ]
+  ],
+  "edit": { "maxLines": 20, "maxLineChars": 80 }
 }

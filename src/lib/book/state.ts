@@ -162,6 +162,10 @@ export function parseBook(raw: string | null): BookState | null {
       memo: (k.memo as string).slice(0, 4000),
       sections: looseSections(k.sections),
       savedAt: k.savedAt as string,
+      ...(Array.isArray(k.edited) ? { edited: k.edited.filter(isStr).slice(0, 20) } : {}),
+      ...(k.editedAt && typeof k.editedAt === "object" && !Array.isArray(k.editedAt)
+        ? { editedAt: Object.fromEntries(Object.entries(k.editedAt as Record<string, unknown>).filter((e): e is [string, string] => isStr(e[1])).slice(0, 20)) }
+        : {}),
     }));
   const off = d.dayOffset;
   const dayOffset = typeof off === "number" && Number.isInteger(off) && off > 0 ? Math.min(off, MAX_DAY_OFFSET) : 0;
