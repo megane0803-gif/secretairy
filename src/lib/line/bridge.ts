@@ -213,7 +213,8 @@ async function handleEvent(d: BridgeDeps, e: LineEvent): Promise<void> {
   const alive = linked && !!(await d.store.get(KEY.alive(linkId!)));
 
   if (e.type === "follow") {
-    if (!linked) await reply(d, replyToken, LINE_TEXT.askCode);
+    // 友だち追加の返事にも「本名や連絡先は入れない」の1行を入れる（返事なので数えない）
+    await reply(d, replyToken, linked ? LINE_TEXT.noRealNames : LINE_TEXT.followHello);
     return;
   }
 

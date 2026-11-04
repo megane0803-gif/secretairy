@@ -1,0 +1,4 @@
+{
+  "template": "明日 {time} {menu}のご予約をお待ちしています。\n{shop}",
+  "demoNote": "デモ：実際には送信されません"
+}

@@ -14,6 +14,7 @@ import recording from "@config/recording.json";
 import todo from "@config/todo.json";
 import posts from "@config/posts.json";
 import jobs from "@config/jobs.json";
+import reminder from "@config/reminder.json";
 import { TAB_IDS, TABS, type TabDef, type TabId } from "./tabs";
 
 export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
@@ -450,4 +451,57 @@ export type JobsSettings = {
 export function getJobsSettings(): JobsSettings {
   const a = (ai as { jobs: { maxAiCallsPerPress: number } }).jobs;
   return { visible: (jobs as { visible: boolean }).visible !== false, maxAiCallsPerPress: a.maxAiCallsPerPress };
+}
+
+/**
+ * ホームの「翌日へ」で見せる前日のお知らせ（デモ。本当には送らない）。文は決まった形で、AI は使わない。
+ * {time}・{menu}・{shop} はプログラムが台帳と店の設定から入れる（config/reminder.json）。
+ */
+export type ReminderSettings = {
+  template: string;
+  /** 画面に小さく出す1文（「デモ：実際には送信されません」） */
+  demoNote: string;
+};
+
+export function getReminderSettings(): ReminderSettings {
+  return reminder as ReminderSettings;
+}
+
+/**
+ * 朝の要点の「AI の一言」（気をつける点を数個まで。config/ai.json の brief。モデル名は ANTHROPIC_BRIEF_MODEL でも差しかえられる）。
+ * Claude が書くのは文だけで、日時・数字・名前はプログラムが印（【予約1】など）から入れる。
+ */
+export type BriefAiSettings = {
+  model: string;
+  /** 1回の返事の長さの上限（トークン） */
+  maxReplyTokens: number;
+  /** 出す一言の数の上限 */
+  maxNotes: number;
+  /** 一言1つの長さの上限（字。印も数える） */
+  maxNoteChars: number;
+  /** 送る材料（今日の予約・承認待ち・ToDo）の数の上限 */
+  maxItems: number;
+  /** 材料1つの文の長さの上限（字） */
+  maxItemChars: number;
+  /** 窓口（/api/ai/brief）が受け取る大きさの上限（字） */
+  maxRequestChars: number;
+};
+
+export function getBriefAiSettings(): BriefAiSettings {
+  const a = (ai as { brief: BriefAiSettings }).brief;
+  return { ...a, model: process.env.ANTHROPIC_BRIEF_MODEL || a.model };
+}
+
+/** 画面で使う「AI の一言」の上限（鍵や環境変数は読まない） */
+export function getBriefLimits(): Omit<BriefAiSettings, "model"> {
+  const { model: _model, ...rest } = (ai as { brief: BriefAiSettings }).brief;
+  void _model;
+  return rest;
+}
+
+/** カルテの案を人が直すときの上限（config/karte.json の edit）：見出し1つの行の数・1行の字数 */
+export type KarteEditSettings = { maxLines: number; maxLineChars: number };
+
+export function getKarteEditSettings(): KarteEditSettings {
+  return (karte as { edit: KarteEditSettings }).edit;
 }

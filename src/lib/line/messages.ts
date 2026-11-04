@@ -1,5 +1,6 @@
 // LINE に出す文とボタンの形。決まった文はここにまとめる（やさしい言葉で。docs/SPEC.md §3.3）。
 
+import { NO_REAL_NAMES_NOTE } from "../notices";
 import type { LineMessage } from "./api";
 import type { ApprovalCard } from "./wire";
 
@@ -12,6 +13,10 @@ export const LINE_TEXT = {
   buttonNotYours: "このボタンは押せません。",
   linkGone: "つながりの期限が切れています。画面の「LINE とつなぐ」でつなぎなおしてください。",
   textOnly: "文で送ってください。",
+  /** 友だち追加された時の返事に入れる注意の1行（予約チャットの入力欄の近くと同じ文） */
+  noRealNames: `${NO_REAL_NAMES_NOTE}。`,
+  /** 友だち追加された時（まだつながっていない人）：注意の1行と、合言葉のお願い */
+  followHello: `${NO_REAL_NAMES_NOTE}。\nこの店の合言葉を送ってください（画面のホームの「LINE とつなぐ」に出ます）。`,
   linked: (hours: number) =>
     `つながりました（${hours}時間）。画面を開いている間だけ動きます。例：「明日15時に青木さんカットで仮押さえ」「シャンプー発注」`,
 } as const;

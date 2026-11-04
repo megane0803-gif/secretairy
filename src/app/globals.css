@@ -1209,3 +1209,48 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .steps .step.hold { color: var(--who-ai); }
 .steps-key { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 4px; }
 .steps-q-text { min-width: 0; overflow-wrap: anywhere; }
+/* ---- 前日のお知らせ（デモ・お客様のスマホの形） ---- */
+
+.remind-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+.remind-head h3 { margin: 0; }
+.remind-demo { margin: 4px 0 8px; font-size: 0.78rem; color: var(--muted); }
+.remind-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 10px; }
+.remind-phone {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  padding: 8px 10px 12px; border: 5px solid var(--text); border-radius: 22px; background: var(--surface);
+}
+.remind-bar { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-size: 0.85rem; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.remind-sent { margin: 0; font-size: 0.75rem; text-align: center; }
+.remind-bubble { margin: 0; align-self: flex-start; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px 12px 12px 2px; font-size: 0.9rem; line-height: 1.6; }
+
+/* ---- 朝の要点の「AI の一言」 ---- */
+
+.brief-ai-list { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+
+/* ---- カルテの案を人が直す ---- */
+
+.karte-edit-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.karte-edit-buttons { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.karte-edit-box { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.karte-edit-box textarea {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 1rem; line-height: 1.6; padding: 6px 8px; resize: vertical;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
+}
+.karte-sec.edited { border-left: 3px solid var(--ok); padding-left: 6px; }
+
+/* ---- 予約チャットの注意の1行 ---- */
+
+.chat-privacy { margin: 2px 0 0; font-size: 0.8rem; color: var(--muted); }
+
+/* ---- カルテのお客様一覧 ---- */
+
+.karte-customers { margin-top: 16px; min-width: 0; }
+.karte-customers-find { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 6px 0; }
+.karte-customers-find input { flex: 1 1 180px; min-width: 0; font: inherit; font-size: 1rem; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
+.karte-kana { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.karte-kana .btn.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.karte-customers-list { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.karte-customer-open { margin-top: 10px; min-width: 0; }
+.karte-talk { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 12px; margin: 6px 0 10px; overflow-wrap: anywhere; }
+.karte-talk ul { list-style: none; margin: 4px 0; padding: 0; }
+.karte-talk-todos { font-size: 0.85rem; }

@@ -93,7 +93,10 @@ export function addedItem(t: AddedTodo, shop: Pick<ShopSettings, "timezone">): T
 /** 最初の状態（済み・戻すの印を重ねる）と、足した分を1つにする。同じ鍵は1つだけ（最初の状態の方を残す） */
 export function todoItems(seedItems: TodoItem[], s: BookState, shop: Pick<ShopSettings, "timezone">): TodoItem[] {
   const marks = s.todoMarks ?? {};
-  const seed = seedItems.map((t) => {
+  const titles = s.todoTitles ?? {};
+  const seed = seedItems.map((t0) => {
+    // 最初の状態のカルテの次回提案を直した時は、その ToDo の文だけ書きかえた物（todoTitles）を使う
+    const t = titles[t0.id] ? { ...t0, title: titles[t0.id] } : t0;
     const m = marks[t.id];
     if (!m) return t;
     const { doneAt: _drop, ...rest } = t;

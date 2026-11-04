@@ -11,6 +11,8 @@ export type Customer = {
   id: string;
   /** 名字だけ */
   surname: string;
+  /** 名字のよみ（ひらがな）。カルテのお客様一覧で50音の行に分ける */
+  kana?: string;
   /** 架空のお客様。画面では必ず「架空」の札を出す */
   fictional: true;
   /** まだ一度も来ていない（初めての方） */
