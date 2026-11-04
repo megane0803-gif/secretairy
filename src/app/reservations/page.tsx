@@ -7,6 +7,7 @@ import { lastStartOf } from "@/lib/reservations";
 import { BookingSite } from "./BookingSite";
 import { Ledger } from "./Ledger";
 import { ReserveChat } from "./ReserveChat";
+import { WeekTimetable } from "./WeekTimetable";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,8 @@ export default function ReservationsPage() {
     <TabPage
       tab="reservations"
       rightFirstOnPhone
+      // PC：一番上に横いっぱいで時間割の台帳。スマホは下の日ごとのカード（予約チャットが上の並びは今のまま）
+      top={<WeekTimetable data={data} />}
       right={
         <Panel title="予約チャット">
           <p className="hint">お客様のスマホのつもりの画面です。AI が空きとルールを確かめて候補を出し、お客様が選ぶと「仮押さえ」まで進めます。</p>
@@ -37,7 +40,7 @@ export default function ReservationsPage() {
       </section>
 
       <div className="book-pair">
-        <Ledger data={data} />
+        <Ledger data={data} className="ledger-cards" />
         <BookingSite data={data} />
       </div>
 

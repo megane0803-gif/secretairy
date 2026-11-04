@@ -1009,3 +1009,197 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .ai-job-what .arrow { color: var(--muted); }
 .ai-job-state { margin: 4px 0 0; font-size: 0.9rem; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .ai-job .hint { margin-top: 2px; }
+
+/* ---- だれがした事か（3つの色）。使うのは予約の台帳・AI の手順・日誌の札だけ（src/lib/actors.ts） ----
+   AI がした事 = 青緑・人がした事 = 琥珀・外の相手 = 藍。色だけに頼らず、札には必ず「AI」「人」「外」の文字を添える */
+
+:root {
+  --who-ai: #0f766e;
+  --who-human: #b45309;
+  --who-outside: #4338ca;
+  /* 塗りつぶした帯の上の文字 */
+  --who-ink: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --who-ai: #2dd4bf;
+    --who-human: #fbbf24;
+    --who-outside: #a5b4fc;
+    --who-ink: #1b1a19;
+  }
+}
+
+.actor-ai { --who: var(--who-ai); }
+.actor-human { --who: var(--who-human); }
+.actor-outside { --who: var(--who-outside); }
+
+.tag.actor {
+  background: color-mix(in srgb, var(--who) 12%, transparent);
+  color: var(--who);
+  border: 1px solid var(--who);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1.3;
+}
+.tag.actor .actor-mark { font-weight: 700; }
+/* 日誌の札（日誌の作りは変えない） */
+.journal .tag.actor { font-size: 0.75rem; }
+
+/* ---- 予約タブ：上の帯（承認待ち・見出し・時間割の台帳）---- */
+
+.page-top { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.page-top > .page-head { margin: 0.5rem 0 0; }
+@media (min-width: 1024px) {
+  .page.has-top > .page-top { grid-column: 1 / -1; margin-bottom: 24px; }
+}
+/* スマホで右の列を上に出すタブ：承認待ち・見出し → 右の列 → ページの中身（今までと同じ並び） */
+@media (max-width: 1023.98px) {
+  .page.right-first-sp > .page-top { order: -2; }
+}
+
+/* 時間割（PC）と日ごとのカード（スマホ）の出し分け */
+.ledger-timetable { display: none; }
+@media (min-width: 1024px) {
+  .ledger-timetable { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px; min-width: 0; }
+  .ledger.ledger-cards { display: none; }
+  /* 台帳は上に出したので、予約サイト（架空）は真ん中の幅いっぱい */
+  .page.has-top .book-pair { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* 台帳の札の説明・日ごとのカードの色（だれが入れたか） */
+.legend-item.actor-ai::before,
+.legend-item.actor-human::before,
+.legend-item.actor-outside::before { display: none; }
+.slot.actor-outside { border-left-color: var(--who-outside); }
+.slot.actor-human { border-left-color: var(--who-human); background: color-mix(in srgb, var(--who-human) 12%, transparent); }
+.slot.hold.actor-ai {
+  border-left: 3px dashed var(--who-ai);
+  background: repeating-linear-gradient(-45deg, transparent 0 6px, color-mix(in srgb, var(--who-ai) 14%, transparent) 6px 12px);
+}
+.slot .tag.actor { align-self: flex-start; }
+
+/* 時間割：横に7日、縦に営業時間。1時間の高さは --tt-hour */
+.tt-wrap { min-width: 0; }
+.tt {
+  --tt-hour: 56px;
+  display: grid;
+  grid-template-columns: 44px repeat(7, minmax(0, 1fr));
+  grid-template-rows: auto calc(var(--tt-hours) * var(--tt-hour));
+  column-gap: 4px;
+  min-width: 0;
+}
+.tt-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 6px 8px;
+  border-radius: 8px 8px 0 0;
+  min-width: 0;
+}
+.tt-date { font-weight: 700; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 0.9rem; }
+.tt-count { color: var(--muted); font-size: 0.8rem; }
+.tt-count strong { font-size: 1.6rem; font-weight: 700; line-height: 1; color: var(--text); }
+.tt-off-label { color: var(--muted); font-size: 0.8rem; }
+
+.tt-axis { position: relative; }
+.tt-tick { position: absolute; right: 4px; transform: translateY(-50%); font-size: 0.7rem; color: var(--muted); line-height: 1; }
+.tt-tick:first-child { transform: none; }
+.tt-tick:last-child { transform: translateY(-100%); }
+
+.tt-col {
+  position: relative;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 0 0 8px 8px;
+  /* 1時間ごとの線と、30分ごとの薄い線 */
+  background:
+    repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px var(--tt-hour)),
+    repeating-linear-gradient(to bottom, transparent 0 calc(var(--tt-hour) / 2), color-mix(in srgb, var(--line) 55%, transparent) calc(var(--tt-hour) / 2) calc(var(--tt-hour) / 2 + 1px), transparent calc(var(--tt-hour) / 2 + 1px) var(--tt-hour)),
+    var(--surface);
+}
+/* 今日の列は目立たせる */
+.tt-head.today { background: var(--accent-soft); box-shadow: inset 0 3px 0 var(--accent); }
+.tt-col.today { border: 2px solid var(--accent); border-top-width: 0; }
+/* 定休日の列は灰色 */
+.tt-head.closed { background: var(--line); color: var(--muted); }
+.tt-col.closed {
+  background: repeating-linear-gradient(45deg, var(--line) 0 2px, transparent 2px 10px), color-mix(in srgb, var(--line) 70%, var(--bg));
+}
+.tt-closed-label { position: absolute; top: 12px; left: 0; right: 0; text-align: center; color: var(--muted); font-size: 0.85rem; }
+.tt-offhours { position: absolute; left: 0; right: 0; background: color-mix(in srgb, var(--line) 70%, var(--bg)); }
+.tt-now { position: absolute; left: -2px; right: -2px; height: 0; border-top: 2px solid var(--accent); z-index: 2; pointer-events: none; }
+.tt-now::before { content: ""; position: absolute; left: -3px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+.tt-bands { list-style: none; margin: 0; padding: 0; }
+.tt-band {
+  position: absolute;
+  box-sizing: border-box;
+  margin-top: 1px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  z-index: 1;
+}
+/* 確定は塗りつぶし（外 = 藍・人 = 琥珀） */
+.tt-band.confirmed { background: var(--who); color: var(--who-ink); border: 1px solid var(--who); }
+.tt-band.confirmed .tag { background: transparent; color: inherit; border: 1px solid currentColor; }
+.tt-band.confirmed .tag.actor { background: var(--who-ink); color: var(--who); border-color: var(--who-ink); }
+/* 仮押さえは点線のしま模様（AI = 青緑） */
+.tt-band.hold {
+  color: var(--text);
+  border: 2px dashed var(--who);
+  background:
+    repeating-linear-gradient(-45deg, color-mix(in srgb, var(--who) 26%, transparent) 0 6px, color-mix(in srgb, var(--who) 8%, var(--surface)) 6px 12px);
+}
+.tt-band.hold .tag.hold { color: var(--who); border-color: var(--who); background: var(--surface); }
+.tt-band .tag { font-size: 0.65rem; padding: 0 5px; }
+.tt-band .tag.fictional { color: inherit; border-color: currentColor; }
+.tt-band .customer { gap: 2px; }
+.tt-band-top { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.tt-band-time { font-weight: 700; white-space: nowrap; }
+.tt-band-time small { font-weight: 400; font-size: 0.85em; }
+.tt-band-menu { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; }
+.tt-band-first { font-size: 0.65rem; font-weight: 700; }
+/* 30分の短い帯は1行に（時刻はホバーと読み上げで） */
+.tt-band.short { flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 3px; white-space: nowrap; }
+.tt-band.short .tt-band-time, .tt-band.short .tt-band-first, .tt-band.short .tt-band-menu .tag { display: none; }
+.tt-band.short .customer { flex-wrap: nowrap; }
+.tt-band.short .tt-band-top { flex: none; }
+.tt-band.short .tt-band-menu { overflow: hidden; text-overflow: ellipsis; display: block; }
+
+/* ---- AI の手順の印（✓ 通った／! 断った・気をつける／→ 次にしたこと） ---- */
+
+.steps .step { display: flex; align-items: flex-start; gap: 8px; }
+.step-text { min-width: 0; overflow-wrap: anywhere; }
+.step-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4em;
+  height: 1.4em;
+  margin-top: 0.05em;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.85em;
+  line-height: 1;
+  border: 1.5px solid currentColor;
+}
+.step-mark.mark-ok, .mark-ok > .step-mark { color: var(--ok); }
+.step-mark.mark-warn, .mark-warn > .step-mark { color: var(--text); border-radius: 4px; background: var(--line); border-color: var(--muted); }
+.step-mark.mark-next, .mark-next > .step-mark { color: var(--who-ai); }
+/* 色の意味をそろえる：AI の手順の中では琥珀は「人」なので、断った行は文字の色ではなく印で見せる */
+.steps .step.reject { color: var(--text); }
+.steps .step.hold { color: var(--who-ai); }
+.steps-key { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 4px; }
+.steps-q-text { min-width: 0; overflow-wrap: anywhere; }

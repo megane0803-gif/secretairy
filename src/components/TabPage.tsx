@@ -9,21 +9,25 @@ import { TabFrame } from "./TabFrame";
  * PC は「真ん中 | 境目（動かせる）| 右の列」、スマホは上から「承認待ち → ページ → 右の列」の1列。
  * 表示スイッチが切れているタブは「出していません」を出す。スイッチはページの終わりに畳む（必須のタブには出さない）。
  * rightFirstOnPhone のタブは、スマホで右の列を見出しのすぐ下に出す。
+ * top を渡したタブは、PC で見出しのすぐ下に横いっぱい（真ん中と右の列をまたいで）top を出す。
  */
 export function TabPage({
   tab,
   right,
   rightFirstOnPhone,
+  top,
   children,
 }: {
   tab: TabId;
   right: ReactNode;
   /** スマホでは、右の列（そのタブの入力欄）をページの上に出す（予約チャットなど） */
   rightFirstOnPhone?: boolean;
+  /** PC で見出しのすぐ下に横いっぱいで出す物（予約タブの時間割）。スマホで出すかは中身の側で決める */
+  top?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <TabFrame tab={tab} baseSwitches={getTabSwitches()} pending={<PendingBar />} right={right} rightFirstOnPhone={rightFirstOnPhone}>
+    <TabFrame tab={tab} baseSwitches={getTabSwitches()} pending={<PendingBar />} right={right} rightFirstOnPhone={rightFirstOnPhone} top={top}>
       {children}
     </TabFrame>
   );

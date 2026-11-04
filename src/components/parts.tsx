@@ -2,6 +2,7 @@
 // 数字は大きく、棒は小さく、確認は ✓、細かい所は畳む。
 
 import type { ReactNode } from "react";
+import { ACTOR_LABEL, ACTOR_MEANING, type Actor } from "@/lib/actors";
 
 export function BigNumber({ label, value, unit }: { label: string; value: number; unit?: string }) {
   return (
@@ -88,6 +89,19 @@ export function CustomerName({ surname, fictional }: { surname: string; fictiona
   return (
     <span className="customer">
       {surname} 様{fictional && <span className="tag fictional">架空</span>}
+    </span>
+  );
+}
+
+/**
+ * だれがしたかの札（AI＝青緑・人＝琥珀・外＝藍）。色だけに頼らず「AI」「人」「外」の文字を必ず出す。
+ * children を渡すと、文字のあとに添える（「人 オーナー」など）。使うのは台帳・AI の手順・日誌だけ（src/lib/actors.ts）。
+ */
+export function ActorTag({ actor, children }: { actor: Actor; children?: ReactNode }) {
+  return (
+    <span className={`tag actor actor-${actor}`} title={ACTOR_MEANING[actor]}>
+      <b className="actor-mark">{ACTOR_LABEL[actor]}</b>
+      {children && <> {children}</>}
     </span>
   );
 }

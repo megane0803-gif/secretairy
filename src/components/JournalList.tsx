@@ -1,9 +1,12 @@
 "use client";
 
 // 日誌：道具を呼んだ・ルールで弾かれた・人が押した・ルールを足した／直した／消した、を時刻つきで新しい順に。
+// だれの札：AI = 青緑「AI」・オーナー = 琥珀「人」・LINE = 藍「外」（src/lib/actors.ts）。プログラムは今までどおりの灰色の札。
 
+import { journalActor } from "@/lib/actors";
+import type { JournalEntry } from "@/lib/journal";
 import { useJournal } from "@/lib/useJournal";
-import { Fold } from "./parts";
+import { ActorTag, Fold } from "./parts";
 
 const SHOW = 12;
 
@@ -14,6 +17,13 @@ function when(iso: string, timezone: string): string {
   return `${md} ${hm}`;
 }
 
+/** 日誌の「だれ」の札。AI・人・外は色と文字の両方で（「AI」「人 オーナー」「外 LINE」）、プログラムは今までどおり */
+export function JournalWhoTag({ who }: { who: JournalEntry["who"] }) {
+  const actor = journalActor(who);
+  if (!actor) return <span className="tag who who-program">{who}</span>;
+  return <ActorTag actor={actor}>{actor === "ai" ? null : who}</ActorTag>;
+}
+
 function Rows({ list, timezone }: { list: ReturnType<typeof useJournal>; timezone: string }) {
   return (
     <ol className="journal">
@@ -22,7 +32,7 @@ function Rows({ list, timezone }: { list: ReturnType<typeof useJournal>; timezon
           <time className="num" dateTime={e.at}>
             {when(e.at, timezone)}
           </time>
-          <span className={`tag who who-${e.who === "AI" ? "ai" : e.who === "オーナー" ? "owner" : "program"}`}>{e.who}</span>
+          <JournalWhoTag who={e.who} />
           <span className="journal-text">{e.text}</span>
         </li>
       ))}
