@@ -60,7 +60,7 @@ export function ReserveChat({ data }: { data: BookData }) {
     () =>
       customer
         ? {
-            shop: data.shop,
+            shop: book.shop,
             menus: data.menus,
             rules,
             booked: book.booked,
@@ -69,7 +69,7 @@ export function ReserveChat({ data }: { data: BookData }) {
             today: book.today,
           }
         : null,
-    [data, rules, book.booked, customer, book.now, book.today],
+    [data, book.shop, rules, book.booked, customer, book.now, book.today],
   );
   // 例文は、いまの台帳・ルール・時刻でプログラムが選んだ日時で作る（どの曜日に開いても同じ働きになるように）
   const examples = useMemo(() => (ctx ? buildExamples(ctx) : []), [ctx]);
@@ -127,6 +127,8 @@ export function ReserveChat({ data }: { data: BookData }) {
       // そのお客様のカルテの日付とメニューだけ（中身は送らない）
       visits: book.visits.filter((v) => v.customerId === customer.id),
       dayOffset: book.dayOffset,
+      // 同じ時間に受ける人数（ルールのタブで変えた分）。サーバーは幅を確かめなおして使う
+      seats: book.shop.seats,
     };
     // この相談の中で増えた・外した仮押さえ（画面の側でも、この会話の物かを確かめる）
     const mine = new Set(body.holds);
@@ -169,6 +171,7 @@ export function ReserveChat({ data }: { data: BookData }) {
           if (e.step.kind === "reject" || e.step.kind === "limit")
             writeJournal({ who: "プログラム", text: `${e.step.kind === "reject" ? "弾いた" : "止めた"}（${who}の相談）：${e.step.text}` });
           else if (e.step.kind === "ask") writeJournal({ who: "プログラム", text: `聞き返した（${who}の相談）：${e.step.text}` });
+          else if (e.step.kind === "price") writeJournal({ who: "プログラム", text: `料金を答えた（${who}の相談）：${e.step.text}` });
           else if (e.step.kind === "tool") writeJournal({ who: "AI", text: `道具を呼んだ（${who}の相談）：${e.step.text}` });
           break;
         case "candidates":

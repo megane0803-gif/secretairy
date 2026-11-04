@@ -10,6 +10,7 @@ import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import type { BookData } from "@/lib/book/data";
 import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
+import { memoDue } from "@/lib/todo/due";
 import { withMemoTodo } from "@/lib/todo/items";
 import { maskNames, restoreNames } from "@/lib/todo/names";
 import { useTodos } from "@/lib/todo/useTodos";
@@ -55,7 +56,7 @@ export function MemoThrow({ data, maxChars }: { data: BookData; maxChars: number
       const title = restoreNames(out.title, memo, found);
       let added: string | null = null;
       todos.book.update((s) => {
-        const r = withMemoTodo(s, todos.seedItems, { title, memo }, new Date().toISOString(), data.shop);
+        const r = withMemoTodo(s, todos.seedItems, { title, memo, due: memoDue(memo, todos.today) }, new Date().toISOString(), data.shop);
         added = r.todo?.title ?? null;
         return r.state;
       });

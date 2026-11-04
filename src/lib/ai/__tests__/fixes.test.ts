@@ -63,7 +63,8 @@ describe("2. 候補のボタンは、出した候補の数だけ", () => {
     const model = claudeLike([{ name: "find_openings", input: { menu_ids: ["cut"], date: "2026-11-06" } }], (l) => `${l[1]} はいかがでしょう。`);
     const r = await chat(ctxAt(now), [{ role: "user", text: "11/6にカット" }], model);
     assert.equal(r.candidates?.length, 1);
-    assert.equal(candidateLabel(ctxAt(now), r.candidates![0]), "11/6（金） 11:30–12:30 カット");
+    // 同じ時間に受ける人数は1人（config/shop.json）。11/6 10:30–12:30 のパーマの後で、1時間より離した2つ目
+    assert.equal(candidateLabel(ctxAt(now), r.candidates![0]), "11/6（金） 14:00–15:00 カット");
   });
 
   test("日付を「6日（金）の15時」と言い換えても、番号を付けて出していればボタンが出る", async () => {

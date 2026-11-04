@@ -22,7 +22,13 @@ export type Hours = { open: string; close: string } | null;
 export type ShopSettings = {
   name: string;
   timezone: string;
+  /**
+   * 同じ時間に受ける人数（前は「席の数」）。予約チャット・台帳・予約サイト・朝の要点・発信の空き枠・AI の仕事が、みなこの1つの数を使う。
+   * 最初の状態はここ。オーナーがルールのタブで変えた分はブラウザの中（capacity.ts の withSeats で重ねる）
+   */
   seats: number;
+  /** ルールのタブで選べる「同じ時間に受ける人数」の幅 */
+  seatsRange?: { min: number; max: number };
   slotMinutes: number;
   holdExpiresHours: number;
   hours: Record<DayKey, Hours>;
@@ -93,8 +99,11 @@ export type KarteHeading = {
   id: string;
   label: string;
   note?: string;
-  /** next = 次回提案（保存のとき ToDo「次回話すこと」に1行目を足す・朝の要点に出す） */
-  role?: "next";
+  /**
+   * next = 次回提案（保存のとき ToDo「次回話すこと」に1行目を足す・朝の要点に出す）。
+   * request = お客様のご希望（次の来店の希望は、ここと次回提案の両方に入れる。karte/tidy.ts）
+   */
+  role?: "next" | "request";
   /** 決まった返事（AI なし）で、メモの文をこの見出しに分ける手がかりの言葉 */
   hints?: string[];
 };
@@ -396,6 +405,10 @@ export type PostsSettings = {
   maxClosedDays: number;
   /** 保存しておける下書きの数（種類ごと） */
   maxSavedPerKind: number;
+  /** 長さの目安（targetChars）から、どれだけ長くてよいか（0.2 = 2割まで）。超えたら1回だけ短く作り直す（posts/write.ts） */
+  lengthSlack?: number;
+  /** 材料に書いた時期の言葉と、その日の幅（月-日）。空き枠・お休みをその時期の日から出す（posts/facts.ts の periodOf） */
+  periods?: { words: string[]; from: string; to: string }[];
 };
 
 export function getPostsSettings(): PostsSettings {

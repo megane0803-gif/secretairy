@@ -17,6 +17,7 @@ export default function ReservationsPage() {
   return (
     <TabPage
       tab="reservations"
+      rightFirstOnPhone
       right={
         <Panel title="予約チャット">
           <p className="hint">お客様のスマホのつもりの画面です。AI が空きとルールを確かめて候補を出し、お客様が選ぶと「仮押さえ」まで進めます。</p>
@@ -25,8 +26,8 @@ export default function ReservationsPage() {
       }
     >
       <section className="inline-box" aria-labelledby="res-approvals">
-        <h2 id="res-approvals">承認待ち（ホームの承認の箱と同じ行）</h2>
-        <ApprovalBox data={data} compact />
+        <h2 id="res-approvals">承認待ちの予約（ホームの承認の箱と同じ行）</h2>
+        <ApprovalBox data={data} compact only="reservations" />
       </section>
 
       <section className="inline-box" aria-labelledby="res-steps">

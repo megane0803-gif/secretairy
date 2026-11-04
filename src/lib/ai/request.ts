@@ -7,7 +7,8 @@ import { resolveMenu } from "../combo";
 import { LOCKED_RULES } from "../rules/locked";
 import type { Rule } from "../rules/types";
 import { validateOwnerRule } from "../rules/validate";
-import type { AiSettings, Menu, ShopSettings } from "../settings";
+import { clampSeats, seatsRangeOf, withSeats } from "../capacity";
+import { getShop, type AiSettings, type Menu, type ShopSettings } from "../settings";
 import { MAX_SHOWN } from "./replies";
 import type { ToolContext } from "./tools";
 import type { BookedRow, Candidate, ChatTurn, ReserveRequest, Visit } from "./wire";
@@ -92,7 +93,10 @@ export function parseReserveRequest(body: unknown, menus: Menu[], ai: Pick<AiSet
     .filter((h): h is string => typeof h === "string" && h.length > 0 && h.length <= 80)
     .slice(-MAX_HOLDS);
 
-  return { ok: true, value: { mode, messages, candidates, customer, booked, rules, visits, dayOffset, holds } };
+  // 同じ時間に受ける人数：設定の幅の中の整数だけ受け取る（ちがえば送られなかった扱い＝設定の数）
+  const seats = clampSeats(body.seats, seatsRangeOf(getShop()));
+
+  return { ok: true, value: { mode, messages, candidates, customer, booked, rules, visits, dayOffset, holds, ...(seats !== null ? { seats } : {}) } };
 }
 
 /**
@@ -127,7 +131,8 @@ export function contextFor(
   // デモの「翌日へ」で進めた分は、画面と同じ決め方（calendar.ts の demoClock）で今日をずらす
   const clock = demoClock(shop, now, req.dayOffset);
   return {
-    shop,
+    // 同じ時間に受ける人数は、画面が送った数（オーナーがルールのタブで変えた分）を重ねる
+    shop: withSeats(shop, req.seats),
     menus,
     rules: req.rules,
     booked: req.booked,

@@ -304,7 +304,12 @@ export function runTool(ctx: ToolContext, name: string, raw: unknown): ToolOutco
         search = r;
         fromLabel = r.looked.length ? `${r.looked.map((d) => calDay(ctx.shop, d).label).join("・")}（日ごとに1つ）` : "当てはまる日なし";
       } else {
-        const from = { date: input.date ?? ctx.now.date, time: input.after ?? (input.date ? undefined : ctx.now.time) };
+        // 日と時刻（after）を言われたら、次の日からもその時刻に近い所から出す（今から先を探すときは開店から）
+        const from = {
+          date: input.date ?? ctx.now.date,
+          time: input.after ?? (input.date ? undefined : ctx.now.time),
+          near: input.date ? input.after : undefined,
+        };
         search = findSlots(ctx, menuId, from, undefined, ctx.released);
         fromLabel = `${calDay(ctx.shop, from.date < ctx.today.date ? ctx.today.date : from.date).label}${from.time ? ` ${from.time}` : ""} から`;
       }

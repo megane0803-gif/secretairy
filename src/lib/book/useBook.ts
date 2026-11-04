@@ -15,7 +15,9 @@ import {
   sortReservations,
   type Reservation,
 } from "../reservations";
-import { getShop } from "../settings";
+import { withSeats } from "../capacity";
+import { getShop, type ShopSettings } from "../settings";
+import { useCapacity } from "../useCapacity";
 import type { BookData } from "./data";
 import { activeChat, emptyBook, parseBook, pendingApprovals, type BookState } from "./state";
 
@@ -58,9 +60,14 @@ export function useBookState() {
   return { state, update };
 }
 
-/** 画面で使う形：今日・起点・全部の予約・7日分・承認待ち・AI に送る台帳・カルテ */
+/**
+ * 画面で使う形：今日・起点・全部の予約・7日分・承認待ち・AI に送る台帳・カルテ。
+ * shop は、店の設定に「同じ時間に受ける人数」（ルールのタブで変えた分）を重ねた物。数を使う所はみなこれを使う。
+ */
 export function useBook(data: BookData) {
   const minute = useMinute();
+  const { seats } = useCapacity();
+  const shop: ShopSettings = useMemo(() => withSeats(data.shop, seats), [data.shop, seats]);
   const now = useMemo(() => new Date(minute * 60_000), [minute]);
   const { state, update } = useBookState();
   // デモの「翌日へ」で進めた分だけ、今日を先へずらす（サーバーも同じ決め方。calendar.ts の demoClock）
@@ -72,7 +79,7 @@ export function useBook(data: BookData) {
   const view = useMemo(() => {
     const anchor = calDay(data.shop, state.anchor);
     const chat = resolveChatReservations(data.menus, data.customers, activeChat(state, nowIso));
-    const book = loadBook(data.shop, data.menus, today, anchor.open ? anchor : today, chat);
+    const book = loadBook(shop, data.menus, today, anchor.open ? anchor : today, chat);
     const all: Reservation[] = sortReservations(book.all);
     const booked: BookedRow[] = all.map((r) => ({
       id: r.id,
@@ -85,10 +92,13 @@ export function useBook(data: BookData) {
     }));
     const kartes = allKartes(resolveSeedKartes(data.seedKartes, all), state.kartes);
     return { anchor, book, all, booked, kartes, visits: toVisits(kartes), pending: pendingApprovals(state, nowIso) };
-  }, [data, state, today, nowIso]);
+  }, [data, shop, state, today, nowIso]);
 
   return {
     ...view,
+    shop,
+    /** 店の設定に、同じ時間に受ける人数を重ねた BookData（AI の仕事・LINE などにそのまま渡す） */
+    data: shop === data.shop ? data : { ...data, shop },
     state,
     update,
     today,

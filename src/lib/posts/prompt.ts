@@ -7,14 +7,23 @@ import type { Rule } from "../rules/types";
 import type { PostKind } from "../settings";
 import { BLOG_LINK_MARK, CLOSED_MARK, OPENINGS_MARK } from "./gate";
 
-export function postsSystem(rules: Rule[], kind: PostKind, shopName: string, gateWords: string[], menuName: (id: string) => string = (id) => id): string {
+export function postsSystem(
+  rules: Rule[],
+  kind: PostKind,
+  shopName: string,
+  gateWords: string[],
+  menuName: (id: string) => string = (id) => id,
+  maxChars?: number,
+): string {
   const lines = [instructionsFor(rules, { tab: "posts", menuIds: [] }, menuName)];
   lines.push("");
   lines.push(`# あなたの仕事：美容室「${shopName}」の「${kind.label}」の下書きを1つ書く`);
   lines.push(`- ${kind.instruction}`);
-  lines.push(`- 長さの目安：${kind.targetChars}字前後・${kind.shape}。`);
+  lines.push(
+    `- 長さの目安：${kind.targetChars}字前後・${kind.shape}。${maxChars ? `長くても${maxChars}字まで（印【…】は数えない）。長くなりそうなら段落を短くする。` : ""}`,
+  );
   lines.push("- 書いてよいのは、下の「お店のメモ」と「材料」にある事だけ。無い事（メニュー・値段・効き目・キャンペーンなど）は足さない。");
-  lines.push("- 日時と数字は書かない（日付・時刻・曜日・値段・回数・割合、算用数字も全角の数字も）。材料に数字があっても書かない。");
+  lines.push("- 日時と数字は書かない（日付・時刻・曜日・値段・回数・割合、算用数字も全角の数字も漢数字も。「一度」「一緒」のような数ではない言い方はよい）。材料に数字があっても書かない。");
   lines.push(`- 空き枠の日時を伝えたい所には「${OPENINGS_MARK}」、お休みの日付を伝えたい所には「${CLOSED_MARK}」とだけ書く（お店のほうで中身を入れる）。`);
   lines.push(`- ブログのリンクを入れる所には「${BLOG_LINK_MARK}」とだけ書く。URL は書かない。`);
   lines.push(`- 次の言葉は使わない：${gateWords.map((w) => `「${w}」`).join("")}。急がせる言い方・こわがらせる言い方もしない。`);

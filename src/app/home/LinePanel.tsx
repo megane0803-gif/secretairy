@@ -88,7 +88,7 @@ export function LinePanel({ data, headings, needsPasscode = false }: { data: Boo
           next: prev ? nextLines(prev, headings) : null,
         };
       });
-    const free = freeRanges(data.shop, book.today, book.all, book.now.date === book.today.date ? book.now.time : undefined);
+    const free = freeRanges(book.shop, book.today, book.all, book.now.date === book.today.date ? book.now.time : undefined);
     const text = morningText({
       shopName: data.shop.name,
       todayLabel: book.today.label,

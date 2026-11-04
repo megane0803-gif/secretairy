@@ -27,6 +27,7 @@ import { loadBook, resolveChatReservations, sortReservations } from "../reservat
 import type { Rule } from "../rules/types";
 import type { AdSettings } from "../settings";
 import type { TabId } from "../tabs";
+import { memoDue } from "../todo/due";
 import { resolveSeedTodos, withMemoTodo } from "../todo/items";
 import { maskNames, restoreNames } from "../todo/names";
 import type { TodoRequest, TodoResponse } from "../todo/wire";
@@ -213,6 +214,8 @@ async function reserveJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
       rules: env.rules.filter((r) => !r.locked),
       visits: view.visits.filter((v) => v.customerId === customer.id),
       dayOffset: view.clock.dayOffset,
+      // 同じ時間に受ける人数（画面の台帳と同じ数）
+      seats: env.data.shop.seats,
     };
     const events = await env.ask.reserve(body);
     const r: ReserveRound = { reply: "", candidates: [], hold: null, todo: false, noAi: false, bad: null };
@@ -357,7 +360,7 @@ async function memoJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
   const seedItems = resolveSeedTodos(env.data.shop, view.anchor, getTodos());
   let added: string | null = null;
   env.store.setBook((s) => {
-    const r = withMemoTodo(s, seedItems, { title, memo }, env.now().toISOString(), env.data.shop);
+    const r = withMemoTodo(s, seedItems, { title, memo, due: memoDue(memo, view.clock.today.date) }, env.now().toISOString(), env.data.shop);
     added = r.todo?.title ?? null;
     return r.state;
   });

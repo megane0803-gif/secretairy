@@ -12,16 +12,26 @@ import { useBook } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
 import { resolveMenu } from "@/lib/combo";
+import { approvalsFor, type ApprovalView } from "@/lib/approvals";
 import { useApprovals } from "@/lib/useApprovals";
 import { AdApprovalRows } from "./AdApprovalRows";
 import { Checked, CustomerName } from "./parts";
 
-export function ApprovalBox({ data, compact = false }: { data: BookData; compact?: boolean }) {
+export function ApprovalBox({
+  data,
+  compact = false,
+  only = "all",
+}: {
+  data: BookData;
+  compact?: boolean;
+  /** 予約タブでは予約の行だけ（広告の案は出さない）。ホームは全部 */
+  only?: ApprovalView;
+}) {
   const book = useBook(data);
   const { rules } = useRules(data.seedRules);
   const [done, setDone] = useState<string | null>(null);
   // 行は approvals.ts の1か所で決める（上の帯・朝の要点の数と同じ物）。広告の案も同じ箱に出す
-  const queue = useApprovals();
+  const queue = approvalsFor(useApprovals(), only);
 
   if (queue.count === 0)
     return (
@@ -65,7 +75,7 @@ export function ApprovalBox({ data, compact = false }: { data: BookData; compact
         // いまの台帳とルールで、もう一度確かめる（自分の仮押さえは数えない）
         const v = judgeSlot(
           {
-            shop: data.shop,
+            shop: book.shop,
             menus: data.menus,
             rules,
             booked: book.booked.filter((b) => b.id !== r.id),
@@ -105,7 +115,7 @@ export function ApprovalBox({ data, compact = false }: { data: BookData; compact
           </li>
         );
       })}
-      <AdApprovalRows seedRules={data.seedRules} />
+      {only !== "reservations" && <AdApprovalRows seedRules={data.seedRules} />}
       {!compact && (
         <li className="hint">
           承認＝確定して台帳に入ります。直す・見送り＝お客様の了解なしに時間は変えないので、仮押さえを外して ToDo に「別の日時を案内」を足します。

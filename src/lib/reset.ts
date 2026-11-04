@@ -6,10 +6,12 @@
 // LINE の預かり：届けた承認待ちの印を消し、画面は続けてサーバーの預かり物（/api/line/link の clear）も消す。つなぎそのものは残す。
 // 録音からメモを作る：残した文字・要点・画面で録った区切り・読んだ印・録音フォルダも消す（動いている物は止める）。
 // ホームの「AI の仕事」の済みの印も消す（4行とも「これから」に戻る）。
+// ルールのタブの「同じ時間に受ける人数」は店の設定の数（config/shop.json の seats）に戻す。
 // 日誌・オーナーが変えたルール（ルールのタブ）・表示スイッチ（「AI の仕事」の表示スイッチも）は残す。
 
 import { ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, JOBS_KEY, LINE_KEY, POSTS_KEY, readBrowser, writeBrowser } from "./browser";
 import { emptyBook } from "./book/state";
+import { CAPACITY_KEY } from "./capacity";
 import { resetDesk } from "./karte/deskStore";
 import { parseLine, withReset } from "./line/state";
 import { resetRecordings } from "./recording/store";
@@ -24,6 +26,7 @@ export function resetAllWrites(today: string, lineRaw: string | null = null): { 
     { key: ACCOUNTING_KEY, value: null },
     { key: POSTS_KEY, value: null },
     { key: JOBS_KEY, value: null },
+    { key: CAPACITY_KEY, value: null },
     ...(line ? [{ key: LINE_KEY, value: JSON.stringify(withReset(line)) }] : []),
   ];
 }

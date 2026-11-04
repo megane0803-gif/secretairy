@@ -1,6 +1,7 @@
 // ホームの「最初に戻す」1回で、予約・カルテ・広告・経理（自動のルールも）・LINE の預かりが全部最初に戻る。
 // ブラウザの置き場所（localStorage）は、テストの中だけの物に置きかえる。
 
+import { CAPACITY_KEY } from "../capacity";
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
 import { register, parseAccounting, EMPTY_ACCOUNTING, withChoice, withAutoNext, sortCurrent, effectiveRules } from "../accounting/state";
@@ -75,9 +76,10 @@ describe("最初に戻す", () => {
     assert.ok(store.has(BROWSER_PREFIX + RULES_KEY), "ルールのタブの変更は残す");
   });
 
-  test("書く物：予約は今日を起点に作り直し、広告と経理と発信の下書き・「AI の仕事」の済みの印は消す", () => {
+  test("書く物：予約は今日を起点に作り直し、広告と経理と発信の下書き・「AI の仕事」の済みの印・同じ時間に受ける人数は消す", () => {
     const w = resetAllWrites("2026-11-04");
-    assert.deepEqual(w.map((x) => x.key).sort(), [ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, JOBS_KEY, POSTS_KEY].sort());
+    assert.deepEqual(w.map((x) => x.key).sort(), [ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, JOBS_KEY, POSTS_KEY, CAPACITY_KEY].sort());
+    assert.equal(w.find((x) => x.key === CAPACITY_KEY)!.value, null, "同じ時間に受ける人数は設定の数に戻る");
     assert.equal(w.find((x) => x.key === POSTS_KEY)!.value, null);
     assert.equal(w.find((x) => x.key === JOBS_KEY)!.value, null);
     assert.equal(w.find((x) => x.key === ADS_KEY)!.value, null);

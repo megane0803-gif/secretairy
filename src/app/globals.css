@@ -110,6 +110,15 @@ h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
 
 html.dragging, html.dragging * { cursor: col-resize !important; user-select: none; }
 
+/* スマホ（1列）で右の列をページの上に出すタブ（予約チャット）：承認待ち → 見出し → 右の列 → ページの中身 */
+@media (max-width: 1023.98px) {
+  .page.right-first-sp > .page-main { display: contents; }
+  .page.right-first-sp > .page-main > .pending { order: -3; }
+  .page.right-first-sp > .page-main > .page-head { order: -2; margin: 0; }
+  .page.right-first-sp > .page-right { order: -1; }
+}
+
+
 /* ---- 左のタブ ---- */
 
 .tabnav {
@@ -213,6 +222,8 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
   position: relative;
 }
 .switch.locked { cursor: default; }
+/* 表示スイッチはページの終わりに畳んで、目立たせない */
+.tab-switch-fold { margin-top: 24px; font-size: 0.85rem; color: var(--muted); }
 .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .switch-track {
   width: 40px;

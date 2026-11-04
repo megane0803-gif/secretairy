@@ -28,7 +28,7 @@ npm run build      # 本番ビルド（push の前に通す）
 
 ## 店ごとに変わる物はコードに書かない
 
-- メニュー・営業時間・席数・カルテの見出し・タブの表示・ルールは `config/` に置き、`src/lib/settings.ts`（ルールは `src/lib/rules/store.ts`）を通して読む。
+- メニュー・営業時間・同じ時間に受ける人数（前は席数。`shop.seats`）・カルテの見出し・タブの表示・ルールは `config/` に置き、`src/lib/settings.ts`（ルールは `src/lib/rules/store.ts`）を通して読む。
 - 画面のコードで `config/*.json` を直接 import しない。
 - 架空のデータ（`seed/`）は `src/lib/data/seed.ts` を通して読む。日付は「何番目の営業日（0 = 今日）＋時刻」で持ち、定休日には置かない。お客様は名字だけで、画面では必ず「架空」の札を出す。
 - 例のルールは `config/rules.seed.json` だけ。作り手の考えで店の決まりを足さない。
@@ -62,14 +62,14 @@ src/app/<tab>/     8つのタブの画面
 src/components/    共通の部品
 src/app/api/ai/    AI を呼ぶ窓口（サーバーの側。受け取った物は残さない）
 src/lib/           設定の読み込み・ルール
-src/lib/ai/        予約チャットの道具・流れ・決まった返事（テスト用）
+src/lib/ai/        予約チャットの道具・流れ・料金の答え（prices.ts）・決まった返事（テスト用）
 src/lib/book/      台帳・承認の箱・保存したカルテ・「翌日へ」（ブラウザの中に残す形）
-src/lib/karte/     カルテ：見出しに分ける・言葉の門・保存と ToDo・Claude（Haiku）と決まった返事
+src/lib/karte/     カルテ：見出しに分ける・整える（tidy.ts。重ねない・次回の希望は次回提案にも）・言葉の門・保存と ToDo・Claude（Haiku）と決まった返事
 src/lib/recording/ カルテの「録音からメモを作る」（PC だけ）：区切る・黙っている所を飛ばす・Whisper（Web Worker）・要点（Haiku）・フォルダ・画面の録音（IndexedDB に残す）
 src/lib/ads/       広告の数・門・道具・流れ・決まった返事・広告の承認の箱（ブラウザの中に残す形）
 src/lib/accounting/ 経理：売上の数・通販の明細の仕分け（自動のルール）・門・登録（ブラウザの中に残す形。AI は使わない）
-src/lib/todo/      ToDo：入口ごとの鍵・並べ方（items.ts。Claude は並べない）・枠が埋まった時・メモを投げる（Haiku は文だけ・門・決まった返事）
-src/lib/posts/     発信：言葉の門・日時を入れる（台帳と設定から）・指示文・流れ（作り直し1回）・決まった返事・保存した下書き（ブラウザの中に残す形）
+src/lib/todo/      ToDo：入口ごとの鍵・並べ方（items.ts。Claude は並べない）・枠が埋まった時・メモを投げる（Haiku は文だけ・門・決まった返事）・メモの期限（due.ts。プログラムが読む）
+src/lib/posts/     発信：言葉の門・日時を入れる（台帳と設定から。本当に空いている時間・材料の時期）・指示文・流れ（作り直し1回）・決まった返事・保存した下書き（ブラウザの中に残す形）
 src/lib/line/      LINE のつなぎ（オーナー側）：署名・Redis・つなぎと預かり（bridge）・一言の振り分け（sort）・画面での入れ方（apply）
 src/app/api/line/  LINE の窓口（Webhook・つなぐ・受け取り・送る）。画面の処理と混ぜない
 src/lib/jobs/      ホームの「AI の仕事」：これから来る物4行の流れ（run.ts。今の /api/ai/ の窓口をそのまま使う）・済みの印（ブラウザの中に残す形）
@@ -79,6 +79,7 @@ src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理�
 - AI の道具は `src/lib/ai/tools.ts` の5つだけ（空きを調べる・ルールを確かめる・前回を見る・仮押さえ・仮押さえを外す）。確定の道具は足さない。「仮押さえを外す」は、この会話で作った、まだ承認されていない仮押さえだけ（プログラムで確かめる）。テストでは Claude を呼ばず `src/lib/ai/script.ts` に置きかえる。
 - 予約チャットでプログラムが決めること：週と日付の食い違いの聞き返し（`dates.ts`）・候補のボタン（返事の文に出た候補だけ）・「お店に確かめてご連絡します」の ToDo（`replies.ts`）。AI に任せない。
 - ToDo の並べ方は `src/lib/todo/items.ts` の1か所（ToDo のタブ・ホームの「今やる3件」・「今日の ToDo」の数）。入口から足すときは鍵（`src/lib/todo/keys.ts`）を付け、同じ鍵がもうあれば足さない。最初の例（`seed/todo.json`）の鍵は「例:」で始め、本物の鍵と重ねない。メモを投げる AI は文だけ（テストでは `scriptTodoWriter`）。
+- 同じ時間に受ける人数は1つの数だけ（`src/lib/capacity.ts`）。オーナーがルールのタブで変えた分はブラウザの中（`secretairy:capacity`）。数を使う所は画面の台帳（`useBook` の `shop`）を通し、`data.shop.seats` を直に読まない。サーバーの窓口には画面が `seats` を送る。
 - 承認待ちの数は、承認の箱の行（`src/lib/approvals.ts` の `approvalQueue`。画面は `useApprovals`）から出す。ほかの所で数えない。
 - 1回の来店で複数のメニューは `src/lib/combo.ts`（設定に無い組み合わせは id を「+」でつなぐ）を通す。
 - カルテの AI は下書きまで。プログラムの言葉の門（`src/lib/karte/gate.ts`。言葉は `locked.ts` の `KARTE_GATE_WORDS`。減らさない）を通し、保存は人の「保存」ボタンだけ。お客様の名前は AI に送らない。テストでは `scriptKarteWriter` に置きかえる。

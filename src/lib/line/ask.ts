@@ -24,6 +24,8 @@ export type LineAskRequest = {
   booked: BookedRow[];
   rules: Rule[];
   dayOffset: number;
+  /** 同じ時間に受ける人数（画面がルールのタブの数を送る。予約チャットと同じ確かめ方） */
+  seats?: number;
 };
 
 export type LineAskResponse =
@@ -61,13 +63,17 @@ export function parseLineAskRequest(
       rules: b.rules,
       visits: [],
       dayOffset: b.dayOffset,
+      seats: b.seats,
     },
     menus,
     { ...ai, maxMessageChars: maxChars },
   );
   if (!r.ok) return r;
   const mode: LineAskMode = b.mode === "script" ? "script" : "ai";
-  return { ok: true, value: { mode, text, customer, booked: r.value.booked, rules: r.value.rules, dayOffset: r.value.dayOffset } };
+  return {
+    ok: true,
+    value: { mode, text, customer, booked: r.value.booked, rules: r.value.rules, dayOffset: r.value.dayOffset, ...(r.value.seats ? { seats: r.value.seats } : {}) },
+  };
 }
 
 export async function runLineAsk(opts: {
@@ -90,12 +96,13 @@ export async function runLineAsk(opts: {
       visits: [],
       dayOffset: req.dayOffset,
       holds: [],
+      seats: req.seats,
     },
     shop,
     menus,
     opts.now,
   );
-  const sorted = await runSort(model, { shop, menus, rules: req.rules, today: ctx.today, now: ctx.now }, req.text, opts.maxTokens);
+  const sorted = await runSort(model, { shop: ctx.shop, menus, rules: req.rules, today: ctx.today, now: ctx.now }, req.text, opts.maxTokens);
   const via = req.mode;
   if (sorted.kind !== "hold") return { ok: true, via, kind: sorted.kind };
 

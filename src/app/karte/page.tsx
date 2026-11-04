@@ -1,5 +1,5 @@
 import { TabPage } from "@/components/TabPage";
-import { Fold, NotYet, Panel } from "@/components/parts";
+import { Fold, Panel } from "@/components/parts";
 import { getBookData } from "@/lib/book/data";
 import { getCustomers, getKarteExamples } from "@/lib/data/seed";
 import { getKarteHeadings, getMemoMaxChars, getRecordingAiSettings, getRecordingMemoMaxChars, getRecordingSettings } from "@/lib/settings";
@@ -33,7 +33,6 @@ export default function KartePage() {
       }
     >
       <KarteBoard data={data} headings={headings} />
-      <NotYet>お客様の一覧（全員）と、カルテを「手で直す」はまだです</NotYet>
       <Fold summary="カルテの見出し（設定：config/karte.json）">
         <ol className="karte-headings">
           {headings.map((h) => (

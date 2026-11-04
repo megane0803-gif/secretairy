@@ -154,7 +154,25 @@ function countOut(excluded: Map<string, { ex: Exclusion; count: number }>, ex: E
 
 const CLOSED_DAY: Exclusion = { key: "base:open-day", kind: "base", label: "営業日", reason: "お休みの日です" };
 
-/** 1日の中を順に見て、受けられる枠を出す（picked と近すぎる物は出さない） */
+/**
+ * 始める時刻を、希望の時刻（near）に近い順に並べる。同じ近さなら、希望の時刻より後の方を先に
+ * （「午後」「夕方」と言われたのに、次の日の朝から出さないように）。near が無ければ開店からの順のまま。
+ */
+export function orderNear(starts: string[], near: string | undefined): string[] {
+  if (!near) return starts;
+  const n = toMinutes(near);
+  return [...starts].sort((a, b) => {
+    const da = Math.abs(toMinutes(a) - n);
+    const db = Math.abs(toMinutes(b) - n);
+    if (da !== db) return da - db;
+    const la = toMinutes(a) >= n ? 0 : 1;
+    const lb = toMinutes(b) >= n ? 0 : 1;
+    if (la !== lb) return la - lb;
+    return toMinutes(a) - toMinutes(b);
+  });
+}
+
+/** 1日の中を順に見て、受けられる枠を出す（picked と近すぎる物は出さない）。near があれば、その時刻に近い順に見る */
 function scanDay(
   ctx: SlotContext,
   menuId: string,
@@ -164,13 +182,14 @@ function scanDay(
   limit: number,
   skip: Candidate[],
   excluded: Map<string, { ex: Exclusion; count: number }>,
+  near?: string,
 ): Candidate[] {
   const out: Candidate[] = [];
   if (!day.open) {
     countOut(excluded, CLOSED_DAY);
     return out;
   }
-  for (const start of startsOf(ctx, day)) {
+  for (const start of orderNear(startsOf(ctx, day), near)) {
     if (out.length >= limit) break;
     if (after && start < after) continue;
     const c = { menuId, date: day.date, start };
@@ -185,17 +204,20 @@ function scanDay(
     if (!p || p.key === "base:future") continue;
     countOut(excluded, p);
   }
-  return out;
+  // 近い順に見たときも、出すのは時刻の順
+  return near ? out.sort((a, b) => toMinutes(a.start) - toMinutes(b.start)) : out;
 }
 
 /**
  * 受けられる枠を、from（日付・時刻）から先へ順に探す（count 個まで・SEARCH_DAYS 日まで）。
+ * from.near（お客様が言った時刻）があれば、次の日からはその時刻に近い順に見る
+ * （「火曜の午後」が定休日なら、水曜の朝ではなく水曜の午後から出す）。
  * 外した枠は、理由ごとに数えておく（AI の手順に「どのルールで外したか」を出すため）。
  */
 export function findSlots(
   ctx: SlotContext,
   menuId: string,
-  from: { date: string; time?: string },
+  from: { date: string; time?: string; near?: string },
   count = MAX_CANDIDATES,
   skip: Candidate[] = [],
 ): SlotSearch {
@@ -204,7 +226,9 @@ export function findSlots(
   const startDate = from.date < ctx.today.date ? ctx.today.date : from.date;
   for (let i = 0; i < SEARCH_DAYS && slots.length < count; i++) {
     const day = calDay(ctx.shop, addDays(startDate, i));
-    slots.push(...scanDay(ctx, menuId, day, i === 0 ? from.time : undefined, slots, count - slots.length, skip, excluded));
+    slots.push(
+      ...scanDay(ctx, menuId, day, i === 0 ? from.time : undefined, slots, count - slots.length, skip, excluded, i === 0 ? undefined : from.near),
+    );
   }
   return { slots, excluded: [...excluded.values()] };
 }
@@ -281,9 +305,9 @@ export function noSlotSentence(search: SlotSearch): string {
   }
 }
 
-/** その日・その時刻のそばで、代わりの時間（2つまで）。頼まれた枠そのものは入れない */
+/** その日・その時刻のそばで、代わりの時間（2つまで）。次の日からは頼まれた時刻に近い順。頼まれた枠そのものは入れない */
 export function alternativesFor(ctx: SlotContext, c: Candidate, skip: Candidate[] = []): SlotSearch {
-  return findSlots(ctx, c.menuId, { date: c.date, time: c.start }, MAX_CANDIDATES, [c, ...skip]);
+  return findSlots(ctx, c.menuId, { date: c.date, time: c.start, near: c.start }, MAX_CANDIDATES, [c, ...skip]);
 }
 
 /**

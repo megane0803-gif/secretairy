@@ -54,6 +54,8 @@ export type ReserveRequest = {
   dayOffset: number;
   /** この会話で作った仮押さえの id（「仮押さえを外す」はこの中の、まだ承認待ちの物だけ） */
   holds: string[];
+  /** 同じ時間に受ける人数（ルールのタブで変えた分）。無ければ店の設定の数。サーバーは幅（seatsRange）を確かめなおす */
+  seats?: number;
 };
 
 /** 仮押さえ。サーバーがプログラムでもう一度判定してから出す。残すのは画面（ブラウザ）の側 */
@@ -73,7 +75,7 @@ export type HoldOffer = {
  * 手順の1行。tool = 道具で調べた / reject = ルール・店の設定で外した / hold = 仮押さえした / limit = 上限で止めた
  * ask = プログラムが聞き返した（日付の食い違い） / release = 仮押さえを外した / todo = ToDo に足した
  */
-export type Step = { kind: "tool" | "reject" | "hold" | "limit" | "ask" | "release" | "todo"; text: string };
+export type Step = { kind: "tool" | "reject" | "hold" | "limit" | "ask" | "release" | "todo" | "price"; text: string };
 
 /** 別の用事で「お店に確かめてご連絡します」と言ったときに、プログラムが足す ToDo */
 export type TodoOffer = { id: string; title: string };
