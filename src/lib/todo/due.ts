@@ -32,6 +32,7 @@ const BY = "(?:まで|迄|中|じゅう|締め切り|締切|〆)";
  * - 今日中・本日中・今日まで → 今日 / 明日まで → 明日 / 明後日まで → あさって
  * - 金曜まで → 今日から見て次の金曜（今日が金曜なら今日）/ 来週の金曜まで → 来週の金曜
  * - 今週中・週末まで → その週の日曜 / 来週中 → 次の週の日曜
+ * - 再来週中 → 2つ先の週の日曜 / 来月中・来月末まで → 来月の終わり / 来月10日まで → 来月の10日
  * - 11/20まで・11月20日まで → その日（過ぎていれば来年）/ 20日まで → その月の20日（過ぎていれば来月）/ 月末まで → その月の終わり
  */
 export function memoDue(memo: string, today: string): string | null {
@@ -51,9 +52,15 @@ export function memoDue(memo: string, today: string): string | null {
     if (wk[1]) return addDays(monday, 7 * weeks + ((want + 6) % 7));
     return addDays(today, (want - weekdayOf(today) + 7) % 7);
   }
+  // 長い言い方を先に（「再来週中」を「来週中」、「来月末」を「月末」と読みちがえないように）
+  if (has("再来週")) return addDays(sundayOf(today), 14);
   if (has("(今週|週末|土日)")) return sundayOf(today);
-  if (has("来週")) return addDays(sundayOf(today), 7);
-  if (has("(月末|今月)")) return validDate(y, m, new Date(Date.UTC(y, m, 0)).getUTCDate());
+  if (has("(?<!再)来週")) return addDays(sundayOf(today), 7);
+  const [ny, nm] = m === 12 ? [y + 1, 1] : [y, m + 1];
+  if (has("来月末?")) return validDate(ny, nm, new Date(Date.UTC(ny, nm, 0)).getUTCDate());
+  const nextMonthDay = t.match(new RegExp(`来月の?(3[01]|[12]\\d|[1-9])日${BY}`));
+  if (nextMonthDay) return validDate(ny, nm, Number(nextMonthDay[1]));
+  if (has("(?<!来)(月末|今月)")) return validDate(y, m, new Date(Date.UTC(y, m, 0)).getUTCDate());
 
   const md = t.match(new RegExp(`(1[0-2]|0?[1-9])(?:/|月)(3[01]|[12]\\d|0?[1-9])日?${BY}`));
   if (md) {

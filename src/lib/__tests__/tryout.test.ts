@@ -277,6 +277,20 @@ describe("B6. 料金は設定のメニューの値段をプログラムが返す
     assert.match(seen[0], /料金はプログラムがもう答えた/);
   });
 
+  test("候補を選ぶ言葉と料金をいっしょに言われたら、料金を返したあと仮押さえまで進む（レビューの指摘）", async () => {
+    const ctx = ctxAt(at("2026-11-04", "10:00"));
+    assert.ok(alsoBooking("1つ目でお願いします。カットの料金はいくらですか"));
+    const first = await chat(ctx, [{ role: "user", text: "11/6の15時にカット" }]);
+    assert.ok(first.candidates && first.candidates.length >= 1);
+    const r = await chat({ ...ctx, shown: first.candidates! }, [
+      { role: "user", text: "11/6の15時にカット" },
+      { role: "assistant", text: first.text },
+      { role: "user", text: "1つ目でお願いします。カットの料金はいくらですか" },
+    ]);
+    assert.ok(r.text.startsWith(`カットは ${yen(cut.price)}です。`));
+    assert.equal(r.holds.length, 1, "仮押さえする");
+  });
+
   test("AI への指示に「料金・値段は書かない」", () => {
     assert.match(reserveSystem(ctxAt(at("2026-11-09", "09:00")), []), /料金・値段は書かない/);
   });
@@ -343,6 +357,8 @@ describe("C9. 同じ内容を2つの見出しや2行に重ねない", () => {
     assert.ok(sameContent("頭皮が赤かった", "シャンプーの時、頭皮が赤かった"));
     assert.ok(!sameContent("全体を3センチ切った", "全体を5センチ切った"));
     assert.ok(!sameContent("前髪", "前髪だけのカット"), "短すぎる物は重なりと見ない");
+    assert.ok(!sameContent("三センチ切った", "十三センチ切った"), "漢数字の数がちがえば別（レビューの指摘）");
+    assert.ok(sameContent("三センチ切った", "全体を三センチ切った"));
     assert.equal(lineKey("「大丈夫」です。"), "大丈夫です");
   });
 
@@ -560,6 +576,11 @@ describe("F15. 投げたメモの「金曜までに」のような期限は、�
     assert.equal(memoDue("3/1までに", today), "2027-03-01", "過ぎた日付は来年");
     assert.equal(memoDue("3日までに", today), "2026-12-03", "過ぎた日は来月");
     assert.equal(memoDue("月末までに締める", today), "2026-11-30");
+    // 長い言い方を短い言い方と読みちがえない（レビューの指摘）
+    assert.equal(memoDue("再来週中に発注", today), "2026-11-22");
+    assert.equal(memoDue("来月末までに発注", today), "2026-12-31");
+    assert.equal(memoDue("来月中に", today), "2026-12-31");
+    assert.equal(memoDue("来月10日までに", today), "2026-12-10");
   });
 
   test("読めない時・期限ではない言い方は今のまま（期限なし）", () => {

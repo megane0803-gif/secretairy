@@ -7,6 +7,7 @@
 // 足す言葉はメモの言葉だけ。良い悪いの判断はしない（🔒 鍵つきの2つ目）。
 
 import type { KarteHeading } from "../settings";
+import { numbersIn } from "./gate";
 import { emptySections, headingWithRole, MAX_LINE_CHARS, MAX_LINES_PER_HEADING, type KarteSections } from "./format";
 
 /** 比べるための形（全角半角・空白・句読点・かっこを除く） */
@@ -22,7 +23,8 @@ export function sameContent(a: string, b: string): boolean {
   if (x === y) return true;
   const [short, long] = x.length <= y.length ? [x, y] : [y, x];
   if (short.length < 4 || !long.includes(short)) return false;
-  const nums = (s: string) => (s.match(/\d+/g) ?? []).join(",");
+  // 数（算用数字も漢数字も。「三」と「十三」はちがう数）がそろっている時だけ同じ中身
+  const nums = (s: string) => [...numbersIn(s)].sort().join(",");
   return nums(short) === nums(long);
 }
 
