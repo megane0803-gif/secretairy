@@ -4,8 +4,8 @@
 
 import type { TabId } from "../tabs";
 
-/** 上から順に動かす4行 */
-export const JOB_IDS = ["reserve", "card", "ads", "memo"] as const;
+/** 上から順に動かす行（4行＋予約サイト（架空）から予約が入る） */
+export const JOB_IDS = ["reserve", "card", "ads", "memo", "site"] as const;
 export type JobId = (typeof JOB_IDS)[number];
 
 /** 済んだ行の結果（例「承認待ち1件」）と、結果が届いたタブ */
@@ -20,6 +20,7 @@ const TAB_OF: Record<JobId, readonly TabId[]> = {
   card: ["accounting"],
   ads: ["ads"],
   memo: ["todo"],
+  site: ["reservations", "todo"],
 };
 
 export const isJobId = (x: unknown): x is JobId => typeof x === "string" && (JOB_IDS as readonly string[]).includes(x);

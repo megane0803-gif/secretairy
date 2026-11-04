@@ -2,5 +2,6 @@
   { "id": "reserve", "customerId": "c05", "menuId": "cut", "day": 1, "start": "15:00" },
   { "id": "card" },
   { "id": "ads" },
-  { "id": "memo", "text": "タオルの替えが少なくなってきたので、次の仕入れでまとめて頼む" }
+  { "id": "memo", "text": "タオルの替えが少なくなってきたので、次の仕入れでまとめて頼む" },
+  { "id": "site" }
 ]

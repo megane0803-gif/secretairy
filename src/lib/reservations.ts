@@ -21,8 +21,8 @@ export type Reservation = {
   status: ReservationStatus;
   menu: Menu;
   customer: Customer;
-  /** seed = 最初の状態 / chat = 予約チャットから入った物 */
-  source: "seed" | "chat";
+  /** seed = 最初の状態（店が受けて確定した予約）/ chat = 予約チャットから入った物 / site = 予約サイト（架空）から入った物 */
+  source: "seed" | "chat" | "site";
 };
 
 /** 予約チャットから入った予約（本当の日付で持つ）。ブラウザの中だけに残す */
@@ -39,6 +39,8 @@ export type ChatReservation = {
   heldAt: string;
   /** 仮押さえの期限（ISO）。確定した物には使わない */
   expiresAt: string;
+  /** site = 予約サイト（架空）から入った予約（お客様が自分で決めたので、承認の箱は通さずに確定で入る。book/site.ts） */
+  via?: "site";
 };
 
 export { lastStartOf };
@@ -85,7 +87,7 @@ export function resolveReservations(
   return sortReservations(out);
 }
 
-/** 予約チャットから入った予約を、台帳の形にする */
+/** 予約チャット（と予約サイト（架空））から入った予約を、台帳の形にする */
 export function resolveChatReservations(menus: Menu[], customers: Customer[], list: ChatReservation[]): Reservation[] {
   const out: Reservation[] = [];
   for (const r of list) {
@@ -93,7 +95,7 @@ export function resolveChatReservations(menus: Menu[], customers: Customer[], li
     const menu = resolveMenu(menus, r.menuId);
     const customer = customers.find((c) => c.id === r.customerId);
     if (!menu || !customer) continue;
-    out.push(make(r.id, r.date, r.start, r.status, menu, customer, "chat"));
+    out.push(make(r.id, r.date, r.start, r.status, menu, customer, r.via === "site" ? "site" : "chat"));
   }
   return out;
 }

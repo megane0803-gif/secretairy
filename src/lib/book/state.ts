@@ -13,8 +13,11 @@ import type { SavedKarte } from "../karte/record";
 import type { ChatReservation } from "../reservations";
 import { chatKey, reserveKey, SEED_TODO_KEYS, todoKey, TODO_SOURCES, type TodoSource } from "../todo/keys";
 
-/** withdrawn = お客様が予約チャットで「ずらしたい」「やめたい」と言ったので、承認の前に外した */
-export type ApprovalState = "pending" | "approved" | "fixed" | "skipped" | "withdrawn";
+/**
+ * withdrawn = お客様が予約チャットで「ずらしたい」「やめたい」と言ったので、承認の前に外した
+ * taken = 予約サイト（架空）から同じ枠に予約が入ったので、承認の前に外した（二重予約を防ぐ。book/site.ts）
+ */
+export type ApprovalState = "pending" | "approved" | "fixed" | "skipped" | "withdrawn" | "taken";
 
 /** 承認の箱の1行（予約の仮押さえ） */
 export type ReservationApproval = {
@@ -117,8 +120,10 @@ export function parseBook(raw: string | null): BookState | null {
       status: r.status as ChatReservation["status"],
       heldAt: r.heldAt as string,
       expiresAt: r.expiresAt as string,
+      // 予約サイト（架空）から入った予約（確定だけ。book/site.ts）
+      ...(r.via === "site" && r.status === "confirmed" ? { via: "site" as const } : {}),
     }));
-  const states: ApprovalState[] = ["pending", "approved", "fixed", "skipped", "withdrawn"];
+  const states: ApprovalState[] = ["pending", "approved", "fixed", "skipped", "withdrawn", "taken"];
   const approvals: ReservationApproval[] = arr(d.approvals)
     .filter((a) => a && isStr(a.id) && isStr(a.reservationId) && isStr(a.createdAt) && isStr(a.reason) && states.includes(a.state as ApprovalState))
     .map((a) => ({

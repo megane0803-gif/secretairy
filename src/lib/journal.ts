@@ -3,8 +3,8 @@
 
 import { JOURNAL_KEY, readBrowser, writeBrowser } from "./browser";
 
-/** だれが（AI / オーナー / プログラム / LINE） */
-export type JournalWho = "AI" | "オーナー" | "プログラム" | "LINE";
+/** だれが（AI / オーナー / プログラム / LINE / 予約サイト（架空）。LINE と予約サイトは外の相手） */
+export type JournalWho = "AI" | "オーナー" | "プログラム" | "LINE" | "予約サイト";
 
 export type JournalEntry = { id: string; at: string; who: JournalWho; text: string };
 
@@ -32,7 +32,7 @@ export function parseJournal(raw: string | null): JournalEntry[] {
           typeof e.id === "string" &&
           typeof e.at === "string" &&
           typeof e.text === "string" &&
-          ["AI", "オーナー", "プログラム", "LINE"].includes(e.who),
+          ["AI", "オーナー", "プログラム", "LINE", "予約サイト"].includes(e.who),
       )
       .slice(0, JOURNAL_MAX);
   } catch {

@@ -170,17 +170,17 @@ describe("AI の仕事：1行ずつ動く", () => {
 });
 
 describe("AI の仕事：まとめて動かす・2回は動かない", () => {
-  test("上から1つずつ順に動く（予約 → 明細 → 広告 → メモ）", async () => {
+  test("上から1つずつ順に動く（予約 → 明細 → 広告 → メモ → 予約サイト）", async () => {
     const { w, env, calls } = setup();
     const seen: string[] = [];
     const out = await runJobs(JOB_IDS, env, budget(), (id, phase) => seen.push(`${id}:${phase === "running" ? "running" : phase.kind}`));
-    assert.deepEqual(seen, ["reserve:running", "reserve:done", "card:running", "card:done", "ads:running", "ads:done", "memo:running", "memo:done"]);
+    assert.deepEqual(seen, ["reserve:running", "reserve:done", "card:running", "card:done", "ads:running", "ads:done", "memo:running", "memo:done", "site:running", "site:done"]);
     assert.deepEqual(calls, ["reserve", "reserve", "ads", "todo"]);
     assert.deepEqual(Object.keys(out), [...JOB_IDS]);
     assert.deepEqual(Object.keys(w.jobs.done).sort(), [...JOB_IDS].sort());
     // 日誌にも1行ずつ流れる（上から順）
     const results = w.journal.filter((j) => j.text.startsWith("AI の仕事：")).map((j) => j.text.replace(/ → .*/, ""));
-    assert.deepEqual(results, ["AI の仕事：予約の相談", "AI の仕事：新しい明細", "AI の仕事：広告の見直し", "AI の仕事：メモ"]);
+    assert.deepEqual(results, ["AI の仕事：予約の相談", "AI の仕事：新しい明細", "AI の仕事：広告の見直し", "AI の仕事：メモ", "AI の仕事：予約サイトから予約が入る"]);
   });
 
   test("済んだ行は2回は動かない（1行でも、まとめてでも）", async () => {
@@ -206,7 +206,8 @@ describe("AI の仕事：まとめて動かす・2回は動かない", () => {
     assert.equal(out.ads?.kind, "limit");
     assert.equal(out.memo?.kind, "limit");
     assert.deepEqual(calls, ["reserve", "reserve"]);
-    assert.deepEqual(Object.keys(w.jobs.done).sort(), ["card", "reserve"]);
+    assert.equal(out.site?.kind, "done", "AI を使わない行は動く");
+    assert.deepEqual(Object.keys(w.jobs.done).sort(), ["card", "reserve", "site"]);
   });
 
   test("AI につながらない時：済みにせず、その後の AI の行は呼ばない。決まった返事で同じ流れが動く", async () => {
@@ -217,8 +218,9 @@ describe("AI の仕事：まとめて動かす・2回は動かない", () => {
     assert.equal(out.card?.kind, "done");
     assert.equal(out.ads?.kind, "no-ai");
     assert.equal(out.memo?.kind, "no-ai");
+    assert.equal(out.site?.kind, "done", "AI を使わない行は動く");
     assert.deepEqual(calls, ["reserve"], "つながらないと分かった後は呼ばない");
-    assert.deepEqual(Object.keys(w.jobs.done), ["card"]);
+    assert.deepEqual(Object.keys(w.jobs.done), ["card", "site"]);
     // 決まった返事（AI なし）に切りかえて、残りを動かす
     const ok = setup();
     ok.w.jobs = w.jobs;
