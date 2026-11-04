@@ -725,3 +725,41 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .todo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; }
 .todo label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .todo.done span { text-decoration: line-through; color: var(--muted); }
+
+/* ---- 小さな縦棒（MiniColumns） ---- */
+
+.minicols { display: flex; align-items: flex-end; gap: 3px; height: 28px; margin-top: 6px; }
+.minicol { flex: 1 1 0; max-width: 18px; height: 100%; display: flex; align-items: flex-end; background: var(--line); border-radius: 3px 3px 0 0; }
+.minicol span { display: block; width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; }
+.minicols-labels { display: flex; gap: 3px; font-size: 0.65rem; color: var(--muted); }
+.minicols-labels span { flex: 1 1 0; max-width: 18px; text-align: center; white-space: nowrap; overflow: hidden; }
+
+/* ---- 広告タブ ---- */
+
+.ad-scroll { overflow-x: auto; max-width: 100%; }
+.table.ad-table { max-width: none; min-width: 480px; }
+.ad-table td.num, .ad-table th.num { text-align: right; white-space: nowrap; }
+.ad-table tr.off td { opacity: 0.4; }
+.ad-table tr.off td:first-child, .ad-table tr.off .tag.offtag { opacity: 1; }
+.ad-table .minicols { height: 18px; margin: 0; width: 72px; }
+.ad-word { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.tag.featured { background: var(--accent); color: var(--surface); }
+.tag.town { background: transparent; color: var(--ok); border: 1px solid var(--ok); }
+.tag.offtag { background: var(--line); color: var(--text); }
+.ad-site { background: var(--surface); border: 1px dashed var(--muted); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px; }
+.ad-site ul { list-style: none; margin: 4px 0 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.ad-site li { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 0.85rem; display: inline-flex; gap: 6px; align-items: center; }
+.ad-site li.off { text-decoration: line-through; color: var(--muted); border-style: dashed; }
+.ad-card { border-width: 3px; gap: 6px; }
+.ad-change { font-size: 1.15rem; font-weight: 700; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.ad-change .arrow { color: var(--muted); }
+.ad-nums { font-size: 0.85rem; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+.ad-nums strong { font-size: 1.05rem; }
+.gate { list-style: none; margin: 0; padding: 0; font-size: 0.8rem; display: flex; flex-direction: column; gap: 2px; }
+.gate .ok { color: var(--ok); }
+.gate .ng { color: var(--warn); }
+.gate .skip { color: var(--muted); }
+.ad-fix { display: flex; flex-wrap: wrap; gap: 6px; }
+.ad-fix input { flex: 1 1 160px; min-width: 0; font: inherit; font-size: 0.9rem; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
+.ad-review { display: flex; flex-direction: column; gap: 8px; }
+.ad-review .btn.big { font-size: 1.05rem; padding: 10px 14px; }

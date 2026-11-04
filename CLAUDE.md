@@ -62,9 +62,11 @@ src/app/api/ai/    AI を呼ぶ窓口（サーバーの側。受け取った物�
 src/lib/           設定の読み込み・ルール
 src/lib/ai/        予約チャットの道具・流れ・決まった返事（テスト用）
 src/lib/book/      台帳・承認の箱（ブラウザの中に残す形）
+src/lib/ads/       広告の数・門・道具・流れ・決まった返事・広告の承認の箱（ブラウザの中に残す形）
 ```
 
 - AI の道具は `src/lib/ai/tools.ts` の4つだけ。確定の道具は足さない。テストでは Claude を呼ばず `src/lib/ai/script.ts` に置きかえる。
+- 広告の見直しの道具は `src/lib/ads/tools.ts` の2つ（止める・外す）だけ。言葉を足す道具は足さない。案は門（`src/lib/ads/gate.ts`）を通してから承認の箱へ。テストでは `src/lib/ads/script.ts` に置きかえる。
 
 - LINE は後で足す。窓口は `src/app/api/line/` に分け、画面の処理と混ぜない。今は作らない。
 - 秘密の鍵（Claude API キー・LINE の秘密・オーナー用の合言葉）は `.env.local` に置く。`.env` で始まるファイルはコミットしない。

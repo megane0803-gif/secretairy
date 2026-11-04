@@ -6,7 +6,7 @@ import reservations from "@seed/reservations.json";
 import ads from "@seed/ads.json";
 import accounting from "@seed/accounting.json";
 import todo from "@seed/todo.json";
-import type { Ad, Customer, MoneyEntry, SeedReservation, Todo } from "./types";
+import type { AdReport, Customer, MoneyEntry, SeedReservation, Todo } from "./types";
 
 export function getCustomers(): Customer[] {
   return customers as Customer[];
@@ -16,8 +16,9 @@ export function getSeedReservations(): SeedReservation[] {
   return reservations as SeedReservation[];
 }
 
-export function getAds(): Ad[] {
-  return ads as Ad[];
+/** 架空の広告の4週分（広告を出す言葉8つ・お客さんが調べた言葉8つ） */
+export function getAds(): AdReport {
+  return ads as AdReport;
 }
 
 export function getMoneyEntries(): MoneyEntry[] {

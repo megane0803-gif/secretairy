@@ -43,6 +43,8 @@ export const TABS_KEY = "tabSwitches";
 export const RULES_KEY = "rules";
 /** 予約チャットから入った予約・承認の箱・足した ToDo・起点の日（book/state.ts） */
 export const BOOK_KEY = "book";
+/** 広告の承認の箱・止めた／外した言葉（ads/state.ts） */
+export const ADS_KEY = "ads";
 /** 日誌（journal.ts） */
 export const JOURNAL_KEY = "journal";
 export const BROWSER_PREFIX = PREFIX;

@@ -7,6 +7,7 @@ import menus from "@config/menus.json";
 import karte from "@config/karte.json";
 import tabs from "@config/tabs.json";
 import ai from "@config/ai.json";
+import ads from "@config/ads.json";
 import { TAB_IDS, TABS, type TabDef, type TabId } from "./tabs";
 
 export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
@@ -82,4 +83,34 @@ export function isTabShown(id: TabId, switches: TabSwitches): boolean {
 /** 表示スイッチが入っているタブ */
 export function getVisibleTabs(switches: TabSwitches = getTabSwitches()): TabDef[] {
   return TAB_IDS.filter((id) => isTabShown(id, switches)).map((id) => TABS[id]);
+}
+
+/** 広告のタブの設定（config/ads.json） */
+export type AdSettings = {
+  /** どこに出している広告か（画面の札） */
+  channel: string;
+  /** 売りのメニュー（その言葉に「売り」の印を出す） */
+  featuredMenus: string[];
+  /** 架空の町の名前。この名前が入った言葉は「外す」案にしない */
+  towns: string[];
+  /** 承認してから何日後に「効いたか見る」の ToDo の期限にするか */
+  checkAfterDays: number;
+  /** 案は何日に1つまでか */
+  oncePerDays: number;
+};
+
+export function getAdSettings(): AdSettings {
+  return ads as AdSettings;
+}
+
+/** 広告の見直しで AI を呼ぶときの上限（config/ai.json の ads） */
+export type AdsAiSettings = {
+  model: string;
+  /** 1回の返事の長さの上限（トークン） */
+  maxReplyTokens: number;
+};
+
+export function getAdsAiSettings(): AdsAiSettings {
+  const a = ai as { ads?: { maxReplyTokens?: number } };
+  return { model: getAiSettings().model, maxReplyTokens: a.ads?.maxReplyTokens ?? 600 };
 }

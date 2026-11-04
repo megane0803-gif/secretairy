@@ -24,7 +24,14 @@ export type ReservationApproval = {
 };
 
 /** 承認の箱から足した ToDo */
-export type AddedTodo = { id: string; title: string; createdAt: string; done: boolean };
+export type AddedTodo = {
+  id: string;
+  title: string;
+  createdAt: string;
+  done: boolean;
+  /** いつまで（YYYY-MM-DD）。無ければ決めていない */
+  due?: string;
+};
 
 export type BookState = {
   v: 1;
@@ -92,7 +99,13 @@ export function parseBook(raw: string | null): BookState | null {
     }));
   const todos: AddedTodo[] = arr(d.todos)
     .filter((t) => t && isStr(t.id) && isStr(t.title) && isStr(t.createdAt))
-    .map((t) => ({ id: t.id as string, title: t.title as string, createdAt: t.createdAt as string, done: t.done === true }));
+    .map((t) => ({
+      id: t.id as string,
+      title: t.title as string,
+      createdAt: t.createdAt as string,
+      done: t.done === true,
+      ...(isStr(t.due) && DATE.test(t.due) ? { due: t.due } : {}),
+    }));
   return { v: 1, anchor: d.anchor, chat, approvals, todos };
 }
 
@@ -187,4 +200,10 @@ export function withReleased(
 
 export function withTodoDone(s: BookState, todoId: string, done: boolean): BookState {
   return { ...s, todos: s.todos.map((t) => (t.id === todoId ? { ...t, done } : t)) };
+}
+
+/** ToDo を1件足す（同じ id の物は2回入れない）。広告の承認から「効いたか見る」を足すときなど */
+export function withTodo(s: BookState, todo: AddedTodo): BookState {
+  if (s.todos.some((t) => t.id === todo.id)) return s;
+  return { ...s, todos: [...s.todos, todo] };
 }
