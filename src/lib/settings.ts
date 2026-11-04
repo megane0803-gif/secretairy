@@ -9,6 +9,7 @@ import tabs from "@config/tabs.json";
 import ai from "@config/ai.json";
 import ads from "@config/ads.json";
 import accounting from "@config/accounting.json";
+import line from "@config/line.json";
 import { TAB_IDS, TABS, type TabDef, type TabId } from "./tabs";
 
 export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
@@ -153,4 +154,41 @@ export type AccountingSettings = {
 
 export function getAccountingSettings(): AccountingSettings {
   return accounting as AccountingSettings;
+}
+
+/** LINE のつなぎ（オーナー側）の設定（config/line.json）。鍵・秘密はここに書かない（環境変数） */
+export type LineSettings = {
+  /** 画面に出す合言葉の期限（分） */
+  codeMinutes: number;
+  /** 合言葉でつないだ後、つながっている時間（時間） */
+  linkHours: number;
+  /** 画面が LINE の知らせを受け取りに行く間（秒） */
+  pollSeconds: number;
+  /** 画面が最後に受け取りに来てから「開いている」とみなす長さ（秒） */
+  aliveSeconds: number;
+  /** LINE の知らせを預けておく長さ（秒）。画面が受け取りに来なければ消える */
+  inboxSeconds: number;
+  /** LINE の返事（無料）に使える長さ（秒）。過ぎたら送る（数える）方になる */
+  replySeconds: number;
+  /** 1日に送る（返事ではない）通数の上限。無料は月200通 */
+  dailyPushLimit: number;
+  /** LINE の一言の長さ（字） */
+  maxTextChars: number;
+  /** つながっていない人が合言葉を試せる回数（10分ごと） */
+  codeTries: number;
+};
+
+export function getLineSettings(): LineSettings {
+  return line as LineSettings;
+}
+
+/** LINE の一言の振り分けで AI を呼ぶときの設定（config/ai.json の line。モデル名は ANTHROPIC_LINE_MODEL でも差しかえられる） */
+export type LineAiSettings = { model: string; maxReplyTokens: number };
+
+export function getLineAiSettings(): LineAiSettings {
+  const a = ai as { line?: { model?: string; maxReplyTokens?: number } };
+  return {
+    model: process.env.ANTHROPIC_LINE_MODEL || a.line?.model || getAiSettings().karte.model,
+    maxReplyTokens: a.line?.maxReplyTokens ?? 300,
+  };
 }

@@ -22,6 +22,7 @@ npm run build      # 本番ビルド（push の前に通す）
 
 - 最初の状態はリポジトリのファイル（`config/` など）。画面で触った後の変化は、見ている人のブラウザの中だけに残す。
 - サーバーにファイルやデータベースで書き込む作りにしない（`data/` は作らない）。公開 URL を見た人どうしでデータが混ざらないようにするため。
+- 例外は LINE のつなぎだけ：Redis（Upstash）に「合言葉のつなぎ」と「画面が受け取りに来るまでの LINE の知らせ」を期限つきで置く。お客様の記録・台帳・日誌は置かない（仕様書 §1.9）。
 - AI を呼ぶ API はブラウザから要るデータとルールを毎回受け取り、答えを返すだけ。受け取った物を残さない。
 
 ## 店ごとに変わる物はコードに書かない
@@ -45,7 +46,7 @@ npm run build      # 本番ビルド（push の前に通す）
 
 - PC は「左にタブ・真ん中にページ・右の列」の3列、スマホは1列。横にはみ出さない。
 - タブの画面は `src/components/TabPage.tsx` で包む（承認待ちの1行・表示スイッチ・右の列が付く）。
-- 右の列：ホームは承認の箱と日誌、ほかはそのタブの入力欄。
+- 右の列：ホームは承認の箱・LINE とつなぐ・日誌、ほかはそのタブの入力欄。
 - 数字は大きく（`BigNumber`）、量は小さい棒（`MiniBar`）、プログラムの確認は ✓（`Checked`）、細かい所は畳む（`Fold`）。部品は `src/components/parts.tsx`。
 - AI の案は大きいカード1枚：「前 → 後」と理由1文、ボタンは「確定」「やめる」（予約の仮押さえの行は「承認／直す／見送り」。仕様書 §1.3）。
 - 画面の言葉はやさしく。言い換え表は `docs/SPEC.md` §3.3。
@@ -65,6 +66,8 @@ src/lib/book/      台帳・承認の箱・保存したカルテ・「翌日へ�
 src/lib/karte/     カルテ：見出しに分ける・言葉の門・保存と ToDo・Claude（Haiku）と決まった返事
 src/lib/ads/       広告の数・門・道具・流れ・決まった返事・広告の承認の箱（ブラウザの中に残す形）
 src/lib/accounting/ 経理：売上の数・通販の明細の仕分け（自動のルール）・門・登録（ブラウザの中に残す形。AI は使わない）
+src/lib/line/      LINE のつなぎ（オーナー側）：署名・Redis・つなぎと預かり（bridge）・一言の振り分け（sort）・画面での入れ方（apply）
+src/app/api/line/  LINE の窓口（Webhook・つなぐ・受け取り・送る）。画面の処理と混ぜない
 src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理をまとめて戻す）
 ```
 
@@ -72,5 +75,9 @@ src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理�
 - カルテの AI は下書きまで。プログラムの言葉の門（`src/lib/karte/gate.ts`。言葉は `locked.ts` の `KARTE_GATE_WORDS`。減らさない）を通し、保存は人の「保存」ボタンだけ。お客様の名前は AI に送らない。テストでは `scriptKarteWriter` に置きかえる。
 - 広告の見直しの道具は `src/lib/ads/tools.ts` の2つ（止める・外す）だけ。言葉を足す道具は足さない。案は門（`src/lib/ads/gate.ts`）を通してから承認の箱へ。テストでは `src/lib/ads/script.ts` に置きかえる。
 
-- LINE は後で足す。窓口は `src/app/api/line/` に分け、画面の処理と混ぜない。今は作らない。
-- 秘密の鍵（Claude API キー・LINE の秘密・オーナー用の合言葉）は `.env.local` に置く。`.env` で始まるファイルはコミットしない。
+- LINE（オーナー側）の窓口は `src/app/api/line/` に分け、画面の処理と混ぜない。画面が開いている間だけ動く（受け取るのは `src/components/LineBridge.tsx`）。
+  - 届いた知らせは `LINE_CHANNEL_SECRET` で署名を確かめ、違う物は捨てる。合言葉でつないでいない LINE では何も動かさない。
+  - LINE のボタンで確定してよいのは、サーバーが「つないだ人・その画面の行・1回だけの印」を確かめた press の知らせだけ。一言（文）や AI の答えからは確定しない。
+  - 送る通数を減らす（返事で済む時は返事。1日の上限は `config/line.json`）。鍵・LINE の人の番号は画面・日誌・ログに出さない。
+  - 一言の振り分けの道具は `src/lib/line/sort.ts` の3つ（仮押さえ・ToDo・カルテのメモ）だけ。テストでは `scriptSortModel` と置きかえた LINE・`memoryStore` を使う（Claude と LINE は呼ばない）。お客さん側の LINE はまだ。
+- 秘密の鍵（Claude API キー・LINE の秘密 `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・Redis の `KV_REST_API_URL`／`KV_REST_API_TOKEN`）は `.env.local`（Vercel では環境変数）に置く。`.env` で始まるファイルはコミットしない。

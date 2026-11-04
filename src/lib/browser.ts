@@ -47,6 +47,8 @@ export const BOOK_KEY = "book";
 export const ADS_KEY = "ads";
 /** 経理：通販の明細で選んだ印・会計（架空）への登録・足した自動のルール（accounting/state.ts） */
 export const ACCOUNTING_KEY = "accounting";
+/** LINE のつなぎ（line/state.ts）。その画面だけが持つ印と、届けた・受け取った物の id（LINE の人の番号は持たない） */
+export const LINE_KEY = "line";
 /** 日誌（journal.ts） */
 export const JOURNAL_KEY = "journal";
 export const BROWSER_PREFIX = PREFIX;
