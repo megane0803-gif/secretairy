@@ -1,0 +1,7 @@
+{
+  "channel": "検索広告（架空）",
+  "featuredMenus": ["straight", "headspa"],
+  "towns": ["もちの木町", "白玉台", "きなこ坂", "あんこ橋", "みたらし川"],
+  "checkAfterDays": 21,
+  "oncePerDays": 7
+}

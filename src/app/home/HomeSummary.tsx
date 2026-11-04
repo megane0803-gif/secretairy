@@ -6,6 +6,7 @@
 
 import { BigNumber, Checked, CustomerName, MiniBar } from "@/components/parts";
 import { ResetBook } from "@/components/ResetBook";
+import { useAds } from "@/lib/ads/useAds";
 import type { BookData } from "@/lib/book/data";
 import { withNextDay } from "@/lib/book/state";
 import { useBook } from "@/lib/book/useBook";
@@ -17,7 +18,9 @@ import type { KarteHeading } from "@/lib/settings";
 
 export function HomeSummary({ data, seedTodos, headings }: { data: BookData; seedTodos: number; headings: KarteHeading[] }) {
   const book = useBook(data);
-  const todos = seedTodos + book.state.todos.filter((t) => !t.done).length;
+  const ads = useAds();
+  // 期限の先の ToDo（広告の「効いたか見る」など）は、その日まで今日の数に入れない
+  const todos = seedTodos + book.state.todos.filter((t) => !t.done && (!t.due || t.due <= book.today.date)).length;
   const todays = book.all.filter((r) => r.date === book.today.date);
   const menuName = (id: string) => data.menus.find((m) => m.id === id)?.name ?? id;
   // 今日のこれからの空き（いまの時刻より前の枠は数えない）
@@ -42,7 +45,7 @@ export function HomeSummary({ data, seedTodos, headings }: { data: BookData; see
       )}
       <div className="bignums">
         <BigNumber label="今日の予約" value={book.book.todayCount} unit="件" />
-        <BigNumber label="承認待ち" value={book.pending.length} unit="件" />
+        <BigNumber label="承認待ち" value={book.pending.length + (ads.pending ? 1 : 0)} unit="件" />
         <BigNumber label="今日の ToDo" value={todos} unit="件" />
       </div>
 

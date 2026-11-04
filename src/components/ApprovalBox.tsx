@@ -11,14 +11,19 @@ import type { BookData } from "@/lib/book/data";
 import { useBook } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
+import { pendingAd } from "@/lib/ads/state";
+import { useAds } from "@/lib/ads/useAds";
+import { AdApprovalRows } from "./AdApprovalRows";
 import { Checked, CustomerName } from "./parts";
 
 export function ApprovalBox({ data, compact = false }: { data: BookData; compact?: boolean }) {
   const book = useBook(data);
   const { rules } = useRules(data.seedRules);
   const [done, setDone] = useState<string | null>(null);
+  // 広告の案（承認待ち）も同じ箱に出す
+  const adPending = pendingAd(useAds().state);
 
-  if (book.pending.length === 0)
+  if (book.pending.length === 0 && !adPending)
     return (
       <>
         <Checked>承認待ちはありません</Checked>
@@ -100,9 +105,11 @@ export function ApprovalBox({ data, compact = false }: { data: BookData; compact
           </li>
         );
       })}
+      <AdApprovalRows seedRules={data.seedRules} />
       {!compact && (
         <li className="hint">
           承認＝確定して台帳に入ります。直す・見送り＝お客様の了解なしに時間は変えないので、仮押さえを外して ToDo に「別の日時を案内」を足します。
+          広告の案は、承認＝広告（架空）でその言葉を止める（外す）。直す＝一言で1回だけ出しなおし。見送り＝案を閉じる。
         </li>
       )}
     </ul>

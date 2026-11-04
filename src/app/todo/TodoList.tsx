@@ -7,7 +7,9 @@ import { CustomerName } from "@/components/parts";
 import { withTodoDone, type AddedTodo } from "@/lib/book/state";
 import { useBookState } from "@/lib/book/useBook";
 import type { Todo } from "@/lib/data/types";
+import { calDay } from "@/lib/calendar";
 import { writeJournal } from "@/lib/journal";
+import { getShop } from "@/lib/settings";
 
 export function TodoList({ seed }: { seed: Todo[] }) {
   const { state, update } = useBookState();
@@ -38,6 +40,7 @@ export function TodoList({ seed }: { seed: Todo[] }) {
             <span>{t.title}</span>
           )}
         </label>
+        {t.due && <small className="hint num">期限 {calDay(getShop(), t.due).label}</small>}
         <small className="hint">{from}</small>
       </li>
     );

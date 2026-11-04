@@ -26,7 +26,15 @@ export type ReservationApproval = {
 };
 
 /** 承認の箱・カルテの保存から足した ToDo。next-talk = カルテの「次回話すこと」 */
-export type AddedTodo = { id: string; title: string; createdAt: string; done: boolean; kind?: "next-talk" };
+export type AddedTodo = {
+  id: string;
+  title: string;
+  createdAt: string;
+  done: boolean;
+  kind?: "next-talk";
+  /** いつまで（YYYY-MM-DD）。無ければ決めていない（広告の「効いたか見る」など） */
+  due?: string;
+};
 
 export type BookState = {
   v: 1;
@@ -103,6 +111,7 @@ export function parseBook(raw: string | null): BookState | null {
       title: t.title as string,
       createdAt: t.createdAt as string,
       done: t.done === true,
+      ...(isStr(t.due) && DATE.test(t.due) ? { due: t.due } : {}),
       ...(t.kind === "next-talk" ? { kind: "next-talk" as const } : {}),
     }));
   const kartes: SavedKarte[] = arr(d.kartes)
@@ -238,4 +247,10 @@ export function withReleased(
 
 export function withTodoDone(s: BookState, todoId: string, done: boolean): BookState {
   return { ...s, todos: s.todos.map((t) => (t.id === todoId ? { ...t, done } : t)) };
+}
+
+/** ToDo を1件足す（同じ id の物は2回入れない）。広告の承認から「効いたか見る」を足すときなど */
+export function withTodo(s: BookState, todo: AddedTodo): BookState {
+  if (s.todos.some((t) => t.id === todo.id)) return s;
+  return { ...s, todos: [...s.todos, todo] };
 }

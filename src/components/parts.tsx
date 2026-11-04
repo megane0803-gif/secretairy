@@ -7,7 +7,7 @@ export function BigNumber({ label, value, unit }: { label: string; value: number
   return (
     <div className="bignum">
       <span className="bignum-label">{label}</span>
-      <span className="bignum-value num">{value}</span>
+      <span className="bignum-value num">{value.toLocaleString("ja-JP")}</span>
       {unit && <span className="bignum-unit">{unit}</span>}
     </div>
   );
@@ -19,6 +19,20 @@ export function MiniBar({ value, max, label }: { value: number; max: number; lab
   return (
     <div className="minibar" role="img" aria-label={`${label} ${value}/${max}`}>
       <span style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+/** 小さな縦棒（週ごとなど）。いちばん大きい値の高さを 100% にする */
+export function MiniColumns({ values, labels, label }: { values: number[]; labels: string[]; label: string }) {
+  const max = Math.max(0, ...values);
+  return (
+    <div className="minicols" role="img" aria-label={`${label}：${values.map((v, i) => `${labels[i] ?? ""} ${v}`).join("、")}`}>
+      {values.map((v, i) => (
+        <span key={i} className="minicol" title={`${labels[i] ?? ""} ${v}`}>
+          <span style={{ height: `${max > 0 ? Math.max(4, Math.round((v / max) * 100)) : 0}%` }} />
+        </span>
+      ))}
     </div>
   );
 }

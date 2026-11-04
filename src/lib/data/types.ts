@@ -53,21 +53,38 @@ export type KarteExample = {
   scripted: string;
 };
 
-// ---- ここから下は形だけ（中身は後日） ----
-
-/** 広告の案。AI の案は「前 → 後」と理由1文 */
-export type Ad = {
-  id: string;
-  /** どこに出すか（例：チラシ・地図アプリ・SNS） */
-  channel: string;
-  title: string;
-  before?: string;
-  after: string;
-  reason: string;
-  /** draft = 案 / approved = 人が確定した */
-  status: "draft" | "approved";
-  day: BusinessDay;
+/** 1週分の数（どれもプログラムが表から出す。AI は数を作らない） */
+export type AdWeek = {
+  /** 押された回数 */
+  clicks: number;
+  /** かかったお金（円） */
+  cost: number;
+  /** 予約の数 */
+  bookings: number;
 };
+
+/**
+ * 広告の1行。番号（no）は「広告を出す言葉」と「お客さんが調べた言葉」を通して1つずつ違う。
+ * weeks は古い順に4週分（4週前・3週前・2週前・先週）。
+ */
+export type AdRow = {
+  no: number;
+  text: string;
+  weeks: AdWeek[];
+};
+
+/** 広告を出す言葉（止められる）。売りのメニューの言葉は menuId を持つ（config/ads.json の featuredMenus） */
+export type AdKeyword = AdRow & { menuId?: string };
+
+/** 架空の広告の4週分（seed/ads.json） */
+export type AdReport = {
+  /** 広告を出す言葉（8つ。止められる） */
+  keywords: AdKeyword[];
+  /** お客さんが調べた言葉（多い順に8つ。外せる） */
+  searchTerms: AdRow[];
+};
+
+// ---- ここから下は形だけ（中身は後日） ----
 
 /** お金の出入り */
 export type MoneyEntry = {
@@ -96,12 +113,12 @@ export type Todo = {
 export type FieldNote = { key: string; label: string };
 
 export const AD_FIELDS: FieldNote[] = [
-  { key: "channel", label: "どこに出すか" },
-  { key: "title", label: "見出し" },
-  { key: "before → after", label: "前 → 後" },
-  { key: "reason", label: "理由（1文）" },
-  { key: "status", label: "状態（案 / 確定）" },
-  { key: "day", label: "何番目の営業日" },
+  { key: "no", label: "番号（「N番を止める」「N番を外す」の N）" },
+  { key: "text", label: "言葉" },
+  { key: "menuId", label: "売りのメニュー（広告を出す言葉だけ。あれば「売り」の印）" },
+  { key: "weeks[].clicks", label: "押された回数（週ごと）" },
+  { key: "weeks[].cost", label: "かかったお金（円・週ごと）" },
+  { key: "weeks[].bookings", label: "予約の数（週ごと）" },
 ];
 
 export const MONEY_FIELDS: FieldNote[] = [
