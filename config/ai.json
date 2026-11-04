@@ -34,5 +34,8 @@
     "maxTries": 2,
     "maxMaterialChars": 300,
     "maxRequestChars": 50000
+  },
+  "jobs": {
+    "maxAiCallsPerPress": 4
   }
 }

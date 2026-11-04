@@ -71,6 +71,7 @@ src/lib/todo/      ToDo：入口ごとの鍵・並べ方（items.ts。Claude は
 src/lib/posts/     発信：言葉の門・日時を入れる（台帳と設定から）・指示文・流れ（作り直し1回）・決まった返事・保存した下書き（ブラウザの中に残す形）
 src/lib/line/      LINE のつなぎ（オーナー側）：署名・Redis・つなぎと預かり（bridge）・一言の振り分け（sort）・画面での入れ方（apply）
 src/app/api/line/  LINE の窓口（Webhook・つなぐ・受け取り・送る）。画面の処理と混ぜない
+src/lib/jobs/      ホームの「AI の仕事」：これから来る物4行の流れ（run.ts。今の /api/ai/ の窓口をそのまま使う）・済みの印（ブラウザの中に残す形）
 src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理・LINE の預かりをまとめて戻す）
 ```
 
@@ -89,4 +90,5 @@ src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理�
   - LINE のボタンで確定してよいのは、サーバーが「つないだ人・その画面の行・1回だけの印」を確かめた press の知らせだけ。一言（文）や AI の答えからは確定しない。
   - 送る通数を減らす（返事で済む時は返事。1日の上限は `config/line.json`）。鍵・LINE の人の番号は画面・日誌・ログに出さない。
   - 一言の振り分けの道具は `src/lib/line/sort.ts` の3つ（仮押さえ・ToDo・カルテのメモ）だけ。テストでは `scriptSortModel` と置きかえた LINE・`memoryStore` を使う（Claude と LINE は呼ばない）。お客さん側の LINE はまだ。
+- ホームの「AI の仕事」（`src/lib/jobs/`）は、今の窓口（予約・広告・メモ）と今の変え方（仮押さえ・承認の箱・ToDo）をそのまま呼ぶだけ。確定は呼ばない。1回押した時に AI を呼ぶ回数は `config/ai.json` の `jobs.maxAiCallsPerPress` まで。テストでは決まった返事に置きかえる（`src/lib/jobs/__tests__/jobs.test.ts`）。
 - 秘密の鍵（Claude API キー・LINE の秘密 `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・オーナー用の合言葉 `LINE_OWNER_PASSCODE`（任意）・Redis の `KV_REST_API_URL`／`KV_REST_API_TOKEN`）は `.env.local`（Vercel では環境変数）に置く。`.env` で始まるファイルはコミットしない。
