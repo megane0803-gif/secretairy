@@ -61,11 +61,13 @@ src/components/    共通の部品
 src/app/api/ai/    AI を呼ぶ窓口（サーバーの側。受け取った物は残さない）
 src/lib/           設定の読み込み・ルール
 src/lib/ai/        予約チャットの道具・流れ・決まった返事（テスト用）
-src/lib/book/      台帳・承認の箱（ブラウザの中に残す形）
+src/lib/book/      台帳・承認の箱・保存したカルテ・「翌日へ」（ブラウザの中に残す形）
+src/lib/karte/     カルテ：見出しに分ける・言葉の門・保存と ToDo・Claude（Haiku）と決まった返事
 src/lib/ads/       広告の数・門・道具・流れ・決まった返事・広告の承認の箱（ブラウザの中に残す形）
 ```
 
 - AI の道具は `src/lib/ai/tools.ts` の4つだけ。確定の道具は足さない。テストでは Claude を呼ばず `src/lib/ai/script.ts` に置きかえる。
+- カルテの AI は下書きまで。プログラムの言葉の門（`src/lib/karte/gate.ts`。言葉は `locked.ts` の `KARTE_GATE_WORDS`。減らさない）を通し、保存は人の「保存」ボタンだけ。お客様の名前は AI に送らない。テストでは `scriptKarteWriter` に置きかえる。
 - 広告の見直しの道具は `src/lib/ads/tools.ts` の2つ（止める・外す）だけ。言葉を足す道具は足さない。案は門（`src/lib/ads/gate.ts`）を通してから承認の箱へ。テストでは `src/lib/ads/script.ts` に置きかえる。
 
 - LINE は後で足す。窓口は `src/app/api/line/` に分け、画面の処理と混ぜない。今は作らない。

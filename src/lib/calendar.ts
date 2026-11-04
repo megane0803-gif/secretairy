@@ -134,3 +134,31 @@ export function dateFromMonthDay(today: string, month: number, day: number): str
   if (thisYear >= today || dayDiff(thisYear, today) <= 60) return thisYear;
   return make(y + 1);
 }
+
+/** デモの「翌日へ」で進められる営業日の数の上限 */
+export const MAX_DAY_OFFSET = 60;
+
+/**
+ * 画面とサーバーで同じに使う「今日」と「いま」。
+ * dayOffset はデモの「翌日へ」で進めた営業日の数（定休日は飛ばす）。0 なら本当の今日・本当の時刻。
+ * 進めたときは「その日の開店1時間前（朝の要点を見るころ）」をいまの時刻にする。
+ */
+export function demoClock(
+  shop: ShopSettings,
+  now = new Date(),
+  dayOffset = 0,
+): { today: CalDay; opened: CalDay; shifted: boolean; now: { date: string; time: string }; realToday: CalDay; dayOffset: number } {
+  const real = shopToday(shop, now);
+  const offset = Number.isInteger(dayOffset) && dayOffset > 0 ? Math.min(dayOffset, MAX_DAY_OFFSET) : 0;
+  if (offset === 0) return { ...real, now: shopNow(shop, now), realToday: real.today, dayOffset: 0 };
+  const today = businessDayAt(shop, real.today, offset) ?? real.today;
+  const open = today.hours ? toMinutes(today.hours.open) : 600;
+  return {
+    today,
+    opened: real.opened,
+    shifted: false,
+    now: { date: today.date, time: toHHMM(Math.max(0, open - 60)) },
+    realToday: real.today,
+    dayOffset: offset,
+  };
+}

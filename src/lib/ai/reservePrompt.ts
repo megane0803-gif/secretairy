@@ -16,7 +16,7 @@ export function reserveSystem(ctx: SlotContext, shown: Candidate[]): string {
   lines.push("");
   lines.push(`# あなたの役目：美容室「${ctx.shop.name}」の予約の係（お客様とチャットで話す）`);
   lines.push("- 空き・受けられるかは、かならず道具で調べる。時刻・空き・件数を自分で作らない・変えない。");
-  lines.push("- お客様が日時とメニューを言ったら check_rules。日時がはっきりしなければ find_openings。「前と同じで」は previous_visit で前回のメニューを見てから find_openings。");
+  lines.push("- お客様が日時とメニューを言ったら check_rules。日時がはっきりしなければ find_openings。「前と同じで」は previous_visit で前回（保存したカルテ）のメニューを見てから、そのメニューで find_openings。前回の記録なしなら、メニューをたずねる。");
   lines.push("- 候補は、道具が返した順に「1つ目：」「2つ目：」と番号を付け、道具の label の書き方のまま出す（2つまで）。");
   lines.push("- 受けられないときは、道具の reason（1文）をそのまま伝え、代わりの候補（2つまで）を出す。");
   lines.push("- お客様が候補を選んだら（「1つ目で」など）、その候補で place_hold。お客様が選ぶ前に仮押さえしない。");

@@ -4,7 +4,7 @@
 
 import { calDay } from "../calendar";
 import { scopeTag } from "../rules/describe";
-import type { Step, Candidate, HoldOffer } from "./wire";
+import type { Step, Candidate, HoldOffer, Visit } from "./wire";
 import {
   alternativesFor,
   candidateLabel,
@@ -70,7 +70,7 @@ export const TOOL_DEFS: ToolDef[] = [
   },
   {
     name: "previous_visit",
-    description: "前回を見る。いま話しているお客様の、前回の来店の日とメニューを返す。",
+    description: "前回を見る。いま話しているお客様の、保存したカルテ（前回の来店）の日とメニューを返す。カルテが無ければ「前回の記録なし」。",
     input_schema: { type: "object", properties: {}, required: [], additionalProperties: false },
   },
   {
@@ -87,6 +87,8 @@ export const TOOL_DEFS: ToolDef[] = [
 ];
 
 export type ToolContext = SlotContext & {
+  /** そのお客様のカルテの日付とメニュー（「前回を見る」に使う） */
+  visits: Visit[];
   /** 直前の返事でお客様に出した候補。仮押さえはこの中から選ばれた物だけ */
   shown: Candidate[];
   /** いまの時刻（ISO） */
@@ -180,14 +182,23 @@ export function runTool(ctx: ToolContext, name: string, raw: unknown): ToolOutco
       const who = `${ctx.customer.surname}（架空）様`;
       if (!prev)
         return {
-          content: json({ found: false, note: "前回の来店の記録はありません" }),
-          steps: [{ kind: "tool", text: `${label}：${who} → 記録はありません` }],
+          content: json({ found: false, note: "前回の記録なし" }),
+          steps: [{ kind: "tool", text: `${label}：${who} → 前回の記録なし（カルテがありません）` }],
         };
       const day = calDay(ctx.shop, prev.date);
       const name = menuName(ctx, prev.menuId);
+      const minutes = menuOf(ctx, prev.menuId)?.minutes;
       return {
-        content: json({ found: true, date: prev.date, label: day.label, menu_id: prev.menuId, menu_name: name }),
-        steps: [{ kind: "tool", text: `${label}：${who} → ${day.label} ${name}` }],
+        content: json({
+          found: true,
+          date: prev.date,
+          label: day.label,
+          menu_id: prev.menuId,
+          menu_name: name,
+          minutes,
+          note: "保存したカルテのメニュー。このメニューで find_openings を呼ぶ",
+        }),
+        steps: [{ kind: "tool", text: `${label}：${who} → ${day.label} ${name}（${minutes ?? "?"}分。保存したカルテから）` }],
       };
     }
 

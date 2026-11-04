@@ -45,15 +45,42 @@ export type AiSettings = {
   maxMessages: number;
   /** お客様の1回の文の長さ（字） */
   maxMessageChars: number;
+  /** カルテ自動作成（Haiku） */
+  karte: KarteAiSettings;
+};
+
+export type KarteAiSettings = {
+  model: string;
+  /** 1回の返事の長さの上限（トークン） */
+  maxReplyTokens: number;
+  /** 施術メモの長さの上限（字） */
+  maxMemoChars: number;
 };
 
 export function getAiSettings(): AiSettings {
   const a = ai as AiSettings;
   // モデル名は環境変数で差しかえられる（鍵と同じく .env.local）
-  return { ...a, model: process.env.ANTHROPIC_MODEL || a.model };
+  return {
+    ...a,
+    model: process.env.ANTHROPIC_MODEL || a.model,
+    karte: { ...a.karte, model: process.env.ANTHROPIC_KARTE_MODEL || a.karte.model },
+  };
 }
 
-export type KarteHeading = { id: string; label: string; note?: string };
+/** 施術メモの長さの上限（字）。画面でも使う（鍵や環境変数は読まない） */
+export function getMemoMaxChars(): number {
+  return (ai as AiSettings).karte.maxMemoChars;
+}
+
+export type KarteHeading = {
+  id: string;
+  label: string;
+  note?: string;
+  /** next = 次回提案（保存のとき ToDo「次回話すこと」に1行目を足す・朝の要点に出す） */
+  role?: "next";
+  /** 決まった返事（AI なし）で、メモの文をこの見出しに分ける手がかりの言葉 */
+  hints?: string[];
+};
 
 export function getShop(): ShopSettings {
   return shop as ShopSettings;

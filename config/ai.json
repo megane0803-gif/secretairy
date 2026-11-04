@@ -4,6 +4,11 @@
   "maxToolCalls": 6,
   "maxMessages": 20,
   "maxMessageChars": 300,
+  "karte": {
+    "model": "claude-haiku-5-5",
+    "maxReplyTokens": 1000,
+    "maxMemoChars": 1500
+  },
   "ads": {
     "maxReplyTokens": 600
   }

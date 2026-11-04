@@ -7,7 +7,8 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import type { BookedRow } from "../ai/wire";
 import { BOOK_KEY, readBrowser, subscribeBrowser, writeBrowser } from "../browser";
-import { calDay, shopNow, shopToday } from "../calendar";
+import { calDay, demoClock, shopToday } from "../calendar";
+import { allKartes, resolveSeedKartes, toVisits } from "../karte/record";
 import {
   loadBook,
   resolveChatReservations,
@@ -57,14 +58,16 @@ export function useBookState() {
   return { state, update };
 }
 
-/** 画面で使う形：今日・起点・全部の予約・7日分・承認待ち・AI に送る台帳 */
+/** 画面で使う形：今日・起点・全部の予約・7日分・承認待ち・AI に送る台帳・カルテ */
 export function useBook(data: BookData) {
   const minute = useMinute();
   const now = useMemo(() => new Date(minute * 60_000), [minute]);
-  const { today, opened, shifted } = useMemo(() => shopToday(data.shop, now), [data.shop, now]);
   const { state, update } = useBookState();
+  // デモの「翌日へ」で進めた分だけ、今日を先へずらす（サーバーも同じ決め方。calendar.ts の demoClock）
+  const clock = useMemo(() => demoClock(data.shop, now, state.dayOffset), [data.shop, now, state.dayOffset]);
+  const { today, opened, shifted, realToday, dayOffset } = clock;
   const nowIso = now.toISOString();
-  const nowShop = useMemo(() => shopNow(data.shop, now), [data.shop, now]);
+  const nowShop = clock.now;
 
   const view = useMemo(() => {
     const anchor = calDay(data.shop, state.anchor);
@@ -80,7 +83,8 @@ export function useBook(data: BookData) {
       status: r.status,
       newCustomer: r.customer.firstVisit,
     }));
-    return { anchor, book, all, booked, pending: pendingApprovals(state, nowIso) };
+    const kartes = allKartes(resolveSeedKartes(data.seedKartes, all), state.kartes);
+    return { anchor, book, all, booked, kartes, visits: toVisits(kartes), pending: pendingApprovals(state, nowIso) };
   }, [data, state, today, nowIso]);
 
   return {
@@ -90,6 +94,8 @@ export function useBook(data: BookData) {
     today,
     opened,
     shifted,
+    realToday,
+    dayOffset,
     now: nowShop,
     nowIso,
   };

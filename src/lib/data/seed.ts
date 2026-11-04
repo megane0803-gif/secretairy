@@ -6,7 +6,9 @@ import reservations from "@seed/reservations.json";
 import ads from "@seed/ads.json";
 import accounting from "@seed/accounting.json";
 import todo from "@seed/todo.json";
-import type { AdReport, Customer, MoneyEntry, SeedReservation, Todo } from "./types";
+import kartes from "@seed/kartes.json";
+import karteExamples from "@seed/karte-examples.json";
+import type { AdReport, Customer, KarteExample, MoneyEntry, SeedKarte, SeedReservation, Todo } from "./types";
 
 export function getCustomers(): Customer[] {
   return customers as Customer[];
@@ -27,4 +29,14 @@ export function getMoneyEntries(): MoneyEntry[] {
 
 export function getTodos(): Todo[] {
   return todo as Todo[];
+}
+
+/** 前回までのカルテ（最初の状態）。日付・メニューは予約（前回の来店）から取る */
+export function getSeedKartes(): SeedKarte[] {
+  return kartes as SeedKarte[];
+}
+
+/** カルテの「例文を入れる」（今日のお客様1人に1つ） */
+export function getKarteExamples(): KarteExample[] {
+  return karteExamples as KarteExample[];
 }

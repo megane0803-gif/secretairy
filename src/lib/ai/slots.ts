@@ -6,7 +6,7 @@ import { scopeTag } from "../rules/describe";
 import { judge, type Verdict } from "../rules/judge";
 import type { Rule } from "../rules/types";
 import type { Menu, ShopSettings } from "../settings";
-import type { BookedRow, Candidate } from "./wire";
+import type { BookedRow, Candidate, Visit } from "./wire";
 
 export type SlotContext = {
   shop: ShopSettings;
@@ -170,10 +170,13 @@ export function alternativesFor(ctx: SlotContext, c: Candidate): SlotSearch {
   return findSlots(ctx, c.menuId, { date: c.date, time: c.start }, MAX_CANDIDATES, [c]);
 }
 
-/** その方の前回の来店（今日より前の確定の予約のうち、いちばん新しい物） */
-export function previousVisit(ctx: SlotContext): BookedRow | null {
-  const past = ctx.booked
-    .filter((b) => b.customerId === ctx.customer.id && b.status === "confirmed" && b.date < ctx.today.date)
-    .sort((a, b) => (a.date === b.date ? (a.start < b.start ? 1 : -1) : a.date < b.date ? 1 : -1));
+/**
+ * その方の前回の来店。保存したカルテ（最初の状態の「前回までのカルテ」も含む）のうち、
+ * 今日まででいちばん新しい物の日付とメニュー。カルテが無ければ null（「前回の記録なし」）。
+ */
+export function previousVisit(ctx: { visits: Visit[]; customer: { id: string }; today: CalDay }): Visit | null {
+  const past = ctx.visits
+    .filter((v) => v.customerId === ctx.customer.id && v.date <= ctx.today.date)
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   return past[0] ?? null;
 }

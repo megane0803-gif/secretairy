@@ -13,7 +13,7 @@ import { approveAd, withAdFixed, withAdFixUsed, withAdSkipped, type AdProposal }
 import { useAds } from "@/lib/ads/useAds";
 import { MAX_FIX_CHARS, type AdsMode } from "@/lib/ads/wire";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
-import { shopToday } from "@/lib/calendar";
+import { demoClock } from "@/lib/calendar";
 import { useBookState } from "@/lib/book/useBook";
 import { writeJournal, type JournalWho } from "@/lib/journal";
 import type { Rule } from "@/lib/rules/types";
@@ -60,7 +60,8 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
     if (!e.nativeEvent.isTrusted) return;
     const shop = getShop();
     const nowIso = new Date().toISOString();
-    const today = shopToday(shop).today.date;
+    // 「翌日へ」で進めた日もホームと同じ「今日」から数える
+    const today = demoClock(shop, new Date(), bookState.state.dayOffset).today.date;
     // 広告（架空）・ToDo・日誌を同じ1回で変える（書く直前に読みなおした物で）
     let journal: { who: JournalWho; text: string }[] = [];
     ads.update((a) => {

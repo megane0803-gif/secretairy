@@ -31,7 +31,8 @@ const MAX_CHARS = 300;
 export function ReserveChat({ data }: { data: BookData }) {
   const book = useBook(data);
   const { rules } = useRules(data.seedRules);
-  const withPast = data.customers.find((c) => book.all.some((r) => r.customer.id === c.id && r.date < book.today.date));
+  // 「前と同じで」は、前回のカルテがある方で話す
+  const withPast = data.customers.find((c) => book.kartes.some((k) => k.customerId === c.id && k.date <= book.today.date));
   const [customerId, setCustomerId] = useState(withPast?.id ?? data.customers[0]?.id ?? "");
   const customer = data.customers.find((c) => c.id === customerId) ?? data.customers[0];
   const greeting = (): Msg[] => [
@@ -95,6 +96,9 @@ export function ReserveChat({ data }: { data: BookData }) {
       customer: { id: customer.id, surname: customer.surname, firstVisit: customer.firstVisit },
       booked: book.booked,
       rules: rules.filter((r) => !r.locked),
+      // そのお客様のカルテの日付とメニューだけ（中身は送らない）
+      visits: book.visits.filter((v) => v.customerId === customer.id),
+      dayOffset: book.dayOffset,
     };
 
     let aiText = "";
@@ -194,7 +198,7 @@ export function ReserveChat({ data }: { data: BookData }) {
 
   const tryExample = (ex: Example) => {
     if (busy) return;
-    if (ex.id === "previous" && ctx && !previousVisit(ctx) && withPast) {
+    if (ex.id === "previous" && ctx && !previousVisit({ ...ctx, visits: book.visits }) && withPast) {
       // 前回の来店がある方に切りかえて話す
       const fresh = greeting();
       setCustomerId(withPast.id);
