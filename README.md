@@ -47,8 +47,8 @@ npm run build      # 本番ビルド
 
 ### 公開 URL
 
-- 公開 URL：`https://<公開URL>`（Vercel。提出の前にここに書き入れる）
-- LINE の Webhook の URL：`https://<公開URL>/api/line`
+- 公開 URL：https://secretairy.vercel.app （Vercel）
+- LINE の Webhook の URL：`https://secretairy.vercel.app/api/line`（LINE Developers の Messaging API の設定に入れる）
 
 ### 環境変数
 

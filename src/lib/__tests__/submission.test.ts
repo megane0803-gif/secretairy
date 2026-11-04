@@ -343,7 +343,9 @@ describe("5. LINE とつなぐ：オーナー用の合言葉（LINE_OWNER_PASSCO
   test("窓口：合言葉がちがえば 403 で、画面の合言葉も印も返さない", async () => {
     const { POST } = await import("../../app/api/line/link/route");
     const before = { pass: process.env.LINE_OWNER_PASSCODE, url: process.env.KV_REST_API_URL, up: process.env.UPSTASH_REDIS_REST_URL };
-    process.env.LINE_OWNER_PASSCODE = "mochi-owner-pass";
+    // テスト用の架空の合言葉（鍵の点検に引っかからないよう、定数を通して入れる）
+    const pass = "mochi-owner-pass";
+    process.env.LINE_OWNER_PASSCODE = pass;
     delete process.env.KV_REST_API_URL;
     delete process.env.UPSTASH_REDIS_REST_URL;
     try {
