@@ -824,3 +824,65 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .ad-fix input { flex: 1 1 160px; min-width: 0; font: inherit; font-size: 0.9rem; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
 .ad-review { display: flex; flex-direction: column; gap: 8px; }
 .ad-review .btn.big { font-size: 1.05rem; padding: 10px 14px; }
+
+/* ---- 経理タブ ---- */
+
+.acct-sales { margin-bottom: 24px; }
+/* 売上は桁が多いので、狭い画面では1つずつの段にする */
+.acct-sales .bignums { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.acct-sales .bignum { min-width: 0; overflow-wrap: anywhere; }
+.acct-h3 { font-size: 1rem; margin: 12px 0 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.acct-h4 { font-size: 0.95rem; margin: 12px 0 4px; }
+.daybars { display: flex; align-items: flex-end; gap: 2px; height: 72px; min-width: 0; }
+.daybar { flex: 1 1 0; min-width: 0; height: 100%; padding: 0; border: 0; background: var(--line); border-radius: 3px 3px 0 0; display: flex; align-items: flex-end; cursor: pointer; font: inherit; }
+.daybar span { display: block; width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; }
+.daybar:hover span, .daybar.on span { background: var(--ok); }
+.daybar.on { outline: 2px solid var(--ok); outline-offset: 1px; }
+.daybar:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.daybar.closed { background: transparent; cursor: default; align-items: flex-end; justify-content: center; }
+.daybar.closed i { display: block; width: 5px; height: 5px; border-radius: 50%; background: var(--muted); margin-bottom: 1px; }
+.daybars-labels { display: flex; gap: 2px; font-size: 0.65rem; color: var(--muted); }
+.daybars-labels span { flex: 1 1 0; min-width: 0; text-align: center; overflow: visible; white-space: nowrap; }
+.acct-pickday { margin: 6px 0 0; min-height: 1.7em; overflow-wrap: anywhere; }
+.acct-methods { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.acct-methods li { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) 3.5em auto; align-items: center; gap: 8px; }
+.acct-methods .minibar { height: 10px; border-radius: 5px; }
+.acct-method-pct { text-align: right; }
+.acct-method-pct strong { font-size: 1.15rem; }
+.table.acct-table { max-width: none; min-width: 320px; }
+.acct-table td.num, .acct-table th.num { text-align: right; white-space: nowrap; }
+.acct-table tr.off td { color: var(--muted); }
+
+.acct-card-sec { margin-bottom: 16px; }
+.acct-bigcard { border: 3px solid var(--accent); margin: 8px 0 12px; }
+.acct-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.acct-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 10px; min-width: 0; }
+.acct-no strong { font-size: 1.05rem; }
+.acct-merchant { font-weight: 600; overflow-wrap: anywhere; }
+.acct-date { color: var(--muted); }
+.acct-amount { font-weight: 700; margin-right: auto; }
+.acct-use { display: inline-flex; gap: 4px; }
+.acct-use-btn { font: inherit; font-size: 0.9rem; padding: 2px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); cursor: pointer; }
+.acct-use-btn:hover:not(:disabled) { border-color: var(--accent); }
+.acct-use-btn:disabled { cursor: default; }
+.acct-use-btn.on.shop { background: var(--accent); border-color: var(--accent); color: #fff; }
+.acct-use-btn.on.private { background: var(--muted); border-color: var(--muted); color: var(--surface); }
+.acct-use-btn:disabled:not(.on) { opacity: 0.5; }
+.acct-auto { display: inline-flex; align-items: center; gap: 4px; font-size: 0.85rem; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.acct-auto.on { color: var(--accent); font-weight: 600; }
+.acct-merchant-box { border: 1px dashed var(--line); border-radius: var(--radius); padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.acct-merchant-box.ng { border: 2px solid var(--warn); }
+.acct-merchant-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.acct-rules { list-style: none; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.acct-rules li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tag.use-shop { background: var(--accent); color: #fff; }
+.tag.use-private { background: var(--muted); color: var(--surface); }
+
+.acct-left { margin: 0; font-size: 1.05rem; }
+.acct-left strong { font-size: 1.8rem; color: var(--accent); }
+.acct-service { border: 1px dashed var(--muted); border-radius: var(--radius); padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+.acct-service .acct-h3 { margin: 0; }
+.acct-trial { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; }
+.acct-trial .ad-change { font-size: 1rem; margin: 0; }
+.acct-trial-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; }
+.acct-trial-rows li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 8px; overflow-wrap: anywhere; }

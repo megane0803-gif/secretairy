@@ -45,6 +45,8 @@ export const RULES_KEY = "rules";
 export const BOOK_KEY = "book";
 /** 広告の承認の箱・止めた／外した言葉（ads/state.ts） */
 export const ADS_KEY = "ads";
+/** 経理：通販の明細で選んだ印・会計（架空）への登録・足した自動のルール（accounting/state.ts） */
+export const ACCOUNTING_KEY = "accounting";
 /** 日誌（journal.ts） */
 export const JOURNAL_KEY = "journal";
 export const BROWSER_PREFIX = PREFIX;

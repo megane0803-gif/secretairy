@@ -84,21 +84,65 @@ export type AdReport = {
   searchTerms: AdRow[];
 };
 
-// ---- ここから下は形だけ（中身は後日） ----
+// ---- 経理（売上・通販の明細） ----
 
-/** お金の出入り */
-export type MoneyEntry = {
-  id: string;
-  day: BusinessDay;
-  /** income = 入ったお金 / expense = 使ったお金 */
-  kind: "income" | "expense";
-  /** 何のお金か（例：カット売上・シャンプー仕入れ） */
-  label: string;
+/** 店用 / 私用 */
+export type CardUse = "shop" | "private";
+
+/** 売上の1日分（定休日は持たない）。売上は支払い方法の合計（プログラムが足す） */
+export type SalesDay = {
+  /** YYYY-MM-DD */
+  date: string;
+  /** 来店（人） */
+  visits: number;
+  /** 支払い方法ごとの金額（円）。キーは methods の id */
+  pay: Record<string, number>;
+};
+
+/** 架空の1か月の売上 */
+export type SalesMonth = {
+  /** YYYY-MM */
+  month: string;
+  methods: { id: string; name: string }[];
+  days: SalesDay[];
+};
+
+/** 購入先（架空） */
+export type Merchant = { id: string; name: string };
+
+/** 自動のルール：この購入先は店用（私用） */
+export type MerchantRule = { merchantId: string; use: CardUse };
+
+/** 前の月までに仕分けた数（購入先ごと） */
+export type MerchantHistory = { merchantId: string; shop: number; private: number };
+
+/** 通販の明細の1行。来るのは日付・購入先・金額だけ（品名は無い） */
+export type CardItem = {
+  /** 番号（1から） */
+  no: number;
+  /** YYYY-MM-DD */
+  date: string;
+  merchantId: string;
   /** 円 */
   amount: number;
-  /** 予約から来た売上なら、その予約 */
-  reservationId?: string;
 };
+
+export type CardStatement = { from: string; to: string; items: CardItem[] };
+
+/** 経理の最初の状態（seed/accounting.json） */
+export type AccountingSeed = {
+  sales: SalesMonth;
+  merchants: Merchant[];
+  /** 前の月までの自動のルール */
+  rules: MerchantRule[];
+  history: MerchantHistory[];
+  /** 会計（架空）がカード会社から取り込んだ、未処理の通販の明細 */
+  statement: CardStatement;
+  /** 登録の後の「次の明細（試し）」 */
+  trial: CardStatement;
+};
+
+// ---- ここから下は形だけ（中身は後日） ----
 
 /** やること */
 export type Todo = {
@@ -121,12 +165,14 @@ export const AD_FIELDS: FieldNote[] = [
   { key: "weeks[].bookings", label: "予約の数（週ごと）" },
 ];
 
-export const MONEY_FIELDS: FieldNote[] = [
-  { key: "day", label: "何番目の営業日（負の数は過去）" },
-  { key: "kind", label: "入ったお金 / 使ったお金" },
-  { key: "label", label: "何のお金か" },
-  { key: "amount", label: "金額（円）" },
-  { key: "reservationId", label: "どの予約の売上か（あれば）" },
+export const CARD_FIELDS: FieldNote[] = [
+  { key: "statement.items[].no", label: "番号" },
+  { key: "statement.items[].date", label: "日付（YYYY-MM-DD。品名は来ない）" },
+  { key: "statement.items[].merchantId", label: "購入先（merchants の id）" },
+  { key: "statement.items[].amount", label: "金額（円）" },
+  { key: "rules[]", label: "前の月までの自動のルール（購入先ごとに店用か私用）" },
+  { key: "history[]", label: "前の月までに仕分けた数（購入先ごとの店用・私用）" },
+  { key: "sales.days[]", label: "売上の1日分（日付・来店・支払い方法ごとの金額。定休日は持たない）" },
 ];
 
 export const TODO_FIELDS: FieldNote[] = [
