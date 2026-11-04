@@ -20,9 +20,11 @@ export type DeskState = {
   noAi: boolean;
   /** うまくいかなかったときの1文 */
   problem: string | null;
+  /** 録音から作ったメモの印（key = customerId|date）。この時だけメモの上限を広げる */
+  sources?: Record<string, "recording">;
 };
 
-const EMPTY_DESK: DeskState = { selected: null, memos: {}, drafts: {}, busy: false, mode: "ai", noAi: false, problem: null };
+const EMPTY_DESK: DeskState = { selected: null, memos: {}, drafts: {}, busy: false, mode: "ai", noAi: false, problem: null, sources: {} };
 let state: DeskState = EMPTY_DESK;
 const listeners = new Set<() => void>();
 

@@ -9,7 +9,8 @@
     "model": "claude-haiku-5-5",
     "maxReplyTokens": 1000,
     "maxMemoChars": 1500,
-    "maxRequestChars": 200000
+    "maxRequestChars": 200000,
+    "maxRecordingMemoChars": 6000
   },
   "ads": {
     "maxReplyTokens": 600,
@@ -34,6 +35,15 @@
     "maxTries": 2,
     "maxMaterialChars": 300,
     "maxRequestChars": 50000
+  },
+  "recording": {
+    "model": "claude-haiku-5-5",
+    "maxReplyTokens": 600,
+    "maxTextChars": 12000,
+    "maxNotes": 12,
+    "maxNoteChars": 60,
+    "maxRequestChars": 100000,
+    "minIntervalSeconds": 7
   },
   "jobs": {
     "maxAiCallsPerPress": 4

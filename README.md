@@ -15,6 +15,7 @@
 - 予約チャット（AI は仮押さえまで。確定はオーナーの承認だけ）
 - 1週間の予約台帳と、予約サイト（架空）
 - カルテ自動作成（AI は案まで。言葉の門を通し、人が「保存」を押す）
+- カルテ：録音からメモを作る（PC だけ。録音のファイル・画面の録音・録音フォルダから。2〜4時間の録音でも読めます。声はブラウザの中で Whisper が文字にします）
 - 朝の要点（今日の予約・承認待ち・ToDo・前回の次回提案・空き枠）
 - オーナーの承認（承認の箱。確定は人のボタンだけ）
 - 広告の見直し（AI が案を1つ → プログラムの門 → 承認の箱）
@@ -72,7 +73,8 @@ npm run build      # 本番ビルド
 
 - 例外は LINE のつなぎだけ：Redis に「合言葉のつなぎ」と「画面が受け取りに来るまでの LINE の知らせ」を期限つきで置きます。お客様の記録・台帳・日誌は置きません。
 - AI を呼ぶ窓口は、ブラウザから要るデータとルールを毎回受け取り、答えを返すだけで、受け取った物を残しません。
-- ホームの「最初に戻す」1回で、予約・カルテ・広告・経理・LINE の預かりが全部最初に戻ります（日誌・ルールのタブの変更・LINE のつなぎは残ります）。
+- 録音からメモを作るときの、文字・要点・画面で録った区切りは、ブラウザの中（IndexedDB）に残します。声も文字もサーバーには残しません。
+- ホームの「最初に戻す」1回で、予約・カルテ（録音から作った文字と要点も）・広告・経理・LINE の預かりが全部最初に戻ります（日誌・ルールのタブの変更・LINE のつなぎは残ります）。
 
 | ファイル | 中身 |
 |---|---|
@@ -80,6 +82,7 @@ npm run build      # 本番ビルド
 | `config/menus.json` | メニュー |
 | `config/ai.json` | AI のモデル名と上限 |
 | `config/karte.json` | カルテの見出し |
+| `config/recording.json` | 録音からメモを作る：受ける形・上限（4時間半・300MB）・区切りの長さ・黙っている所の見分け方・Whisper のモデル |
 | `config/ads.json` | 広告の札・売りのメニュー・架空の町の名前 |
 | `config/accounting.json` | 経理の札（「会計（架空）」など） |
 | `config/line.json` | LINE のつなぎ：合言葉の期限・つながる時間・1日に送る上限など |
@@ -94,6 +97,20 @@ npm run build      # 本番ビルド
 - LINE のボタンで確定してよいのは、合言葉でつないだ LINE の人が押した物だけです。一言や AI の答えからは確定しません。
 - 画面は開いている間、数秒ごとに受け取りに行きます（`config/line.json` の `pollSeconds`）。
 
+## 録音からメモを作る（カルテのタブ・PC だけ）
+
+声はこの PC のブラウザの外に出しません。文字にした中身は、要点とカルテを作るために Claude に送ります。
+
+録音は、お客様の了解を得てから行ってください。
+
+- 入口は3つ：ファイルを選ぶ（落としてもよい）・「録音」ボタン（PC につないだマイクから、ブラウザが録る）・「録音フォルダを選ぶ」（PC の Chrome・Edge だけ。画面を開いている間、入った新しい録音を読む）。
+- 2〜4時間の録音でも読めます（受けるのは4時間半・300MBまで。`config/recording.json`）。10分くらいずつに区切って読み、黙っている所や音だけの所は飛ばします。
+- 文字にするのは、ブラウザの中（Web Worker）で動かす Whisper です。WebGPU が使えれば大きめのモデル（large-v3-turbo）、使えなければ小さいモデル（base）に自動で切り替えます。初回はモデルの読み込みに時間がかかります（大きさは画面に出します）。2回目からはブラウザに覚えさせます。
+- 区切りごとの文字を Claude（Haiku）が短い要点にし（雑談は捨てる）、全部の要点を施術のメモに入れて、今までどおり「カルテにする」→ 言葉の門 →「保存」（人）です。お客様の名字は〔お客様〕に置きかえてから送ります。
+- 途中で止めても、済んだ区切りの文字はブラウザの中（IndexedDB）に残り、続きから再開できます。ホームの「最初に戻す」で消えます。
+
+おすすめは、本体に録音できる胸元のワイヤレスマイク。作者のお店では、これで施術中の会話を録り、終わったら PC に移して置いています。録音できないマイクでも、受信機を PC につないで画面の録音ボタンで録れます。受けるのは m4a・mp3・wav・aac です。
+
 ## 使った物と権利
 
 ### ライブラリ
@@ -106,6 +123,18 @@ npm run build      # 本番ビルド
 | [TypeScript](https://www.typescriptlang.org/) | 型 | Apache-2.0 |
 | [tsx](https://github.com/privatenumber/tsx) | テストを動かす | MIT |
 | `@types/node`・`@types/react`・`@types/react-dom` | 型の定義 | MIT |
+| [Transformers.js](https://github.com/huggingface/transformers.js)（`@huggingface/transformers`） | ブラウザの中（Web Worker）で Whisper を動かし、録音を文字にする | Apache-2.0 |
+| [ONNX Runtime Web](https://github.com/microsoft/onnxruntime)（`onnxruntime-web`。Transformers.js が中で使う） | モデルを WebGPU・WebAssembly で動かす | MIT |
+
+### モデル（録音を文字にする）
+
+| 名前 | 使い道 | ライセンス |
+|---|---|---|
+| [Whisper](https://github.com/openai/whisper)（OpenAI） | 声を文字にするモデル（日本語） | MIT（コードとモデルの重み） |
+| [onnx-community/whisper-large-v3-turbo](https://huggingface.co/onnx-community/whisper-large-v3-turbo) | WebGPU が使える PC で使う（Whisper large-v3-turbo を ONNX にした物） | MIT |
+| [onnx-community/whisper-base](https://huggingface.co/onnx-community/whisper-base) | WebGPU が使えない PC で使う（Whisper base を ONNX にした物） | MIT |
+
+モデルは、初回に Hugging Face から読み込んで、ブラウザに覚えさせます（読み込むだけで、声や文字は送りません）。
 
 ほかに、これらが中で使うライブラリがあります（`package-lock.json`）。LINE と Upstash Redis は SDK を使わず、それぞれの公開の API を `fetch` で呼んでいます。
 
@@ -113,10 +142,11 @@ npm run build      # 本番ビルド
 
 | 名前 | 使い道 | 権利・決まり |
 |---|---|---|
-| Claude API（Anthropic） | 予約チャット・カルテの案・広告の案・LINE の一言の振り分け | Anthropic の利用規約に従って使う |
+| Claude API（Anthropic） | 予約チャット・カルテの案・録音の要点・広告の案・LINE の一言の振り分け | Anthropic の利用規約に従って使う |
 | LINE Messaging API（LINE ヤフー） | オーナーの LINE とのつなぎ | LINE 公式アカウントの規約に従って使う |
 | Vercel | 公開（ホスティング）・Firewall | Vercel の利用規約に従って使う |
 | Upstash Redis（Vercel からつなぐ） | LINE のつなぎと預かり（期限つき） | Upstash の利用規約に従って使う |
+| Hugging Face Hub | 録音を文字にするモデル（Whisper）を、ブラウザが初回に読み込む | 各モデルのライセンス（上の表）に従って使う |
 
 画面にも README にも、実在の会計サービス・カード会社・広告サービスの名前は出していません（「会計（架空）」などの札）。お客様・店・住所・数字はすべて架空で、実在の人や店とは関係ありません。
 

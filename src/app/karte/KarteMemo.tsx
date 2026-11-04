@@ -1,6 +1,7 @@
 "use client";
 
-// カルテのタブの右の列：施術のメモ。スマホのキーボードの音声入力で話して入れる前提（録音の機能は作らない）。
+// カルテのタブの右の列：施術のメモ。スマホのキーボードの音声入力で話して入れる前提。
+// PC では、下の「録音からメモを作る」で作った要点もここに入る（その時だけメモの上限を広げる：recordingMaxChars）。
 // 「カルテにする」で /api/ai/karte に、メモとこのブラウザのルールを送る（お客様の名前は送らない）。
 // 返ってきた案は真ん中に大きいカードで出る。保存は真ん中の「保存」（人のボタン）だけ。
 
@@ -15,13 +16,26 @@ import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
 import { useKarteToday } from "./useKarteToday";
 
-export function KarteMemo({ data, examples, maxChars }: { data: BookData; examples: KarteExample[]; maxChars: number }) {
+export function KarteMemo({
+  data,
+  examples,
+  maxChars: baseMaxChars,
+  recordingMaxChars,
+}: {
+  data: BookData;
+  examples: KarteExample[];
+  maxChars: number;
+  /** 録音から作ったメモの時だけの上限（字） */
+  recordingMaxChars?: number;
+}) {
   const { book, desk, selected, key, saved, memo } = useKarteToday(data);
   const { rules } = useRules(data.seedRules);
 
   if (!selected || !key)
     return <p className="empty">今日のお客様（確定の予約）がいないので、メモを書く方がいません。</p>;
 
+  const fromRecording = desk.sources?.[key] === "recording" && typeof recordingMaxChars === "number";
+  const maxChars = fromRecording ? Math.max(baseMaxChars, recordingMaxChars) : baseMaxChars;
   const who = `${selected.customer.surname}（架空）様`;
   const length = [...memo].length;
   const over = length > maxChars;
@@ -29,13 +43,19 @@ export function KarteMemo({ data, examples, maxChars }: { data: BookData; exampl
   const locked = !!saved;
   const canMake = !locked && !desk.busy && memo.trim() !== "" && !over;
 
-  const setMemo = (text: string) => setDesk((s) => ({ memos: { ...s.memos, [key]: text } }));
+  // 手で入れた・例文を入れた時は、録音の印を外す（空にした時も）。録音のメモを手で直した時は印を残す
+  const setMemo = (text: string, keepSource = true) =>
+    setDesk((s) => {
+      const sources = { ...(s.sources ?? {}) };
+      if (!keepSource || !text.trim()) delete sources[key];
+      return { memos: { ...s.memos, [key]: text }, sources };
+    });
 
   async function make(mode: KarteMode) {
     const text = (getDesk().memos[key!] ?? "").trim();
     if (!text || [...text].length > maxChars || getDesk().busy) return;
     setDesk(() => ({ busy: true, problem: null, mode }));
-    const body: KarteRequest = { mode, memo: text, rules: rules.filter((r) => !r.locked) };
+    const body: KarteRequest = { mode, memo: text, rules: rules.filter((r) => !r.locked), ...(fromRecording ? { source: "recording" as const } : {}) };
     try {
       const res = await fetch("/api/ai/karte", {
         method: "POST",
@@ -62,7 +82,7 @@ export function KarteMemo({ data, examples, maxChars }: { data: BookData; exampl
       writeJournal(
         {
           who: mode === "ai" ? "AI" : "プログラム",
-          text: `カルテの案を作った（${who}・${lines}行${mode === "script" ? "・決まった返事" : ""}。保存は人が押す）`,
+          text: `カルテの案を作った（${who}・${lines}行${mode === "script" ? "・決まった返事" : ""}${fromRecording ? "・録音の要点から" : ""}。保存は人が押す）`,
         },
         ...draft.removed.map((r) => ({
           who: "プログラム" as const,
@@ -103,11 +123,11 @@ export function KarteMemo({ data, examples, maxChars }: { data: BookData; exampl
         placeholder="例：来た時は根元が5センチくらい伸びてて…（スマホのキーボードのマイクで話して入れられます）"
       />
       <p id="karte-memo-count" className={over ? "karte-count over" : "karte-count"}>
-        <span className="num">{length}</span>/{maxChars}字{over && "（多すぎます。短くしてください）"}
+        <span className="num">{length}</span>/{maxChars}字{fromRecording && "（録音の要点）"}{over && "（多すぎます。短くしてください）"}
       </p>
       {locked && <p className="hint">このメモは保存したので、今日はもう直しません。</p>}
       <p id="karte-memo-voice" className="hint">
-        スマホのキーボードの音声入力（マイクのボタン）で話して入れる前提です。録音はしません。
+        スマホのキーボードの音声入力（マイクのボタン）で話して入れられます。PC では、下の「録音からメモを作る」で作った要点も入れられます。
       </p>
 
       <div className="chat-mode" role="group" aria-label="カルテの案を作る物">
@@ -159,7 +179,7 @@ export function KarteMemo({ data, examples, maxChars }: { data: BookData; exampl
           className="btn"
           disabled={locked || !example || desk.busy}
           title={example ? "この方の話し言葉の例文をメモに入れます" : "この方の例文はありません"}
-          onClick={() => example && setMemo(example.memo)}
+          onClick={() => example && setMemo(example.memo, false)}
         >
           例文を入れる
         </button>

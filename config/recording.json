@@ -1,0 +1,42 @@
+{
+  "visible": true,
+  "accept": ["m4a", "mp3", "wav", "aac"],
+  "maxBytes": 314572800,
+  "maxSeconds": 16200,
+  "chunkSeconds": 600,
+  "sampleRate": 16000,
+  "language": "japanese",
+  "silence": {
+    "frameMs": 30,
+    "minLevel": 0.01,
+    "modulationRatio": 2,
+    "windowSeconds": 2,
+    "padSeconds": 0.3,
+    "minSpeechSeconds": 0.4,
+    "mergeGapSeconds": 1
+  },
+  "recorder": {
+    "segmentSeconds": 600,
+    "quietLevel": 0.01,
+    "quietWarnSeconds": 10
+  },
+  "folder": {
+    "pollSeconds": 20
+  },
+  "models": {
+    "webgpu": {
+      "id": "onnx-community/whisper-large-v3-turbo",
+      "label": "Whisper large-v3-turbo",
+      "device": "webgpu",
+      "dtype": { "encoder_model": "fp16", "decoder_model_merged": "q4" },
+      "approxMB": 1400
+    },
+    "wasm": {
+      "id": "onnx-community/whisper-base",
+      "label": "Whisper base",
+      "device": "wasm",
+      "dtype": { "encoder_model": "q8", "decoder_model_merged": "q8" },
+      "approxMB": 80
+    }
+  }
+}

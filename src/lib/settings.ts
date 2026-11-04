@@ -10,6 +10,7 @@ import ai from "@config/ai.json";
 import ads from "@config/ads.json";
 import accounting from "@config/accounting.json";
 import line from "@config/line.json";
+import recording from "@config/recording.json";
 import todo from "@config/todo.json";
 import posts from "@config/posts.json";
 import jobs from "@config/jobs.json";
@@ -64,6 +65,8 @@ export type KarteAiSettings = {
   maxMemoChars: number;
   /** 窓口（/api/ai/karte）が受け取る大きさの上限（字） */
   maxRequestChars: number;
+  /** 録音から作ったメモ（要点をまとめた物）の長さの上限（字）。この流れの時だけ広げる */
+  maxRecordingMemoChars: number;
 };
 
 export function getAiSettings(): AiSettings {
@@ -229,6 +232,96 @@ export function getLineAiSettings(): LineAiSettings {
     maxReplyTokens: a.maxReplyTokens,
     maxRequestChars: a.maxRequestChars,
   };
+}
+
+/** 録音からメモを作る（カルテのタブ。config/recording.json）。声はブラウザの外に出さない */
+export type WhisperModel = {
+  /** Hugging Face のモデルの名前 */
+  id: string;
+  label: string;
+  device: "webgpu" | "wasm";
+  dtype: Record<string, string>;
+  /** 初回に読み込む大きさのめやす（MB） */
+  approxMB: number;
+};
+
+export type SilenceSettings = {
+  /** 音の大きさを見る1こまの長さ（ミリ秒） */
+  frameMs: number;
+  /** これより小さい音は黙っている所 */
+  minLevel: number;
+  /** まわりのいちばん小さい音の何倍より大きければ声とみなすか（ずっと同じ大きさの音＝音だけの所は飛ばす） */
+  modulationRatio: number;
+  /** 「まわり」の幅（秒） */
+  windowSeconds: number;
+  /** 声の前後に足す長さ（秒） */
+  padSeconds: number;
+  /** これより短い声は捨てる（秒） */
+  minSpeechSeconds: number;
+  /** これより短いすき間は声どうしをつなぐ（秒） */
+  mergeGapSeconds: number;
+};
+
+export type RecordingSettings = {
+  /** 機能を出すか（最初の状態。画面のスイッチで変えた分はブラウザの中だけ） */
+  visible: boolean;
+  /** 受けるファイルの拡張子 */
+  accept: string[];
+  /** 受けるファイルの大きさの上限（バイト） */
+  maxBytes: number;
+  /** 受ける録音の長さの上限（秒） */
+  maxSeconds: number;
+  /** 1つの区切りの長さ（秒） */
+  chunkSeconds: number;
+  /** 文字にするときの音の細かさ（Hz） */
+  sampleRate: number;
+  /** Whisper に渡す言葉 */
+  language: string;
+  silence: SilenceSettings;
+  recorder: {
+    /** 画面の録音を区切ってしまう長さ（秒） */
+    segmentSeconds: number;
+    /** これより小さい音が続けば「音が入っていません」 */
+    quietLevel: number;
+    /** 何秒続けば知らせるか */
+    quietWarnSeconds: number;
+  };
+  folder: {
+    /** 録音フォルダを見に行く間（秒） */
+    pollSeconds: number;
+  };
+  models: { webgpu: WhisperModel; wasm: WhisperModel };
+};
+
+export function getRecordingSettings(): RecordingSettings {
+  return recording as RecordingSettings;
+}
+
+/** 録音の要点づくりで AI を呼ぶときの設定（config/ai.json の recording。モデル名は ANTHROPIC_KARTE_MODEL でも差しかえられる） */
+export type RecordingAiSettings = {
+  model: string;
+  /** 1回の返事の長さの上限（トークン） */
+  maxReplyTokens: number;
+  /** 1つの区切りの文字の長さの上限（字）。超えた分は送らない */
+  maxTextChars: number;
+  /** 1つの区切りの要点の数の上限 */
+  maxNotes: number;
+  /** 要点1行の長さの上限（字） */
+  maxNoteChars: number;
+  /** 窓口（/api/ai/recording）が受け取る大きさの上限（字） */
+  maxRequestChars: number;
+  /** 区切りごとに AI を呼ぶ間（秒。/api/ai/ の1分10回に収める） */
+  minIntervalSeconds: number;
+};
+
+export function getRecordingAiSettings(): RecordingAiSettings {
+  const a = (ai as { recording: RecordingAiSettings }).recording;
+  return { ...a, model: process.env.ANTHROPIC_KARTE_MODEL || a.model };
+}
+
+/** 録音から作ったメモの長さの上限（字）。画面でも使う（鍵や環境変数は読まない） */
+export function getRecordingMemoMaxChars(): number {
+  return (ai as AiSettings).karte.maxRecordingMemoChars;
 }
 
 /** ToDo のメモを短いタスクの文に直すときの設定（config/ai.json の todo。モデル名は ANTHROPIC_TODO_MODEL でも差しかえられる） */
