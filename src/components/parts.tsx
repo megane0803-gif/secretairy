@@ -68,3 +68,28 @@ export function InputStub({ placeholder, button }: { placeholder: string; button
     </form>
   );
 }
+
+/** お客様の名前。架空のお客様には必ず「架空」の札を付ける */
+export function CustomerName({ surname, fictional }: { surname: string; fictional: boolean }) {
+  return (
+    <span className="customer">
+      {surname} 様{fictional && <span className="tag fictional">架空</span>}
+    </span>
+  );
+}
+
+/** 細かい所に入れる「どんな形で持つか」の表 */
+export function FieldList({ fields }: { fields: { key: string; label: string }[] }) {
+  return (
+    <dl className="fields">
+      {fields.map((f) => (
+        <div key={f.key}>
+          <dt>
+            <code>{f.key}</code>
+          </dt>
+          <dd>{f.label}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
