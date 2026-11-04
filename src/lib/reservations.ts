@@ -5,6 +5,7 @@
 // 予約チャットで入った仮押さえ・確定は、本当の日付のままブラウザに残る（book/state.ts の extra）。
 
 import { businessDayAt, calDay, lastStartOf, toHHMM, toMinutes, weekFrom, type CalDay } from "./calendar";
+import { resolveMenu } from "./combo";
 import { getCustomers, getSeedReservations } from "./data/seed";
 import type { Customer, ReservationStatus, SeedReservation } from "./data/types";
 import type { Booked } from "./rules/judge";
@@ -88,7 +89,8 @@ export function resolveReservations(
 export function resolveChatReservations(menus: Menu[], customers: Customer[], list: ChatReservation[]): Reservation[] {
   const out: Reservation[] = [];
   for (const r of list) {
-    const menu = menus.find((m) => m.id === r.menuId);
+    // 1回の来店で複数のメニュー（cut+headspa）も、時間を足した1つのメニューにする
+    const menu = resolveMenu(menus, r.menuId);
     const customer = customers.find((c) => c.id === r.customerId);
     if (!menu || !customer) continue;
     out.push(make(r.id, r.date, r.start, r.status, menu, customer, "chat"));
@@ -98,7 +100,13 @@ export function resolveChatReservations(menus: Menu[], customers: Customer[], li
 
 /** 判定（judge.ts）に渡す形。確定・仮押さえのどちらも枠はふさがっている */
 export function toBooked(r: Reservation): Booked {
-  return { date: r.date, start: r.start, menuIds: [r.menu.id], newCustomer: r.customer.firstVisit };
+  return {
+    date: r.date,
+    start: r.start,
+    menuIds: "parts" in r.menu && Array.isArray(r.menu.parts) ? (r.menu.parts as string[]) : [r.menu.id],
+    newCustomer: r.customer.firstVisit,
+    customerId: r.customer.id,
+  };
 }
 
 export type LedgerDay = CalDay & {

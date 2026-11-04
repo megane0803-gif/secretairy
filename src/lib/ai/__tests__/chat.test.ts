@@ -79,7 +79,8 @@ describe("仮押さえの守り", () => {
   const now = at("2026-11-04", "10:00");
 
   test("🔒 確定の道具は無い。呼ぼうとしても止める", () => {
-    assert.deepEqual(TOOL_DEFS.map((t) => t.name).sort(), ["check_rules", "find_openings", "place_hold", "previous_visit"]);
+    assert.deepEqual(TOOL_DEFS.map((t) => t.name).sort(), ["check_rules", "find_openings", "place_hold", "previous_visit", "release_hold"]);
+    assert.ok(!TOOL_DEFS.some((t) => /confirm|確定/.test(t.name)), "確定の道具は無い");
     const out = runTool(ctxAt(now), "confirm_reservation", {});
     assert.equal(out.isError, true);
     assert.equal(out.hold, undefined);

@@ -117,6 +117,14 @@ export function validateOwnerRule(raw: unknown, menuIds?: string[]): Checked<Rul
       if (typeof check.time !== "string" || !HHMM.test(check.time))
         return { ok: false, reason: "時刻は 18:00 のように入れてください。" };
       return { ok: true, value: { ...base, label, check: { kind: "lastStart", time: check.time } } };
+    case "notTogether": {
+      // 2つのメニューを選ぶ：1つ目はどこに効くか（メニュー）、2つ目は with
+      if (scope.level !== "menu") return { ok: false, reason: "この種類は「メニュー」に付けて、2つのメニューを選んでください。" };
+      if (typeof check.with !== "string" || !check.with) return { ok: false, reason: "いっしょに受けないメニューを選んでください。" };
+      if (check.with === scope.menuId) return { ok: false, reason: "ちがう2つのメニューを選んでください。" };
+      if (menuIds && !menuIds.includes(check.with)) return { ok: false, reason: "そのメニューは見つかりません。" };
+      return { ok: true, value: { ...base, label, check: { kind: "notTogether", with: check.with } } };
+    }
     case "text":
       return { ok: true, value: { ...base, label, check: { kind: "text" } } };
     default:

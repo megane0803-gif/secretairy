@@ -22,7 +22,7 @@ import { activeChat, emptyBook, parseBook, pendingApprovals, type BookState } fr
 const read = () => readBrowser(BOOK_KEY);
 
 /** 1分ごとに変わる「いま」（仮押さえの期限・今日の切りかわりのため） */
-function useMinute(): number {
+export function useMinute(): number {
   const sub = useCallback((f: () => void) => {
     const t = window.setInterval(f, 60_000);
     return () => window.clearInterval(t);

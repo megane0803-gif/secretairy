@@ -45,10 +45,19 @@ describe("厳しい方を使う", () => {
     assert.deepEqual(strictest([a, b]).map((r) => r.id), [a.id]);
   });
 
-  test("同じ日に不可：2つあっても1つにまとまる", () => {
+  test("当日の予約は不可：2つあっても1つにまとまる", () => {
     const a = rule({ kind: "noSameDay" });
     const b = rule({ kind: "noSameDay" }, { level: "menu", menuId: "m90" });
     assert.equal(strictest([a, b]).length, 1);
+  });
+
+  test("いっしょに受けない組み合わせ：同じ2つなら1つに、ちがう2つならどちらも残す", () => {
+    const a = rule({ kind: "notTogether", with: "m90" }, { level: "menu", menuId: "m60" });
+    const b = rule({ kind: "notTogether", with: "m60" }, { level: "menu", menuId: "m90" });
+    const c = rule({ kind: "notTogether", with: "m30" }, { level: "menu", menuId: "m60" });
+    assert.equal(strictest([a, b]).length, 1);
+    assert.equal(strictest([a, c]).length, 2);
+    assert.equal(strictest([a, rule({ kind: "noSameDay" })]).length, 2, "当日の予約は不可とは別");
   });
 
   test("文のルールはぜんぶ残す", () => {

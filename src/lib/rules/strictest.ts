@@ -44,30 +44,43 @@ export function strictnessNumber(check: RuleCheck): number {
     case "lastStart":
       return toMinutes(check.time);
     case "noSameDay":
+    case "notTogether":
     case "text":
       return 0;
   }
 }
 
+/**
+ * 「1つでもあれば効く」（any）の種類で、同じ物とみなす印。
+ * 「いっしょに受けない組み合わせ」は2つのメニューごとに中身がちがうので、組み合わせごとに1つずつ残す
+ * （同じ2つなら、どちらのメニューに付けたルールでも1つにまとめる）。
+ */
+function anyKey(r: Rule): string {
+  return r.check.kind === "notTogether" && r.level === "menu"
+    ? `notTogether|${[r.menuId, r.check.with].sort().join("|")}`
+    : r.check.kind;
+}
+
 export function strictest<R extends Rule>(rules: R[]): R[] {
   const texts: R[] = [];
-  const best = new Map<ProgramKind, R>();
+  const best = new Map<string, R>();
   for (const r of rules) {
     if (r.check.kind === "text") {
       texts.push(r);
       continue;
     }
     const kind = r.check.kind;
-    const cur = best.get(kind);
+    const way = STRICTER[kind];
+    const key = way === "any" ? anyKey(r) : kind;
+    const cur = best.get(key);
     if (!cur) {
-      best.set(kind, r);
+      best.set(key, r);
       continue;
     }
-    const way = STRICTER[kind];
     if (way === "any") continue;
     const a = strictnessNumber(r.check);
     const b = strictnessNumber(cur.check);
-    if (way === "higher" ? a > b : a < b) best.set(kind, r);
+    if (way === "higher" ? a > b : a < b) best.set(key, r);
   }
   return [...texts, ...best.values()];
 }

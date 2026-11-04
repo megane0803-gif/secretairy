@@ -4,9 +4,9 @@
 // 今日の予約・そのお客様の前回メモ（次回提案）・今日の空き枠。
 // デモ用の「翌日へ」で今日を1営業日先へ（定休日は飛ばす）。「最初に戻す」で本当の今日に戻る。
 
+import { resolveMenu } from "@/lib/combo";
 import { BigNumber, Checked, CustomerName, MiniBar } from "@/components/parts";
 import { ResetBook } from "@/components/ResetBook";
-import { useAds } from "@/lib/ads/useAds";
 import type { BookData } from "@/lib/book/data";
 import { withNextDay } from "@/lib/book/state";
 import { useBook } from "@/lib/book/useBook";
@@ -14,15 +14,17 @@ import { businessDayAt, calDay } from "@/lib/calendar";
 import { latestBefore, nextLines } from "@/lib/karte/record";
 import { writeJournal } from "@/lib/journal";
 import { freeRanges } from "@/lib/reservations";
+import { useApprovals } from "@/lib/useApprovals";
 import type { KarteHeading } from "@/lib/settings";
 
 export function HomeSummary({ data, seedTodos, headings }: { data: BookData; seedTodos: number; headings: KarteHeading[] }) {
   const book = useBook(data);
-  const ads = useAds();
+  // 承認待ちは承認の箱の行と同じ数（approvals.ts）
+  const approvals = useApprovals();
   // 期限の先の ToDo（広告の「効いたか見る」など）は、その日まで今日の数に入れない
   const todos = seedTodos + book.state.todos.filter((t) => !t.done && (!t.due || t.due <= book.today.date)).length;
   const todays = book.all.filter((r) => r.date === book.today.date);
-  const menuName = (id: string) => data.menus.find((m) => m.id === id)?.name ?? id;
+  const menuName = (id: string) => resolveMenu(data.menus, id)?.name ?? id;
   // 今日のこれからの空き（いまの時刻より前の枠は数えない）
   const free = freeRanges(data.shop, book.today, book.all, book.now.date === book.today.date ? book.now.time : undefined);
   const day = book.book.week.find((d) => d.date === book.today.date);
@@ -45,7 +47,7 @@ export function HomeSummary({ data, seedTodos, headings }: { data: BookData; see
       )}
       <div className="bignums">
         <BigNumber label="今日の予約" value={book.book.todayCount} unit="件" />
-        <BigNumber label="承認待ち" value={book.pending.length + (ads.pending ? 1 : 0)} unit="件" />
+        <BigNumber label="承認待ち" value={approvals.count} unit="件" />
         <BigNumber label="今日の ToDo" value={todos} unit="件" />
       </div>
 

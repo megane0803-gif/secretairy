@@ -7,12 +7,13 @@
 // 🔒 確定は人：確定（approve）を呼ぶのは画面の「承認」ボタンだけ（ApprovalBox.tsx）。
 // AI・サーバー・自動の処理からは呼ばない。サーバーが出せるのは仮押さえ（HoldOffer）まで。
 
-import type { HoldOffer } from "../ai/wire";
+import type { HoldOffer, TodoOffer } from "../ai/wire";
 import { MAX_DAY_OFFSET } from "../calendar";
 import type { SavedKarte } from "../karte/record";
 import type { ChatReservation } from "../reservations";
 
-export type ApprovalState = "pending" | "approved" | "fixed" | "skipped";
+/** withdrawn = お客様が予約チャットで「ずらしたい」「やめたい」と言ったので、承認の前に外した */
+export type ApprovalState = "pending" | "approved" | "fixed" | "skipped" | "withdrawn";
 
 /** 承認の箱の1行（予約の仮押さえ） */
 export type ReservationApproval = {
@@ -93,7 +94,7 @@ export function parseBook(raw: string | null): BookState | null {
       heldAt: r.heldAt as string,
       expiresAt: r.expiresAt as string,
     }));
-  const states: ApprovalState[] = ["pending", "approved", "fixed", "skipped"];
+  const states: ApprovalState[] = ["pending", "approved", "fixed", "skipped", "withdrawn"];
   const approvals: ReservationApproval[] = arr(d.approvals)
     .filter((a) => a && isStr(a.id) && isStr(a.reservationId) && isStr(a.createdAt) && isStr(a.reason) && states.includes(a.state as ApprovalState))
     .map((a) => ({
@@ -242,6 +243,42 @@ export function withReleased(
     chat: s.chat.filter((r) => r.id !== a.reservationId),
     approvals: s.approvals.map((x) => (x.id === approvalId ? { ...x, state: how, decidedAt: nowIso } : x)),
     todos: s.todos.some((t) => t.id === todo.id) ? s.todos : [...s.todos, todo],
+  };
+}
+
+/**
+ * お客様の頼みで、予約チャットの仮押さえを外す（「ずらしたい」「やめたい」）。
+ * 外せるのは、そのお客様の、まだ承認待ちの仮押さえだけ（承認された予約・ほかの方の物は変えない）。
+ * お客様が自分で取り下げたので、ToDo は足さない（新しい日時はチャットで出しなおす）。
+ */
+export function withGuestReleased(s: BookState, reservationId: string, customerId: string, nowIso: string): BookState {
+  const r = s.chat.find((x) => x.id === reservationId && x.customerId === customerId && x.status === "hold");
+  const a = s.approvals.find((x) => x.reservationId === reservationId && x.state === "pending");
+  if (!r || !a) return s;
+  return {
+    ...s,
+    chat: s.chat.filter((x) => x.id !== reservationId),
+    approvals: s.approvals.map((x) => (x.id === a.id ? { ...x, state: "withdrawn", decidedAt: nowIso } : x)),
+  };
+}
+
+/**
+ * 予約チャットで「お店に確かめてご連絡します」と返したときの ToDo（プログラムが足す）と、日誌の1行。
+ * 題は「○○（架空）様：用件の1行」の形の物だけ受け取る。同じ id は2回入れない。
+ */
+export function withChatTodo(
+  s: BookState,
+  todo: TodoOffer,
+  surname: string,
+  nowIso: string,
+): { state: BookState; journal: string | null } {
+  const title = typeof todo?.title === "string" ? todo.title.replace(/\s+/g, " ").trim().slice(0, 80) : "";
+  const id = typeof todo?.id === "string" ? todo.id.slice(0, 60) : "";
+  if (!id || !title.startsWith(`${surname}（架空）様：`) || title.length <= `${surname}（架空）様：`.length) return { state: s, journal: null };
+  if (s.todos.some((t) => t.id === id)) return { state: s, journal: null };
+  return {
+    state: withTodo(s, { id, title, createdAt: nowIso, done: false }),
+    journal: `ToDo に足した（予約チャットで「お店に確かめてご連絡します」と返したため）：${title}`,
   };
 }
 

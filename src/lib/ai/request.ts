@@ -3,11 +3,12 @@
 // ルールは鍵つきを先頭に足しなおし、オーナーのルールは validate.ts で同じように確かめる（送られた物で鍵つきは緩まない）。
 
 import { demoClock, MAX_DAY_OFFSET } from "../calendar";
+import { resolveMenu } from "../combo";
 import { LOCKED_RULES } from "../rules/locked";
 import type { Rule } from "../rules/types";
 import { validateOwnerRule } from "../rules/validate";
 import type { AiSettings, Menu, ShopSettings } from "../settings";
-import { MAX_CANDIDATES } from "./slots";
+import { MAX_SHOWN } from "./replies";
 import type { ToolContext } from "./tools";
 import type { BookedRow, Candidate, ChatTurn, ReserveRequest, Visit } from "./wire";
 
@@ -16,6 +17,7 @@ const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_BOOKED = 2000;
 const MAX_RULES = 200;
 const MAX_VISITS = 500;
+const MAX_HOLDS = 20;
 
 type Parsed = { ok: true; value: ReserveRequest } | { ok: false; reason: string };
 
@@ -34,13 +36,14 @@ export function parseReserveRequest(body: unknown, menus: Menu[], ai: Pick<AiSet
   const last = messages[messages.length - 1];
   if (!last || last.role !== "user" || !last.text.trim()) return { ok: false, reason: "お客様の文がありません" };
 
-  const menuIds = new Set(menus.map((m) => m.id));
+  // 1回の来店で複数のメニュー（cut+headspa）も、中身がどれも設定にあれば受け取る
+  const menuIds = { has: (id: string) => !!resolveMenu(menus, id) };
   const candidates: Candidate[] = (Array.isArray(body.candidates) ? body.candidates : [])
     .filter(
       (c): c is Record<string, unknown> =>
         isObj(c) && typeof c.menuId === "string" && menuIds.has(c.menuId) && typeof c.date === "string" && DATE.test(c.date) && typeof c.start === "string" && TIME.test(c.start),
     )
-    .slice(0, MAX_CANDIDATES)
+    .slice(0, MAX_SHOWN)
     .map((c) => ({ menuId: c.menuId as string, date: c.date as string, start: c.start as string }));
 
   const cu = body.customer;
@@ -72,7 +75,7 @@ export function parseReserveRequest(body: unknown, menus: Menu[], ai: Pick<AiSet
       newCustomer: b.newCustomer === true,
     }));
 
-  const rules = readRules(body.rules, [...menuIds]);
+  const rules = readRules(body.rules, menus.map((m) => m.id));
   if (!rules) return { ok: false, reason: "ルールの形がおかしいです" };
 
   const visits: Visit[] = (Array.isArray(body.visits) ? body.visits : [])
@@ -85,7 +88,11 @@ export function parseReserveRequest(body: unknown, menus: Menu[], ai: Pick<AiSet
 
   const dayOffset = readDayOffset(body.dayOffset);
 
-  return { ok: true, value: { mode, messages, candidates, customer, booked, rules, visits, dayOffset } };
+  const holds: string[] = (Array.isArray(body.holds) ? body.holds : [])
+    .filter((h): h is string => typeof h === "string" && h.length > 0 && h.length <= 80)
+    .slice(-MAX_HOLDS);
+
+  return { ok: true, value: { mode, messages, candidates, customer, booked, rules, visits, dayOffset, holds } };
 }
 
 /**
@@ -131,6 +138,9 @@ export function contextFor(
     shown: req.candidates,
     nowIso: now.toISOString(),
     held: false,
+    // この会話で作った仮押さえ（そのお客様の物だけ）
+    convHolds: req.holds.filter((id) => req.booked.some((b) => b.id === id && b.customerId === req.customer.id)),
+    released: [],
     newId,
   };
 }
