@@ -19,6 +19,7 @@ export type RuleCheck =
   | { kind: "bufferAfterMinutes"; value: number } // 施術のあと何分あけるか
   | { kind: "noSameDay" } // 来店と同じ日の予約は受けない
   | { kind: "lastStart"; time: string } // この時刻（HH:MM）までに始める
+  | { kind: "notTogether"; with: string } // メニューごとのルール：このメニューと with のメニューは同じ日に入れない
   | { kind: "text" }; // 文だけ
 
 export type RuleKind = RuleCheck["kind"];
@@ -32,6 +33,7 @@ export const PROGRAM_KINDS: ProgramKind[] = [
   "bufferAfterMinutes",
   "noSameDay",
   "lastStart",
+  "notTogether",
 ];
 
 export type Rule = RuleScope & {
@@ -46,13 +48,15 @@ export type Rule = RuleScope & {
  * ルールがぶつかったとき、どちらが「厳しい」か。種類を足すときは必ずここにも足す。
  * "higher" = 数が大きい方が厳しい / "lower" = 数が小さい方が厳しい
  * "any" = 数を持たない種類。1つでもあれば効く（どれを使っても同じ）
+ * "all" = 数を持たず、中身（どのメニューとか）がルールごとに違う種類。ぶつからないので、ぜんぶ使う
  *
  * 最終受付（lastStart）は時刻を分に直して比べる。早い（小さい）方が厳しい。
  */
-export const STRICTER: Record<ProgramKind, "higher" | "lower" | "any"> = {
+export const STRICTER: Record<ProgramKind, "higher" | "lower" | "any" | "all"> = {
   minLeadMinutes: "higher",
   maxNewCustomersPerDay: "lower",
   bufferAfterMinutes: "higher",
   noSameDay: "any",
   lastStart: "lower",
+  notTogether: "all",
 };

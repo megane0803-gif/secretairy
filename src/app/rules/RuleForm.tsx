@@ -56,6 +56,7 @@ export function RuleForm({
   );
   const [unit, setUnit] = useState<Unit>(lead.unit);
   const [time, setTime] = useState(c?.kind === "lastStart" ? c.time : "18:00");
+  const [withId, setWithId] = useState(c?.kind === "notTogether" ? c.with : (menus.find((m) => m.id !== menuId)?.id ?? ""));
   const [text, setText] = useState(c?.kind === "text" ? (initial?.label ?? "") : "");
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -79,6 +80,8 @@ export function RuleForm({
         return { kind };
       case "lastStart":
         return time ? { kind, time } : null;
+      case "notTogether":
+        return withId ? { kind, with: withId } : null;
       case "text":
         return { kind };
     }
@@ -88,7 +91,9 @@ export function RuleForm({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!check) {
-      setProblem(kind === "lastStart" ? "時刻を入れてください。" : "数を入れてください。");
+      setProblem(
+        kind === "lastStart" ? "時刻を入れてください。" : kind === "notTogether" ? "いっしょに入れないメニューを選んでください。" : "数を入れてください。",
+      );
       return;
     }
     const v = validateOwnerRule(
@@ -122,6 +127,8 @@ export function RuleForm({
                   setKind(k);
                   setNum("");
                   setProblem(null);
+                  // 組み合わせのルールはメニューに付ける
+                  if (k === "notTogether") setLevel("menu");
                 }}
               />
               <span className="choice-name">{KIND_INFO[k].name}</span>
@@ -163,7 +170,23 @@ export function RuleForm({
       </fieldset>
 
       <fieldset>
-        <legend>3. {isText ? "ルールの文" : kind === "lastStart" ? "時刻" : "数"}</legend>
+        <legend>3. {isText ? "ルールの文" : kind === "lastStart" ? "時刻" : kind === "notTogether" ? "いっしょに入れないメニュー" : "数"}</legend>
+        {kind === "notTogether" && (
+          <div className="num-row">
+            <span>{level === "menu" ? menuName(menuId) : "（2. でメニューを選ぶ）"}と</span>
+            <select value={withId} onChange={(e) => setWithId(e.target.value)} aria-label="いっしょに入れないメニュー">
+              {menus
+                .filter((m) => m.id !== menuId)
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+            </select>
+            <span>は同じ日に受けない</span>
+          </div>
+        )}
+        {kind === "notTogether" && level !== "menu" && <small className="hint">この種類は「メニュー」に付けます。</small>}
         {kind === "minLeadMinutes" && (
           <div className="num-row">
             <span>来店の</span>

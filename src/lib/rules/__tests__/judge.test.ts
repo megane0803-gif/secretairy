@@ -130,3 +130,33 @@ describe("店の設定で確かめる所", () => {
     assert.equal(v.ok, false);
   });
 });
+
+describe("同じ日に入れない組み合わせ（notTogether）", () => {
+  const r = rule({ kind: "notTogether", with: "m90" }, { level: "menu", menuId: "m60" });
+  const seats = { seats: 3 };
+  test("通る：60分のメニューだけ", () => {
+    const v = run([r], { menuIds: ["m60"] }, seats);
+    assert.equal(resultOf(v, r)?.ok, true);
+    assert.equal(v.ok, true);
+  });
+  test("通る：ほかの方が同じ日に90分のメニュー", () => {
+    const v = run([r], { menuIds: ["m60"], customerId: "a" }, { ...seats, existing: [{ date: "2026-11-05", start: "10:00", menuIds: ["m90"], newCustomer: false, customerId: "b" }] });
+    assert.equal(v.ok, true);
+  });
+  test("断る：1回の来店で60分と90分のメニュー", () => {
+    const v = run([r], { menuIds: ["m60", "m90"] }, seats);
+    assert.equal(resultOf(v, r)?.ok, false);
+    assert.equal(v.ok, false);
+  });
+  test("断る：同じ方がその日に90分のメニューを入れている（どちらに付けたルールでも効く）", () => {
+    const existing = [{ date: "2026-11-05", start: "10:00", menuIds: ["m60"], newCustomer: false, customerId: "a" }];
+    const v = run([r], { menuIds: ["m90"], start: "15:00", customerId: "a" }, { ...seats, existing });
+    assert.equal(resultOf(v, r)?.ok, false);
+    assert.match(resultOf(v, r)!.reason, /同じ日に/);
+  });
+  test("ぶつかったら厳しい方：組み合わせのルールは1つにまとめず、ぜんぶ使う", () => {
+    const r2 = rule({ kind: "notTogether", with: "m60" }, { level: "menu", menuId: "m90" });
+    const v = run([r, r2], { menuIds: ["m60", "m90"] }, seats);
+    assert.equal(v.results.filter((x) => !x.ok).length, 2);
+  });
+});

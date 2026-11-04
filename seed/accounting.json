@@ -43,10 +43,7 @@
     { "id": "m-d", "name": "服の通販D" },
     { "id": "m-e", "name": "通販モールE" },
     { "id": "m-f", "name": "タオルの通販F" },
-    { "id": "m-g", "name": "花の通販G" },
-    { "id": "m-h", "name": "本の通販H" },
-    { "id": "m-i", "name": "掃除用品の通販I" },
-    { "id": "m-j", "name": "食品の通販J" }
+    { "id": "m-i", "name": "掃除用品の通販I" }
   ],
   "rules": [
     { "merchantId": "m-a", "use": "shop" },
@@ -72,22 +69,19 @@
       { "no": 5, "date": "2026-10-17", "merchantId": "m-f", "amount": 6600 },
       { "no": 6, "date": "2026-10-18", "merchantId": "m-a", "amount": 8450 },
       { "no": 7, "date": "2026-10-19", "merchantId": "m-d", "amount": 5990 },
-      { "no": 8, "date": "2026-10-21", "merchantId": "m-g", "amount": 3300 },
-      { "no": 9, "date": "2026-10-22", "merchantId": "m-a", "amount": 21600 },
-      { "no": 10, "date": "2026-10-23", "merchantId": "m-b", "amount": 1280 },
-      { "no": 11, "date": "2026-10-24", "merchantId": "m-e", "amount": 3480 },
-      { "no": 12, "date": "2026-10-25", "merchantId": "m-d", "amount": 7480 },
-      { "no": 13, "date": "2026-10-26", "merchantId": "m-h", "amount": 1760 },
-      { "no": 14, "date": "2026-10-28", "merchantId": "m-a", "amount": 4620 },
-      { "no": 15, "date": "2026-10-29", "merchantId": "m-c", "amount": 1490 },
-      { "no": 16, "date": "2026-10-30", "merchantId": "m-b", "amount": 2860 },
-      { "no": 17, "date": "2026-10-31", "merchantId": "m-i", "amount": 2420 },
-      { "no": 18, "date": "2026-11-01", "merchantId": "m-a", "amount": 15300 },
-      { "no": 19, "date": "2026-11-03", "merchantId": "m-e", "amount": 1280 },
-      { "no": 20, "date": "2026-11-05", "merchantId": "m-d", "amount": 4290 },
-      { "no": 21, "date": "2026-11-06", "merchantId": "m-j", "amount": 4860 },
-      { "no": 22, "date": "2026-11-08", "merchantId": "m-a", "amount": 6930 },
-      { "no": 23, "date": "2026-11-10", "merchantId": "m-b", "amount": 990 }
+      { "no": 8, "date": "2026-10-22", "merchantId": "m-a", "amount": 21600 },
+      { "no": 9, "date": "2026-10-23", "merchantId": "m-b", "amount": 1280 },
+      { "no": 10, "date": "2026-10-25", "merchantId": "m-d", "amount": 7480 },
+      { "no": 11, "date": "2026-10-28", "merchantId": "m-a", "amount": 4620 },
+      { "no": 12, "date": "2026-10-29", "merchantId": "m-c", "amount": 1490 },
+      { "no": 13, "date": "2026-10-30", "merchantId": "m-b", "amount": 2860 },
+      { "no": 14, "date": "2026-10-31", "merchantId": "m-i", "amount": 2420 },
+      { "no": 15, "date": "2026-11-01", "merchantId": "m-a", "amount": 15300 },
+      { "no": 16, "date": "2026-11-03", "merchantId": "m-e", "amount": 1280 },
+      { "no": 17, "date": "2026-11-05", "merchantId": "m-d", "amount": 4290 },
+      { "no": 18, "date": "2026-11-08", "merchantId": "m-a", "amount": 6930 },
+      { "no": 19, "date": "2026-11-09", "merchantId": "m-d", "amount": 3980 },
+      { "no": 20, "date": "2026-11-10", "merchantId": "m-b", "amount": 990 }
     ]
   },
   "trial": {

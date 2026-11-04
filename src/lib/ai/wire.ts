@@ -17,7 +17,7 @@ export type BookedRow = {
   newCustomer: boolean;
 };
 
-/** 予約の候補。お客様に「1つ目」「2つ目」と番号で出す */
+/** 予約の候補。お客様に「1つ目」「2つ目」と番号で出す。1回の来店で複数のメニューなら menuId は「cut+headspa」の形（combo.ts） */
 export type Candidate = {
   menuId: string;
   date: string;
@@ -52,6 +52,8 @@ export type ReserveRequest = {
   visits: Visit[];
   /** デモの「翌日へ」で進めた営業日の数（0 = 本当の今日） */
   dayOffset: number;
+  /** この会話で作った仮押さえの id（「仮押さえを外す」はこの中の、まだ承認待ちの物だけ） */
+  holds: string[];
 };
 
 /** 仮押さえ。サーバーがプログラムでもう一度判定してから出す。残すのは画面（ブラウザ）の側 */
@@ -67,14 +69,22 @@ export type HoldOffer = {
   reason: string;
 };
 
-/** 手順の1行。tool = 道具で調べた / reject = ルール・店の設定で外した / hold = 仮押さえした / limit = 上限で止めた */
-export type Step = { kind: "tool" | "reject" | "hold" | "limit"; text: string };
+/**
+ * 手順の1行。tool = 道具で調べた / reject = ルール・店の設定で外した / hold = 仮押さえした / limit = 上限で止めた
+ * ask = プログラムが聞き返した（日付の食い違い） / release = 仮押さえを外した / todo = ToDo に足した
+ */
+export type Step = { kind: "tool" | "reject" | "hold" | "limit" | "ask" | "release" | "todo"; text: string };
+
+/** 別の用事で「お店に確かめてご連絡します」と言ったときに、プログラムが足す ToDo */
+export type TodoOffer = { id: string; title: string };
 
 export type ReserveEvent =
   | { t: "text"; d: string }
   | { t: "step"; step: Step }
   | { t: "candidates"; list: Candidate[] }
   | { t: "hold"; hold: HoldOffer }
+  | { t: "release"; holdId: string }
+  | { t: "todo"; todo: TodoOffer }
   | { t: "error"; code: "no-ai" | "bad-request"; message: string }
   | { t: "done" };
 

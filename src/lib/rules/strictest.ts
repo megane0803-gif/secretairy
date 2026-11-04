@@ -44,6 +44,7 @@ export function strictnessNumber(check: RuleCheck): number {
     case "lastStart":
       return toMinutes(check.time);
     case "noSameDay":
+    case "notTogether":
     case "text":
       return 0;
   }
@@ -51,6 +52,7 @@ export function strictnessNumber(check: RuleCheck): number {
 
 export function strictest<R extends Rule>(rules: R[]): R[] {
   const texts: R[] = [];
+  const every: R[] = [];
   const best = new Map<ProgramKind, R>();
   for (const r of rules) {
     if (r.check.kind === "text") {
@@ -58,6 +60,10 @@ export function strictest<R extends Rule>(rules: R[]): R[] {
       continue;
     }
     const kind = r.check.kind;
+    if (STRICTER[kind] === "all") {
+      every.push(r);
+      continue;
+    }
     const cur = best.get(kind);
     if (!cur) {
       best.set(kind, r);
@@ -69,7 +75,7 @@ export function strictest<R extends Rule>(rules: R[]): R[] {
     const b = strictnessNumber(cur.check);
     if (way === "higher" ? a > b : a < b) best.set(kind, r);
   }
-  return [...texts, ...best.values()];
+  return [...texts, ...best.values(), ...every];
 }
 
 /** その場面で効く、ある種類のルール（厳しい方の1つ）。無ければ undefined */

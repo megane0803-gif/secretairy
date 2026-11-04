@@ -11,8 +11,8 @@ import type { BookData } from "@/lib/book/data";
 import { useBook } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
-import { pendingAd } from "@/lib/ads/state";
-import { useAds } from "@/lib/ads/useAds";
+import { resolveMenu } from "@/lib/combo";
+import { useApprovals } from "@/lib/useApprovals";
 import { AdApprovalRows } from "./AdApprovalRows";
 import { Checked, CustomerName } from "./parts";
 
@@ -20,10 +20,10 @@ export function ApprovalBox({ data, compact = false }: { data: BookData; compact
   const book = useBook(data);
   const { rules } = useRules(data.seedRules);
   const [done, setDone] = useState<string | null>(null);
-  // 広告の案（承認待ち）も同じ箱に出す
-  const adPending = pendingAd(useAds().state);
+  // 行は approvals.ts の1か所で決める（上の帯・朝の要点の数と同じ物）。広告の案も同じ箱に出す
+  const queue = useApprovals();
 
-  if (book.pending.length === 0 && !adPending)
+  if (queue.count === 0)
     return (
       <>
         <Checked>承認待ちはありません</Checked>
@@ -58,10 +58,10 @@ export function ApprovalBox({ data, compact = false }: { data: BookData; compact
 
   return (
     <ul className={compact ? "approvals compact" : "approvals"}>
-      {book.pending.map((row) => {
+      {queue.reservations.map((row) => {
         const r = row.reservation;
         const customer = data.customers.find((c) => c.id === r.customerId);
-        const menu = data.menus.find((m) => m.id === r.menuId);
+        const menu = resolveMenu(data.menus, r.menuId);
         // いまの台帳とルールで、もう一度確かめる（自分の仮押さえは数えない）
         const v = judgeSlot(
           {

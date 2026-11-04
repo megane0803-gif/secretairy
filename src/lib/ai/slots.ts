@@ -2,8 +2,10 @@
 // 数（時刻・空き）はここが出す。AI は作らない・変えない。判定は judge.ts（ルールは strictest.ts を通る）。
 
 import { addDays, calDay, toHHMM, toMinutes, type CalDay } from "../calendar";
+import { partsOf, resolveMenu } from "../combo";
 import { scopeTag } from "../rules/describe";
 import { judge, type Verdict } from "../rules/judge";
+import { expandMenuIds } from "../rules/strictest";
 import type { Rule } from "../rules/types";
 import type { Menu, ShopSettings } from "../settings";
 import type { BookedRow, Candidate, Visit } from "./wire";
@@ -22,11 +24,14 @@ export type SlotContext = {
 
 /** 代わりを探す日数（カレンダーの日数） */
 export const SEARCH_DAYS = 14;
-/** 候補は2つまで */
+/** 候補は2つまで（日が複数のときも、日ごとに1つずつで2日分まで） */
 export const MAX_CANDIDATES = 2;
+/** 同じ日に2つ出すときは、この分より離す（「1時間以内」の2つは並べない） */
+export const SAME_DAY_GAP_MINUTES = 60;
 
+/** メニュー。設定に無い組み合わせ（cut+headspa）は時間を足して作る（combo.ts） */
 export function menuOf(ctx: Pick<SlotContext, "menus">, id: string): Menu | undefined {
-  return ctx.menus.find((m) => m.id === id);
+  return resolveMenu(ctx.menus, id);
 }
 
 export function menuName(ctx: Pick<SlotContext, "menus">, id: string): string {
@@ -49,12 +54,25 @@ export function judgeSlot(ctx: SlotContext, c: Candidate): Verdict {
   const day = calDay(ctx.shop, c.date);
   return judge({
     rules: ctx.rules,
-    booking: { date: c.date, start: c.start, menuIds: [c.menuId], newCustomer: ctx.customer.firstVisit },
+    // 1回の来店で複数のメニューなら、中身を並べて渡す（時間は足され、どのメニューの最終受付・ルールも効く）
+    booking: {
+      date: c.date,
+      start: c.start,
+      menuIds: partsOf(ctx.menus, c.menuId),
+      newCustomer: ctx.customer.firstVisit,
+      customerId: ctx.customer.id,
+    },
     now: ctx.now,
     hours: day.hours,
     seats: ctx.shop.seats,
     menus: ctx.menus,
-    existing: ctx.booked.map((b) => ({ date: b.date, start: b.start, menuIds: [b.menuId], newCustomer: b.newCustomer })),
+    existing: ctx.booked.map((b) => ({
+      date: b.date,
+      start: b.start,
+      menuIds: partsOf(ctx.menus, b.menuId),
+      newCustomer: b.newCustomer,
+      customerId: b.customerId,
+    })),
     tab: "reservations",
   });
 }
@@ -121,6 +139,55 @@ export type SlotSearch = {
   excluded: { ex: Exclusion; count: number }[];
 };
 
+/** 同じ日の候補どうしが近すぎないか（重ならず、1時間より離れている） */
+function farEnough(ctx: SlotContext, picked: Candidate[], c: Candidate): boolean {
+  const minutes = menuOf(ctx, c.menuId)?.minutes ?? 0;
+  const gap = Math.max(SAME_DAY_GAP_MINUTES + 1, minutes);
+  return picked.every((p) => p.date !== c.date || Math.abs(toMinutes(p.start) - toMinutes(c.start)) >= gap);
+}
+
+function countOut(excluded: Map<string, { ex: Exclusion; count: number }>, ex: Exclusion) {
+  const cur = excluded.get(ex.key) ?? { ex, count: 0 };
+  cur.count += 1;
+  excluded.set(ex.key, cur);
+}
+
+const CLOSED_DAY: Exclusion = { key: "base:open-day", kind: "base", label: "営業日", reason: "お休みの日です" };
+
+/** 1日の中を順に見て、受けられる枠を出す（picked と近すぎる物は出さない） */
+function scanDay(
+  ctx: SlotContext,
+  menuId: string,
+  day: CalDay,
+  after: string | undefined,
+  picked: Candidate[],
+  limit: number,
+  skip: Candidate[],
+  excluded: Map<string, { ex: Exclusion; count: number }>,
+): Candidate[] {
+  const out: Candidate[] = [];
+  if (!day.open) {
+    countOut(excluded, CLOSED_DAY);
+    return out;
+  }
+  for (const start of startsOf(ctx, day)) {
+    if (out.length >= limit) break;
+    if (after && start < after) continue;
+    const c = { menuId, date: day.date, start };
+    if (skip.some((s) => sameSlot(s, c))) continue;
+    const v = judgeSlot(ctx, c);
+    if (v.ok) {
+      if (farEnough(ctx, [...picked, ...out], c)) out.push(c);
+      continue;
+    }
+    const p = firstProblem(ctx, v);
+    // まだ過ぎた時刻は数えない（外したとは言わない）
+    if (!p || p.key === "base:future") continue;
+    countOut(excluded, p);
+  }
+  return out;
+}
+
 /**
  * 受けられる枠を、from（日付・時刻）から先へ順に探す（count 個まで・SEARCH_DAYS 日まで）。
  * 外した枠は、理由ごとに数えておく（AI の手順に「どのルールで外したか」を出すため）。
@@ -137,37 +204,86 @@ export function findSlots(
   const startDate = from.date < ctx.today.date ? ctx.today.date : from.date;
   for (let i = 0; i < SEARCH_DAYS && slots.length < count; i++) {
     const day = calDay(ctx.shop, addDays(startDate, i));
-    if (!day.open) {
-      const key = "base:open-day";
-      const cur = excluded.get(key) ?? { ex: { key, kind: "base", label: "営業日", reason: "お休みの日です" }, count: 0 };
-      cur.count += 1;
-      excluded.set(key, cur);
-      continue;
-    }
-    for (const start of startsOf(ctx, day)) {
-      if (slots.length >= count) break;
-      if (i === 0 && from.time && start < from.time) continue;
-      const c = { menuId, date: day.date, start };
-      if (skip.some((s) => sameSlot(s, c))) continue;
-      const v = judgeSlot(ctx, c);
-      if (v.ok) {
-        slots.push(c);
-        continue;
-      }
-      const p = firstProblem(ctx, v);
-      // まだ過ぎた時刻は数えない（外したとは言わない）
-      if (!p || p.key === "base:future") continue;
-      const cur = excluded.get(p.key) ?? { ex: p, count: 0 };
-      cur.count += 1;
-      excluded.set(p.key, cur);
-    }
+    slots.push(...scanDay(ctx, menuId, day, i === 0 ? from.time : undefined, slots, count - slots.length, skip, excluded));
   }
   return { slots, excluded: [...excluded.values()] };
 }
 
+/**
+ * お客様が言った日（いくつか）で、日ごとに1つずつ探す（count 日分まで）。日の順に見て、空きのある日から出す。
+ * 「11月の金曜」のような幅のある言い方は、当てはまる日を全部ここに渡す（daysInMonth）。
+ */
+export function findOnDays(
+  ctx: SlotContext,
+  menuId: string,
+  dates: string[],
+  after?: string,
+  count = MAX_CANDIDATES,
+  skip: Candidate[] = [],
+): SlotSearch & { looked: string[] } {
+  const slots: Candidate[] = [];
+  const excluded = new Map<string, { ex: Exclusion; count: number }>();
+  const looked = [...new Set(dates)].filter((d) => d >= ctx.today.date).sort();
+  for (const date of looked) {
+    if (slots.length >= count) break;
+    slots.push(...scanDay(ctx, menuId, calDay(ctx.shop, date), after, slots, 1, skip, excluded));
+  }
+  return { slots, excluded: [...excluded.values()], looked };
+}
+
+const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+export type WeekdayKey = (typeof WEEKDAYS)[number];
+
+/** その月（YYYY-MM）の、その曜日の日を全部（今日より前は入れない） */
+export function daysInMonth(ctx: Pick<SlotContext, "today">, month: string, weekday?: WeekdayKey): string[] {
+  const [y, m] = month.split("-").map(Number);
+  const out: string[] = [];
+  for (let d = 1; d <= 31; d++) {
+    const date = new Date(Date.UTC(y, m - 1, d));
+    if (date.getUTCMonth() !== m - 1) break;
+    const iso = date.toISOString().slice(0, 10);
+    if (iso < ctx.today.date) continue;
+    if (weekday && WEEKDAYS[date.getUTCDay()] !== weekday) continue;
+    out.push(iso);
+  }
+  return out;
+}
+
+/**
+ * 組み合わせそのものが受けられないとき（「同じ日に入れない組み合わせ」のルール）、理由を1文で。受けられれば null。
+ * 日時に関係なく断るので、空きを探す前に見る。
+ */
+export function comboRefusal(ctx: SlotContext, menuId: string): string | null {
+  const mine = new Set(expandMenuIds(partsOf(ctx.menus, menuId), ctx.menus));
+  for (const r of ctx.rules) {
+    if (r.level !== "menu" || r.check.kind !== "notTogether") continue;
+    if (mine.has(r.menuId) && mine.has(r.check.with))
+      return `「${r.label}」という決まりがあるので、${menuName(ctx, r.menuId)}と${menuName(ctx, r.check.with)}をいっしょにはお受けできません。`;
+  }
+  return null;
+}
+
+/** 空きが1つも無かったときの理由（1文）。いちばん多く外した理由から */
+export function noSlotSentence(search: SlotSearch): string {
+  const top = [...search.excluded].filter((e) => e.ex.key !== "base:open-day").sort((a, b) => b.count - a.count)[0];
+  if (!top) return "その日はお休み（定休日）なので、お受けできません。";
+  switch (top.ex.key) {
+    case "base:menu-last":
+      return `最終受付に間に合う枠が無いので、お受けできません（${top.ex.reason}）。`;
+    case "base:hours":
+      return "営業時間の中に収まる枠が無いので、お受けできません。";
+    case "base:seats":
+      return "その日はもう埋まっているので、お受けできません。";
+    default:
+      return top.ex.kind === "rule"
+        ? `「${top.ex.label.replace(/^\[[^\]]*\] /, "")}」という決まりがあるので、お受けできません。`
+        : `お受けできません（${plainReason(top.ex.reason)}）。`;
+  }
+}
+
 /** その日・その時刻のそばで、代わりの時間（2つまで）。頼まれた枠そのものは入れない */
-export function alternativesFor(ctx: SlotContext, c: Candidate): SlotSearch {
-  return findSlots(ctx, c.menuId, { date: c.date, time: c.start }, MAX_CANDIDATES, [c]);
+export function alternativesFor(ctx: SlotContext, c: Candidate, skip: Candidate[] = []): SlotSearch {
+  return findSlots(ctx, c.menuId, { date: c.date, time: c.start }, MAX_CANDIDATES, [c, ...skip]);
 }
 
 /**

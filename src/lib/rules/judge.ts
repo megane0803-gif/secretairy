@@ -18,6 +18,8 @@ export type Booking = {
   menuIds: string[];
   /** 初めての方 */
   newCustomer: boolean;
+  /** だれの予約か（「同じ日に入れない組み合わせ」で、同じ方のその日のほかの予約も見るため。無くてもよい） */
+  customerId?: string;
 };
 
 /** もう入っている予約（確定・仮押さえのどちらも、枠はふさがっている） */
@@ -190,9 +192,35 @@ export function judge(input: JudgeInput): Verdict {
         break;
       }
       case "bufferAfterMinutes":
+      case "notTogether":
       case "text":
-        break; // 間を空けるは下でまとめて、文はプログラムでは判定しない
+        break; // 間を空ける・同じ日に入れない組み合わせは下でまとめて、文はプログラムでは判定しない
     }
+  }
+
+  // 同じ日に入れない組み合わせ：この予約のメニューと、同じ方のその日のほかの予約のメニューを合わせて、
+  // ルールの2つのメニューがどちらも入っていて、そのどちらかがこの予約にあれば断る（どちらのメニューに付けたルールでも効く）
+  const mine = new Set(situation.menuIds);
+  const sameCustomer = booking.customerId ? sameDay.filter((b) => b.customerId === booking.customerId) : [];
+  const theirs = new Set(expandMenuIds(sameCustomer.flatMap((b) => b.menuIds), menus));
+  const nameOf = (id: string) => menus.find((m) => m.id === id)?.name ?? id;
+  for (const rule of input.rules) {
+    const c = rule.check;
+    if (c.kind !== "notTogether" || rule.level !== "menu") continue;
+    const a = rule.menuId;
+    const b = c.with;
+    if (!mine.has(a) && !mine.has(b)) continue;
+    const together = (mine.has(a) || theirs.has(a)) && (mine.has(b) || theirs.has(b));
+    const inThis = mine.has(a) && mine.has(b);
+    results.push({
+      rule,
+      ok: !together,
+      reason: !together
+        ? `${nameOf(a)}と${nameOf(b)}は同じ日に入っていません`
+        : inThis
+          ? `${nameOf(a)}と${nameOf(b)}は同じ日に入れられません`
+          : `同じ日に${mine.has(a) ? nameOf(b) : nameOf(a)}の予約があります（${nameOf(a)}と${nameOf(b)}は同じ日に入れられません）`,
+    });
   }
 
   // 間を空ける：それぞれの予約の後ろに、そのメニューに効く「間」を足して席を数える。

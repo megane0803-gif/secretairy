@@ -29,6 +29,10 @@ const id = (name: string) => seed.merchants.find((m) => m.name === name)!.id;
 const MALL = id("通販モールE");
 const TOWEL = id("タオルの通販F");
 const nowIso = "2026-11-11T01:00:00.000Z";
+// 件数は書き込まず、明細とルールからプログラムで出す（明細の件数を変えてもテストを直さなくてよいように）
+const ITEMS = seed.statement.items;
+const AUTO = ITEMS.filter((i) => seed.rules.some((r) => r.merchantId === i.merchantId)).length;
+const MANUAL = ITEMS.length - AUTO;
 
 /** 人が選ぶ行に印を付ける（pick で購入先ごとに変えられる） */
 function chooseAll(s: AccountingState, pick: (merchantId: string, no: number) => CardUse = () => "shop"): AccountingState {
@@ -36,10 +40,10 @@ function chooseAll(s: AccountingState, pick: (merchantId: string, no: number) =>
 }
 
 describe("最初の状態（seed/accounting.json）", () => {
-  test("通販の明細は番号つきの23件（10/13〜11/10）。購入先は10か所、自動のルールは4件", () => {
+  test("通販の明細は番号つきの20件前後（10/13〜11/10）。購入先はどれも一覧にあり、自動のルールは4件", () => {
     const items = seed.statement.items;
-    assert.equal(items.length, 23);
-    assert.deepEqual(items.map((i) => i.no), Array.from({ length: 23 }, (_, k) => k + 1));
+    assert.ok(items.length >= 18 && items.length <= 22, `20件前後（${items.length}件）`);
+    assert.deepEqual(items.map((i) => i.no), Array.from({ length: items.length }, (_, k) => k + 1));
     assert.equal(seed.statement.from, "2026-10-13");
     assert.equal(seed.statement.to, "2026-11-10");
     for (const i of items) {
@@ -47,8 +51,7 @@ describe("最初の状態（seed/accounting.json）", () => {
       assert.ok(seed.merchants.some((m) => m.id === i.merchantId), `${i.no}番の購入先`);
       assert.deepEqual(Object.keys(i).sort(), ["amount", "date", "merchantId", "no"], "品名は持たない");
     }
-    assert.equal(seed.merchants.length, 10);
-    assert.equal(new Set(items.map((i) => i.merchantId)).size, 10);
+    assert.equal(new Set(items.map((i) => i.merchantId)).size, seed.merchants.length, "一覧の購入先はどれも明細に出てくる");
     assert.equal(seed.rules.length, 4);
     assert.deepEqual(seed.rules.find((r) => r.merchantId === id("美容材料の通販A")), { merchantId: id("美容材料の通販A"), use: "shop" });
   });
@@ -93,17 +96,19 @@ describe("売上（見るだけ）", () => {
 
 describe("自動のルールで仕分ける（AI は使わない）", () => {
   const sorted = sortCurrent(seed);
-  test("自動のルールで15件が仕分けられる", () => {
-    assert.equal(sorted.auto.length, 15);
+  test("自動の数は、作った明細と自動のルールからプログラムが出す", () => {
+    assert.equal(sorted.auto.length, AUTO);
+    assert.equal(sorted.auto.length + manualItems(sorted).length, ITEMS.length);
     for (const a of sorted.auto) assert.equal(a.use, seed.rules.find((r) => r.merchantId === a.item.merchantId)!.use);
   });
-  test("人が選ぶ8件が残る：初めての購入先5件・前にも仕分けた購入先（通販モール）3件", () => {
-    assert.equal(manualItems(sorted).length, 8);
-    assert.equal(sorted.fresh.length, 5);
-    assert.equal(new Set(sorted.fresh.map((i) => i.merchantId)).size, 5);
+  test("人が選ぶのは数件：初めての購入先と、前にも仕分けた購入先（通販モール）", () => {
+    assert.equal(manualItems(sorted).length, MANUAL);
+    assert.ok(MANUAL >= 3 && MANUAL <= 5, `数件（${MANUAL}件）`);
+    assert.ok(sorted.fresh.length >= 1);
     assert.ok(sorted.fresh.every((i) => !seed.history.some((h) => h.merchantId === i.merchantId)));
-    assert.equal(sorted.known.length, 3);
+    assert.ok(sorted.known.length >= 2, "通販モールは2件以上（見出しに「次から自動」が1つ）");
     assert.ok(sorted.known.every((i) => i.merchantId === MALL));
+    assert.equal(sorted.fresh.length + sorted.known.length, MANUAL);
   });
   test("自動の行には人の印を付けられない", () => {
     const autoNo = sorted.auto[0].item.no;
@@ -115,10 +120,10 @@ describe("自動のルールで仕分ける（AI は使わない）", () => {
 describe("プログラムの門と登録", () => {
   test("選び終わるまでは登録できない（あと N件）", () => {
     let s = EMPTY_ACCOUNTING;
-    assert.equal(gateOf(seed, s).remaining, 8);
+    assert.equal(gateOf(seed, s).remaining, MANUAL);
     assert.equal(gateOf(seed, s).ok, false);
     s = withChoice(seed, s, manualItems(sortCurrent(seed))[0].no, "shop");
-    assert.equal(gateOf(seed, s).remaining, 7);
+    assert.equal(gateOf(seed, s).remaining, MANUAL - 1);
     assert.equal(register(seed, s, { nowIso, service }).ok, false);
     s = chooseAll(s);
     const g = gateOf(seed, s);
@@ -152,13 +157,13 @@ describe("プログラムの門と登録", () => {
     const r = register(seed, s, { nowIso, service });
     assert.ok(r.ok);
     if (!r.ok) return;
-    assert.equal(r.state.registered!.total, 23);
-    assert.equal(r.state.registered!.auto, 15);
-    assert.equal(r.state.registered!.manual, 8);
+    assert.equal(r.state.registered!.total, ITEMS.length);
+    assert.equal(r.state.registered!.auto, AUTO);
+    assert.equal(r.state.registered!.manual, MANUAL);
     assert.equal(r.state.registered!.shopAmount + r.state.registered!.privateAmount, seed.statement.items.reduce((a, i) => a + i.amount, 0));
-    assert.equal(r.message, "自動 15件・人が選んだ 8件。自動のルールに「タオルの通販F＝店用」を足しました");
+    assert.equal(r.message, `自動 ${AUTO}件・人が選んだ ${MANUAL}件。自動のルールに「タオルの通販F＝店用」を足しました`);
     assert.equal(r.journal.length, 2);
-    assert.match(r.journal[0].text, /^人が登録：会計（架空）に通販の明細 23件（自動 15件・人が選んだ 8件）/);
+    assert.ok(r.journal[0].text.startsWith(`人が登録：会計（架空）に通販の明細 ${ITEMS.length}件（自動 ${AUTO}件・人が選んだ ${MANUAL}件）`));
     assert.equal(r.journal[0].who, "オーナー");
     assert.match(r.journal[1].text, /自動のルールに足した：タオルの通販F＝店用/);
     assert.deepEqual(effectiveRules(seed.rules, r.state).length, 5);
@@ -171,7 +176,7 @@ describe("プログラムの門と登録", () => {
     const r = register(seed, chooseAll(EMPTY_ACCOUNTING), { nowIso, service });
     assert.ok(r.ok);
     if (!r.ok) return;
-    assert.equal(r.message, "自動 15件・人が選んだ 8件。自動のルールは足していません");
+    assert.equal(r.message, `自動 ${AUTO}件・人が選んだ ${MANUAL}件。自動のルールは足していません`);
     assert.equal(r.journal.length, 1);
     assert.deepEqual(r.state.addedRules, []);
   });
@@ -218,5 +223,23 @@ describe("ブラウザに残す形", () => {
     assert.deepEqual(bad.choices, { "1": "shop" });
     assert.deepEqual(bad.autoNext, ["m-f"]);
     assert.deepEqual(bad.addedRules, []);
+  });
+});
+
+describe("9. 通販の明細（架空）は20件前後。自動と人が選ぶ数は、作った明細からプログラムが出す", () => {
+  test("20件・自動16件・人が選ぶ4件（初めての購入先2件・通販モール2件）", () => {
+    const s = sortCurrent(seed);
+    assert.equal(ITEMS.length, 20);
+    assert.equal(s.auto.length, 16);
+    assert.equal(s.fresh.length, 2);
+    assert.equal(s.known.length, 2);
+  });
+  test("画面の数は書き込まず、仕分けた結果から出す（「23件」などの決まった数が画面のコードに無い）", async () => {
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const dir = new URL("../../../app/accounting/", import.meta.url);
+    for (const f of readdirSync(dir)) {
+      const src = readFileSync(new URL(f, dir), "utf8");
+      assert.doesNotMatch(src, /(23|15|8|20|16|4)件/, f);
+    }
   });
 });
