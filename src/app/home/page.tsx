@@ -3,8 +3,7 @@ import { JournalList } from "@/components/JournalList";
 import { TabPage } from "@/components/TabPage";
 import { Fold, NotYet, Panel } from "@/components/parts";
 import { getBookData } from "@/lib/book/data";
-import { getKarteHeadings } from "@/lib/settings";
-import { getTodos } from "@/lib/data/seed";
+import { getKarteHeadings, getTodoLimits } from "@/lib/settings";
 import { needsOwnerPasscode } from "@/lib/line/server";
 import { HomeSummary } from "./HomeSummary";
 import { LinePanel } from "./LinePanel";
@@ -13,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default function HomePage() {
   const data = getBookData();
-  const seedTodos = getTodos().filter((t) => !t.done && (t.due === undefined || t.due <= 0)).length;
+  const todo = getTodoLimits();
   return (
     <TabPage
       tab="home"
@@ -31,10 +30,11 @@ export default function HomePage() {
         </>
       }
     >
-      <HomeSummary data={data} seedTodos={seedTodos} headings={getKarteHeadings()} />
+      <HomeSummary data={data} headings={getKarteHeadings()} todo={todo} />
       <NotYet>AI の一言（今日の気をつける点を3つまで）はまだです。今はプログラムが並べるだけです</NotYet>
       <Fold summary="くわしく">
         <p>朝の要点は、予約・承認待ち・ToDo・保存したカルテの次回提案・席の空きから、プログラムが並べます。AI は数を変えません。</p>
+        <p>「今やる{todo.topCount}件」は ToDo のタブと同じ並べ方の上から{todo.topCount}つです（済んだ物は出しません）。「メモを投げる」は AI が短いタスクの文に直し、ToDo の「投げたメモ」に入ります。</p>
       </Fold>
     </TabPage>
   );

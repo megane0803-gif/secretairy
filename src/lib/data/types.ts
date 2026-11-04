@@ -142,16 +142,23 @@ export type AccountingSeed = {
   trial: CardStatement;
 };
 
-// ---- ここから下は形だけ（中身は後日） ----
-
-/** やること */
+/**
+ * やること（最初の状態。seed/todo.json）。期限は「何番目の営業日」（0 = 今日・負の数は過ぎた日）。
+ * source はどの入口から入った物のつもりか（src/lib/todo/keys.ts の TodoSource）。key は同じ物を2回足さない鍵。
+ */
 export type Todo = {
   id: string;
   title: string;
   /** いつまで（無ければ決めていない） */
   due?: BusinessDay;
   done: boolean;
+  source?: "memo" | "karte" | "ad" | "reserve" | "line" | "chat";
+  key?: string;
+  /** 投げたメモの元の文（source が memo の物） */
+  memo?: string;
 };
+
+// ---- ここから下は形だけ（中身は後日） ----
 
 /** 画面の「くわしく」で見せる、形の説明 */
 export type FieldNote = { key: string; label: string };
@@ -176,7 +183,10 @@ export const CARD_FIELDS: FieldNote[] = [
 ];
 
 export const TODO_FIELDS: FieldNote[] = [
-  { key: "title", label: "やること" },
-  { key: "due", label: "いつまで（何番目の営業日）" },
+  { key: "title", label: "やること（1行の文）" },
+  { key: "due", label: "いつまで（何番目の営業日。無ければ期限なし）" },
   { key: "done", label: "済んだか" },
+  { key: "source", label: "どこから入ったか（メモ・カルテ・広告・予約・LINE・チャット）" },
+  { key: "key", label: "同じ物を2回足さない鍵（メモ:番号・カルテ:番号・語句:番号・予約:お客様＠日時 など）" },
+  { key: "memo", label: "投げたメモの元の文（プログラムがそのまましまう）" },
 ];

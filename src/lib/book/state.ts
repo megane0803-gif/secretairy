@@ -11,6 +11,7 @@ import type { HoldOffer, TodoOffer } from "../ai/wire";
 import { MAX_DAY_OFFSET } from "../calendar";
 import type { SavedKarte } from "../karte/record";
 import type { ChatReservation } from "../reservations";
+import { chatKey, reserveKey, SEED_TODO_KEYS, todoKey, TODO_SOURCES, type TodoSource } from "../todo/keys";
 
 /** withdrawn = お客様が予約チャットで「ずらしたい」「やめたい」と言ったので、承認の前に外した */
 export type ApprovalState = "pending" | "approved" | "fixed" | "skipped" | "withdrawn";
@@ -35,7 +36,18 @@ export type AddedTodo = {
   kind?: "next-talk";
   /** いつまで（YYYY-MM-DD）。無ければ決めていない（広告の「効いたか見る」など） */
   due?: string;
+  /** 同じ物を2回足さないための鍵（メモ:番号・カルテ:番号・語句:番号・予約:お客様＠日時 など。src/lib/todo/keys.ts） */
+  key?: string;
+  /** どこから入ったか（無ければ id の頭から出す） */
+  source?: TodoSource;
+  /** 投げたメモの元の文（プログラムがそのまましまう。行の印を押すと開く） */
+  memo?: string;
+  /** 済みにした時（「済み」のタブで新しい順に並べる） */
+  doneAt?: string;
 };
+
+/** 最初の状態の ToDo（seed/todo.json）を済みにした・戻した印（id ごと） */
+export type TodoMark = { done: boolean; at: string };
 
 export type BookState = {
   v: 1;
@@ -48,10 +60,12 @@ export type BookState = {
   kartes: SavedKarte[];
   /** デモの「翌日へ」で進めた営業日の数（「最初に戻す」で 0 に戻る） */
   dayOffset: number;
+  /** 最初の状態の ToDo を済みにした・戻した印（「最初に戻す」で消える） */
+  todoMarks?: Record<string, TodoMark>;
 };
 
 export function emptyBook(anchor: string): BookState {
-  return { v: 1, anchor, chat: [], approvals: [], todos: [], kartes: [], dayOffset: 0 };
+  return { v: 1, anchor, chat: [], approvals: [], todos: [], kartes: [], dayOffset: 0, todoMarks: {} };
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -114,7 +128,17 @@ export function parseBook(raw: string | null): BookState | null {
       done: t.done === true,
       ...(isStr(t.due) && DATE.test(t.due) ? { due: t.due } : {}),
       ...(t.kind === "next-talk" ? { kind: "next-talk" as const } : {}),
+      ...(isStr(t.key) && t.key.length <= 120 ? { key: t.key } : {}),
+      ...(TODO_SOURCES.includes(t.source as TodoSource) ? { source: t.source as TodoSource } : {}),
+      ...(isStr(t.memo) ? { memo: t.memo.slice(0, 400) } : {}),
+      ...(isStr(t.doneAt) ? { doneAt: t.doneAt } : {}),
     }));
+  const todoMarks: Record<string, TodoMark> = {};
+  if (d.todoMarks && typeof d.todoMarks === "object" && !Array.isArray(d.todoMarks))
+    for (const [id, m] of Object.entries(d.todoMarks as Record<string, unknown>)) {
+      const mark = m as Record<string, unknown> | null;
+      if (mark && typeof mark === "object" && typeof mark.done === "boolean" && isStr(mark.at)) todoMarks[id.slice(0, 60)] = { done: mark.done, at: mark.at };
+    }
   const kartes: SavedKarte[] = arr(d.kartes)
     .filter(
       (k) =>
@@ -141,7 +165,7 @@ export function parseBook(raw: string | null): BookState | null {
     }));
   const off = d.dayOffset;
   const dayOffset = typeof off === "number" && Number.isInteger(off) && off > 0 ? Math.min(off, MAX_DAY_OFFSET) : 0;
-  return { v: 1, anchor: d.anchor, chat, approvals, todos, kartes, dayOffset };
+  return { v: 1, anchor: d.anchor, chat, approvals, todos, kartes, dayOffset, todoMarks };
 }
 
 /** 見出しの id ごとの行（文字の並び）だけを残す。見出しが設定にあるかは画面で読むときに確かめる */
@@ -229,20 +253,25 @@ export function withReleased(
   how: "fixed" | "skipped",
   surname: string,
   nowIso: string,
+  /** 今日（YYYY-MM-DD。「翌日へ」も入れた日）。あれば ToDo を「今日中」にする */
+  today?: string,
 ): BookState {
   const a = s.approvals.find((x) => x.id === approvalId && x.state === "pending");
   if (!a) return s;
+  const r = s.chat.find((x) => x.id === a.reservationId);
   const todo: AddedTodo = {
     id: `td-${a.reservationId}`,
     title: `${surname}（架空）様に別の日時を案内`,
     createdAt: nowIso,
     done: false,
+    source: "reserve",
+    ...(r ? { key: reserveKey(r.customerId, r.date, r.start) } : {}),
+    ...(today && DATE.test(today) ? { due: today } : {}),
   };
   return {
-    ...s,
+    ...withTodo(s, todo),
     chat: s.chat.filter((r) => r.id !== a.reservationId),
     approvals: s.approvals.map((x) => (x.id === approvalId ? { ...x, state: how, decidedAt: nowIso } : x)),
-    todos: s.todos.some((t) => t.id === todo.id) ? s.todos : [...s.todos, todo],
   };
 }
 
@@ -271,23 +300,50 @@ export function withChatTodo(
   todo: TodoOffer,
   surname: string,
   nowIso: string,
+  /** 今日（YYYY-MM-DD）。あれば「お客様への連絡（今日中）」にする */
+  today?: string,
 ): { state: BookState; journal: string | null } {
   const title = typeof todo?.title === "string" ? todo.title.replace(/\s+/g, " ").trim().slice(0, 80) : "";
   const id = typeof todo?.id === "string" ? todo.id.slice(0, 60) : "";
   if (!id || !title.startsWith(`${surname}（架空）様：`) || title.length <= `${surname}（架空）様：`.length) return { state: s, journal: null };
   if (s.todos.some((t) => t.id === id)) return { state: s, journal: null };
+  const added: AddedTodo = {
+    id,
+    title,
+    createdAt: nowIso,
+    done: false,
+    source: "chat",
+    key: chatKey(id.replace(/^td-chat-/, "")),
+    ...(today && DATE.test(today) ? { due: today } : {}),
+  };
+  if (hasTodoKey(s, todoKey(added))) return { state: s, journal: null };
   return {
-    state: withTodo(s, { id, title, createdAt: nowIso, done: false }),
+    state: withTodo(s, added),
     journal: `ToDo に足した（予約チャットで「お店に確かめてご連絡します」と返したため）：${title}`,
   };
 }
 
-export function withTodoDone(s: BookState, todoId: string, done: boolean): BookState {
-  return { ...s, todos: s.todos.map((t) => (t.id === todoId ? { ...t, done } : t)) };
+export function withTodoDone(s: BookState, todoId: string, done: boolean, nowIso?: string): BookState {
+  return {
+    ...s,
+    todos: s.todos.map((t) => {
+      if (t.id !== todoId) return t;
+      const next: AddedTodo = { ...t, done };
+      if (done && nowIso) next.doneAt = nowIso;
+      else delete next.doneAt;
+      return next;
+    }),
+  };
 }
 
-/** ToDo を1件足す（同じ id の物は2回入れない）。広告の承認から「効いたか見る」を足すときなど */
+/** その鍵の ToDo がもうあるか（足した物と、最初の状態の物。済んだ物も数える） */
+export function hasTodoKey(s: BookState, key: string): boolean {
+  return SEED_TODO_KEYS.has(key) || s.todos.some((t) => todoKey(t) === key);
+}
+
+/** ToDo を1件足す（同じ id・同じ鍵の物は2回入れない）。広告の承認から「効いたか見る」を足すときなど */
 export function withTodo(s: BookState, todo: AddedTodo): BookState {
   if (s.todos.some((t) => t.id === todo.id)) return s;
+  if (hasTodoKey(s, todoKey(todo))) return s;
   return { ...s, todos: [...s.todos, todo] };
 }

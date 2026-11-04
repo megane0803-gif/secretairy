@@ -9,6 +9,7 @@ import type { Reservation } from "../reservations";
 import type { KarteHeading } from "../settings";
 import type { Visit } from "../ai/wire";
 import { headingWithRole, type KarteSections } from "./format";
+import { karteKey } from "../todo/keys";
 
 /** 人が「保存」を押したカルテ。ブラウザの中だけに残す（secretairy:book の kartes） */
 export type SavedKarte = {
@@ -114,6 +115,6 @@ export function withKarteSaved(s: BookState, k: SavedKarte, surname: string, hea
   const title = nextTalkTitle(k, surname, headings);
   if (!title) return { ok: true, state: next, todo: null, todoSkipped: "none" };
   if (s.todos.some((t) => !t.done && t.title === title)) return { ok: true, state: next, todo: null, todoSkipped: "same" };
-  const todo: AddedTodo = { id: `td-next-${k.id}`, title, createdAt: k.savedAt, done: false, kind: "next-talk" };
+  const todo: AddedTodo = { id: `td-next-${k.id}`, title, createdAt: k.savedAt, done: false, kind: "next-talk", source: "karte", key: karteKey(k.id) };
   return { ok: true, state: { ...next, todos: [...next.todos, todo] }, todo, todoSkipped: null };
 }

@@ -11,6 +11,7 @@ import { candidateLabel, judgeSlot, menuName, type SlotContext } from "../ai/slo
 import { parseHoldOffer } from "../ai/wire";
 import { pendingApprovals, withApproved, withHold, withReleased, withTodo, type BookState, type PendingRow } from "../book/state";
 import { savedOn } from "../karte/record";
+import { lineKey } from "../todo/keys";
 import type { JournalWho } from "../journal";
 import type { Customer } from "../data/types";
 import type { AdSettings, Menu, ShopSettings } from "../settings";
@@ -98,7 +99,7 @@ export function applyPress(ev: Extract<ScreenEvent, { kind: "press" }>, book: Bo
         reply: `✓ 確定しました：${what}`,
       };
     return {
-      book: withReleased(book, row.approval.id, "skipped", surname, ctx.nowIso),
+      book: withReleased(book, row.approval.id, "skipped", surname, ctx.nowIso, ctx.today),
       ads,
       journal: [
         {
@@ -146,7 +147,7 @@ export function applyAsk(
     case "todo": {
       const title = ev.text.slice(0, 80);
       return {
-        book: withTodo(book, { id: `td-line-${ev.id}`, title, createdAt: ctx.nowIso, done: false }),
+        book: withTodo(book, { id: `td-line-${ev.id}`, title, createdAt: ctx.nowIso, done: false, source: "line", key: lineKey(ev.id) }),
         ads,
         journal: [sortLine("ToDo"), { who: "LINE", text: `ToDo に足した：${title}` }],
         reply: `ToDo に足しました：${title}`,
