@@ -198,9 +198,11 @@ export const TODO_FIELDS: FieldNote[] = [
  * ホームの「AI の仕事」で、これから来る物（最初の状態。seed/jobs.json）。1行ずつ上から順に並べる。
  * reserve = 予約の相談（架空のお客様の文。日は「何番目の営業日」と時刻で持ち、文は画面がその日の言い方で作る）
  * card = 新しい明細（経理の「次の明細（試し）」の架空の明細）/ ads = 広告の見直し / memo = メモ1件（ToDo へ）
+ * site = 予約サイト（架空）から予約が入る（空いている枠に1件。AI なし。お客様と枠はプログラムが選ぶ。src/lib/book/site.ts）
  */
 export type JobSeed =
   | { id: "reserve"; customerId: string; menuId: string; day: BusinessDay; start: string }
   | { id: "card" }
   | { id: "ads" }
-  | { id: "memo"; text: string };
+  | { id: "memo"; text: string }
+  | { id: "site" };

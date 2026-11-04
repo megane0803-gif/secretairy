@@ -1,14 +1,39 @@
 "use client";
 
 // 予約サイト（架空）。台帳の横に並べる、お客様が見る空き状況のつもりの画面。
-// 今は台帳 → 予約サイトの片方向だけ：台帳で「確定」した予約を受け取り、その枠を塞ぐ。仮押さえはまだ送らない。
+// 台帳 → 予約サイト：台帳で「確定」した予約を受け取り、その枠を塞ぐ。仮押さえは送らない。
+// 予約サイト → 台帳：「ここで予約が入る（デモ）」で、架空のお客様が自分で決めた予約が1件、空いている枠に入る
+// （承認の箱は通さずに確定で台帳へ。札は「予約サイトから」。src/lib/book/site.ts）。AI は使わない。
+// 「仮押さえと同じ枠に入れる（デモ）」は二重予約を防ぐ見せ場：その仮押さえを外し、ToDo に「別の日時を案内」を足す。
 
+import { useState } from "react";
 import { toHHMM, toMinutes, weekFrom } from "@/lib/calendar";
 import type { BookData } from "@/lib/book/data";
+import { siteBook, siteCount, type SiteMode, type SiteOutcome } from "@/lib/book/site";
 import { useBook } from "@/lib/book/useBook";
+import { writeJournal } from "@/lib/journal";
+import { useRules } from "@/lib/rules/useRules";
 
 export function BookingSite({ data }: { data: BookData }) {
   const book = useBook(data);
+  const { rules } = useRules(data.seedRules);
+  const [note, setNote] = useState<string | null>(null);
+  const holds = book.pending.length;
+  const received = siteCount(book.state);
+
+  // 押されたのは本物の操作の時だけ（デモのボタン。お客様が予約サイトで決めたつもり）
+  const press = (mode: SiteMode) => (e: React.MouseEvent) => {
+    if (!e.nativeEvent.isTrusted) return;
+    let out: SiteOutcome | null = null;
+    book.update((s) => {
+      out = siteBook(s, { data: book.data, rules, now: new Date() }, mode);
+      return out.state;
+    });
+    const o = out as SiteOutcome | null;
+    if (!o) return;
+    if (o.ok) writeJournal(...o.journal);
+    setNote(o.ok ? o.message : o.note);
+  };
   const days = weekFrom(data.shop, book.today);
   const confirmed = book.all.filter((r) => r.status === "confirmed");
   const opens = days.filter((d) => d.hours).map((d) => toMinutes(d.hours!.open));
@@ -27,7 +52,28 @@ export function BookingSite({ data }: { data: BookData }) {
         <strong>{data.shop.name} 予約サイト</strong>
         <span className="tag fictional">架空</span>
       </div>
-      <p className="hint">台帳で確定した予約を受け取って、枠を塞ぎます（台帳 → 予約サイトの片方向）。仮押さえは送りません。</p>
+      <p className="hint">
+        台帳で確定した予約を受け取って、枠を塞ぎます。仮押さえは送りません。予約サイトでお客様が決めた予約は、承認の箱を通さずに台帳へ入ります（予約サイト → 台帳）。
+      </p>
+      <div className="site-demo">
+        <button type="button" className="btn small" onClick={press("free")}>
+          ここで予約が入る（デモ）
+        </button>
+        <button
+          type="button"
+          className="btn small"
+          onClick={press("onHold")}
+          disabled={holds === 0}
+          title={holds === 0 ? "予約チャットで仮押さえをすると押せます" : "いちばん古い仮押さえと同じ枠に入れます"}
+        >
+          仮押さえと同じ枠に入れる（デモ）
+        </button>
+      </div>
+      {note && (
+        <p className="hint site-demo-note" role="status">
+          {note}
+        </p>
+      )}
       <div className="site-scroll">
         <table className="site-grid">
           <thead>
@@ -57,12 +103,13 @@ export function BookingSite({ data }: { data: BookData }) {
                   const here = confirmed.filter((r) => r.date === d.date && r.startMin < t + step && t < r.endMin);
                   const left = Math.max(0, book.shop.seats - here.length);
                   const byChat = here.some((r) => r.source === "chat");
+                  const bySite = here.some((r) => r.source === "site");
                   const mark = left === 0 ? "×" : left < book.shop.seats ? "△" : "○";
                   return (
                     <td
                       key={d.date}
-                      className={[left === 0 ? "full" : left < book.shop.seats ? "few" : "free", byChat ? "bychat" : ""].join(" ").trim()}
-                      title={`${d.label} ${toHHMM(t)}：のこり${left}席${byChat ? "（承認で確定した予約が入っています）" : ""}`}
+                      className={[left === 0 ? "full" : left < book.shop.seats ? "few" : "free", byChat ? "bychat" : "", bySite ? "bysite" : ""].join(" ").trim()}
+                      title={`${d.label} ${toHHMM(t)}：のこり${left}席${byChat ? "（承認で確定した予約が入っています）" : ""}${bySite ? "（この予約サイトで入った予約があります）" : ""}`}
                     >
                       {mark}
                     </td>
@@ -74,10 +121,15 @@ export function BookingSite({ data }: { data: BookData }) {
         </table>
       </div>
       <p className="site-legend">
-        ○ 空き　△ のこりわずか　× 満席　<span className="bychat-key">太枠</span> 承認で確定した予約が入った枠
+        ○ 空き　△ のこりわずか　× 満席　<span className="bychat-key">太枠</span> 承認で確定した予約が入った枠　<u className="bysite-key">点線の下線</u> この予約サイトで入った枠
         {fresh > 0 && (
           <>
             （<strong className="num">{fresh}</strong> 件受け取り済み）
+          </>
+        )}
+        {received > 0 && (
+          <>
+            （予約サイトから <strong className="num">{received}</strong> 件入った）
           </>
         )}
       </p>

@@ -16,7 +16,9 @@ export type TimetableBand = Span & {
   status: Reservation["status"];
   /** 承認で確定した予約（予約チャットから入った確定） */
   fresh: boolean;
-  /** だれが入れた物か（仮押さえ = AI・承認で確定 = 人・前からの確定 = 外。src/lib/actors.ts） */
+  /** 予約サイト（架空）から入った予約（お客様が自分で決めた確定。承認の箱は通らない） */
+  site?: boolean;
+  /** だれが入れた物か（仮押さえ = AI・承認で確定と店が受けた確定 = 人・予約サイトから = 外。src/lib/actors.ts） */
   actor: Actor;
   start: string;
   end: string;
@@ -127,6 +129,7 @@ export function timetable(week: LedgerDay[], now?: { date: string; time: string 
         id: r.id,
         status: r.status,
         fresh: r.status === "confirmed" && r.source === "chat",
+        ...(r.source === "site" ? { site: true } : {}),
         actor: reservationActor(r),
         start: r.start,
         end: r.end,
@@ -152,7 +155,7 @@ export function timetable(week: LedgerDay[], now?: { date: string; time: string 
 /** 帯の読み上げ・ホバーの文（「10:00–11:00 カット 久保（架空）様 仮押さえ（承認待ち）［AI：AI がした事］」） */
 export function bandTitle(b: TimetableBand): string {
   const who = `${b.surname}${b.fictional ? "（架空）" : ""}様`;
-  const state = b.status === "hold" ? "仮押さえ（承認待ち）" : b.fresh ? "確定（承認で確定）" : "確定";
+  const state = b.status === "hold" ? "仮押さえ（承認待ち）" : b.fresh ? "確定（承認で確定）" : b.site ? "確定（予約サイトから）" : "確定";
   const by = `［${ACTOR_LABEL[b.actor]}：${ACTOR_MEANING[b.actor]}］`;
   return `${b.start}–${b.end} ${b.menuName} ${who} ${state}${b.firstVisit ? " 初めての方" : ""} ${by}`;
 }

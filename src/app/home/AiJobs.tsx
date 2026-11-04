@@ -32,6 +32,7 @@ const FLOW: Record<JobId, string> = {
   card: "自動のルールで仕分け → 迷う物は経理タブへ",
   ads: "AI が案を1つ → 確かめて承認の箱へ",
   memo: "AI が ToDo の文に → ToDo へ",
+  site: "空いている枠に入る → 台帳へ（承認の箱は通さない・AI なし）",
 };
 
 function noteOf(o: JobOutcome): string | null {
@@ -120,6 +121,7 @@ export function AiJobs({ data, settings }: { data: BookData; settings: JobsSetti
     if (id === "reserve") return `${JOB_NAME.reserve} 1件`;
     if (id === "card") return `${JOB_NAME.card} ${trialCount}件`;
     if (id === "memo") return `${JOB_NAME.memo} 1件`;
+    if (id === "site") return "予約サイトから予約 1件";
     return JOB_NAME.ads;
   };
 

@@ -3,6 +3,7 @@
 //   新しい明細 … 経理の「次の明細（試し）」の架空の明細を、いま効く自動のルールで仕分け（AI なし）→ 迷う物は経理タブへ
 //   広告の見直し … 広告タブと同じ /api/ai/ads → 画面でももう一度門 → 承認の箱へ（今週の案がもうある時は動かさない）
 //   メモ … 架空のメモ1件を、メモを投げると同じ /api/ai/todo → ToDo へ
+//   予約サイトから予約が入る … 予約サイト（架空）の「ここで予約が入る（デモ）」と同じ（AI なし。book/site.ts）→ 台帳へ（承認の箱は通さない）
 //
 // 置き場所（JobStore）と AI の窓口（JobAsk）は外から渡す：画面はブラウザの中と fetch、テストはメモリと決まった返事。
 // 🔒 確定は人：ここから呼ぶのは仮押さえ（withHold）・承認の箱に入れる（withProposal）・ToDo に足すだけ。確定の変え方は呼ばない。
@@ -18,6 +19,7 @@ import type { AdsRequest, AdsResponse } from "../ads/wire";
 import { candidateLabel } from "../ai/slots";
 import { NO_AI_MESSAGE, parseHoldOffer, type Candidate, type HoldOffer, type ReserveEvent, type ReserveRequest } from "../ai/wire";
 import type { BookData } from "../book/data";
+import { siteBook, type SiteOutcome } from "../book/site";
 import { activeChat, withChatTodo, withHold, type BookState } from "../book/state";
 import { businessDayAt, calDay, demoClock } from "../calendar";
 import { resolveMenu } from "../combo";
@@ -86,13 +88,14 @@ export type JobOutcome =
 export type JobBudget = { left: number };
 
 /** その行が AI の窓口を呼ぶ回数の多い方（予約は「相談」と「1つ目で」の2回） */
-export const AI_CALLS: Record<JobId, number> = { reserve: 2, card: 0, ads: 1, memo: 1 };
+export const AI_CALLS: Record<JobId, number> = { reserve: 2, card: 0, ads: 1, memo: 1, site: 0 };
 
 export const JOB_NAME: Record<JobId, string> = {
   reserve: "予約の相談",
   card: "新しい明細",
   ads: "広告の見直し",
   memo: "メモ",
+  site: "予約サイトから予約が入る",
 };
 
 export const ALREADY_THIS_WEEK = "今週の案はもうあります";
@@ -141,7 +144,15 @@ function seedsOf(env: JobEnv): JobSeed[] {
 export async function runJob(id: JobId, env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
   if (isJobDone(env.store.jobs(), id)) return { kind: "skip", note: "もう済んでいます" };
   if (!seedOf(seedsOf(env), id)) return { kind: "skip", note: "これから来る物がありません" };
-  const out = await (id === "reserve" ? reserveJob(env, budget) : id === "card" ? cardJob(env) : id === "ads" ? adsJob(env, budget) : memoJob(env, budget));
+  const out = await (id === "reserve"
+    ? reserveJob(env, budget)
+    : id === "card"
+      ? cardJob(env)
+      : id === "ads"
+        ? adsJob(env, budget)
+        : id === "site"
+          ? siteJob(env)
+          : memoJob(env, budget));
   if (out.kind === "done") {
     const done = { at: env.now().toISOString(), result: out.result, tab: out.tab };
     env.store.setJobs((s) => withJobDone(s, id, done));
@@ -370,4 +381,23 @@ async function memoJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
     ...(res.note ? [{ who: "プログラム" as const, text: `メモを投げる：${res.note}` }] : []),
   );
   return { kind: "done", result: "ToDo に1件", tab: "todo" };
+}
+
+// ── 予約サイトから予約が入る（AI なし） ─────────────────────
+
+async function siteJob(env: JobEnv): Promise<JobOutcome> {
+  env.journal({ who: "オーナー", text: `AI の仕事を動かした：${JOB_NAME.site}（AI なし）` });
+  let out: SiteOutcome | null = null;
+  // 予約サイト（架空）の「ここで予約が入る（デモ）」と同じ変え方（空いている枠に1件。承認の箱は通さない）
+  env.store.setBook((s) => {
+    out = siteBook(s, { data: env.data, rules: env.rules, now: env.now() }, "free");
+    return out.state;
+  });
+  const o = out as SiteOutcome | null;
+  if (!o) return { kind: "failed", note: "台帳が読めませんでした" };
+  if (!o.ok) return { kind: "failed", note: o.note };
+  env.journal(...o.journal);
+  return o.released.length
+    ? { kind: "done", result: `台帳に1件・仮押さえを外して ToDo に${o.released.length}件`, tab: "todo" }
+    : { kind: "done", result: `台帳に1件（${o.surname}（架空）様）`, tab: "reservations" };
 }
