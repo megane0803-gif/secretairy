@@ -12,6 +12,8 @@ import { judge, type Booked, type Booking, type JudgeMenu } from "@/lib/rules/ju
 import { instructionsFor } from "@/lib/rules/prompt";
 import type { Rule } from "@/lib/rules/types";
 import { useRules } from "@/lib/rules/useRules";
+import type { BookData } from "@/lib/book/data";
+import { useBook } from "@/lib/book/useBook";
 import { RuleForm } from "./RuleForm";
 
 type Props = {
@@ -19,7 +21,8 @@ type Props = {
   menus: JudgeMenu[];
   shop: { timezone: string; seats: number; slotMinutes: number };
   days: CalDay[];
-  booked: Booked[];
+  /** 台帳（このブラウザの仮押さえ・確定も重ねる） */
+  data: BookData;
 };
 
 export function RuleSide(props: Props) {
@@ -48,8 +51,13 @@ export function RuleSide(props: Props) {
   );
 }
 
-function TryPanel({ seed, menus, shop, days, booked }: Props) {
+function TryPanel({ seed, menus, shop, days, data }: Props) {
   const { rules } = useRules(seed);
+  const book = useBook(data);
+  const booked: Booked[] = useMemo(
+    () => book.booked.map((b) => ({ date: b.date, start: b.start, menuIds: [b.menuId], newCustomer: b.newCustomer })),
+    [book.booked],
+  );
   const firstOpen = days.find((d, i) => i > 0 && d.open) ?? days[0];
   const [menuId, setMenuId] = useState(menus[0]?.id ?? "");
   const [date, setDate] = useState(firstOpen?.date ?? "");
@@ -143,7 +151,7 @@ function TryPanel({ seed, menus, shop, days, booked }: Props) {
             {asked.booking.newCustomer ? "（初めての方）" : ""}
             <br />
             <small>
-              判定した時刻：{dayLabel(asked.now.date)} {asked.now.time}（店の時間帯）。入っている予約（架空）も数えます。
+              判定した時刻：{dayLabel(asked.now.date)} {asked.now.time}（店の時間帯）。入っている予約（架空・このブラウザの仮押さえも）も数えます。
             </small>
           </p>
           <ul className="verdict-list">

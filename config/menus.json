@@ -1,7 +1,7 @@
 [
   { "id": "cut", "name": "カット", "minutes": 60, "price": 4800, "lastStart": "19:00" },
   { "id": "color", "name": "カラー", "minutes": 90, "price": 6800, "lastStart": "18:00" },
-  { "id": "cut_color", "name": "カット＋カラー", "minutes": 120, "price": 10800, "lastStart": "18:00" },
+  { "id": "cut_color", "name": "カット＋カラー", "minutes": 120, "price": 10800, "lastStart": "18:00", "includes": ["cut", "color"] },
   { "id": "perm", "name": "パーマ", "minutes": 120, "price": 9800, "lastStart": "17:00" },
   { "id": "straight", "name": "縮毛矯正", "minutes": 180, "price": 15800, "lastStart": "16:00" },
   { "id": "headspa", "name": "ヘッドスパ", "minutes": 30, "price": 3300, "lastStart": "19:00" }

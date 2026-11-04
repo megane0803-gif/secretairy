@@ -1,4 +1,8 @@
 [
+  { "id": "p01", "customerId": "c04", "menuId": "cut_color", "day": -12, "start": "13:00", "status": "confirmed" },
+  { "id": "p02", "customerId": "c01", "menuId": "cut", "day": -20, "start": "11:00", "status": "confirmed" },
+  { "id": "p03", "customerId": "c06", "menuId": "color", "day": -15, "start": "15:00", "status": "confirmed" },
+  { "id": "p04", "customerId": "c02", "menuId": "color", "day": -24, "start": "10:30", "status": "confirmed" },
   { "id": "r01", "customerId": "c01", "menuId": "cut", "day": 0, "start": "10:00", "status": "confirmed" },
   { "id": "r02", "customerId": "c02", "menuId": "color", "day": 0, "start": "11:30", "status": "confirmed" },
   { "id": "r03", "customerId": "c03", "menuId": "straight", "day": 0, "start": "14:00", "status": "confirmed" },

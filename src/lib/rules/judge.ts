@@ -6,7 +6,7 @@ import { dayDiff, lastStartOf, toHHMM, toMinutes } from "../calendar";
 import type { Hours } from "../settings";
 import type { TabId } from "../tabs";
 import { formatMinutes } from "./describe";
-import { rulesFor, strictest, type Situation } from "./strictest";
+import { expandMenuIds, rulesFor, strictest, type Situation } from "./strictest";
 import type { Rule } from "./types";
 
 /** 判定したい予約 */
@@ -23,7 +23,8 @@ export type Booking = {
 /** もう入っている予約（確定・仮押さえのどちらも、枠はふさがっている） */
 export type Booked = Booking;
 
-export type JudgeMenu = { id: string; name: string; minutes: number; lastStart?: string };
+/** includes = 組み合わせのメニューに入っているメニュー。メニューごとのルールは、それを含む組み合わせにも効く */
+export type JudgeMenu = { id: string; name: string; minutes: number; lastStart?: string; includes?: string[] };
 
 export type JudgeInput = {
   /** 全部のルール（鍵つき＋オーナーのルール）。この中から場面に効く物を選ぶ */
@@ -76,7 +77,8 @@ function peakOverlap(target: Span, others: Span[]): number {
 export function judge(input: JudgeInput): Verdict {
   const { booking, now, hours, seats, menus, existing } = input;
   const tab = input.tab ?? "reservations";
-  const situation: Situation = { tab, menuIds: booking.menuIds };
+  // メニューごとのルールは、そのメニューを含む組み合わせ（例：カット＋カラー）にも効かせる
+  const situation: Situation = { tab, menuIds: expandMenuIds(booking.menuIds, menus) };
   const effective = strictest(rulesFor(input.rules, situation));
   const texts = effective.filter((r) => r.check.kind === "text");
 
@@ -196,7 +198,9 @@ export function judge(input: JudgeInput): Verdict {
   // 間を空ける：それぞれの予約の後ろに、そのメニューに効く「間」を足して席を数える。
   // 新しい予約の側のルールだけでなく、すでに入っている予約の側のルール（例：前のカラーの後の15分）も効く。
   const bufferRule = (menuIds: string[]) =>
-    strictest(rulesFor(input.rules, { tab, menuIds })).find((r) => r.check.kind === "bufferAfterMinutes");
+    strictest(rulesFor(input.rules, { tab, menuIds: expandMenuIds(menuIds, menus) })).find(
+      (r) => r.check.kind === "bufferAfterMinutes",
+    );
   const bufOf = (r: Rule | undefined) => (r && r.check.kind === "bufferAfterMinutes" ? r.check.value : 0);
   const ownRule = bufferRule(booking.menuIds);
   const others = plain.map((p) => ({ ...p, rule: bufferRule(p.b.menuIds) }));

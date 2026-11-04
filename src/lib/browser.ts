@@ -41,4 +41,8 @@ export const RIGHT_KEY = "rightWidth";
 export const TABS_KEY = "tabSwitches";
 /** オーナーが足した・直した・消したルール（例のルールに重ねる分） */
 export const RULES_KEY = "rules";
+/** 予約チャットから入った予約・承認の箱・足した ToDo・起点の日（book/state.ts） */
+export const BOOK_KEY = "book";
+/** 日誌（journal.ts） */
+export const JOURNAL_KEY = "journal";
 export const BROWSER_PREFIX = PREFIX;

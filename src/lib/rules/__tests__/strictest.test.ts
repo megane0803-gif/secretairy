@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { formatMinutes } from "../describe";
-import { effective, strictest } from "../strictest";
+import { effective, expandMenuIds, strictest } from "../strictest";
 import { PROGRAM_KINDS, STRICTER } from "../types";
 import { resultOf, rule, run } from "./helpers";
 
@@ -69,5 +69,23 @@ describe("時間の書き方", () => {
     assert.equal(formatMinutes(2880), "2日");
     assert.equal(formatMinutes(180), "3時間");
     assert.equal(formatMinutes(90), "1時間30分");
+  });
+});
+
+describe("組み合わせのメニュー", () => {
+  const menus = [
+    { id: "a", name: "A", minutes: 60 },
+    { id: "b", name: "B", minutes: 60 },
+    { id: "ab", name: "A＋B", minutes: 120, includes: ["a", "b"] },
+  ];
+  test("メニューごとのルールは、そのメニューを含む組み合わせにも効く", () => {
+    const r = rule({ kind: "minLeadMinutes", value: 1440 }, { level: "menu", menuId: "b" });
+    const v = run([r], { menuIds: ["ab"], date: "2026-11-04", start: "15:00" }, { menus });
+    assert.equal(resultOf(v, r)?.ok, false, "B の24時間前までが、A＋B にも効く");
+    assert.equal(resultOf(run([r], { menuIds: ["a"], date: "2026-11-04", start: "15:00" }, { menus }), r), undefined);
+  });
+  test("広げても、入っていないメニューは足さない", () => {
+    assert.deepEqual(expandMenuIds(["ab"], menus).sort(), ["a", "ab", "b"]);
+    assert.deepEqual(expandMenuIds(["a"], menus), ["a"]);
   });
 });

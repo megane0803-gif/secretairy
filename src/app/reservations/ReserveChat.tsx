@@ -1,0 +1,327 @@
+"use client";
+
+// 予約チャット（お客様のスマホ画面のつもり）。予約タブの右の列。
+// 送るたびに、このブラウザの台帳とルールをいっしょに /api/ai/reserve へ送り、返事を少しずつ受け取る。
+// サーバーは何も残さない。仮押さえ・日誌・AI の手順を残すのは、この画面（ブラウザ）の側。
+// AI は仮押さえまで。確定はオーナーが承認の箱で押す。
+
+import { useMemo, useRef, useState } from "react";
+import { buildExamples, type Example } from "@/lib/ai/examples";
+import { candidateLabel, previousVisit, type SlotContext } from "@/lib/ai/slots";
+import { addStep, markFailed, startConsultation } from "@/lib/ai/stepsStore";
+import {
+  NO_AI_MESSAGE,
+  parseHoldOffer,
+  type Candidate,
+  type ChatMode,
+  type ChatTurn,
+  type ReserveEvent,
+  type ReserveRequest,
+} from "@/lib/ai/wire";
+import type { BookData } from "@/lib/book/data";
+import { withHold } from "@/lib/book/state";
+import { useBook } from "@/lib/book/useBook";
+import { writeJournal } from "@/lib/journal";
+import { useRules } from "@/lib/rules/useRules";
+
+type Msg = { from: "guest" | "ai" | "note"; text: string };
+
+const MAX_CHARS = 300;
+
+export function ReserveChat({ data }: { data: BookData }) {
+  const book = useBook(data);
+  const { rules } = useRules(data.seedRules);
+  const withPast = data.customers.find((c) => book.all.some((r) => r.customer.id === c.id && r.date < book.today.date));
+  const [customerId, setCustomerId] = useState(withPast?.id ?? data.customers[0]?.id ?? "");
+  const customer = data.customers.find((c) => c.id === customerId) ?? data.customers[0];
+  const greeting = (): Msg[] => [
+    { from: "ai", text: `${data.shop.name} の予約の係です。ご希望のメニューと日にちを教えてください。` },
+  ];
+  const [msgs, setMsgs] = useState<Msg[]>(greeting);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<ChatMode>("ai");
+  const [noAi, setNoAi] = useState(false);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const logRef = useRef<HTMLOListElement>(null);
+
+  const ctx: SlotContext | null = useMemo(
+    () =>
+      customer
+        ? {
+            shop: data.shop,
+            menus: data.menus,
+            rules,
+            booked: book.booked,
+            customer: { id: customer.id, surname: customer.surname, firstVisit: customer.firstVisit },
+            now: book.now,
+            today: book.today,
+          }
+        : null,
+    [data, rules, book.booked, customer, book.now, book.today],
+  );
+  // 例文は、いまの台帳・ルール・時刻でプログラムが選んだ日時で作る（どの曜日に開いても同じ働きになるように）
+  const examples = useMemo(() => (ctx ? buildExamples(ctx) : []), [ctx]);
+
+  const scroll = () => requestAnimationFrame(() => logRef.current?.lastElementChild?.scrollIntoView({ block: "nearest" }));
+
+  const reset = (id: string) => {
+    setCustomerId(id);
+    setMsgs(greeting());
+    setCandidates([]);
+  };
+
+  async function send(raw: string, over?: { mode?: ChatMode; msgs?: Msg[]; customerId?: string }) {
+    const t = raw.trim().slice(0, MAX_CHARS);
+    const customer = data.customers.find((c) => c.id === (over?.customerId ?? customerId));
+    if (!t || busy || !customer) return;
+    const useMode = over?.mode ?? mode;
+    const before = over?.msgs ?? msgs;
+    const history: ChatTurn[] = [
+      ...before.filter((m) => m.from !== "note").map((m) => ({ role: m.from === "guest" ? ("user" as const) : ("assistant" as const), text: m.text })),
+      { role: "user", text: t },
+    ];
+    setMsgs([...before, { from: "guest", text: t }]);
+    setText("");
+    setBusy(true);
+    scroll();
+    const cid = startConsultation(t, useMode);
+    const who = `${customer.surname}（架空）様`;
+
+    const body: ReserveRequest = {
+      mode: useMode,
+      messages: history,
+      candidates: over?.msgs ? [] : candidates,
+      customer: { id: customer.id, surname: customer.surname, firstVisit: customer.firstVisit },
+      booked: book.booked,
+      rules: rules.filter((r) => !r.locked),
+    };
+
+    let aiText = "";
+    let gotAny = false;
+    let aiFailed = false;
+    const showAi = (d: string) => {
+      aiText += d;
+      const shown = aiText;
+      setMsgs((m) => {
+        const last = m[m.length - 1];
+        if (gotAny && last?.from === "ai") return [...m.slice(0, -1), { from: "ai", text: shown }];
+        return [...m, { from: "ai", text: shown }];
+      });
+      gotAny = true;
+      scroll();
+    };
+    const failed = () => {
+      aiFailed = true;
+      markFailed(cid);
+      setNoAi(true);
+      setMsgs((m) => [...m, { from: "note", text: `${NO_AI_MESSAGE}。ほかの画面はそのまま使えます。` }]);
+      scroll();
+    };
+
+    const onEvent = (e: ReserveEvent) => {
+      switch (e.t) {
+        case "text":
+          showAi(e.d);
+          break;
+        case "step":
+          addStep(cid, e.step);
+          // 仮押さえは下の hold で1行書く
+          if (e.step.kind === "reject" || e.step.kind === "limit")
+            writeJournal({ who: "プログラム", text: `${e.step.kind === "reject" ? "弾いた" : "止めた"}（${who}の相談）：${e.step.text}` });
+          else if (e.step.kind === "tool") writeJournal({ who: "AI", text: `道具を呼んだ（${who}の相談）：${e.step.text}` });
+          break;
+        case "candidates":
+          setCandidates(e.list);
+          break;
+        case "hold": {
+          const h = parseHoldOffer(e.hold);
+          if (!h || h.customerId !== customer.id) break;
+          book.update((s) => withHold(s, h));
+          writeJournal({ who: "AI", text: `仮押さえした：${who} ${candidateLabel(data, h)}（承認の箱へ）` });
+          break;
+        }
+        case "error":
+          if (e.code === "no-ai") failed();
+          else setMsgs((m) => [...m, { from: "note", text: `うまくいきませんでした。${e.message}。もう一度送ってください。` }]);
+          break;
+        case "done":
+          break;
+      }
+    };
+
+    try {
+      const res = await fetch("/api/ai/reserve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok || !res.body) {
+        let msg = "";
+        try {
+          msg = ((await res.json()) as { message?: string }).message ?? "";
+        } catch {}
+        if (res.status >= 500 || !msg) failed();
+        else setMsgs((m) => [...m, { from: "note", text: `うまくいきませんでした。${msg}。文を短くして送ってください。` }]);
+        return;
+      }
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i: number;
+        while ((i = buf.indexOf("\n")) >= 0) {
+          const lineText = buf.slice(0, i).trim();
+          buf = buf.slice(i + 1);
+          if (!lineText) continue;
+          try {
+            onEvent(JSON.parse(lineText) as ReserveEvent);
+          } catch {
+            // 形の崩れた行は読み飛ばす
+          }
+        }
+      }
+      if (useMode === "ai" && !aiFailed) setNoAi(false);
+    } catch {
+      failed();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const tryExample = (ex: Example) => {
+    if (busy) return;
+    if (ex.id === "previous" && ctx && !previousVisit(ctx) && withPast) {
+      // 前回の来店がある方に切りかえて話す
+      const fresh = greeting();
+      setCustomerId(withPast.id);
+      setMsgs(fresh);
+      setCandidates([]);
+      void send(ex.text, { msgs: fresh, customerId: withPast.id });
+      return;
+    }
+    void send(ex.text);
+  };
+
+  const trySample = () => {
+    // AI につながらないとき：決まった返事（AI なし）で、同じ道具・同じ流れを試す
+    setMode("script");
+    setNoAi(false);
+    const lastGuest = [...msgs].reverse().find((m) => m.from === "guest");
+    const idx = lastGuest ? msgs.lastIndexOf(lastGuest) : -1;
+    const before = idx >= 0 ? msgs.slice(0, idx).filter((m) => m.from !== "note") : msgs;
+    if (lastGuest) void send(lastGuest.text, { mode: "script", msgs: before });
+  };
+
+  return (
+    <div className="phone" aria-label="お客様のスマホの画面（架空）">
+      <div className="phone-bar">
+        <span className="phone-shop">{data.shop.name} の予約</span>
+        <span className="tag fictional">架空の店</span>
+      </div>
+      <div className="phone-who">
+        <label>
+          お客様
+          <select value={customerId} onChange={(e) => reset(e.target.value)} disabled={busy}>
+            {data.customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.surname} 様（架空）{c.firstVisit ? "・初めて" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="chat-mode" role="group" aria-label="返事を作る物">
+          <button type="button" className={mode === "ai" ? "chat-mode-on" : "chat-mode-off"} aria-pressed={mode === "ai"} onClick={() => setMode("ai")}>
+            AI（Claude）
+          </button>
+          <button
+            type="button"
+            className={mode === "script" ? "chat-mode-on" : "chat-mode-off"}
+            aria-pressed={mode === "script"}
+            onClick={() => setMode("script")}
+            title="AI を使わず、決まった返事で同じ道具を試します"
+          >
+            決まった返事（AI なし）
+          </button>
+        </div>
+      </div>
+
+      {noAi && (
+        <div className="noai" role="alert">
+          <strong>{NO_AI_MESSAGE}</strong>
+          <span>台帳・承認の箱・ルールなど、ほかの画面はそのまま使えます。</span>
+          <button type="button" className="btn small" onClick={trySample} disabled={busy}>
+            決まった返事で試す（AI なし）
+          </button>
+        </div>
+      )}
+
+      <ol className="chat-log" ref={logRef} aria-live="polite">
+        {msgs.map((m, i) => (
+          <li key={i} className={`bubble ${m.from}`}>
+            <span className="bubble-who">
+              {m.from === "guest" ? `${customer?.surname ?? ""} 様（架空）` : m.from === "ai" ? (mode === "script" ? "係（決まった返事）" : "係（AI）") : "お知らせ"}
+            </span>
+            {m.text}
+          </li>
+        ))}
+        {busy && (
+          <li className="bubble ai typing" aria-label="返事を作っています">
+            …
+          </li>
+        )}
+      </ol>
+
+      {candidates.length > 0 && (
+        <p className="chat-cands">
+          候補：
+          {candidates.map((c, i) => (
+            <button key={i} type="button" className="btn small" disabled={busy} onClick={() => void send(`${i + 1}つ目で`)}>
+              {i + 1}つ目で
+            </button>
+          ))}
+        </p>
+      )}
+
+      <div className="chat-examples" role="group" aria-label="例文">
+        {examples.map((ex) => (
+          <button key={ex.id} type="button" className="btn small" onClick={() => tryExample(ex)} disabled={busy} title={`${ex.text}（${ex.note}）`}>
+            {ex.button}
+          </button>
+        ))}
+      </div>
+
+      <form
+        className="chat-input"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send(text);
+        }}
+      >
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="例：土曜の15時にカットをお願いしたいです"
+          rows={2}
+          maxLength={MAX_CHARS}
+          aria-label="お客様のつもりで書く"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              void send(text);
+            }
+          }}
+        />
+        <button type="submit" disabled={!text.trim() || busy}>
+          送る
+        </button>
+      </form>
+      <p className="chat-note">
+        お客様はみな架空の方です。AI は「仮押さえ」まで。確定はお店（承認の箱）で人が押します。
+      </p>
+    </div>
+  );
+}
