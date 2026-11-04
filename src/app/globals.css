@@ -726,6 +726,48 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .todo label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .todo.done span { text-decoration: line-through; color: var(--muted); }
 .todo-group { font-size: 1rem; margin: 8px 0 6px; }
+.todo { flex-direction: column; align-items: stretch; gap: 4px; }
+.todo-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.todo-line input[type="checkbox"] { width: 20px; height: 20px; flex: none; margin: 0; cursor: pointer; }
+.todo-body { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; line-height: 1.6; }
+.todo-body .customer { display: inline; }
+.todo-body .customer .tag { margin: 0 4px; }
+.todo-due { display: inline-block; margin-right: 6px; vertical-align: 1px; font-size: 0.72rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.todo-due.contact { color: var(--accent); background: var(--accent-soft); }
+.todo-due.today { color: var(--warn); }
+.todo-due.week { color: var(--ok); }
+.todo-due.later { color: var(--muted); border-style: dashed; }
+/* 過ぎた物は灰色（赤で急がせない） */
+.todo-due.overdue { color: var(--muted); background: var(--line); border-color: var(--line); font-weight: 400; }
+.todo-from { flex: none; font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+.todo-memo-mark { margin-left: 6px; vertical-align: 1px; font: inherit; font-size: 0.85rem; line-height: 1; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: transparent; cursor: pointer; }
+.todo-memo-mark[aria-expanded="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.todo-memo { margin: 0 0 0 28px; font-size: 0.8rem; color: var(--muted); overflow-wrap: anywhere; }
+.todo.done .todo-memo { text-decoration: none; }
+.todo-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 0 0 12px; }
+.todo-tab { font: inherit; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--muted); cursor: pointer; min-width: 0; }
+.todo-tab span { font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.todo-tab strong { font-size: 1.3rem; color: var(--text); }
+.todo-tab.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.todo-tab.on strong { color: var(--accent); }
+.todo-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.todo-undo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 10px; padding: 6px 10px; border-radius: 10px; background: var(--accent-soft); font-size: 0.85rem; }
+.todo-top .todos { margin-bottom: 8px; }
+.todo-howto { margin: 0 0 8px; padding-left: 1.2em; font-size: 0.85rem; display: flex; flex-direction: column; gap: 4px; }
+.memo-throw { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 12px; min-width: 0; }
+.memo-throw-label { font-weight: 700; font-size: 0.9rem; }
+.memo-throw-row { display: flex; gap: 6px; min-width: 0; }
+.memo-throw-row input { flex: 1 1 auto; min-width: 0; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); }
+.memo-throw-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.memo-throw-row .btn { flex: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* ToDo のタブ：PC は右の列に「メモを投げる」と今やる3件、スマホはページの上にメモの欄だけ */
+.pc-only { display: none; }
+.sp-only { display: block; }
+@media (min-width: 1024px) {
+  .pc-only { display: block; }
+  .sp-only { display: none; }
+}
 
 /* ---- カルテ ---- */
 
@@ -920,3 +962,27 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .rec-job-count .num { font-size: 1.4rem; font-weight: 700; }
 .rec-texts { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; }
 .rec-texts p { margin: 0; white-space: pre-wrap; }
+
+/* ---- 発信 ---- */
+.posts-form { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.posts-step { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.posts-step legend { font-weight: 700; font-size: 0.95rem; padding: 0; margin-bottom: 4px; }
+.posts-step[disabled] { opacity: 0.6; }
+.posts-field, .posts-edit { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.posts-field textarea, .posts-edit textarea {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 1rem; line-height: 1.6; padding: 8px 10px; resize: vertical;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
+}
+.posts-form .btn.big { font-size: 1.05rem; padding: 10px 14px; }
+.posts-memos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; }
+.posts-memos li { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; overflow-wrap: anywhere; }
+.posts-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.posts-nosend { font-size: 0.85rem; color: var(--muted); margin-right: auto; }
+.posts-failed { border: 2px solid var(--warn); }
+.posts-group { margin-bottom: 8px; }
+.posts-saved { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.posts-row { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 12px; min-width: 0; }
+.posts-row summary { cursor: pointer; display: flex; gap: 10px; align-items: baseline; min-width: 0; }
+.posts-at { flex: none; font-weight: 700; font-size: 0.9rem; }
+.posts-first { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.posts-full { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 2px; font-size: 0.95rem; line-height: 1.7; }

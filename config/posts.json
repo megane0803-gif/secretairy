@@ -1,0 +1,46 @@
+{
+  "kinds": [
+    {
+      "id": "notice",
+      "label": "お客様への配信",
+      "instruction": "お店からお客様（すでに来てくださった方）へ送る、お知らせの文。やさしい話し言葉で、あいさつから始めて、最後はお礼の一言で終える。段落のあいだは1行あける。",
+      "targetChars": 350,
+      "shape": "5段落くらい",
+      "materials": [
+        { "id": "topic", "label": "お題", "placeholder": "例：冬のヘアケアのお知らせ" },
+        { "id": "points", "label": "伝えたいこと", "placeholder": "例：ヘッドスパでゆっくりしてほしい" }
+      ],
+      "insert": ["openings", "closed", "blogLink"]
+    },
+    {
+      "id": "blog",
+      "label": "ブログの下書き",
+      "instruction": "お店のブログの記事。1行目に題を書き、そのあとに「## 」で始まる見出しを置いて、見出しの下に短い段落を書く。読む人がお店のことを知れるように、落ち着いた書き言葉で。",
+      "targetChars": 900,
+      "shape": "見出し4つくらい",
+      "materials": [
+        { "id": "topic", "label": "お題", "placeholder": "例：冬の髪の乾燥とヘッドスパ" },
+        { "id": "points", "label": "入れたいこと", "placeholder": "例：お店の雰囲気・家でのお手入れ" }
+      ],
+      "insert": []
+    },
+    {
+      "id": "sns",
+      "label": "SNS の投稿文",
+      "instruction": "お店の SNS に載せる短い投稿文。明るく短い文で、最後の行に「#」で始まるタグを並べる（タグとタグのあいだは空ける）。",
+      "targetChars": 200,
+      "shape": "タグ4つくらい",
+      "materials": [
+        { "id": "topic", "label": "お題", "placeholder": "例：冬のヘッドスパ" },
+        { "id": "photo", "label": "写真のようす", "placeholder": "例：お店の窓ぎわの席（お客様は写っていない）" }
+      ],
+      "insert": ["openings", "blogLink"]
+    }
+  ],
+  "gateWords": ["今だけ", "急いで", "絶対", "必ず", "100%", "放置", "お得", "やらないと損"],
+  "openingDays": 7,
+  "maxOpeningDays": 3,
+  "closedDays": 14,
+  "maxClosedDays": 3,
+  "maxSavedPerKind": 30
+}

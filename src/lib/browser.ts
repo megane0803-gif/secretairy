@@ -51,6 +51,8 @@ export const ACCOUNTING_KEY = "accounting";
 export const LINE_KEY = "line";
 /** カルテの「録音からメモを作る」を出す・隠す（最初の状態は config/recording.json の visible） */
 export const RECORDING_SWITCH_KEY = "recordingVisible";
+/** 発信：保存した下書き（posts/state.ts） */
+export const POSTS_KEY = "posts";
 /** 日誌（journal.ts） */
 export const JOURNAL_KEY = "journal";
 export const BROWSER_PREFIX = PREFIX;

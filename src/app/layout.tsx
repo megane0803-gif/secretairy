@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { LineBridge } from "@/components/LineBridge";
 import { TabNav } from "@/components/TabNav";
+import { TodoFeeds } from "@/components/TodoFeeds";
 import { getBookData } from "@/lib/book/data";
 import { BROWSER_PREFIX, NAV_KEY, RIGHT_KEY } from "@/lib/browser";
 import { getShop, getTabSwitches } from "@/lib/settings";
@@ -35,6 +36,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         </div>
         {/* LINE のつなぎ（オーナー側）。つないでいる間だけ、どのタブでも受け取りに行く。何も描かない */}
         <LineBridge data={getBookData()} />
+        {/* 予約サイト（架空）で枠が埋まった仮押さえを、ToDo「別の日時を案内」に足す（プログラム）。何も描かない */}
+        <TodoFeeds data={getBookData()} />
       </body>
     </html>
   );

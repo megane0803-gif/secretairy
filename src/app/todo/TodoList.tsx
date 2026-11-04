@@ -1,72 +1,75 @@
 "use client";
 
-// やることの一覧。最初の状態（seed/todo.json）と、承認の箱・カルテの保存から足した分（このブラウザの中だけ）。
-// カルテの保存から足した物は「次回話すこと」としてまとめて先に出す。
+// やることの一覧（真ん中）。上にタブを4つ：期限あり（最初に開く）／メモ・次回／期限なし／済み。名前の下に件数。
+// 並べ方はプログラム（src/lib/todo/items.ts）。Claude は並べない。
+// 最初の状態（seed/todo.json）と、このブラウザで足した分（投げたメモ・カルテ・広告・予約・LINE・予約チャット）を1つにする。
 
-import { CustomerName } from "@/components/parts";
-import { withTodoDone, type AddedTodo } from "@/lib/book/state";
-import { useBookState } from "@/lib/book/useBook";
-import type { Todo } from "@/lib/data/types";
-import { calDay } from "@/lib/calendar";
-import { writeJournal } from "@/lib/journal";
-import { getShop } from "@/lib/settings";
+import { useState } from "react";
+import { TodoRowList, useUndo } from "@/components/TodoRows";
+import type { BookData } from "@/lib/book/data";
+import { TODO_TABS, type TodoTab } from "@/lib/todo/items";
+import { useTodos } from "@/lib/todo/useTodos";
 
-export function TodoList({ seed }: { seed: Todo[] }) {
-  const { state, update } = useBookState();
-  const all = [...state.todos].reverse();
-  const talks = all.filter((t) => t.kind === "next-talk");
-  const added = all.filter((t) => t.kind !== "next-talk");
-  if (seed.length === 0 && all.length === 0) return <p className="empty">やることはありません。</p>;
+const EMPTY: Record<TodoTab, string> = {
+  due: "期限のあるやることはありません。",
+  talk: "次回話すこと・投げたメモはありません。",
+  none: "期限なしのやることはありません。",
+  done: "済んだ物はまだありません。",
+};
 
-  const row = (t: AddedTodo, from: string) => {
-    const m = t.title.match(/^(.+?)（架空）様(.*)$/);
-    return (
-      <li key={t.id} className={t.done ? "todo done" : "todo"}>
-        <label>
-          <input
-            type="checkbox"
-            checked={t.done}
-            onChange={(e) => {
-              update((s) => withTodoDone(s, t.id, e.target.checked));
-              writeJournal({ who: "オーナー", text: `ToDo を${e.target.checked ? "済みにした" : "まだに戻した"}：${t.title}` });
-            }}
-          />
-          {m ? (
-            <span>
-              <CustomerName surname={m[1]} fictional />
-              {m[2]}
-            </span>
-          ) : (
-            <span>{t.title}</span>
-          )}
-        </label>
-        {t.due && <small className="hint num">期限 {calDay(getShop(), t.due).label}</small>}
-        <small className="hint">{from}</small>
-      </li>
-    );
-  };
+export function TodoList({ data, undoSeconds }: { data: BookData; undoSeconds: number }) {
+  const todos = useTodos(data);
+  const [tab, setTab] = useState<TodoTab>("due");
+  const { mark, toast } = useUndo(todos.mark, undoSeconds);
+  const rows = todos.tabs[tab];
+  // 「メモ・次回」は、次回話すこと（カルテ）→ 投げたメモ の順に見出しを分ける
+  const talks = tab === "talk" ? rows.filter((t) => t.source === "karte") : [];
+  const memos = tab === "talk" ? rows.filter((t) => t.source !== "karte") : [];
 
   return (
     <>
-      {talks.length > 0 && (
-        <>
-          <h3 className="todo-group">次回話すこと（カルテの次回提案から）</h3>
-          <ul className="todos">{talks.map((t) => row(t, "カルテから"))}</ul>
-        </>
-      )}
-      {(added.length > 0 || seed.length > 0) && (
-        <>
-          {talks.length > 0 && <h3 className="todo-group">ほかのやること</h3>}
-          <ul className="todos">
-            {added.map((t) => row(t, t.id.startsWith("td-line-") ? "LINE から" : t.id.startsWith("td-chat-") ? "予約チャットから" : t.id.startsWith("td-ad-") ? "広告の承認から" : "承認の箱から"))}
-            {seed.map((t) => (
-              <li key={t.id} className={t.done ? "todo done" : "todo"}>
-                <span>{t.title}</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+      <div className="todo-tabs" role="tablist" aria-label="ToDo の分け方">
+        {TODO_TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            id={`todo-tab-${t.id}`}
+            aria-selected={tab === t.id}
+            aria-controls="todo-panel"
+            className={tab === t.id ? "todo-tab on" : "todo-tab"}
+            onClick={() => setTab(t.id)}
+          >
+            <span>{t.label}</span>
+            <strong className="num">{todos.tabs[t.id].length}</strong>
+          </button>
+        ))}
+      </div>
+      {toast}
+      <div id="todo-panel" role="tabpanel" aria-labelledby={`todo-tab-${tab}`}>
+        {tab === "talk" ? (
+          rows.length === 0 ? (
+            <p className="empty">{EMPTY.talk}</p>
+          ) : (
+            <>
+              {talks.length > 0 && (
+                <>
+                  <h3 className="todo-group">次回話すこと（カルテの次回提案から）</h3>
+                  <TodoRowList items={talks} today={todos.today} shop={data.shop} onMark={mark} empty="" />
+                </>
+              )}
+              {memos.length > 0 && (
+                <>
+                  <h3 className="todo-group">投げたメモ</h3>
+                  <TodoRowList items={memos} today={todos.today} shop={data.shop} onMark={mark} empty="" />
+                </>
+              )}
+            </>
+          )
+        ) : (
+          <TodoRowList items={rows} today={todos.today} shop={data.shop} onMark={mark} empty={EMPTY[tab]} />
+        )}
+      </div>
     </>
   );
 }

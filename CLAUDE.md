@@ -68,6 +68,8 @@ src/lib/karte/     カルテ：見出しに分ける・言葉の門・保存と 
 src/lib/recording/ カルテの「録音からメモを作る」（PC だけ）：区切る・黙っている所を飛ばす・Whisper（Web Worker）・要点（Haiku）・フォルダ・画面の録音（IndexedDB に残す）
 src/lib/ads/       広告の数・門・道具・流れ・決まった返事・広告の承認の箱（ブラウザの中に残す形）
 src/lib/accounting/ 経理：売上の数・通販の明細の仕分け（自動のルール）・門・登録（ブラウザの中に残す形。AI は使わない）
+src/lib/todo/      ToDo：入口ごとの鍵・並べ方（items.ts。Claude は並べない）・枠が埋まった時・メモを投げる（Haiku は文だけ・門・決まった返事）
+src/lib/posts/     発信：言葉の門・日時を入れる（台帳と設定から）・指示文・流れ（作り直し1回）・決まった返事・保存した下書き（ブラウザの中に残す形）
 src/lib/line/      LINE のつなぎ（オーナー側）：署名・Redis・つなぎと預かり（bridge）・一言の振り分け（sort）・画面での入れ方（apply）
 src/app/api/line/  LINE の窓口（Webhook・つなぐ・受け取り・送る）。画面の処理と混ぜない
 src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理・LINE の預かりをまとめて戻す）
@@ -75,11 +77,14 @@ src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理�
 
 - AI の道具は `src/lib/ai/tools.ts` の5つだけ（空きを調べる・ルールを確かめる・前回を見る・仮押さえ・仮押さえを外す）。確定の道具は足さない。「仮押さえを外す」は、この会話で作った、まだ承認されていない仮押さえだけ（プログラムで確かめる）。テストでは Claude を呼ばず `src/lib/ai/script.ts` に置きかえる。
 - 予約チャットでプログラムが決めること：週と日付の食い違いの聞き返し（`dates.ts`）・候補のボタン（返事の文に出た候補だけ）・「お店に確かめてご連絡します」の ToDo（`replies.ts`）。AI に任せない。
+- ToDo の並べ方は `src/lib/todo/items.ts` の1か所（ToDo のタブ・ホームの「今やる3件」・「今日の ToDo」の数）。入口から足すときは鍵（`src/lib/todo/keys.ts`）を付け、同じ鍵がもうあれば足さない。最初の例（`seed/todo.json`）の鍵は「例:」で始め、本物の鍵と重ねない。メモを投げる AI は文だけ（テストでは `scriptTodoWriter`）。
 - 承認待ちの数は、承認の箱の行（`src/lib/approvals.ts` の `approvalQueue`。画面は `useApprovals`）から出す。ほかの所で数えない。
 - 1回の来店で複数のメニューは `src/lib/combo.ts`（設定に無い組み合わせは id を「+」でつなぐ）を通す。
 - カルテの AI は下書きまで。プログラムの言葉の門（`src/lib/karte/gate.ts`。言葉は `locked.ts` の `KARTE_GATE_WORDS`。減らさない）を通し、保存は人の「保存」ボタンだけ。お客様の名前は AI に送らない。テストでは `scriptKarteWriter` に置きかえる。
 - 録音からメモを作る（仕様書 §1.5.1）：声はブラウザの外に出さない（文字にするのは Web Worker の Whisper）。送るのは文字だけで、名字は〔お客様〕に置きかえる。要点にも言葉の門（`gateLine`）を通し、メモに入れるのも保存も人のボタン。テストでは作った音・決まった文字起こし・`scriptNotesWriter` を使う（Whisper と Claude は呼ばない）。
 - 広告の見直しの道具は `src/lib/ads/tools.ts` の2つ（止める・外す）だけ。言葉を足す道具は足さない。案は門（`src/lib/ads/gate.ts`）を通してから承認の箱へ。テストでは `src/lib/ads/script.ts` に置きかえる。
+
+- 発信の下書きは `src/lib/posts/`（窓口は `/api/ai/posts`。Sonnet）。種類が違っても仕組みは1本で、変わるのは `config/posts.json` の指示文と材料だけ。Claude には日時と数字を書かせない（空き枠・お休みは画面が台帳と設定から入れる。ブログのリンクは印だけ）。言葉の門（`gate.ts`）に当たったら1回だけ作り直し、2回とも当たったら保存しない。保存はオーナーのボタンだけ（承認の箱は通さない）。送信・公開はしない。テストでは `scriptPostsModel` か決まった文を返す物に置きかえる。
 
 - LINE（オーナー側）の窓口は `src/app/api/line/` に分け、画面の処理と混ぜない。画面が開いている間だけ動く（受け取るのは `src/components/LineBridge.tsx`）。
   - 届いた知らせは `LINE_CHANNEL_SECRET` で署名を確かめ、違う物は捨てる。合言葉でつないでいない LINE では何も動かさない。

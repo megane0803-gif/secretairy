@@ -23,6 +23,19 @@
     "maxReplyTokens": 300,
     "maxRequestChars": 400000
   },
+  "todo": {
+    "model": "claude-haiku-5-5",
+    "maxReplyTokens": 200,
+    "maxMemoChars": 100,
+    "maxTitleChars": 40,
+    "maxRequestChars": 100000
+  },
+  "posts": {
+    "maxReplyTokens": 1500,
+    "maxTries": 2,
+    "maxMaterialChars": 300,
+    "maxRequestChars": 50000
+  },
   "recording": {
     "model": "claude-haiku-5-5",
     "maxReplyTokens": 600,
