@@ -24,6 +24,14 @@ export type Candidate = {
   start: string;
 };
 
+/** 前回までの来店（カルテから）。「前回を見る」はこれのいちばん新しい物を返す */
+export type Visit = {
+  customerId: string;
+  /** YYYY-MM-DD */
+  date: string;
+  menuId: string;
+};
+
 export type ChatTurn = { role: "user" | "assistant"; text: string };
 
 /** ai = Claude に聞く / script = 決まった返事（AI なし。テストと、AI につながらないときのお試し用） */
@@ -40,6 +48,10 @@ export type ReserveRequest = {
   booked: BookedRow[];
   /** そのブラウザのルール（鍵つきはサーバーで先頭に足しなおす） */
   rules: Rule[];
+  /** そのお客様のカルテ（最初の状態＋保存した物）の日付とメニュー。「前回を見る」に使う */
+  visits: Visit[];
+  /** デモの「翌日へ」で進めた営業日の数（0 = 本当の今日） */
+  dayOffset: number;
 };
 
 /** 仮押さえ。サーバーがプログラムでもう一度判定してから出す。残すのは画面（ブラウザ）の側 */

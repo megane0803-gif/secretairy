@@ -1,0 +1,175 @@
+"use client";
+
+// カルテのタブの右の列：施術のメモ。スマホのキーボードの音声入力で話して入れる前提（録音の機能は作らない）。
+// 「カルテにする」で /api/ai/karte に、メモとこのブラウザのルールを送る（お客様の名前は送らない）。
+// 返ってきた案は真ん中に大きいカードで出る。保存は真ん中の「保存」（人のボタン）だけ。
+
+import { CustomerName } from "@/components/parts";
+import { NO_AI_MESSAGE } from "@/lib/ai/wire";
+import type { BookData } from "@/lib/book/data";
+import type { KarteExample } from "@/lib/data/types";
+import { getDesk, setDesk } from "@/lib/karte/deskStore";
+import { removedSentence } from "@/lib/karte/gate";
+import type { KarteMode, KarteRequest, KarteResponse } from "@/lib/karte/wire";
+import { writeJournal } from "@/lib/journal";
+import { useRules } from "@/lib/rules/useRules";
+import { useKarteToday } from "./useKarteToday";
+
+export function KarteMemo({ data, examples, maxChars }: { data: BookData; examples: KarteExample[]; maxChars: number }) {
+  const { book, desk, selected, key, saved, memo } = useKarteToday(data);
+  const { rules } = useRules(data.seedRules);
+
+  if (!selected || !key)
+    return <p className="empty">今日のお客様（確定の予約）がいないので、メモを書く方がいません。</p>;
+
+  const who = `${selected.customer.surname}（架空）様`;
+  const length = [...memo].length;
+  const over = length > maxChars;
+  const example = examples.find((e) => e.customerId === selected.customer.id);
+  const locked = !!saved;
+  const canMake = !locked && !desk.busy && memo.trim() !== "" && !over;
+
+  const setMemo = (text: string) => setDesk((s) => ({ memos: { ...s.memos, [key]: text } }));
+
+  async function make(mode: KarteMode) {
+    const text = (getDesk().memos[key!] ?? "").trim();
+    if (!text || [...text].length > maxChars || getDesk().busy) return;
+    setDesk(() => ({ busy: true, problem: null, mode }));
+    const body: KarteRequest = { mode, memo: text, rules: rules.filter((r) => !r.locked) };
+    try {
+      const res = await fetch("/api/ai/karte", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      let out: KarteResponse | null = null;
+      try {
+        out = (await res.json()) as KarteResponse;
+      } catch {
+        out = null;
+      }
+      if (!out || (!out.ok && out.code === "no-ai")) {
+        setDesk(() => ({ noAi: true }));
+        return;
+      }
+      if (!out.ok) {
+        setDesk(() => ({ problem: `うまくいきませんでした。${out.message}。` }));
+        return;
+      }
+      const draft = out;
+      setDesk((s) => ({ drafts: { ...s.drafts, [key!]: { ...draft, memo: text } }, noAi: mode === "ai" ? false : s.noAi }));
+      const lines = Object.values(draft.sections).reduce((n, l) => n + l.length, 0);
+      writeJournal(
+        {
+          who: mode === "ai" ? "AI" : "プログラム",
+          text: `カルテの案を作った（${who}・${lines}行${mode === "script" ? "・決まった返事" : ""}。保存は人が押す）`,
+        },
+        ...draft.removed.map((r) => ({
+          who: "プログラム" as const,
+          text: `言葉の門：${who}のカルテの案から${removedSentence(r)}：[${r.heading}] ${r.line}`,
+        })),
+      );
+    } catch {
+      setDesk(() => ({ noAi: true }));
+    } finally {
+      setDesk(() => ({ busy: false }));
+    }
+  }
+
+  return (
+    <form
+      className="karte-memo"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (canMake) void make(desk.mode);
+      }}
+    >
+      <p className="karte-memo-who">
+        <CustomerName surname={selected.customer.surname} fictional={selected.customer.fictional} />
+        <span className="hint">
+          {book.today.label} {selected.start} {selected.menu.name}
+        </span>
+      </p>
+      <label className="karte-memo-label" htmlFor="karte-memo-text">
+        施術後のメモ
+      </label>
+      <textarea
+        id="karte-memo-text"
+        value={memo}
+        onChange={(e) => setMemo(e.target.value)}
+        rows={9}
+        readOnly={locked}
+        aria-describedby="karte-memo-count karte-memo-voice"
+        placeholder="例：来た時は根元が5センチくらい伸びてて…（スマホのキーボードのマイクで話して入れられます）"
+      />
+      <p id="karte-memo-count" className={over ? "karte-count over" : "karte-count"}>
+        <span className="num">{length}</span>/{maxChars}字{over && "（多すぎます。短くしてください）"}
+      </p>
+      {locked && <p className="hint">このメモは保存したので、今日はもう直しません。</p>}
+      <p id="karte-memo-voice" className="hint">
+        スマホのキーボードの音声入力（マイクのボタン）で話して入れる前提です。録音はしません。
+      </p>
+
+      <div className="chat-mode" role="group" aria-label="カルテの案を作る物">
+        <button
+          type="button"
+          className={desk.mode === "ai" ? "chat-mode-on" : "chat-mode-off"}
+          aria-pressed={desk.mode === "ai"}
+          onClick={() => setDesk(() => ({ mode: "ai" }))}
+        >
+          AI（Claude）
+        </button>
+        <button
+          type="button"
+          className={desk.mode === "script" ? "chat-mode-on" : "chat-mode-off"}
+          aria-pressed={desk.mode === "script"}
+          onClick={() => setDesk(() => ({ mode: "script" }))}
+          title="AI を使わず、決まった返事で同じ流れ（見出しに分ける → 言葉の門）を試します"
+        >
+          決まった返事（AI なし）
+        </button>
+      </div>
+
+      {desk.noAi && (
+        <div className="noai" role="alert">
+          <strong>{NO_AI_MESSAGE}</strong>
+          <span>台帳・承認の箱・前回までのカルテなど、ほかの画面はそのまま使えます。</span>
+          <button
+            type="button"
+            className="btn small"
+            disabled={!canMake}
+            onClick={() => {
+              setDesk(() => ({ noAi: false }));
+              void make("script");
+            }}
+          >
+            決まった返事で試す（AI なし）
+          </button>
+        </div>
+      )}
+      {desk.problem && (
+        <p className="form-problem" role="status">
+          {desk.problem}
+        </p>
+      )}
+
+      <div className="form-buttons">
+        <button
+          type="button"
+          className="btn"
+          disabled={locked || !example || desk.busy}
+          title={example ? "この方の話し言葉の例文をメモに入れます" : "この方の例文はありません"}
+          onClick={() => example && setMemo(example.memo)}
+        >
+          例文を入れる
+        </button>
+        <button type="submit" className="btn primary" disabled={!canMake}>
+          {desk.busy ? "作っています…" : "カルテにする"}
+        </button>
+      </div>
+      <p className="hint">
+        お客様の名前は AI に送りません（カルテにはプログラムが入れます）。AI の案は、言葉の門（プログラム）を通してから真ん中に出ます。保存は人が押すまでしません。
+      </p>
+    </form>
+  );
+}

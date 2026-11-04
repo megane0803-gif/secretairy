@@ -725,3 +725,64 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .todo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; }
 .todo label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .todo.done span { text-decoration: line-through; color: var(--muted); }
+.todo-group { font-size: 1rem; margin: 8px 0 6px; }
+
+/* ---- カルテ ---- */
+
+.karte-today { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.karte-pick {
+  font: inherit; color: inherit; cursor: pointer; text-align: left;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+  padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+  max-width: 100%;
+}
+.karte-pick:hover { border-color: var(--accent); }
+.karte-pick.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; background: var(--accent-soft); }
+.karte-pick-time { font-weight: 700; }
+.karte-pick-menu { color: var(--muted); font-size: 0.9rem; }
+
+.karte-now { margin-bottom: 20px; }
+.karte-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.karte-card.ai { border: 2px solid var(--accent); }
+.karte-card.saved { border: 2px solid var(--ok); }
+.karte-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; font-size: 1.05rem; }
+.karte-before { margin: 0; font-size: 0.9rem; }
+.karte-why { margin: 0; font-size: 0.9rem; }
+.karte-wait { color: var(--muted); border: 1px dashed var(--line); border-radius: var(--radius); padding: 14px 16px; margin: 0; }
+.karte-sections { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px 16px; }
+@media (min-width: 720px) { .karte-sections { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.karte-sec dt { font-weight: 700; }
+.karte-sec dd { margin: 0 0 0 0.5em; line-height: 1.5; }
+.karte-sec.empty dt { color: var(--muted); }
+.karte-none { color: var(--muted); font-size: 0.85rem; }
+.karte-removed { list-style: none; margin: 0; padding: 8px 10px; border: 1px dashed var(--warn); border-radius: 8px; color: var(--warn); font-size: 0.9rem; display: flex; flex-direction: column; gap: 4px; }
+.karte-removed small { display: block; color: var(--muted); font-size: 0.8rem; }
+.karte-memo-text { white-space: pre-wrap; margin: 0; font-size: 0.9rem; }
+.karte-past h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.karte-past-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.karte-card.past .fold { margin: 0; }
+
+.karte-memo { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.karte-memo-who { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.karte-memo-label { font-weight: 700; font-size: 0.9rem; }
+.karte-memo textarea {
+  width: 100%; font: inherit; font-size: 1rem; line-height: 1.6; padding: 8px 10px; resize: vertical;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
+}
+.karte-memo textarea[readonly] { background: var(--bg); color: var(--muted); }
+.karte-count { margin: 0; font-size: 0.9rem; color: var(--muted); text-align: right; }
+.karte-count.over { color: var(--warn); font-weight: 700; }
+
+/* ---- 朝の要点 ---- */
+
+.brief { margin: 16px 0; }
+.brief h3 { font-size: 1rem; margin: 0 0 8px; }
+.brief-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.brief-item { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 0 var(--radius) var(--radius) 0; padding: 8px 12px; overflow-wrap: anywhere; }
+.brief-item.hold { border-left-style: dashed; border-left-color: var(--warn); }
+.brief-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.brief-time { font-weight: 700; }
+.brief-time small { font-weight: 400; color: var(--muted); }
+.brief-prev { margin: 4px 0 0; font-size: 0.9rem; }
+.brief-prev ul { list-style: none; margin: 0; padding: 0; }
+.brief-free { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.95rem; }

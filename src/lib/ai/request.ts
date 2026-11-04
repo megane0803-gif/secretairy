@@ -2,19 +2,20 @@
 // 台帳とルールは画面から毎回送られてくる。サーバーでは残さない。
 // ルールは鍵つきを先頭に足しなおし、オーナーのルールは validate.ts で同じように確かめる（送られた物で鍵つきは緩まない）。
 
-import { shopNow, shopToday } from "../calendar";
+import { demoClock, MAX_DAY_OFFSET } from "../calendar";
 import { LOCKED_RULES } from "../rules/locked";
 import type { Rule } from "../rules/types";
 import { validateOwnerRule } from "../rules/validate";
 import type { AiSettings, Menu, ShopSettings } from "../settings";
 import { MAX_CANDIDATES } from "./slots";
 import type { ToolContext } from "./tools";
-import type { BookedRow, Candidate, ChatTurn, ReserveRequest } from "./wire";
+import type { BookedRow, Candidate, ChatTurn, ReserveRequest, Visit } from "./wire";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_BOOKED = 2000;
 const MAX_RULES = 200;
+const MAX_VISITS = 500;
 
 type Parsed = { ok: true; value: ReserveRequest } | { ok: false; reason: string };
 
@@ -71,19 +72,44 @@ export function parseReserveRequest(body: unknown, menus: Menu[], ai: Pick<AiSet
       newCustomer: b.newCustomer === true,
     }));
 
-  if (!Array.isArray(body.rules) || body.rules.length > MAX_RULES) return { ok: false, reason: "ルールの形がおかしいです" };
-  const locked = new Set(LOCKED_RULES.map((r) => r.id));
-  const own: Rule[] = [];
-  for (const r of body.rules) {
-    if (isObj(r) && typeof r.id === "string" && locked.has(r.id)) continue; // 鍵つきは送られた物を使わない
-    const v = validateOwnerRule(r, [...menuIds]);
-    if (v.ok) own.push(v.value);
-  }
+  const rules = readRules(body.rules, [...menuIds]);
+  if (!rules) return { ok: false, reason: "ルールの形がおかしいです" };
 
-  return { ok: true, value: { mode, messages, candidates, customer, booked, rules: [...LOCKED_RULES, ...own] } };
+  const visits: Visit[] = (Array.isArray(body.visits) ? body.visits : [])
+    .filter(
+      (v): v is Record<string, unknown> =>
+        isObj(v) && typeof v.customerId === "string" && typeof v.menuId === "string" && menuIds.has(v.menuId) && typeof v.date === "string" && DATE.test(v.date),
+    )
+    .slice(0, MAX_VISITS)
+    .map((v) => ({ customerId: v.customerId as string, menuId: v.menuId as string, date: v.date as string }));
+
+  const dayOffset = readDayOffset(body.dayOffset);
+
+  return { ok: true, value: { mode, messages, candidates, customer, booked, rules, visits, dayOffset } };
 }
 
-/** 道具が使う形にする。いまの時刻はサーバーの時計（店の時間帯）で決める */
+/**
+ * 画面から送られたルールを読む。鍵つきは送られた物を使わず、いつもこちらで先頭に足す。
+ * オーナーのルールは validate.ts で同じように確かめる（送られた物で鍵つきは緩まない）。形がおかしければ null。
+ */
+export function readRules(raw: unknown, menuIds: string[]): Rule[] | null {
+  if (!Array.isArray(raw) || raw.length > MAX_RULES) return null;
+  const locked = new Set(LOCKED_RULES.map((r) => r.id));
+  const own: Rule[] = [];
+  for (const r of raw) {
+    if (isObj(r) && typeof r.id === "string" && locked.has(r.id)) continue;
+    const v = validateOwnerRule(r, menuIds);
+    if (v.ok) own.push(v.value);
+  }
+  return [...LOCKED_RULES, ...own];
+}
+
+/** デモの「翌日へ」で進めた営業日の数（0〜MAX_DAY_OFFSET） */
+export function readDayOffset(x: unknown): number {
+  return typeof x === "number" && Number.isInteger(x) && x > 0 ? Math.min(x, MAX_DAY_OFFSET) : 0;
+}
+
+/** 道具が使う形にする。いまの時刻はサーバーの時計（店の時間帯）で決める（「翌日へ」の分だけ先へずらす） */
 export function contextFor(
   req: ReserveRequest,
   shop: ShopSettings,
@@ -91,14 +117,17 @@ export function contextFor(
   now: Date = new Date(),
   newId: () => string = () => `h-${now.getTime().toString(36)}${Math.random().toString(36).slice(2, 7)}`,
 ): ToolContext {
+  // デモの「翌日へ」で進めた分は、画面と同じ決め方（calendar.ts の demoClock）で今日をずらす
+  const clock = demoClock(shop, now, req.dayOffset);
   return {
     shop,
     menus,
     rules: req.rules,
     booked: req.booked,
+    visits: req.visits,
     customer: req.customer,
-    now: shopNow(shop, now),
-    today: shopToday(shop, now).today,
+    now: clock.now,
+    today: clock.today,
     shown: req.candidates,
     nowIso: now.toISOString(),
     held: false,
