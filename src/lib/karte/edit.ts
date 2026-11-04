@@ -2,14 +2,17 @@
 // 直した見出しには印（edited）を付け、「元に戻す」で AI の案（aiSections）に戻せる。
 // 🔒 人が書いた行は言葉の門を通さない（人の記録なので）。直していない見出しの AI の行は、保存の直前にもう一度門を通す。
 // 保存したカルテも、後から見出しごとに人が直せる（withSavedKarteEdited）。直した日時と「人が直した」を残す。
-// 次回提案を直した時は、同じ鍵（カルテ:番号）の ToDo を足さずに文だけ書きかえる（済みの ToDo は触らない）。
+// 最初の状態のカルテ（seed/kartes.json）も同じように直せる（withKarteEdited。直した分は BookState の seedKarteEdits に重ねて持ち、
+// 「最初に戻す」で消えて最初の中身に戻る）。
+// 次回提案を直した時は、同じ鍵（カルテ:番号。最初の状態の物は 例:カルテ:番号）の ToDo を足さずに文だけ書きかえる（済みの ToDo は触らない）。
 
-import type { AddedTodo, BookState } from "../book/state";
+import type { AddedTodo, BookState, SeedKarteEdit } from "../book/state";
+import { getTodos } from "../data/seed";
 import type { KarteHeading, KarteEditSettings } from "../settings";
-import { karteKey, todoKey } from "../todo/keys";
+import { karteKey, seedTodoKey, todoKey } from "../todo/keys";
 import { cleanSections, headingWithRole, type KarteSections } from "./format";
 import { gateKarte, type GateRemoved } from "./gate";
-import { nextTalkTitle } from "./record";
+import { nextTalkTitle, type KarteRecord } from "./record";
 
 /** 直せる案の形（deskStore の DeskDraft と同じ物を持つ） */
 export type EditableDraft = {
@@ -127,4 +130,50 @@ export function withSavedKarteEdited(
   if (!title) return { ok: true, state, changed: true, todo: "empty" };
   state = { ...state, todos: state.todos.map((x) => (x.id === t.id ? { ...x, title } : x)) };
   return { ok: true, state, changed: true, todo: "updated", title };
+}
+
+/**
+ * 🔒 人のボタン（「決める」）から呼ぶ：最初の状態のカルテの見出し1つを人が直す（門は通さない。人の記録）。
+ * karte は今の中身（直した分を重ねた物。useBook の kartes）。直した分は seedKarteEdits に、印と日時といっしょに残す。
+ * 次回提案なら、同じ鍵（例:カルテ:番号）の最初の状態の ToDo の文だけ書きかえる（todoTitles。足さない・済みは触らない）。
+ */
+export function withSeedKarteEdited(
+  s: BookState,
+  karte: Pick<KarteRecord, "id" | "sections" | "source">,
+  headingId: string,
+  text: string,
+  o: { limits: KarteEditSettings; headings: KarteHeading[]; surname: string; nowIso: string },
+): SavedEditOutcome {
+  if (karte.source !== "seed") return { ok: false, state: s, reason: "最初の状態のカルテではありません" };
+  if (!o.headings.some((h) => h.id === headingId)) return { ok: false, state: s, reason: "知らない見出しです" };
+  const lines = humanLines(text, o.limits);
+  if (same(lines, karte.sections[headingId] ?? [])) return { ok: true, state: s, changed: false, todo: null };
+  const prev: SeedKarteEdit = s.seedKarteEdits?.[karte.id] ?? { sections: {}, edited: [], editedAt: {} };
+  const entry: SeedKarteEdit = {
+    sections: { ...prev.sections, [headingId]: lines },
+    edited: [...new Set([...prev.edited, headingId])],
+    editedAt: { ...prev.editedAt, [headingId]: o.nowIso },
+  };
+  let state: BookState = { ...s, seedKarteEdits: { ...(s.seedKarteEdits ?? {}), [karte.id]: entry } };
+  if (headingWithRole(o.headings, "next")?.id !== headingId) return { ok: true, state, changed: true, todo: null };
+  const key = seedTodoKey({ id: karteKey(karte.id) });
+  const t = getTodos().find((x) => seedTodoKey(x) === key);
+  if (!t) return { ok: true, state, changed: true, todo: "none" };
+  const done = s.todoMarks?.[t.id]?.done ?? t.done;
+  if (done) return { ok: true, state, changed: true, todo: "done" };
+  const title = nextTalkTitle({ sections: { ...karte.sections, [headingId]: lines } }, o.surname, o.headings);
+  if (!title) return { ok: true, state, changed: true, todo: "empty" };
+  state = { ...state, todoTitles: { ...(state.todoTitles ?? {}), [t.id]: title } };
+  return { ok: true, state, changed: true, todo: "updated", title };
+}
+
+/** 保存したカルテも最初の状態のカルテも、同じ1つの入口で直す（画面はこれを呼ぶ） */
+export function withKarteEdited(
+  s: BookState,
+  karte: Pick<KarteRecord, "id" | "sections" | "source">,
+  headingId: string,
+  text: string,
+  o: { limits: KarteEditSettings; headings: KarteHeading[]; surname: string; nowIso: string },
+): SavedEditOutcome {
+  return karte.source === "seed" ? withSeedKarteEdited(s, karte, headingId, text, o) : withSavedKarteEdited(s, karte.id, headingId, text, o);
 }

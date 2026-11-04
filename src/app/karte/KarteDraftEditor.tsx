@@ -8,7 +8,7 @@
 import { useState } from "react";
 import { useBookState } from "@/lib/book/useBook";
 import { setDesk, type DeskDraft } from "@/lib/karte/deskStore";
-import { isEdited, linesText, withHumanEdit, withReverted, withSavedKarteEdited, type SavedEditOutcome } from "@/lib/karte/edit";
+import { isEdited, linesText, withHumanEdit, withReverted, withKarteEdited, type SavedEditOutcome } from "@/lib/karte/edit";
 import type { KarteSections } from "@/lib/karte/format";
 import type { KarteRecord } from "@/lib/karte/record";
 import { writeJournal } from "@/lib/journal";
@@ -148,7 +148,7 @@ export function KarteDraftEditor({
   );
 }
 
-/** 保存したカルテを後から直す（secretairy:book の kartes。「最初に戻す」で消える） */
+/** 保存したカルテ・最初の状態のカルテを後から直す（secretairy:book の kartes／seedKarteEdits。「最初に戻す」で最初の中身に戻る） */
 export function SavedKarteEditor({
   karte,
   headings,
@@ -185,7 +185,7 @@ export function SavedKarteEditor({
         let out: SavedEditOutcome | null = null;
         const nowIso = new Date().toISOString();
         update((s) => {
-          out = withSavedKarteEdited(s, karte.id, h.id, text, { limits, headings, surname, nowIso });
+          out = withKarteEdited(s, karte, h.id, text, { limits, headings, surname, nowIso });
           return out.state;
         });
         const r = out as SavedEditOutcome | null;
@@ -207,9 +207,11 @@ export function SavedKarteEditor({
                 : r.todo === "empty"
                   ? "次回提案が空になったので ToDo の文は変えなかった"
                   : "";
+        const kind = karte.source === "seed" ? "最初の状態のカルテ" : "保存したカルテ";
+        const n = karte.source === "seed" ? (r.state.seedKarteEdits?.[karte.id]?.sections[h.id] ?? []).length : (r.state.kartes.find((k) => k.id === karte.id)?.sections[h.id] ?? []).length;
         writeJournal({
           who: "オーナー",
-          text: `人が直した：${surname}（架空）様の保存したカルテ（${dateLabel}）［${h.label}］（${(r.state.kartes.find((k) => k.id === karte.id)?.sections[h.id] ?? []).length}行。言葉の門は通さない）${todo ? `。${todo}` : ""}`,
+          text: `人が直した：${surname}（架空）様の${kind}（${dateLabel}）［${h.label}］（${n}行。言葉の門は通さない）${todo ? `。${todo}` : ""}`,
         });
         onDone?.(`✓ ［${h.label}］を直しました。${todo}`);
       }}

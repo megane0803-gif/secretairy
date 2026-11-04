@@ -150,6 +150,21 @@ describe("最初に戻す", () => {
     assert.equal(getPostsDesk().mode, "script");
   });
 
+  test("カルテを人が直した分：最初の状態のカルテを直した分と、その ToDo の文の書きかえも消え、最初の中身に戻る", () => {
+    const book: BookState = {
+      ...emptyBook("2026-10-01"),
+      seedKarteEdits: { "k-p01": { sections: { next: ["次はパーマ"] }, edited: ["next"], editedAt: { next: "2026-11-04T01:00:00.000Z" } } },
+      todoTitles: { "ts-08": "江口（架空）様：次はパーマ" },
+    };
+    writeBrowser(BOOK_KEY, JSON.stringify(book));
+    assert.ok(parseBook(readBrowser(BOOK_KEY))!.seedKarteEdits!["k-p01"]);
+    resetAll("2026-11-04");
+    const after = parseBook(readBrowser(BOOK_KEY))!;
+    assert.equal(after.seedKarteEdits, undefined);
+    assert.equal(after.todoTitles, undefined);
+    assert.deepEqual(after.kartes, []);
+  });
+
   test("LINE とつないでいなければ、LINE には何も書かない", () => {
     writeBrowser(LINE_KEY, null);
     const out = resetAll("2026-11-04");

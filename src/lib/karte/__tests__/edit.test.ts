@@ -5,15 +5,21 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { emptyBook, parseBook, withTodoDone, type BookState } from "../../book/state";
-import { getCustomers, getKarteExamples } from "../../data/seed";
+import { getCustomers, getKarteExamples, getSeedKartes, getTodos } from "../../data/seed";
+import { at, menus, shop } from "../../ai/__tests__/helpers";
+import { shopToday } from "../../calendar";
+import { loadBook } from "../../reservations";
+import { resolveSeedTodos, todoItems, withTodoMarked } from "../../todo/items";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { getAiSettings, getKarteEditSettings, getKarteHeadings } from "../../settings";
 import { getRules } from "../../rules/store";
 import { karteKey, todoKey } from "../../todo/keys";
 import { filterCustomers, kanaRowOf, toHiragana } from "../customers";
-import { editedLabels, humanLines, isEdited, sectionsToSave, withHumanEdit, withReverted, withSavedKarteEdited } from "../edit";
+import { editedLabels, humanLines, isEdited, sectionsToSave, withHumanEdit, withKarteEdited, withReverted, withSavedKarteEdited } from "../edit";
 import type { DeskDraft } from "../deskStore";
 import { emptySections } from "../format";
-import { withKarteSaved, type SavedKarte } from "../record";
+import { resolveSeedKartes, withKarteSaved, withSeedKarteEdits, type SavedKarte } from "../record";
 import { runKarte } from "../run";
 import { scriptKarteWriter } from "../writer";
 
@@ -123,7 +129,7 @@ describe("保存したカルテを後から直す", () => {
     assert.equal(none.state.todos.length, 0);
   });
 
-  test("同じ中身なら何もしない。最初の状態のカルテ（保存していない物）は直せない", () => {
+  test("同じ中身なら何もしない。保存したカルテの入口（withSavedKarteEdited）は、保存していない id を受けない（最初の状態の物は withKarteEdited から）", () => {
     const { state } = saved();
     const same = withSavedKarteEdited(state, "k-a", "treatment", "カット", o);
     assert.ok(same.ok && !same.changed);
@@ -139,6 +145,102 @@ describe("保存したカルテを後から直す", () => {
     const reset = emptyBook("2026-11-05");
     assert.equal(reset.kartes.length, 0);
     assert.equal(reset.todos.length, 0);
+  });
+});
+
+describe("最初の状態のカルテも、保存したカルテと同じように直す", () => {
+  const nowIso = "2026-11-05T03:00:00.000Z";
+  const o = { limits, headings, surname: "江口", nowIso };
+  const now = at("2026-11-04", "09:00");
+  const { today } = shopToday(shop, now);
+  const all = loadBook(shop, menus, today).all;
+  const seedList = () => resolveSeedKartes(getSeedKartes(), all);
+  /** 画面と同じ：最初の状態に、直した分を重ねて読む */
+  const view = (s: BookState) => withSeedKarteEdits(seedList(), s.seedKarteEdits);
+  const p01 = (s: BookState) => view(s).find((k) => k.id === "k-p01")!;
+  const seedTodo = getTodos().find((t) => t.key === "例:カルテ:k-p01")!;
+  const items = (s: BookState) => todoItems(resolveSeedTodos(shop, today, getTodos()), s, shop);
+
+  test("直した見出しは差しかわり、印と日時が付く。ほかの見出し・ほかのカルテは最初のまま。門は通さない", () => {
+    const s0 = emptyBook(today.date);
+    const before = p01(s0);
+    assert.equal(before.source, "seed");
+    const r = withKarteEdited(s0, before, "notes", "頭皮がしみると話していた（人が書いた）", o);
+    assert.ok(r.ok && r.changed && r.todo === null);
+    const k = p01(r.state);
+    assert.deepEqual(k.sections.notes, ["頭皮がしみると話していた（人が書いた）"]);
+    assert.deepEqual(k.sections.condition, before.sections.condition);
+    assert.deepEqual(k.edited, ["notes"]);
+    assert.equal(k.editedAt!.notes, nowIso);
+    // ほかのカルテには付かない
+    assert.ok(view(r.state).filter((x) => x.id !== "k-p01").every((x) => !x.edited));
+    // 同じ中身なら何もしない
+    const same = withKarteEdited(r.state, k, "notes", "頭皮がしみると話していた（人が書いた）", o);
+    assert.ok(same.ok && !same.changed);
+    // 2つ目の見出しを直しても前の印は残る
+    const r2 = withKarteEdited(r.state, k, "talk", "旅行の話", { ...o, nowIso: "2026-11-05T04:00:00.000Z" });
+    assert.ok(r2.ok);
+    assert.deepEqual(p01(r2.state).edited, ["notes", "talk"]);
+    assert.equal(p01(r2.state).editedAt!.notes, nowIso);
+  });
+
+  test("ブラウザに残して読みなおしても、直した分・印・日時は消えない（形のおかしい物は落とす）", () => {
+    const r = withKarteEdited(emptyBook(today.date), p01(emptyBook(today.date)), "notes", "x", o);
+    assert.ok(r.ok);
+    const back = parseBook(JSON.stringify(r.state))!;
+    assert.deepEqual(p01(back).sections.notes, ["x"]);
+    assert.equal(p01(back).editedAt!.notes, nowIso);
+    const bad = parseBook(JSON.stringify({ ...r.state, seedKarteEdits: { "k-p01": "おかしい" }, todoTitles: { "ts-08": 3 } }))!;
+    assert.equal(bad.seedKarteEdits, undefined);
+    assert.equal(bad.todoTitles, undefined);
+  });
+
+  test("次回提案を直すと、同じ鍵（例:カルテ:番号）の最初の状態の ToDo の文だけ書きかえる（足さない）", () => {
+    const s0 = emptyBook(today.date);
+    const countBefore = items(s0).length;
+    const r = withKarteEdited(s0, p01(s0), "next", "次は明るめのカラー\n前髪も相談", o);
+    assert.ok(r.ok && r.todo === "updated");
+    assert.equal(r.title, "江口（架空）様：次は明るめのカラー（ほか1行はカルテに）");
+    const list = items(r.state);
+    assert.equal(list.length, countBefore, "足さない");
+    const t = list.filter((x) => x.key === "例:カルテ:k-p01");
+    assert.equal(t.length, 1);
+    assert.equal(t[0].id, seedTodo.id);
+    assert.equal(t[0].title, "江口（架空）様：次は明るめのカラー（ほか1行はカルテに）");
+    assert.equal(r.state.todos.length, 0, "足した ToDo は増えない");
+  });
+
+  test("済みの ToDo は触らない（最初から済み・人が済みにした物）", () => {
+    const s0 = emptyBook(today.date);
+    // 人が済みにした
+    const marked = withTodoMarked(s0, { id: seedTodo.id, seed: true }, true, nowIso);
+    const r = withKarteEdited(marked, p01(marked), "next", "次はパーマ", o);
+    assert.ok(r.ok && r.todo === "done");
+    assert.equal(items(r.state).find((x) => x.id === seedTodo.id)!.title, seedTodo.title);
+    // 最初から済み（石田様 k-p04 → ts-11）
+    const k04 = view(s0).find((k) => k.id === "k-p04")!;
+    const r4 = withKarteEdited(s0, k04, "next", "次はパーマ", { ...o, surname: "石田" });
+    assert.ok(r4.ok && r4.todo === "done");
+    assert.deepEqual(r4.state.todoTitles ?? {}, {});
+  });
+
+  test("「最初に戻す」で、直した最初の状態のカルテと ToDo の文は最初の中身に戻る", () => {
+    const s0 = emptyBook(today.date);
+    const r = withKarteEdited(s0, p01(s0), "next", "次はパーマ", o);
+    assert.ok(r.ok);
+    // 最初に戻す（reset.ts）は今日を起点に emptyBook を書く
+    const reset = emptyBook(today.date);
+    assert.equal(reset.seedKarteEdits, undefined);
+    assert.equal(reset.todoTitles, undefined);
+    assert.deepEqual(p01(reset).sections.next, p01(s0).sections.next);
+    assert.equal(p01(reset).edited, undefined);
+    assert.equal(items(reset).find((x) => x.id === seedTodo.id)!.title, seedTodo.title);
+  });
+
+  test("画面：どのカルテも同じ「直す」（最初の状態のカルテを見るだけにしない）", () => {
+    const body = readFileSync(join(__dirname, "../../../app/karte/KarteRecordBody.tsx"), "utf8");
+    assert.doesNotMatch(body, /source !== "saved"/);
+    assert.match(readFileSync(join(__dirname, "../../../app/karte/KarteDraftEditor.tsx"), "utf8"), /withKarteEdited\(/);
   });
 });
 

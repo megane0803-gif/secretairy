@@ -49,6 +49,12 @@ export type AddedTodo = {
 /** 最初の状態の ToDo（seed/todo.json）を済みにした・戻した印（id ごと） */
 export type TodoMark = { done: boolean; at: string };
 
+/**
+ * 最初の状態のカルテ（seed/kartes.json）を人が直した分（カルテの id ごと）。最初の中身に重ねて読む（record.ts の withSeedKarteEdits）。
+ * sections は直した見出しの行だけ・edited は直した見出し・editedAt は直した日時。「最初に戻す」で消え、最初の中身に戻る
+ */
+export type SeedKarteEdit = { sections: Record<string, string[]>; edited: string[]; editedAt: Record<string, string> };
+
 export type BookState = {
   v: 1;
   /** 起点の日（YYYY-MM-DD） */
@@ -62,6 +68,10 @@ export type BookState = {
   dayOffset: number;
   /** 最初の状態の ToDo を済みにした・戻した印（「最初に戻す」で消える） */
   todoMarks?: Record<string, TodoMark>;
+  /** 最初の状態のカルテを人が直した分（「最初に戻す」で消える） */
+  seedKarteEdits?: Record<string, SeedKarteEdit>;
+  /** 最初の状態の ToDo の文を書きかえた分（最初の状態のカルテの次回提案を直した時。id ごと。「最初に戻す」で消える） */
+  todoTitles?: Record<string, string>;
 };
 
 export function emptyBook(anchor: string): BookState {
@@ -169,7 +179,34 @@ export function parseBook(raw: string | null): BookState | null {
     }));
   const off = d.dayOffset;
   const dayOffset = typeof off === "number" && Number.isInteger(off) && off > 0 ? Math.min(off, MAX_DAY_OFFSET) : 0;
-  return { v: 1, anchor: d.anchor, chat, approvals, todos, kartes, dayOffset, todoMarks };
+  const seedKarteEdits: Record<string, SeedKarteEdit> = {};
+  if (d.seedKarteEdits && typeof d.seedKarteEdits === "object" && !Array.isArray(d.seedKarteEdits))
+    for (const [id, x] of Object.entries(d.seedKarteEdits as Record<string, unknown>).slice(0, 200)) {
+      const e = x as Record<string, unknown> | null;
+      if (!e || typeof e !== "object" || !e.sections || typeof e.sections !== "object") continue;
+      const edited = Array.isArray(e.edited) ? e.edited.filter(isStr).slice(0, 20) : [];
+      const editedAt =
+        e.editedAt && typeof e.editedAt === "object" && !Array.isArray(e.editedAt)
+          ? Object.fromEntries(Object.entries(e.editedAt as Record<string, unknown>).filter((p): p is [string, string] => isStr(p[1])).slice(0, 20))
+          : {};
+      seedKarteEdits[id.slice(0, 60)] = { sections: looseSections(e.sections), edited, editedAt };
+    }
+  const todoTitles: Record<string, string> = {};
+  if (d.todoTitles && typeof d.todoTitles === "object" && !Array.isArray(d.todoTitles))
+    for (const [id, t] of Object.entries(d.todoTitles as Record<string, unknown>).slice(0, 200)) if (isStr(t) && t.trim()) todoTitles[id.slice(0, 60)] = t.slice(0, 200);
+  return {
+    v: 1,
+    anchor: d.anchor,
+    chat,
+    approvals,
+    todos,
+    kartes,
+    dayOffset,
+    todoMarks,
+    // 直した分があるときだけ持つ（無ければ今までと同じ形）
+    ...(Object.keys(seedKarteEdits).length ? { seedKarteEdits } : {}),
+    ...(Object.keys(todoTitles).length ? { todoTitles } : {}),
+  };
 }
 
 /** 見出しの id ごとの行（文字の並び）だけを残す。見出しが設定にあるかは画面で読むときに確かめる */

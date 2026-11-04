@@ -260,7 +260,7 @@ export function KarteBoard({ data, headings, editLimits }: { data: BookData; hea
               })}
             </ol>
           )}
-          <p className="hint">保存したカルテを新しい順に並べています（AI は使いません）。人が保存したカルテは「直す」で直せます（最初の状態のカルテは見るだけ）。</p>
+          <p className="hint">保存したカルテを新しい順に並べています（AI は使いません）。どのカルテも見出しごとに「直す」で直せます（最初の状態のカルテを直した分は「最初に戻す」で元に戻ります）。</p>
         </section>
       )}
 

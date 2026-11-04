@@ -37,7 +37,7 @@ export function whenLabel(iso: string, timezone: string): string {
   return `${md} ${hm}`;
 }
 
-/** カルテ1枚の中身。人が保存したカルテは見出しごとに直せる。最初の状態のカルテは見るだけ */
+/** カルテ1枚の中身。人が保存したカルテも最初の状態のカルテも、見出しごとに直せる */
 export function KarteRecordBody({
   karte,
   data,
@@ -53,7 +53,6 @@ export function KarteRecordBody({
   surname: string;
   onDone?: (text: string) => void;
 }) {
-  if (karte.source !== "saved") return <KarteSectionsView sections={cleanSections(karte.sections, headings)} headings={headings} edited={karte.edited} />;
   return (
     <SavedKarteEditor
       karte={{ ...karte, sections: cleanSections(karte.sections, headings) }}

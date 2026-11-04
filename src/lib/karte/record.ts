@@ -3,7 +3,7 @@
 // 「次回提案」の1行目を ToDo の「次回話すこと」に1件だけ足す（同じ物があれば足さない）。
 // 施術のメモは保存したら変えない（2回目の保存はしない）。保存したカルテの中身は後から人が直せる（edit.ts）。AI は使わない。
 
-import type { BookState, AddedTodo } from "../book/state";
+import type { BookState, AddedTodo, SeedKarteEdit } from "../book/state";
 import type { SeedKarte } from "../data/types";
 import type { Reservation } from "../reservations";
 import type { KarteHeading } from "../settings";
@@ -53,6 +53,19 @@ export function resolveSeedKartes(seed: SeedKarte[], reservations: Reservation[]
     });
   }
   return out;
+}
+
+/**
+ * 最初の状態のカルテに、人が直した分（BookState の seedKarteEdits）を重ねる。直した見出しだけ差しかえ、印と日時を付ける。
+ * 「最初に戻す」で直した分が消えると、最初の中身に戻る。
+ */
+export function withSeedKarteEdits(seed: KarteRecord[], edits: Record<string, SeedKarteEdit> | undefined): KarteRecord[] {
+  if (!edits) return seed;
+  return seed.map((k) => {
+    const e = edits[k.id];
+    if (!e || k.source !== "seed") return k;
+    return { ...k, sections: { ...k.sections, ...e.sections }, edited: [...e.edited], editedAt: { ...e.editedAt } };
+  });
 }
 
 /** 新しい順（日付 → 保存した時刻） */
