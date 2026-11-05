@@ -26,20 +26,15 @@ import type { useAds } from "@/lib/ads/useAds";
 import { writeJournal } from "@/lib/journal";
 import type { Rule } from "@/lib/rules/types";
 import { getAdsTeamLimits, getShop } from "@/lib/settings";
-import { ActorTag } from "./parts";
+import { TeamVoice } from "./TeamVoice";
 
 const LIMITS = getAdsTeamLimits();
 
 function Voice({ role, ai, children }: { role: TeamRole; ai: boolean; children: React.ReactNode }) {
   return (
-    <article className={`voice ${ai ? "voice-ai" : "voice-program"}`} aria-label={`${ROLE_NAME[role]}＝${ROLE_DESC[role]}`}>
-      <header className="voice-head">
-        <strong>{ROLE_NAME[role]}</strong>
-        <span className="voice-desc">＝{ROLE_DESC[role]}</span>
-        {ai ? <ActorTag actor="ai" /> : <span className="tag who-program">{role === "researcher" ? "プログラム" : "AI なし"}</span>}
-      </header>
+    <TeamVoice name={ROLE_NAME[role]} desc={ROLE_DESC[role]} ai={ai} programTag={role === "researcher" ? "プログラム" : "AI なし"}>
       {children}
-    </article>
+    </TeamVoice>
   );
 }
 

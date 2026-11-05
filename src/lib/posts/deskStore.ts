@@ -6,9 +6,15 @@
 import { useSyncExternalStore } from "react";
 import type { PostGateCheck } from "./gate";
 import type { PostInsert } from "../settings";
+import type { PostPeriod } from "./facts";
+import type { PostTeamRecord } from "./team/types";
 import type { PostsMode } from "./wire";
 
 export type PostDraft = {
+  /** 下書きの番号（作るたびに新しい。発信のチームの会議は1つの下書きに1回） */
+  id?: string;
+  /** 直した版の番号（チームの直しを「入れる」で変わった時だけ上がる） */
+  version?: number;
   kind: string;
   /** 画面に出す文（プログラムが日時を入れた後。オーナーが手で直す） */
   text: string;
@@ -27,6 +33,19 @@ export type PostDraft = {
   unreadable?: boolean;
   /** 確かめてください（材料のお休みが台帳・店の設定とぶつかる所） */
   cautions?: string[];
+  /** 材料から読んだお休みの日（readOwnerClosed の dates。読めた時だけ） */
+  closedDates?: string[];
+  /** プログラムが入れた文字（お休み・空き枠の所に入れた言葉・足した行・ブログのリンクの印。fillPost の pieces） */
+  pieces?: string[];
+  /** 入れた時の空き枠とお休み（リサーチャーが今の台帳・店の設定と比べなおす） */
+  openings?: string[];
+  closed?: string[];
+  /** 入れた時の時期（材料の「年末」など。無ければ null） */
+  period?: PostPeriod | null;
+  /** オーナーが手で直した（日誌と、チームの残りの候補に使う） */
+  handEdited?: boolean;
+  /** 発信のチームの会議の印と答え（src/lib/posts/team/state.ts） */
+  team?: PostTeamRecord;
 };
 
 export type PostsDesk = {

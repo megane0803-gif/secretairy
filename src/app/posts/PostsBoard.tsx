@@ -4,11 +4,15 @@
 // 保存はオーナーのボタンだけ（isTrusted で確かめる）。承認の箱は通さない。送信・公開はしない。
 
 import { useState } from "react";
+import { afterHandEdit, PostTeam } from "@/components/PostTeam";
+import type { BookData } from "@/lib/book/data";
+import type { PostMemo } from "@/lib/data/types";
 import { writeJournal } from "@/lib/journal";
 import { CLOSED_UNREADABLE } from "@/lib/posts/closed";
 import { setPostsDesk, usePostsDesk } from "@/lib/posts/deskStore";
 import { CAUTION_HEAD, CLOSED_FROM_LABEL } from "@/lib/posts/facts";
 import { KEPT_AFTER_FAIL } from "@/lib/posts/redo";
+import { withHandEdit } from "@/lib/posts/team/state";
 import { COULD_NOT_WRITE } from "@/lib/posts/write";
 import { savedByKind, withSavedPost } from "@/lib/posts/state";
 import { usePosts } from "@/lib/posts/usePosts";
@@ -35,7 +39,7 @@ function firstLine(text: string): string {
   return l.replace(/^#+\s*/, "").slice(0, 40);
 }
 
-export function PostsBoard({ settings, timezone }: { settings: PostsSettings; timezone: string }) {
+export function PostsBoard({ settings, timezone, data, memos }: { settings: PostsSettings; timezone: string; data: BookData; memos: PostMemo[] }) {
   const desk = usePostsDesk();
   const posts = usePosts();
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -63,7 +67,7 @@ export function PostsBoard({ settings, timezone }: { settings: PostsSettings; ti
     posts.update(() => r.state);
     writeJournal({
       who: "オーナー",
-      text: `${kind.label}の下書きを保存した（${[...r.post.text].length}字${draft.text !== draft.made ? "・手で直した" : ""}。送信・公開はしていない）`,
+      text: `${kind.label}の下書きを保存した（${[...r.post.text].length}字${draft.handEdited ? "・手で直した" : ""}${(draft.version ?? 0) > 0 ? `・補佐の直しを${draft.version}つ入れた` : ""}。送信・公開はしていない）`,
     });
     setNote({ ok: true, text: `保存しました（${kind.label}）。` });
   };
@@ -80,82 +84,88 @@ export function PostsBoard({ settings, timezone }: { settings: PostsSettings; ti
       <section className="karte-now" aria-labelledby="posts-step3">
         <h2 id="posts-step3">③ 見て、手で直して保存</h2>
         {draft && kind ? (
-          <article className="karte-card ai" aria-label={`${kind.label}の下書き`}>
-            <header className="karte-card-head">
-              <span className="tag who-ai">{draft.mode === "ai" ? "AI の下書き" : "決まった返事の下書き"}</span>
-              <strong>{kind.label}</strong>
-            </header>
-            <p className="karte-before">
-              <span className="hint">前：</span>材料（{kind.materials[0]?.label ?? "お題"}「{draft.topic}」）とお店のメモ
-              <span aria-hidden> → </span>
-              <span className="hint">後：</span>
-              {kind.label}の下書き
-            </p>
-            <ul className="gate" aria-label="確認">
-              {draft.checks.map((c) => (
-                <li key={c.id} className={c.ok ? "ok" : "ng"}>
-                  {c.ok ? "✓" : "✗"} {c.label}
-                </li>
-              ))}
-              {draft.inserted
-                .filter((i) => insertLabel(i, draft))
-                .map((i) => (
-                  <li key={i} className="ok">
-                    ✓ {insertLabel(i, draft)}
+          <>
+            <article className="karte-card ai" aria-label={`${kind.label}の下書き`}>
+              <header className="karte-card-head">
+                <span className="tag who-ai">{draft.mode === "ai" ? "AI の下書き" : "決まった返事の下書き"}</span>
+                <strong>{kind.label}</strong>
+              </header>
+              <p className="karte-before">
+                <span className="hint">前：</span>材料（{kind.materials[0]?.label ?? "お題"}「{draft.topic}」）とお店のメモ
+                <span aria-hidden> → </span>
+                <span className="hint">後：</span>
+                {kind.label}の下書き
+              </p>
+              <ul className="gate" aria-label="確認">
+                {draft.checks.map((c) => (
+                  <li key={c.id} className={c.ok ? "ok" : "ng"}>
+                    {c.ok ? "✓" : "✗"} {c.label}
                   </li>
                 ))}
-            </ul>
-            {draft.unreadable && (
-              <p className="problems" role="status">
-                {CLOSED_UNREADABLE}材料のお休みの日付は推して入れず、空き枠も入れていません。「12月31日から1月5日まで休みます」のように書くと読めます。
+                {draft.inserted
+                  .filter((i) => insertLabel(i, draft))
+                  .map((i) => (
+                    <li key={i} className="ok">
+                      ✓ {insertLabel(i, draft)}
+                    </li>
+                  ))}
+              </ul>
+              {draft.unreadable && (
+                <p className="problems" role="status">
+                  {CLOSED_UNREADABLE}材料のお休みの日付は推して入れず、空き枠も入れていません。「12月31日から1月5日まで休みます」のように書くと読めます。
+                </p>
+              )}
+              {(draft.cautions ?? []).map((c, i) => (
+                <p key={i} className="problems" role="status">
+                  {CAUTION_HEAD}
+                  {c}
+                </p>
+              ))}
+              <label className="posts-edit">
+                <span className="karte-memo-label">下書き（手で直せます）</span>
+                <textarea
+                  value={draft.text}
+                  rows={Math.min(30, Math.max(8, draft.text.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil([...l].length / 36)), 1)))}
+                  onChange={(e) => {
+                    const text = e.target.value;
+                    // 手で直したら、チームの残りの候補は使えなくする（「下書きが変わったので入れられません」）
+                    setPostsDesk((s) => (s.draft ? { draft: withHandEdit(s.draft, text) } : {}));
+                    afterHandEdit();
+                    setNote(null);
+                  }}
+                />
+                <span className="karte-count">
+                  <span className="num">{[...draft.text].length}</span>字（目安 {kind.targetChars}字前後・{kind.shape}）
+                </span>
+              </label>
+              {draft.cut && <p className="problems">長くなったので、途中までの下書きです。</p>}
+              {desk.failed && (
+                <p className="problems" role="status">
+                  作り直しは{failedKind?.label ?? ""}の下書きを{COULD_NOT_WRITE}（{desk.failed.problems.join("。")}）。{KEPT_AFTER_FAIL}
+                </p>
+              )}
+              <p className="karte-why">
+                理由：お店のメモと材料にある事だけで、{kind.label}の形に書きました{draft.tries > 1 ? "（1回作り直した下書きです）" : ""}。
               </p>
-            )}
-            {(draft.cautions ?? []).map((c, i) => (
-              <p key={i} className="problems" role="status">
-                {CAUTION_HEAD}
-                {c}
-              </p>
-            ))}
-            <label className="posts-edit">
-              <span className="karte-memo-label">下書き（手で直せます）</span>
-              <textarea
-                value={draft.text}
-                rows={Math.min(30, Math.max(8, draft.text.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil([...l].length / 36)), 1)))}
-                onChange={(e) => {
-                  const text = e.target.value;
-                  setPostsDesk((s) => (s.draft ? { draft: { ...s.draft, text } } : {}));
-                  setNote(null);
-                }}
-              />
-              <span className="karte-count">
-                <span className="num">{[...draft.text].length}</span>字（目安 {kind.targetChars}字前後・{kind.shape}）
-              </span>
-            </label>
-            {draft.cut && <p className="problems">長くなったので、途中までの下書きです。</p>}
-            {desk.failed && (
-              <p className="problems" role="status">
-                作り直しは{failedKind?.label ?? ""}の下書きを{COULD_NOT_WRITE}（{desk.failed.problems.join("。")}）。{KEPT_AFTER_FAIL}
-              </p>
-            )}
-            <p className="karte-why">
-              理由：お店のメモと材料にある事だけで、{kind.label}の形に書きました{draft.tries > 1 ? "（1回作り直した下書きです）" : ""}。
-            </p>
-            <div className="posts-buttons">
-              <button type="button" className="btn primary" onClick={save}>
-                下書きを保存
-              </button>
-              <span className="posts-nosend">送信・公開はしません</span>
-              <button type="button" className="btn" onClick={drop}>
-                やめる
-              </button>
-            </div>
-            {note && (
-              <p className={note.ok ? "checked" : "problems"} role="status">
-                {note.ok && <span aria-hidden>✓ </span>}
-                {note.text}
-              </p>
-            )}
-          </article>
+              <div className="posts-buttons">
+                <button type="button" className="btn primary" onClick={save}>
+                  下書きを保存
+                </button>
+                <span className="posts-nosend">送信・公開はしません</span>
+                <button type="button" className="btn" onClick={drop}>
+                  やめる
+                </button>
+              </div>
+              {note && (
+                <p className={note.ok ? "checked" : "problems"} role="status">
+                  {note.ok && <span aria-hidden>✓ </span>}
+                  {note.text}
+                </p>
+              )}
+            </article>
+            {/* 下書きのカードの下：AI のチーム（今の下書きだけ。保存した下書きには出さない） */}
+            <PostTeam draft={draft} kind={kind} settings={settings} data={data} memos={memos} />
+          </>
         ) : desk.failed && failedKind ? (
           <article className="karte-card posts-failed" role="status">
             <p className="karte-card-head">

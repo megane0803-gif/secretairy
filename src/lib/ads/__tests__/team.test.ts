@@ -482,10 +482,16 @@ describe("会議の途中で LINE のボタンで決まった時・日誌の形�
       .sort();
     assert.deepEqual(users, [
       "src/app/api/ai/ads/team/route.ts",
+      // 発信の下書きの会議（§1.10.1）：共有するのは役の名前と短い説明・Claude を呼ぶ薄い所だけ（posts/__tests__/team.test.ts で確かめる）
+      "src/app/api/ai/posts/team/route.ts",
       "src/components/AdApprovalRows.tsx",
       "src/components/AdTeam.tsx",
       "src/lib/ads/state.ts",
       "src/lib/line/apply.ts",
+      "src/lib/posts/deskStore.ts",
+      "src/lib/posts/team/run.ts",
+      "src/lib/posts/team/script.ts",
+      "src/lib/posts/team/types.ts",
     ]);
     // AI の仕事（src/lib/jobs・ホームの欄）と AI の手順（予約チャット・AiSteps）は、会議に触れない
     for (const f of [...walk(join(root, "src/lib/jobs")), join(root, "src/app/home/AiJobs.tsx"), join(root, "src/components/AiSteps.tsx"), ...walk(join(root, "src/lib/ai")), ...walk(join(root, "src/app/reservations"))].filter((f) => !f.includes("__tests__")))

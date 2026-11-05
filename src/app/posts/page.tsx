@@ -24,7 +24,7 @@ export default function PostsPage() {
         </Panel>
       }
     >
-      <PostsBoard settings={settings} timezone={data.shop.timezone} />
+      <PostsBoard settings={settings} timezone={data.shop.timezone} data={data} memos={getPostMemos()} />
     </TabPage>
   );
 }
