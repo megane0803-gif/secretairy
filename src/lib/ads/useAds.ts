@@ -22,7 +22,7 @@ export function useAds() {
   const update = useCallback((f: (s: AdsState) => AdsState) => {
     // 書く直前に読みなおす（別の窓で変えた分を消さないように）
     const next = f(parseAds(read()));
-    writeBrowser(ADS_KEY, next.proposals.length === 0 && next.applied.length === 0 ? null : JSON.stringify(next));
+    writeBrowser(ADS_KEY, next.proposals.length === 0 && next.applied.length === 0 && !next.judgements?.length && !next.reports?.length ? null : JSON.stringify(next));
   }, []);
 
   return { state, update, table, settings, report, pending: pendingAd(state) };

@@ -1254,3 +1254,19 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .karte-talk { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 12px; margin: 6px 0 10px; overflow-wrap: anywhere; }
 .karte-talk ul { list-style: none; margin: 4px 0; padding: 0; }
 .karte-talk-todos { font-size: 0.85rem; }
+
+/* 広告：効いたかの判定・毎週の見直しの報告（docs/SPEC.md §1.7.1・§1.7.2） */
+.ad-results { display: flex; flex-direction: column; gap: 10px; }
+.ad-waiting { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; }
+.ad-waiting li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; overflow-wrap: anywhere; }
+.ad-verdict { display: flex; flex-direction: column; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.ad-verdict.ng .verdict-head { color: var(--warn); }
+.ad-verdict .ad-change { margin: 0; }
+.ad-compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.ad-compare-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ad-note { margin: 0; font-size: 0.9rem; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.ad-report { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; overflow-wrap: anywhere; margin-bottom: 8px; }
+.ad-report.latest { border-width: 2px; border-color: var(--accent); }
+.ad-report-lines { margin: 0; padding-left: 1.6em; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; line-height: 1.5; }
+.ad-report-lines > li > b { display: block; font-size: 0.8rem; color: var(--muted); }
+.ad-report-lines ul { margin: 0; padding-left: 1.1em; }

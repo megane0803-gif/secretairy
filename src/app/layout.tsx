@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { AdsFeeds } from "@/components/AdsFeeds";
 import { LineBridge } from "@/components/LineBridge";
 import { TabNav } from "@/components/TabNav";
 import { TodoFeeds } from "@/components/TodoFeeds";
@@ -38,6 +39,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <LineBridge data={getBookData()} />
         {/* 予約サイト（架空）で枠が埋まった仮押さえを、ToDo「別の日時を案内」に足す（プログラム）。何も描かない */}
         <TodoFeeds data={getBookData()} />
+        {/* 広告：判定日が来た言葉を判定する（プログラム）。結果は広告タブ・日誌・ToDo へ。何も描かない */}
+        <AdsFeeds />
       </body>
     </html>
   );

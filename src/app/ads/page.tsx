@@ -6,6 +6,7 @@ import { AD_FIELDS } from "@/lib/data/types";
 import { getSeedRules } from "@/lib/rules/store";
 import { getAdSettings, getShop } from "@/lib/settings";
 import { AdsReport } from "./AdsReport";
+import { AdsResults } from "./AdsResults";
 import { AdsReview } from "./AdsReview";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,8 @@ export default function AdsPage() {
         <AdApprovalRows seedRules={seedRules} standalone />
       </section>
 
+      <AdsResults />
+
       <AdsReport />
 
       <Fold summary="くわしく（プログラムの確認と、広告の数の形）">
@@ -43,6 +46,10 @@ export default function AdsPage() {
         </ul>
         <p>
           案は{ads.oncePerDays}日に1つまで。承認すると、{ads.checkAfterDays}日後を期限に ToDo「効いたか見る」を足します。数（回数・お金・予約）は AI に書かせず、表からプログラムが入れます。
+        </p>
+        <p>
+          効いたかの判定は、判定日（承認の{ads.checkAfterDays}日後）に前と後の数をプログラムが比べます。その言葉の押された回数が{ads.judge.minWordClicks}回より少ない時・前と後の予約を足して{ads.judge.minBookings}件より少ない時は「まだ分からない」。後の数は最初の状態に置いた架空の数です。
+          戻す案は承認の箱に入り、戻すのはオーナーの「承認」だけです。
         </p>
         <FieldList fields={AD_FIELDS} />
       </Fold>
