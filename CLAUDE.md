@@ -52,6 +52,7 @@ npm run build      # 本番ビルド（push の前に通す）
 - 数字は大きく（`BigNumber`）、量は小さい棒（`MiniBar`）、プログラムの確認は ✓（`Checked`）、細かい所は畳む（`Fold`）。部品は `src/components/parts.tsx`。
 - AI の案は大きいカード1枚：「前 → 後」と理由1文、ボタンは「確定」「やめる」（予約の仮押さえの行は「承認／直す／見送り」。仕様書 §1.3）。
 - 画面の言葉はやさしく。言い換え表は `docs/SPEC.md` §3.3。
+- ホームの欄は「題名＋1行の説明＋だれの札（AI・人・外・プログラム）」（`SectionHead`・`Panel` の `tag`／`desc`）。細かい欄は開け閉めでき、見る人のブラウザに欄ごとに覚える（`RememberFold`・`src/lib/home/`。閉じても中身の部品は外さない）。仕様書 §1.6。
 
 ## 置き場所
 
@@ -74,7 +75,8 @@ src/lib/todo/      ToDo：入口ごとの鍵・並べ方（items.ts。Claude は
 src/lib/posts/     発信：言葉の門・日時を入れる（台帳と設定から。本当に空いている時間・材料の時期）・お休みの日付は材料から読む（closed.ts。全部読み切れなければ読めないと出す）・ぶつかったら確かめての注意・発信だけの数の見方（postNumbersWritten）・指示文・流れ（作り直し1回）・決まった返事・保存した下書き（ブラウザの中に残す形）
 src/lib/line/      LINE のつなぎ（オーナー側）：署名・Redis・つなぎと預かり（bridge）・一言の振り分け（sort）・画面での入れ方（apply）
 src/app/api/line/  LINE の窓口（Webhook・つなぐ・受け取り・送る）。画面の処理と混ぜない
-src/lib/jobs/      ホームの「AI の仕事」：これから来る物4行の流れ（run.ts。今の /api/ai/ の窓口をそのまま使う）・済みの印（ブラウザの中に残す形）
+src/lib/home/      ホームの欄の開け閉め：最初の状態（PC／スマホ）と覚えた物の読み方（folds.ts。画面に依らない）・画面で使う形（useHomeFolds.ts）
+src/lib/jobs/      ホームの「AI に頼める仕事」：これから来る物4行の流れ（run.ts。今の /api/ai/ の窓口をそのまま使う）・済みの印（ブラウザの中に残す形）
 src/lib/brief/     朝の要点の「AI の一言」：材料と印（items.ts。名前は送らない・印を日時とお名前に置きかえる）・門・指示文・流れ・決まった返事（scriptBriefWriter）
 src/lib/eval/      試験10問（/eval。左のタブには出さない）：問い（config と seed から作る。ふつうの予約3問）・判定（checks.ts。文と結果。AI は使わない）・流し方（同時に1回・1問ごとに eval.minIntervalSeconds 秒・eval.maxCallsPerRun 回まで・流せなかった物は数えない）・合言葉（EVAL_PASSCODE。窓口は src/app/api/eval/。AI は呼ばない）・サーバーの見張り（guard.ts。KV の印は SET NX＋期限・回数は INCR。/api/ai/ の窓口が試験の札の見出しを見て数える）・仮押さえの問いは「選んだ枠にちょうど1件・確定0件」の時だけ合格・「確定しました」と言わない、は確定したと伝える文だけ落とす（かぎかっこの中・「〜とお伝えできません」の打ち消しは数えない）・README に写す形は文の条件で落ちた所の前後も出す。今の /api/ai/ の窓口を使い、結果は画面の表だけ
 .claude/agents/   サブエージェント「意地悪なお客さん役」（mean-customer.md）：試験の問いの案を出す。材料は seed と config だけ

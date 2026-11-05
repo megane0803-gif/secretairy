@@ -1,13 +1,14 @@
 "use client";
 
-// 朝の要点。このブラウザの台帳・カルテから、プログラムが数えて並べる。
-// 今日の予約・そのお客様の前回メモ（次回提案）・今日の空き枠。AI の一言（BriefNotes）は気をつける点を数個まで（文だけ）。
-// デモ用の「翌日へ」で今日を1営業日先へ（定休日は飛ばす）。押すと前日のお知らせ（デモ・送らない）を見せる。
-// 「最初に戻す」で本当の今日に戻る。
+// ホームの真ん中（「AI に頼める仕事」と一番下の「くわしく」より上）。このブラウザの台帳・カルテから、プログラムが数えて並べる。
+// 上から：朝の要点（数字3枚＋まずやる3つ。日付の横に「翌日へ」）・思いついたことを一言メモ・今日のお客様（前回の次回提案）・
+// 今日の注意（AI。BriefNotes。気をつける点を数個まで・文だけ）・今日これから空いている時間。下の3つは畳める（RememberFold）。
+// デモ用の「翌日へ」で今日を1営業日先へ（定休日は飛ばす）。押すと前日のお知らせ（デモ・送らない）を数字の下に見せる。
+// 「最初に戻す」（ページの一番下）で本当の今日に戻る。
 
 import { resolveMenu } from "@/lib/combo";
-import { BigNumber, Checked, CustomerName, MiniBar } from "@/components/parts";
-import { ResetBook } from "@/components/ResetBook";
+import { ActorTag, BigNumber, Checked, CustomerName, MiniBar, ProgramTag, SectionHead } from "@/components/parts";
+import { RememberFold } from "@/components/RememberFold";
 import type { BookData } from "@/lib/book/data";
 import { withNextDay } from "@/lib/book/state";
 import { useBook } from "@/lib/book/useBook";
@@ -34,7 +35,7 @@ export function HomeSummary({
 }: {
   data: BookData;
   headings: KarteHeading[];
-  /** 今やる N 件・「戻す」の秒数・メモの字数（config） */
+  /** まずやる N つ・「戻す」の秒数・メモの字数（config） */
   todo: TodoSettings & { maxMemoChars: number };
   /** 前日のお知らせの決まった形（config/reminder.json） */
   reminder: ReminderSettings;
@@ -69,39 +70,76 @@ export function HomeSummary({
 
   return (
     <>
-      <h2>朝の要点（{book.today.label}）</h2>
-      {book.shifted && <p className="shifted">{book.opened.label}はお休みなので、次の営業日を「今日」にしています。</p>}
-      {book.dayOffset > 0 && (
-        <p className="shifted">
-          デモ：「翌日へ」で {book.dayOffset} 営業日進めています（{book.today.label} の開店前 {book.now.time} のつもり）。本当の今日は {book.realToday.label} です。
-        </p>
-      )}
-      <div className="bignums">
-        <BigNumber label="今日の予約" value={book.book.todayCount} unit="件" />
-        <BigNumber label="承認待ち" value={approvals.count} unit="件" />
-        <BigNumber label="今日の ToDo" value={todos} unit="件" />
-      </div>
-
-      {remind && (
-        <DayBeforeReminders
-          reminders={remind.list}
-          dayLabel={remind.dayLabel}
-          sentLabel={remind.sentLabel}
-          demoNote={reminder.demoNote}
-          onClose={() => setRemind(null)}
+      <section className="home-morning" aria-labelledby="brief-morning">
+        <SectionHead
+          id="brief-morning"
+          title={`朝の要点（${book.today.label}）`}
+          tag={<ProgramTag />}
+          aside={
+            <>
+              <button type="button" className="btn small" onClick={nextDay} title="デモ用：今日を1営業日先へ進めます（定休日は飛ばす）">
+                翌日へ
+              </button>
+              <span className="tag text">デモ</span>
+            </>
+          }
+          desc="今日の予約・承認待ち・ToDo の数を、プログラムが数えました"
         />
-      )}
+        {book.shifted && <p className="shifted">{book.opened.label}はお休みなので、次の営業日を「今日」にしています。</p>}
+        {book.dayOffset > 0 && (
+          <p className="shifted">
+            デモ：「翌日へ」で {book.dayOffset} 営業日進めています（{book.today.label} の開店前 {book.now.time} のつもり）。本当の今日は {book.realToday.label} です。
+          </p>
+        )}
+        <div className="morning-wrap">
+          <div className="morning-row">
+            <div className="bignums home-bignums">
+              <BigNumber label="今日の予約" value={book.book.todayCount} unit="件" />
+              <BigNumber label="承認待ち" value={approvals.count} unit="件" />
+              <BigNumber label="今日の ToDo" value={todos} unit="件" />
+            </div>
+            <section className="morning-top" aria-labelledby="brief-todo">
+              <SectionHead
+                id="brief-todo"
+                level={3}
+                title={`まずやる${todo.topCount}つ`}
+                tag={<ProgramTag />}
+                desc={`ToDo のタブと同じ並べ方の上から${todo.topCount}つ（お客様への連絡と、期限が近い物が先）。済んだら □ を押します`}
+              />
+              <TodoTop data={data} count={todo.topCount} undoSeconds={todo.undoSeconds} link checked={false} />
+            </section>
+          </div>
+        </div>
 
-      <BriefNotes data={data} headings={headings} limits={brief} />
-
-      <section className="brief" aria-labelledby="brief-todo">
-        <h3 id="brief-todo">今やる{todo.topCount}件</h3>
-        <TodoTop data={data} count={todo.topCount} undoSeconds={todo.undoSeconds} link />
-        <MemoThrow data={data} maxChars={todo.maxMemoChars} />
+        {remind && (
+          <DayBeforeReminders
+            reminders={remind.list}
+            dayLabel={remind.dayLabel}
+            sentLabel={remind.sentLabel}
+            demoNote={reminder.demoNote}
+            onClose={() => setRemind(null)}
+          />
+        )}
       </section>
 
-      <section className="brief" aria-labelledby="brief-res">
-        <h3 id="brief-res">今日の予約と、前回のメモ（次回提案）</h3>
+      <section className="home-memo" aria-labelledby="brief-memo">
+        <SectionHead
+          id="brief-memo"
+          title="思いついたことを一言メモ"
+          tag={<ActorTag actor="human" />}
+          desc="書いて送ると、ToDo の文にして足します（AI か、AI なしの決まった返事で）"
+        />
+        <MemoThrow data={data} maxChars={todo.maxMemoChars} label="思いついたことを一言メモ" hideLabel />
+      </section>
+
+      <RememberFold
+        id="customers"
+        className="brief"
+        title="今日のお客様"
+        tag={<ProgramTag />}
+        count={`${todays.length}人`}
+        desc="時間とメニュー、前回のカルテの「次回提案」"
+      >
         {todays.length === 0 ? (
           <p className="empty">今日の予約はありません。</p>
         ) : (
@@ -144,10 +182,19 @@ export function HomeSummary({
             })}
           </ol>
         )}
-      </section>
+      </RememberFold>
 
-      <section className="brief" aria-labelledby="brief-free">
-        <h3 id="brief-free">今日の空き枠（これから）</h3>
+      {/* 今日の注意（AI）。出せない時は欄ごと出さない。部品は畳んでも外さない */}
+      <BriefNotes data={data} headings={headings} limits={brief} />
+
+      <RememberFold
+        id="free"
+        className="brief"
+        title="今日これから空いている時間"
+        tag={<ProgramTag />}
+        count={book.today.hours ? `${free.seatSlots}枠` : undefined}
+        desc="これからの時間で、席に空きがある所"
+      >
         {!book.today.hours ? (
           <p className="empty">今日はお休みです。</p>
         ) : (
@@ -174,15 +221,7 @@ export function HomeSummary({
             <p className="hint">メニューやルール（何分前まで など）で受けられるかは、予約チャットで確かめます。</p>
           </>
         )}
-      </section>
-
-      <div className="reset-row">
-        <span className="hint">デモ用：今日を1営業日先へ進めます（定休日は飛ばす）。</span>
-        <button type="button" className="btn small" onClick={nextDay}>
-          翌日へ
-        </button>
-        <ResetBook data={data} />
-      </div>
+      </RememberFold>
     </>
   );
 }

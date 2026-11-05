@@ -62,13 +62,59 @@ export function NotYet({ children }: { children?: ReactNode }) {
   return <p className="notyet">{children ?? "ここはまだ作っていません"}</p>;
 }
 
-/** 右の列の箱 */
-export function Panel({ title, id, children }: { title: string; id?: string; children: ReactNode }) {
+/**
+ * 右の列の箱。tag（だれの欄かの札）と desc（題名の下の1行）は、渡した時だけ出す（ホーム）。
+ * 渡さないタブは今までどおり題名だけ。
+ */
+export function Panel({ title, id, tag, desc, children }: { title: string; id?: string; tag?: ReactNode; desc?: ReactNode; children: ReactNode }) {
   return (
     <section className="panel" id={id}>
-      <h2>{title}</h2>
+      {tag || desc ? <SectionHead title={title} tag={tag} desc={desc} /> : <h2>{title}</h2>}
       {children}
     </section>
+  );
+}
+
+/**
+ * 欄の題名＋だれの札＋題名の下の1行（ホーム）。畳まない欄に使う（畳む欄は RememberFold.tsx）。
+ * aside は題名の行の右に出す物（「翌日へ」のボタンなど）。
+ */
+export function SectionHead({
+  title,
+  id,
+  level = 2,
+  tag,
+  desc,
+  aside,
+}: {
+  title: ReactNode;
+  id?: string;
+  level?: 2 | 3;
+  tag?: ReactNode;
+  desc?: ReactNode;
+  aside?: ReactNode;
+}) {
+  const H = level === 2 ? "h2" : "h3";
+  return (
+    <>
+      <div className="section-head">
+        <H id={id} className="section-title">
+          {title}
+        </H>
+        {tag}
+        {aside && <span className="section-aside">{aside}</span>}
+      </div>
+      {desc && <p className="section-desc">{desc}</p>}
+    </>
+  );
+}
+
+/** プログラムがした事の札（日誌と同じ灰色。色だけに頼らず「プログラム」の文字） */
+export function ProgramTag() {
+  return (
+    <span className="tag who who-program" title="プログラムがした事">
+      プログラム
+    </span>
   );
 }
 
@@ -95,13 +141,15 @@ export function CustomerName({ surname, fictional }: { surname: string; fictiona
 
 /**
  * だれがしたかの札（AI＝青緑・人＝琥珀・外＝藍）。色だけに頼らず「AI」「人」「外」の文字を必ず出す。
- * children を渡すと、文字のあとに添える（「人 オーナー」など）。使うのは台帳・AI の手順・日誌だけ（src/lib/actors.ts）。
+ * children を渡すと、文字のあとに添える（「人 オーナー」など）。使うのは台帳・AI の手順・日誌と、ホームの欄の題名（src/lib/actors.ts）。
+ * note を渡した時だけ、ホバーの説明と読み上げに添える（「AI なしの時は決まった返事」など）。
  */
-export function ActorTag({ actor, children }: { actor: Actor; children?: ReactNode }) {
+export function ActorTag({ actor, note, children }: { actor: Actor; note?: string; children?: ReactNode }) {
   return (
-    <span className={`tag actor actor-${actor}`} title={ACTOR_MEANING[actor]}>
+    <span className={`tag actor actor-${actor}`} title={note ? `${ACTOR_MEANING[actor]}（${note}）` : ACTOR_MEANING[actor]}>
       <b className="actor-mark">{ACTOR_LABEL[actor]}</b>
       {children && <> {children}</>}
+      {note && <span className="sr-only">（{note}）</span>}
     </span>
   );
 }

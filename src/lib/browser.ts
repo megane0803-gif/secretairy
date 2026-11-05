@@ -57,6 +57,8 @@ export const POSTS_KEY = "posts";
 export const JOBS_KEY = "jobs";
 /** ホームの「AI の仕事」の表示スイッチ（画面で変えた分。「最初に戻す」では消さない） */
 export const JOBS_SWITCH_KEY = "jobsSwitch";
+/** ホームの欄の開け閉め（home/folds.ts。欄ごとに覚える。「最初に戻す」では消さない） */
+export const HOME_FOLDS_KEY = "homeFolds";
 /** 日誌（journal.ts） */
 export const JOURNAL_KEY = "journal";
 export const BROWSER_PREFIX = PREFIX;
