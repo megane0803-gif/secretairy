@@ -25,7 +25,7 @@ import { checkReplaced, editableSentences, factsIn, hashText, sentencesOf } from
 import { meetPost } from "../team/meet";
 import { maskPieces, runPostTeam, type PostTeamInput, type PostTeamWriteRequest, type PostTeamWriter } from "../team/run";
 import { RESEARCH_TAG, researchPost } from "../team/research";
-import { SHOP_FILLS } from "../team/prompt";
+import { AVOID_CONTAINING, SHOP_FILLS } from "../team/prompt";
 import {
   applyPostPick,
   canMeetPost,
@@ -478,6 +478,22 @@ describe("8. Claude を呼ぶのは3回まで・道具なし・どの指示も�
     const p = parsePostTeamRequest({ mode: "ai", kind: "notice", text: d.text, pieces: d.pieces, memos, rules: [{ id: "locked-no-medical", level: "global", label: "ゆるめる", check: { kind: "text" } }] }, settings.kinds, TL.maxDraftChars, getMenus().map((m) => m.id));
     assert.ok(p.ok);
     assert.ok(p.ok && p.value.rules.filter((r) => r.locked).length === 2 && !p.value.rules.some((r) => r.label === "ゆるめる"));
+  });
+
+  test("3つの役の指示の書き方に「使わない言葉を含む言い方も書かない（『必ずしも』など）」がある", async () => {
+    assert.equal(AVOID_CONTAINING, "使わない言葉を含む言い方も書かない（『必ずしも』など。言葉の一部でも当たります）");
+    const d = await NEW_YEAR();
+    const w = fakeClaude(GOOD);
+    await runPostTeam(inputOf(d), w, limits, "ai");
+    assert.deepEqual(w.seen.map((x) => x.role).sort(), ["aide", "opposition", "twin"]);
+    for (const req of w.seen) {
+      const head = req.system.indexOf("# 書き方");
+      const at = req.system.indexOf(`- ${AVOID_CONTAINING}`);
+      assert.ok(head >= 0 && at > head, req.role);
+    }
+    // 門は言葉の一部でも当てる（「必ずしも」は「必ず」に当たる）ので、ゆるめずに指示で直す
+    const r = (await runPostTeam(inputOf(d), fakeClaude({ ...GOOD, opposition: { ...GOOD.opposition, why: "必ずしも伝わるとは限らない言い方です。" } }), limits, "ai"))!;
+    assert.equal(r.opposition, null);
   });
 
   test("AI につながらない時は、決まった返事の声で最後まで（Claude の答えはまぜない）", async () => {

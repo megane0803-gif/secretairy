@@ -13,6 +13,9 @@ export type PostTeamPromptLimits = { maxLineChars: number; maxTwinEdits: number;
 /** 日時など、プログラムが入れた所を AI に見せない時の印 */
 export const SHOP_FILLS = "【お店が入れる所】";
 
+/** 使わない言葉は、言葉の一部でも門に当たる（本番で野党の理由の「必ずしも」が「必ず」に当たった） */
+export const AVOID_CONTAINING = "使わない言葉を含む言い方も書かない（『必ずしも』など。言葉の一部でも当たります）";
+
 /** 書き方の決まり（プログラムの門に合う書き方。3つの役で同じ） */
 export function writingRules(gateWords: string[], maxLineChars: number): string[] {
   return [
@@ -23,6 +26,7 @@ export function writingRules(gateWords: string[], maxLineChars: number): string[
     "- 下書きとお店のメモに無い事（メニュー・値段・効き目・キャンペーンなど）は足さない。",
     "- 髪・頭皮・肌の具合や体調について、判断や助言の言葉（大丈夫・良くなる・おすすめ・効果・改善・控える など）は書かない。",
     `- 次の言葉は使わない：${gateWords.map((w) => `「${w}」`).join("")}。急がせる言い方・こわがらせる言い方もしない。`,
+    `- ${AVOID_CONTAINING}`,
     "- 答えは決まった JSON の形だけ。欄の外に文を書かない。",
   ];
 }
