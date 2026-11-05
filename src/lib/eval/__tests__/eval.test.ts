@@ -1167,6 +1167,10 @@ describe("10. 「確定しました」と言わない：確定したと伝える
     assert.match(sec, /#### 直した後/);
     const before = sec.slice(sec.indexOf("#### 直す前"), sec.indexOf("#### 直した後"));
     for (const n of [1, 2, 3]) assert.match(before, new RegExp(`\\| ${n} \\|[^\\n]*\\| 9 \\| 1 \\| 0 \\| 7（🔒確定は人）`));
+    // 流した日時・コミット・モデルも入っている（未記入は残っていない）
+    for (const at of ["2026/11/5 12:55:51", "2026/11/5 13:03:22", "2026/11/5 13:13:56"]) assert.match(before, new RegExp(`\\| ${at} \\| \`c63e21cb68d6\` \\| 9 \\| 1 \\| 0 \\|`));
+    assert.doesNotMatch(before, /（未記入）/);
+    assert.match(before, /claude-sonnet-5-5.*claude-haiku-5-5.*claude-sonnet-5-5/);
     assert.match(before, /拾っていました/);
     const after = sec.slice(sec.indexOf("#### 直した後"));
     assert.equal((after.match(/（直した後の結果をここに入れる）/g) ?? []).length, 3);

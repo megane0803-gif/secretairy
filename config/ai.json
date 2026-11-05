@@ -18,6 +18,15 @@
     "maxFixChars": 100,
     "maxRequestChars": 200000
   },
+  "adsTeam": {
+    "model": "claude-haiku-5-5",
+    "maxReplyTokens": 400,
+    "maxCalls": 3,
+    "maxTwinChars": 90,
+    "maxLineChars": 60,
+    "maxHistory": 8,
+    "maxRequestChars": 200000
+  },
   "adsNote": {
     "model": "claude-haiku-5-5",
     "maxReplyTokens": 200,

@@ -81,6 +81,8 @@ describe("3. 色は3つの変数で、使う所は台帳・AI の手順・日誌
       "src/app/reservations/TimetableGrid.tsx",
       "src/components/AiSteps.tsx",
       "src/components/JournalList.tsx",
+      // 広告の案の「AI のチーム」の会議の声（AI の役 = 青緑。§1.7.4・§3.4）
+      "src/components/AdTeam.tsx",
       "src/components/parts.tsx",
       "src/lib/actors.ts",
       "src/lib/book/timetable.ts",

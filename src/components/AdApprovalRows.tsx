@@ -3,6 +3,7 @@
 // 承認の箱の、広告の案の行。ホームの承認の箱と、広告タブの中に同じ行を出す。
 // 大きいカード1枚：「前 → 後」と理由1文、数（表からプログラムが入れた物）、プログラムの確認（✓ 3つ）。
 // ボタンは「承認／直す／見送り」。押すとプログラムが実行する（直すの出しなおしだけ AI を1回使う）。
+// カードの下に「チームの会議にかける」（AdTeam.tsx）。会議の声は読む物で、決めるのはこのボタンだけ。押した後、日誌に「分身の予想：…／オーナー：…」。
 // 🔒 確定は人：止める・外すのは、人が画面の「承認」を押したときだけ。押した事（ブラウザの本物の操作か）を確かめてから呼ぶ。
 
 import { useState } from "react";
@@ -20,7 +21,9 @@ import type { Rule } from "@/lib/rules/types";
 import { useRules } from "@/lib/rules/useRules";
 import { getAdsFixMaxChars, getShop } from "@/lib/settings";
 import { pendingRevert } from "@/lib/ads/verdict";
+import { teamDecisionLine } from "@/lib/ads/team/state";
 import { AdRevertRow } from "./AdRevertRow";
+import { AdTeam } from "./AdTeam";
 
 const MAX_FIX_CHARS = getAdsFixMaxChars();
 
@@ -78,7 +81,8 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
       });
       return next;
     });
-    writeJournal(...journal);
+    const guess = teamDecisionLine(x, "approved");
+    writeJournal(...journal, ...(guess ? [{ who: "プログラム" as const, text: guess }] : []));
     setDone(`✓ ${ads.settings.channel}で ${x.no}番「${x.text}」を${x.action === "stop" ? "止めました" : "外しました"}。ToDo に「効いたか見る」を足しました`);
     setFixOpen(false);
   };
@@ -86,7 +90,11 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
   const skip = (e: React.MouseEvent, x: AdProposal) => {
     if (!e.nativeEvent.isTrusted) return;
     ads.update((a) => withAdSkipped(a, x.id, new Date().toISOString()));
-    writeJournal({ who: "オーナー", text: `見送り：広告の案「${proposalLabel(x)}」を閉じた（広告は変えていない）` });
+    const guess = teamDecisionLine(x, "skipped");
+    writeJournal(
+      { who: "オーナー", text: `見送り：広告の案「${proposalLabel(x)}」を閉じた（広告は変えていない）` },
+      ...(guess ? [{ who: "プログラム" as const, text: guess }] : []),
+    );
     setDone(`見送りました：${x.no}番を${actionVerb(x.action)}案を閉じました`);
     setFixOpen(false);
   };
@@ -217,6 +225,7 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
           {note}
         </p>
       )}
+      <AdTeam p={p} ads={ads} rules={rules} anchor={bookState.state.anchor} />
     </li>
   ) : null;
 

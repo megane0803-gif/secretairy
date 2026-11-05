@@ -567,3 +567,34 @@ export function getRuleWordsAiSettings(): RuleWordsAiSettings {
 export function getRuleWordsMaxChars(): number {
   return (ai as { ruleWords: RuleWordsAiSettings }).ruleWords.maxTextChars;
 }
+
+/**
+ * 広告の案の「AI のチーム」の会議（config/ai.json の adsTeam。docs/SPEC.md §1.7.4）。
+ * Claude を呼ぶのは1回の会議で maxCalls（3。分身・野党・補佐）まで。作り直しはしない。
+ */
+export type AdsTeamAiSettings = {
+  model: string;
+  /** 1回の返事の長さの上限（トークン。役ごと） */
+  maxReplyTokens: number;
+  /** 1回の会議で Claude を呼ぶ回数の上限 */
+  maxCalls: number;
+  /** 分身の文（1〜2文）の長さの上限（字） */
+  maxTwinChars: number;
+  /** 野党の「危ない所」「代わりの選び方」・補佐の3行の、1つの長さの上限（字） */
+  maxLineChars: number;
+  /** 分身に渡す前のオーナーの判断の数の上限（新しい方から） */
+  maxHistory: number;
+  /** 窓口（/api/ai/ads/team）が受け取る大きさの上限（字） */
+  maxRequestChars: number;
+};
+
+export function getAdsTeamAiSettings(): AdsTeamAiSettings {
+  return (ai as { adsTeam: AdsTeamAiSettings }).adsTeam;
+}
+
+/** 画面でも使う会議の上限（鍵や環境変数は読まない） */
+export function getAdsTeamLimits(): Omit<AdsTeamAiSettings, "model"> {
+  const { model: _model, ...rest } = (ai as { adsTeam: AdsTeamAiSettings }).adsTeam;
+  void _model;
+  return rest;
+}
