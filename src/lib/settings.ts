@@ -45,6 +45,11 @@ export type Menu = {
   lastStart?: string;
   /** 組み合わせのメニュー（例：カット＋カラー）に入っているメニュー。メニューごとのルールはここにも効く */
   includes?: string[];
+  /**
+   * 予約の台帳の帯の色の名前（globals.css の --menu-<名前>。src/lib/book/menuColor.ts の MENU_COLORS のどれか）。
+   * 見た目だけに使う（AI に送る中身・料金の答えには入れない）。無い・知らない名前のメニューは灰色。
+   */
+  color?: string;
 };
 
 /** AI を呼ぶときの設定（モデル名・1回の返事の長さ・1回の相談で道具を呼ぶ回数の上限など） */
