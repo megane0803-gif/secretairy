@@ -782,10 +782,16 @@ describe("7. 外に送らない・残さない・左のタブに出さない", (
     assert.doesNotMatch(JSON.stringify(aiJson), /passcode"\s*:\s*"/i);
   });
 
-  test("README の試験の節：問いはサブエージェントが作り、人が選んだ・結果の欄は空", () => {
+  test("README の試験の節：問いの出どころ（最初の版の7つ・サブエージェントの案から3つ。人が選んだ）・結果の欄は空", () => {
     const readme = readFileSync(join(ROOT, "README.md"), "utf8");
     assert.match(readme, /## 試験10問/);
-    assert.match(readme, /問いはサブエージェント.*が作り、人が選んだ/);
+    assert.match(readme, /最初の版の問い7つ/);
+    assert.match(readme, /意地悪なお客さん役.*の案から3つ/);
+    assert.match(readme, /人が見て選びました/);
+    // 数が今の10問と合う：サブエージェントの案から取ったのは、ふつうの予約の3問
+    const qs = buildQuestions(env(NOW));
+    assert.equal(qs.filter((q) => q.kind === "accept").length, 3);
+    assert.equal(qs.length - 3, 7);
     assert.ok(existsSync(join(ROOT, ".claude/agents/mean-customer.md")));
   });
 
