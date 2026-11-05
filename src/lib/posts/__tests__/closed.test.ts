@@ -186,8 +186,21 @@ describe("5. ぶつかった時は「確かめてください」（保存は止�
     for (const o of f.openings) assert.doesNotMatch(o, /^(12\/31|1\/[1-5])（/, o);
     assert.ok(f.openings.some((o) => o.startsWith("1/6（")), "お休みの次の営業日は出る");
     const g = factsFor({ topic: "年末年始のお休み", points: "12月26日、12月30日、1月4日はお休み" }, { more });
-    assert.deepEqual(g.closed, ["12月26日（土）"], "表示はまとまり1つまで");
+    assert.deepEqual(g.closed, ["12月26日（土）", "12月30日（水）", "1月4日（月）"], "材料に書いた日付は上限で切らない");
     for (const o of g.openings) assert.doesNotMatch(o, /^(12\/26|12\/30|1\/4)（/, o);
+  });
+});
+
+describe("5b. 材料に書いたお休みの日付は、上限（maxClosedDays）で切らない", () => {
+  test("離れた日を4つ書く → 4つとも【お休み】に入る（上限は店の設定のお休みだけ）", () => {
+    assert.equal(settings.maxClosedDays, 3, "上限より多く書く");
+    const f = factsFor({ topic: "年末年始のお休み", points: "12月26日、12月28日、12月30日、1月4日はお休みします" });
+    assert.equal(f.closedFrom, "materials");
+    const four = ["12月26日（土）", "12月28日（月）", "12月30日（水）", "1月4日（月）"];
+    assert.deepEqual(f.closed, four);
+    assert.ok(fill(`${CLOSED_MARK}はお休みをいただきます。`, f).text.startsWith(`${four.join("、")}は`));
+    // 店の設定のお休みには今までどおり上限を当てる
+    assert.equal(factsFor({ topic: "年末年始のお知らせ" }, { more: { maxClosedDays: 1 } }).closed.length, 1);
   });
 });
 

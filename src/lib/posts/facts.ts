@@ -98,7 +98,8 @@ const MAX_PERIOD_DAYS = 62;
  * 時期があれば、その時期の日（今日より前は見ない）の中から、空き枠とお休みを出す（「年末」なら年末の日）。
  * owner = 材料に書いたお休みの日付（closed.ts の readOwnerClosed）。読めたら、その日だけをお休みにして空き枠から外す。
  * 読み取れなかったら、お休みも空き枠も入れない。
- * お休みの数の上限（maxClosedDays）は、続いている日をまとめた数で数える（空き枠から外す日・ぶつかりの確かめは全部の日で）。
+ * お休みの数の上限（maxClosedDays）は店の設定のお休みにだけ当て、続いている日をまとめた数で数える。
+ * 材料に書いたお休みの日付は上限で切らずに全部入れる（空き枠から外す日・ぶつかりの確かめも全部の日で）。
  * now = 店の時間帯のいま（今日がその日なら、それより前の枠は入れない）。
  */
 export function postFacts(
@@ -133,7 +134,9 @@ export function postFacts(
       if (!day.open) closedDays.push(day.date);
     }
   }
-  const closed = groupDays(closedDays).slice(0, settings.maxClosedDays).map(groupLabel);
+  const groups = groupDays(closedDays);
+  // 上限は店の設定のお休みだけ。オーナーが書いた日付は切らない
+  const closed = (owner.kind === "dates" ? groups : groups.slice(0, settings.maxClosedDays)).map(groupLabel);
   return {
     openings,
     closed,
