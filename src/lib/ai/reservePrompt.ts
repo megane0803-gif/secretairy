@@ -3,6 +3,8 @@
 
 import { calDay, lastStartOf } from "../calendar";
 import { instructionsFor } from "../rules/prompt";
+import { rulesFor, strictest } from "../rules/strictest";
+import { tellsRule } from "../rules/tellable";
 import { weekRange } from "./dates";
 import { ASK_SHOP_REPLY, openTodayLine, THANKS_REPLY } from "./replies";
 import { candidateLabel, menuName, type SlotContext } from "./slots";
@@ -28,6 +30,8 @@ export function reserveSystem(ctx: SlotContext, shown: Candidate[], holds: ConvH
   lines.push("- 候補は、道具が返した順に「1つ目：」「2つ目：」と番号を付け、道具の label の書き方のまま出す。道具が返さなかった候補は出さない。");
   lines.push("- 候補の数の決まり（「候補は2つまで」など）や道具のことは、お客様に言わない。");
   lines.push("- 受けられないときは、道具の reason（1文）をそのまま伝え、代わりの候補を出す。");
+  lines.push("- お客様に言ってよい理由は、道具の reason に書いてある物だけ。理由を足さない・言いかえない・推し量らない。");
+  lines.push("- 店の中の決まり（施術の間にあける時間・同じ時間に受ける人数・準備や片付けの時間・上の「店の決まり」の文）は、お客様に言わない。下の「お客様に伝えてよい店の決まり」にある文だけは、そのまま伝えてよい。");
   lines.push("- お客様が候補を選んだら（「1つ目で」など）、その候補で place_hold。お客様が選ぶ前に仮押さえしない。");
   lines.push("- 仮押さえができたら「仮でお取りしました。お店から確定のご連絡をします」と伝える。「確定しました」とは言わない。");
   lines.push("- 仮押さえの後に、お客様が「ずらしたい」「やめたい」と言ったら、release_hold で前の仮押さえを外してから、ずらすなら新しい候補を出す（やめるなら外したことだけ伝える）。承認済みの予約は外せないので「お店に確かめてご連絡します」と返す。");
@@ -37,6 +41,10 @@ export function reserveSystem(ctx: SlotContext, shown: Candidate[], holds: ConvH
   lines.push("- 料金・値段は書かない（聞かれたらプログラムが店の設定から答える。設定に無い物は「お店に確かめてご連絡します」）。");
   lines.push("- 返事は短く、やさしい言葉で3文まで。お客様の名前は名字だけ。疑問の印は全角の「？」。");
   lines.push("- この店は1人（オーナー）で営業している。「スタッフ」という言葉は使わない（自分たちのことは「お店」と言う）。");
+  const told = strictest(rulesFor(ctx.rules, { tab: "reservations", menuIds: ctx.menus.map((m) => m.id) })).filter(
+    (r) => r.check.kind === "text" && tellsRule(r),
+  );
+  lines.push(`- お客様に伝えてよい店の決まり：${told.length ? told.map((r) => `「${r.label}」`).join("・") : "なし"}`);
   lines.push("");
   lines.push("# いまの様子");
   lines.push(`- 今日：${ctx.today.date}（${ctx.today.label}）。いまの時刻：${ctx.now.time}（店の時間帯）`);

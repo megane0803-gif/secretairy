@@ -163,13 +163,13 @@ export function scriptModel(ctx: Pick<SlotContext, "menus" | "today" | "shop" | 
           if (list.length === 0) {
             const reason = typeof d.reason === "string" ? d.reason : "あいにく空きが見つかりませんでした。";
             // 組み合わせそのものを受けられないときは、日を変えても同じなので理由だけ
-            return say(/いっしょには/.test(reason) ? reason : `${reason}別の日をお知らせください。`, onText);
+            return say(d.combo ? reason : `${reason}別の日をお知らせください。`, onText);
           }
           return say(`${d.menu}は、${listText(list)} が空いています。${pick}`, onText);
         case "check_rules":
           if (d.ok) return say(`${listText(list)} でお取りできます。${pick}`, onText);
           return say(
-            `${d.reason}${list.length ? `代わりに、${listText(list)} はいかがでしょう。${pick}` : /いっしょには/.test(String(d.reason)) ? "" : "別の日をお知らせください。"}`,
+            `${d.reason}${list.length ? `代わりに、${listText(list)} はいかがでしょう。${pick}` : d.combo ? "" : "別の日をお知らせください。"}`,
             onText,
           );
         case "place_hold":

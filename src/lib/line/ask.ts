@@ -126,7 +126,8 @@ export async function runLineAsk(opts: {
       ok: true,
       via,
       kind: "hold-no",
-      reason: out.reason ?? out.error ?? "受けられません",
+      // オーナーの LINE なので、店の中の決まりも理由に書く（お客様への文ではない）
+      reason: checked.ownerReason ?? out.reason ?? out.error ?? "受けられません",
       alternatives: (out.candidates ?? []).map((x) => x.label),
       label,
       steps,
@@ -137,7 +138,7 @@ export async function runLineAsk(opts: {
   steps.push(...held.steps);
   if (!held.hold) {
     const o = JSON.parse(held.content) as { reason?: string; error?: string; candidates?: { label: string }[] };
-    return { ok: true, via, kind: "hold-no", reason: o.reason ?? o.error ?? "受けられません", alternatives: (o.candidates ?? []).map((x) => x.label), label, steps };
+    return { ok: true, via, kind: "hold-no", reason: held.ownerReason ?? o.reason ?? o.error ?? "受けられません", alternatives: (o.candidates ?? []).map((x) => x.label), label, steps };
   }
   return { ok: true, via, kind: "hold", hold: { ...held.hold, reason: LINE_HOLD_REASON }, label, steps };
 }
