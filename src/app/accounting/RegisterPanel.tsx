@@ -7,14 +7,20 @@
 // 🔒 確定は人：登録は、人が画面のボタンを押したとき（isTrusted）だけ。AI・自動の処理からは呼ばない。
 
 import { useState } from "react";
-import { BigNumber } from "@/components/parts";
+import { BigNumber, Fold } from "@/components/parts";
 import { md, yen } from "@/lib/accounting/sales";
 import { merchantName, USE_LABEL } from "@/lib/accounting/sort";
 import { register, registrationMessage, sortTrial } from "@/lib/accounting/state";
 import { useAccounting } from "@/lib/accounting/useAccounting";
+import type { useFreee } from "@/lib/freee/useFreee";
 import { writeJournal, type JournalWho } from "@/lib/journal";
+import { FreeeConnectForm, useCallbackNote } from "./FreeePanel";
 
-export function RegisterPanel() {
+/** freee（テスト事業所）とつながっていない画面（cookie が無い・審査員の画面も）。今のまま会計（架空）に登録する */
+export function RegisterPanel({ freee }: { freee: ReturnType<typeof useFreee> }) {
+  const callbackNote = useCallbackNote();
+  // 「freee とつなぐ」は、本番のサイトで freee の環境変数がそろっている時だけ出す（cookie が無い・鍵が切れた・事業所の番号がまだ空）
+  const canConnect = freee.status === "none" || freee.status === "expired" || freee.status === "no-company-id";
   const acct = useAccounting();
   const { seed, settings, state, gate } = acct;
   const [trial, setTrial] = useState(false);
@@ -90,7 +96,21 @@ export function RegisterPanel() {
         ) : (
           <p className="hint">まだ登録していません（未処理 {seed.statement.items.length}件）。本物の会計にはつながっていません。</p>
         )}
+        <p>
+          <span className="tag text wrap">{settings.freee.unconnectedNote}</span>
+        </p>
       </section>
+      {callbackNote && (
+        <p className="hint" role="status">
+          {callbackNote}
+        </p>
+      )}
+      {canConnect && !reg && (
+        <Fold summary="オーナー用">
+          <FreeeConnectForm label="freee とつなぐ" />
+          <p className="hint">許可の画面で、テスト事業所を選んでください。ほかの事業所を選ぶと、鍵を捨てて止めます。</p>
+        </Fold>
+      )}
 
       {reg && (
         <>

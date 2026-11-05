@@ -1352,3 +1352,8 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .voice-facts > div { display: flex; flex-direction: column; }
 .voice-facts dt { font-size: 0.78rem; color: var(--muted); min-width: 5.5em; }
 .voice-facts dd { margin: 0; min-width: 0; }
+
+/* 経理：freee（テスト事業所）の札・数（長い札は折り返す） */
+.tag.wrap { white-space: normal; display: inline-block; }
+.freee-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.freee-connect { margin: 8px 0; }

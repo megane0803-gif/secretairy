@@ -9,6 +9,7 @@
 import { useState } from "react";
 import type { BookData } from "@/lib/book/data";
 import { useBook } from "@/lib/book/useBook";
+import { freeeSendingNow, useFreeeLocked, useFreeeSending } from "@/lib/freee/useFreee";
 import { writeJournal } from "@/lib/journal";
 import { lineApi } from "@/lib/line/useLine";
 import { getLineSettings } from "@/lib/settings";
@@ -17,9 +18,13 @@ import { resetAll } from "@/lib/reset";
 export function ResetBook({ data }: { data: BookData }) {
   const book = useBook(data);
   const [asking, setAsking] = useState(false);
+  // 経理で freee（テスト事業所）に送っている間は戻さない
+  const sending = useFreeeSending();
+  const freeeStarted = useFreeeLocked();
 
   const onReset = (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted) return;
+    if (freeeSendingNow()) return;
     const { lineToken } = resetAll(book.realToday.date);
     writeJournal({
       who: "オーナー",
@@ -35,8 +40,9 @@ export function ResetBook({ data }: { data: BookData }) {
 
   return asking ? (
     <span className="rule-buttons" role="group" aria-label="最初に戻すかどうか">
+      {freeeStarted && <span>経理の選びは画面だけ戻します。freee（テスト事業所）の記録は残ります。</span>}
       <span>本当の今日を起点に作り直します。仮押さえ・承認の箱・ToDo（足した物・済みの印）・保存したカルテ・人が直したカルテ（最初の状態の物も最初の中身に）・カルテのメモ・録音から作った文字と要点・広告・経理（足した自動のルールも）・保存した発信の下書き・「AI の仕事」（4行とも「これから」に）・LINE の預かり・同じ時間に受ける人数（{data.shop.seats}人に）も最初に戻ります（LINE のつなぎは残します）。</span>
-      <button type="button" className="btn danger" onClick={onReset}>
+      <button type="button" className="btn danger" onClick={onReset} disabled={sending}>
         最初に戻す
       </button>
       <button type="button" className="btn" onClick={() => setAsking(false)}>
@@ -44,8 +50,11 @@ export function ResetBook({ data }: { data: BookData }) {
       </button>
     </span>
   ) : (
-    <button type="button" className="btn small" onClick={() => setAsking(true)}>
-      最初に戻す
-    </button>
+    <>
+      <button type="button" className="btn small" onClick={() => setAsking(true)} disabled={sending}>
+        最初に戻す
+      </button>
+      {sending && <span className="hint">経理で送っている間は、最初に戻せません</span>}
+    </>
   );
 }

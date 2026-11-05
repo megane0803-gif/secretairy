@@ -211,7 +211,49 @@ export type AccountingSettings = {
   service: string;
   /** 明細の出どころ（例「カード会社（架空）」） */
   cardSource: string;
+  /** freee（テスト事業所）とのつなぎ（オーナーのブラウザだけ。鍵・秘密は環境変数。docs/SPEC.md §1.8.1） */
+  freee: FreeeSettings;
 };
+
+export type FreeeSettings = {
+  /** つながっている時の札 */
+  label: string;
+  /** つながっていない画面の札 */
+  unconnectedNote: string;
+  /** 本番のサイト（ここから来た呼び出しだけ受ける） */
+  siteOrigin: string;
+  /** 許可の戻り先の道（freee のアプリに入れた物と同じ） */
+  callbackPath: string;
+  authorizeUrl: string;
+  tokenUrl: string;
+  apiBase: string;
+  /** 使うカードの口座の名前（プログラムでは作らない。ちょうど1つの時だけ使う） */
+  cardName: string;
+  /** 店用の科目の名前（freee から名前で引く） */
+  accountItemName: string;
+  /** 店用の税区分の名前（freee の画面の名前 name_ja） */
+  taxName: string;
+  /** 摘要の印の頭（「SecretAIry:<データの版>:<明細の番号>」） */
+  markPrefix: string;
+  /** 許可の行き来の合図（state）の期限（分） */
+  stateMinutes: number;
+  /** アクセスの鍵を持たせる長さの上限（秒。6時間） */
+  maxTokenSeconds: number;
+  /** 明細を読む時の1ページの件数（freee の上限は100） */
+  pageLimit: number;
+  /** めくるページの上限 */
+  maxPages: number;
+  /** freee の返事を待つ秒数 */
+  timeoutSeconds: number;
+  /** 窓口が受け取る大きさ（字） */
+  maxRequestChars: number;
+  /** 「送っている」の印が、この秒数より古ければ止まった物とみなす */
+  sendingStaleSeconds: number;
+};
+
+export function getFreeeSettings(): FreeeSettings {
+  return getAccountingSettings().freee;
+}
 
 export function getAccountingSettings(): AccountingSettings {
   return accounting as AccountingSettings;
