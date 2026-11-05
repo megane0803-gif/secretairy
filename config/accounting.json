@@ -1,4 +1,27 @@
 {
   "service": "会計（架空）",
-  "cardSource": "カード会社（架空）"
+  "cardSource": "カード会社（架空）",
+  "freee": {
+    "label": "freee（テスト事業所）",
+    "unconnectedNote": "オーナーのブラウザでは、freee（テスト事業所）につながります",
+    "siteOrigin": "https://secretairy.vercel.app",
+    "callbackPath": "/api/freee/callback",
+    "authorizeUrl": "https://accounts.secure.freee.co.jp/public_api/authorize",
+    "tokenUrl": "https://accounts.secure.freee.co.jp/public_api/token",
+    "apiBase": "https://api.freee.co.jp",
+    "cardName": "SecretAIry カード",
+    "accountItemName": "消耗品費",
+    "taxName": "課対仕入10%",
+    "markPrefix": "SecretAIry",
+    "stateMinutes": 10,
+    "maxTokenSeconds": 21600,
+    "pageLimit": 100,
+    "maxPages": 50,
+    "timeoutSeconds": 15,
+    "maxRequestChars": 2000,
+    "sendingStaleSeconds": 120,
+    "serverBudgetSeconds": 45,
+    "importUnknownWaitSeconds": 120,
+    "maxImportCalls": 25
+  }
 }

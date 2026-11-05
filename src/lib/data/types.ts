@@ -154,7 +154,8 @@ export type CardItem = {
   amount: number;
 };
 
-export type CardStatement = { from: string; to: string; items: CardItem[] };
+/** version：データの版（freee（テスト事業所）の明細の摘要の印「SecretAIry:<版>:<番号>」に使う。今回の明細だけが持つ） */
+export type CardStatement = { version?: string; from: string; to: string; items: CardItem[] };
 
 /** 経理の最初の状態（seed/accounting.json） */
 export type AccountingSeed = {

@@ -59,6 +59,7 @@
     { "merchantId": "m-e", "shop": 6, "private": 4 }
   ],
   "statement": {
+    "version": "v1",
     "from": "2026-10-13",
     "to": "2026-11-10",
     "items": [

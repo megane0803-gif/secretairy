@@ -1,0 +1,23 @@
+"use client";
+
+// 経理タブの右の列。どちらに登録するかを決める：
+// - このブラウザが freee（テスト事業所）とつながっている（サーバーが cookie を確かめた）・または freee に送り始めた記録がある → freee の欄
+// - それ以外（cookie が無い画面・審査員の画面も）→ 今のまま「会計（架空）に登録」
+// 途中まで freee に送った記録がある時は、つながりが切れても会計（架空）に切り替えない。
+
+import { Panel } from "@/components/parts";
+import { useFreee } from "@/lib/freee/useFreee";
+import { getAccountingSettings } from "@/lib/settings";
+import { FreeePanel } from "./FreeePanel";
+import { RegisterPanel } from "./RegisterPanel";
+
+export function RegisterColumn() {
+  const freee = useFreee();
+  const settings = getAccountingSettings();
+  const toFreee = freee.status === "connected" || freee.started;
+  return (
+    <Panel title={toFreee ? `${settings.freee.label}に登録` : `${settings.service}に登録`}>
+      {toFreee ? <FreeePanel freee={freee} /> : <RegisterPanel freee={freee} />}
+    </Panel>
+  );
+}
