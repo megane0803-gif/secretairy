@@ -1,5 +1,8 @@
 // 下書きに入れる日時（プログラム）。空き枠の日時は台帳（確定・仮押さえ）と同じ時間に受ける人数から本当に空いている時間を、
-// お休みの日付は店の設定から出す。材料に時期（「年末」など）があれば、その時期の日から出す。
+// お休みの日付は、オーナーが材料に書いた日付（closed.ts が読む）を先に使い、書いていなければ店の設定から出す。
+// 材料の日付を読み取れなかった時は推して入れない（「（日付を読み取れませんでした）」・空き枠も入れない・店の設定に戻さない）。
+// 材料に時期（「年末」など）があれば、その時期の日から出す。続いているお休みの日は「〜」で1つにまとめる。
+// オーナーが書いたお休みが店の設定・台帳とぶつかれば「確かめてください」の1行を出す（保存は止めない）。
 // AI には日時を見せず、書かせない。AI が書いた印（【空き枠】【お休み】【ブログのリンク：…】）をここで置きかえ、
 // その種類に要るのに印が無ければ、下書きの終わり（SNS はタグの前）に1行足す。
 
@@ -7,13 +10,20 @@ import { weekRange } from "../ai/dates";
 import { addDays, calDay, toMinutes, type CalDay } from "../calendar";
 import { freeRanges, type Reservation } from "../reservations";
 import type { PostInsert, PostKind, PostsSettings, ShopSettings } from "../settings";
+import { CLOSED_UNREADABLE, groupDays, groupLabel, OPENINGS_SKIPPED, type OwnerClosed } from "./closed";
 import { BLOG_LINK_MARK, CLOSED_MARK, OPENINGS_MARK } from "./gate";
 
 export type PostFacts = {
   /** 空き枠（日ごとに1行。例「11/5（木）10:00〜12:00・15:00〜20:00」） */
   openings: string[];
-  /** お休みの日（例「11/10（火）」） */
+  /** お休みの日（まとまりごと。例「11月10日（火）」「12月31日（木）〜1月5日（火）」） */
   closed: string[];
+  /** お休みの日付をどこから入れたか（材料に書いた日付か、店の設定か） */
+  closedFrom: "materials" | "shop";
+  /** 材料のお休みの日付を読み取れなかった（お休みも空き枠も入れない） */
+  unreadable: boolean;
+  /** 確かめてください（材料のお休みが台帳・店の設定とぶつかる所。1つ1行） */
+  cautions: string[];
 };
 
 /**
@@ -86,6 +96,10 @@ const MAX_PERIOD_DAYS = 62;
  * 空き枠（営業日だけ。今日はいまの時刻より後）と、お休みの日。
  * 時期（period）が無ければ、今日から openingDays 日の空き枠と closedDays 日の中のお休み。
  * 時期があれば、その時期の日（今日より前は見ない）の中から、空き枠とお休みを出す（「年末」なら年末の日）。
+ * owner = 材料に書いたお休みの日付（closed.ts の readOwnerClosed）。読めたら、その日だけをお休みにして空き枠から外す。
+ * 読み取れなかったら、お休みも空き枠も入れない。
+ * お休みの数の上限（maxClosedDays）は店の設定のお休みにだけ当て、続いている日をまとめた数で数える。
+ * 材料に書いたお休みの日付は上限で切らずに全部入れる（空き枠から外す日・ぶつかりの確かめも全部の日で）。
  * now = 店の時間帯のいま（今日がその日なら、それより前の枠は入れない）。
  */
 export function postFacts(
@@ -95,29 +109,75 @@ export function postFacts(
   now: { date: string; time: string },
   all: Reservation[],
   period: PostPeriod | null = null,
+  owner: OwnerClosed = { kind: "none" },
 ): PostFacts {
+  if (owner.kind === "unreadable") return { openings: [], closed: [], closedFrom: "materials", unreadable: true, cautions: [] };
   const start = period && period.from > today.date ? period.from : today.date;
   const inWindow = (i: number, days: number) => (period ? i < MAX_PERIOD_DAYS && addDays(start, i) <= period.to : i < days);
+  const ownerDays = owner.kind === "dates" ? new Set(owner.dates) : null;
   const openings: string[] = [];
   for (let i = 0; inWindow(i, settings.openingDays) && openings.length < settings.maxOpeningDays; i++) {
     const day = calDay(shop, addDays(start, i));
-    if (!day.open || !day.hours) continue;
+    if (!day.open || !day.hours || ownerDays?.has(day.date)) continue;
     const from = now.date === day.date ? now.time : undefined;
     // 閉店の前の、どのメニューも入らないほど短い空きは出さない（枠の長さより短い物）
     const free = openRanges(shop, day, all, from).filter((f) => toMinutes(f.end) - toMinutes(f.start) >= shop.slotMinutes);
     if (free.length === 0) continue;
     openings.push(`${day.label}${free.map((f) => `${f.start}〜${f.end}`).join("・")}`);
   }
-  const closed: string[] = [];
-  for (let i = 0; inWindow(i, settings.closedDays) && closed.length < settings.maxClosedDays; i++) {
-    const day = calDay(shop, addDays(start, i));
-    if (!day.open) closed.push(day.label);
+  let closedDays: string[];
+  if (owner.kind === "dates") closedDays = owner.dates;
+  else {
+    closedDays = [];
+    for (let i = 0; inWindow(i, settings.closedDays); i++) {
+      const day = calDay(shop, addDays(start, i));
+      if (!day.open) closedDays.push(day.date);
+    }
   }
-  return { openings, closed };
+  const groups = groupDays(closedDays);
+  // 上限は店の設定のお休みだけ。オーナーが書いた日付は切らない
+  const closed = (owner.kind === "dates" ? groups : groups.slice(0, settings.maxClosedDays)).map(groupLabel);
+  return {
+    openings,
+    closed,
+    closedFrom: owner.kind === "dates" ? "materials" : "shop",
+    unreadable: false,
+    cautions: owner.kind === "dates" ? closedCautions(shop, owner.dates, all) : [],
+  };
 }
 
-const OPENINGS_LINE = (f: PostFacts) => (f.openings.length ? `空きのある日時：${f.openings.join("、")}` : "空きのある日時：いまはご案内できる空きがありません");
-const CLOSED_LINE = (f: PostFacts) => (f.closed.length ? `お休み：${f.closed.join("、")}` : "");
+/**
+ * 材料に書いたお休みの日が、台帳（確定・仮押さえ）・店の設定とぶつかる所（1つ1行。お客様の名前は出さない）。
+ * 予約がある日は日ごとに、店の設定で営業日の日は続いた日をまとめて。
+ */
+export function closedCautions(shop: ShopSettings, dates: string[], all: Reservation[]): string[] {
+  const out: string[] = [];
+  for (const d of [...new Set(dates)].sort()) {
+    const n = all.filter((r) => r.date === d && (r.status === "confirmed" || r.status === "hold")).length;
+    if (n > 0) out.push(`${groupLabel({ from: d, to: d })}に予約が${n}件あります`);
+  }
+  for (const g of groupDays(dates.filter((d) => calDay(shop, d).open))) {
+    out.push(`${groupLabel(g)}は、店の設定では営業日です（予約サイト・予約チャットでは受けてしまいます）`);
+  }
+  return out;
+}
+
+/** 【空き枠】の所に入れる言葉 */
+const openingsText = (f: PostFacts) => (f.unreadable ? OPENINGS_SKIPPED : f.openings.length ? f.openings.join("、") : "（いまはご案内できる空きがありません）");
+/** 【お休み】の所に入れる言葉 */
+const closedText = (f: PostFacts) => (f.unreadable ? CLOSED_UNREADABLE : f.closed.length ? f.closed.join("、") : "（しばらくお休みはありません）");
+const OPENINGS_LINE = (f: PostFacts) =>
+  f.unreadable ? `空きのある日時：${OPENINGS_SKIPPED}` : f.openings.length ? `空きのある日時：${f.openings.join("、")}` : "空きのある日時：いまはご案内できる空きがありません";
+const CLOSED_LINE = (f: PostFacts) => (f.unreadable ? `お休み：${CLOSED_UNREADABLE}` : f.closed.length ? `お休み：${f.closed.join("、")}` : "");
+
+/** カードの ✓ と日誌に出す、お休みの日付の入れ元 */
+export const CLOSED_FROM_LABEL: Record<PostFacts["closedFrom"], string> = {
+  materials: "お休みの日付（材料から）",
+  shop: "お休みの日付（店の設定から）",
+};
+
+/** カードの「確かめてください」の1行の頭 */
+export const CAUTION_HEAD = "確かめてください：";
 
 export type FilledPost = {
   text: string;
@@ -135,9 +195,9 @@ export function fillPost(raw: string, kind: Pick<PostKind, "id" | "insert">, fac
     inserted.add("blogLink");
     return BLOG_LINK_MARK;
   });
-  text = text.split(OPENINGS_MARK).join(facts.openings.length ? facts.openings.join("、") : "（いまはご案内できる空きがありません）");
+  text = text.split(OPENINGS_MARK).join(openingsText(facts));
   if (raw.includes(OPENINGS_MARK)) inserted.add("openings");
-  text = text.split(CLOSED_MARK).join(facts.closed.length ? facts.closed.join("、") : "（しばらくお休みはありません）");
+  text = text.split(CLOSED_MARK).join(closedText(facts));
   if (raw.includes(CLOSED_MARK)) inserted.add("closed");
 
   const add: string[] = [];
