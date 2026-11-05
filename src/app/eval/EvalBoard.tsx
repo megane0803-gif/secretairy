@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { BigNumber, Fold } from "@/components/parts";
 import type { BookData } from "@/lib/book/data";
 import type { PostMemo } from "@/lib/data/types";
-import { browserEvalAsk, startEval } from "@/lib/eval/ask";
+import { browserEvalAsk, finishEval, startEval } from "@/lib/eval/ask";
 import { buildQuestions, EVAL_PATHS, type EvalMode, type EvalQuestion } from "@/lib/eval/questions";
 import { EvalBusyError, runEval, tally, UNRUN_LABEL, type EvalResult } from "@/lib/eval/run";
 
@@ -51,6 +51,20 @@ export function EvalBoard({
   const [meta, setMeta] = useState<RunMeta | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const stopRef = useRef(false);
+  // サーバーの「流している印」の札。終わった・止めた・画面を閉じた時に印を消す（消せなくても期限で消える）
+  const tokenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const release = () => {
+      if (tokenRef.current) void finishEval(tokenRef.current);
+      tokenRef.current = null;
+    };
+    window.addEventListener("pagehide", release);
+    return () => {
+      window.removeEventListener("pagehide", release);
+      release();
+    };
+  }, []);
 
   // 問いは押したその時の日付で作る（画面を開いた時にも、いまの日付で見せる）
   useEffect(() => {
@@ -71,9 +85,10 @@ export function EvalBoard({
     setMeta({ at: now.toLocaleString("ja-JP", { timeZone: data.shop.timezone }), commit: started.commit, models: started.models, mode });
     stopRef.current = false;
     setRunning(qs[0]?.no ?? null);
+    tokenRef.current = started.token;
     try {
       await runEval(qs, {
-        ask: browserEvalAsk,
+        ask: browserEvalAsk(started.token),
         intervalMs: intervalSeconds * 1000,
         maxCalls,
         mode,
@@ -86,6 +101,10 @@ export function EvalBoard({
       });
     } catch (e) {
       setProblem(e instanceof EvalBusyError ? e.message : `うまくいきませんでした（${e instanceof Error ? e.message : String(e)}）`);
+    } finally {
+      // 終わった・止めた：サーバーの印を消す（次の試験をすぐ流せるように）
+      tokenRef.current = null;
+      await finishEval(started.token);
     }
   }
 
@@ -144,7 +163,7 @@ export function EvalBoard({
       <ul className="eval-notes">
         <li>合言葉を入れてから流します。合言葉はこの画面にも表にも出しません。</li>
         <li>
-          1問ごとに {intervalSeconds}秒 あけます（AI の窓口は1分10回までのため）。1回の試験で窓口を呼ぶのは {maxCalls}回 までです。同時に流せるのは1回だけです。
+          1問ごとに {intervalSeconds}秒 あけます（AI の窓口は1分10回までのため）。1回の試験で窓口を呼ぶのは {maxCalls}回 までです。同時に流せるのは1回だけです（別のタブ・別の端末からも、サーバーが片方だけ受けます）。
         </li>
         <li>試験は専用の架空の状態（最初の状態の台帳とルール）で流します。結果はこの画面の表だけに出し、どこにも送らず、ブラウザにも残しません（台帳・LINE・日誌も変えません）。</li>
         <li>AI につながらない・通信のまちがい・空の返事・途中で止まった・決まった返事（AI なし）だった問いは、合格にも不合格にも数えず「流せなかった」に分けます。</li>

@@ -3,6 +3,7 @@
 // 受け取った物はどこにも残さない（docs/SPEC.md §5.1）。お客様の名前は受け取らない（画面でプログラムが入れる）。
 // 🔒 ここには保存の処理は無い。保存は画面の「保存」ボタン（人）だけ。
 
+import { evalGate } from "@/lib/eval/guard";
 import { NoAiError } from "@/lib/ai/model";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import { getKarteExamples } from "@/lib/data/seed";
@@ -10,7 +11,7 @@ import { parseKarteRequest } from "@/lib/karte/request";
 import { KarteRefusedError, runKarte } from "@/lib/karte/run";
 import type { KarteResponse } from "@/lib/karte/wire";
 import { claudeKarteWriter, scriptKarteWriter } from "@/lib/karte/writer";
-import { getAiSettings, getKarteHeadings, getMenus } from "@/lib/settings";
+import { getAiSettings, getKarteHeadings, getMenus, getEvalSettings } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,9 @@ function reply(body: KarteResponse, status = 200): Response {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // 試験10問（/eval）の札が付いた頼みだけ、サーバーでも「同時に1回だけ」「1回の試験で呼べる回数」を見張る（src/lib/eval/guard.ts）
+  const refused = await evalGate(request, getEvalSettings());
+  if (refused) return refused;
   const ai = getAiSettings();
   const menus = getMenus();
   const headings = getKarteHeadings();

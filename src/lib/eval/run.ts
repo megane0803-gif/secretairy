@@ -1,5 +1,5 @@
 // 試験10問（/eval。docs/SPEC.md §1.13）を順に流す。1問ずつ窓口に送り、答えをプログラムで判定する。
-// 守り：同時に1回だけ・1問ごとに config/ai.json の eval.minIntervalSeconds 秒あける・1回の試験で窓口を呼ぶのは eval.maxCallsPerRun 回まで・止めるボタン。
+// 守り：同時に1回だけ（ここは画面の中。サーバーでも guard.ts で見張る）・1問ごとに config/ai.json の eval.minIntervalSeconds 秒あける・1回の試験で窓口を呼ぶのは eval.maxCallsPerRun 回まで・止めるボタン。
 // 合格・不合格に数えない物（流せなかった）：AI につながらない・通信のまちがい・空の返事・途中で止まった・決まった返事（AI なし）・窓口が受けなかった・上限・止めた。
 // AI につながらなかったら、そこで止める（残りは流さない）。結果は返すだけで、どこにも残さない・送らない。
 
@@ -9,7 +9,7 @@ import { answerText, judgeQuestion, readReserve, type CheckResult, type EvalAnsw
 export type EvalStatus = "pass" | "fail" | "unrun";
 
 /** 流せなかった訳 */
-export type UnrunCode = "no-ai" | "network" | "empty" | "cut" | "script" | "bad-request" | "limit" | "stopped" | "after-no-ai";
+export type UnrunCode = "no-ai" | "network" | "empty" | "cut" | "script" | "bad-request" | "limit" | "server" | "stopped" | "after-no-ai" | "after-server";
 
 export const UNRUN_LABEL: Record<UnrunCode, string> = {
   "no-ai": "AI につながらない",
@@ -19,8 +19,10 @@ export const UNRUN_LABEL: Record<UnrunCode, string> = {
   script: "決まった返事（AI なし）",
   "bad-request": "窓口が受けなかった",
   limit: "1回の試験で呼べる回数の上限",
+  server: "サーバーが受けなかった（同時に1回だけ・呼べる回数）",
   stopped: "止めた",
   "after-no-ai": "AI につながらないので流していない",
+  "after-server": "サーバーが受けないので流していない",
 };
 
 export type EvalResult = {
@@ -41,6 +43,9 @@ export type EvalResult = {
 
 /** 窓口に届かなかった・答えが読めなかった（通信のまちがい） */
 export class EvalNetworkError extends Error {}
+
+/** サーバーの見張りが断った（ほかで流している・呼べる回数の上限・印の期限切れ） */
+export class EvalServerRefusedError extends Error {}
 
 /** もう流している（同時に1回だけ） */
 export class EvalBusyError extends Error {
@@ -164,10 +169,14 @@ async function runAll(questions: EvalQuestion[], opt: EvalRunOptions): Promise<E
       r = resultOf(q, answer, Math.max(0, clock() - t0), opt.mode, opt.labels);
     } catch (e) {
       const msg = e instanceof Error && e.message ? e.message : String(e);
-      r = unrunResult(q, "network", `${UNRUN_LABEL.network}：${msg}`, "", Math.max(0, clock() - t0));
+      r =
+        e instanceof EvalServerRefusedError
+          ? unrunResult(q, "server", msg, "", Math.max(0, clock() - t0))
+          : unrunResult(q, "network", `${UNRUN_LABEL.network}：${msg}`, "", Math.max(0, clock() - t0));
     }
     push(r);
     if (r.unrun?.code === "no-ai") stop = "after-no-ai";
+    if (r.unrun?.code === "server") stop = "after-server";
   }
   return out;
 }

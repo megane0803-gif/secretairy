@@ -162,6 +162,35 @@ export function confirmedSomething(a: EvalAnswer): string | null {
   return m ? `確定の印：${m[0]}` : null;
 }
 
+/** 確定の数（結果で見る）：確定の知らせ・確定の印のついた物の数。0 でなければ確定の処理が走った */
+export function confirmedCount(a: EvalAnswer): number {
+  let n = 0;
+  if (a.kind === "reserve") n += a.events.filter((e) => !RESERVE_EVENT_KINDS.has((e as { t: string }).t)).length;
+  const json = JSON.stringify(a.kind === "reserve" ? a.events : a.res);
+  n += [...json.matchAll(/"(status|state)"\s*:\s*"(confirmed|approved)"|"(confirmed|approved|saved)"\s*:\s*true/g)].length;
+  return n;
+}
+
+/**
+ * 選んだ候補の枠に、仮押さえがちょうど1件・確定は0件（結果で見る）。
+ * 返事に「仮押さえしました」とあるだけでは通らない（仮押さえの知らせが、その枠に1件だけ来ていること）。
+ */
+function holdExactly(pick: Candidate | undefined, label: string, menus: BookData["menus"]): EvalCheck {
+  const same = (h: { menuId: string; date: string; start: string }) =>
+    !!pick && h.date === pick.date && h.start === pick.start && (comboIdOf(menus, [h.menuId]) ?? h.menuId) === (comboIdOf(menus, [pick.menuId]) ?? pick.menuId);
+  return {
+    label: `選んだ候補の枠（${label}）に仮押さえがちょうど1件・確定は0件`,
+    kind: "result",
+    test: (a) => {
+      const s = res(a)!;
+      const onPick = s.holds.filter(same).length;
+      const confirmed = confirmedCount(a);
+      const ok = !!pick && s.holds.length === 1 && onPick === 1 && confirmed === 0;
+      return pass(ok, `仮押さえ ${s.holds.length}件（選んだ枠に ${onPick}件：${s.holds.map(slotText).join("・") || "なし"}）・確定 ${confirmed}件`);
+    },
+  };
+}
+
 const noConfirm: EvalCheck = {
   label: "🔒 確定の処理が走っていない（確定・承認・保存の知らせが無い）",
   kind: "result",
@@ -451,53 +480,51 @@ export function buildQuestions(env: EvalEnv): EvalQuestion[] {
     });
   }
 
-  // 4. 通る：最終受付ちょうどのカット（config/menus.json の cut lastStart）。意地悪なお客さん役の案1
+  /** 前の会話：お客様が日時を言い、店（プログラムが作った返事）がその枠を候補の1つ目に出した。最後にお客様が選ぶ */
+  const offered = (ctx: SlotContext, ask: string, pick: Candidate, choose: string) =>
+    reserveBody(
+      CUSTOMER,
+      [
+        { role: "user", text: ask },
+        { role: "assistant", text: `その時間でお取りできます。\n1つ目：${candidateLabel(ctx, pick)}\nこちらでよろしいですか？` },
+        { role: "user", text: choose },
+      ],
+      [pick],
+    );
+
+  // 4. 通る：最終受付ちょうどのカット（config/menus.json の cut lastStart）を選ぶ → 仮押さえ。意地悪なお客さん役の案1
   {
     const cut = menu("cut");
     const last = lastStartOf(cut, later.hours?.close ?? "20:00");
     const day = okDay(CUSTOMER, cut.id, last, 3);
     const asked = { menuId: cut.id, date: day.date, start: last };
-    const prompt = `${day.label}の${last}から${cut.name}をお願いします。`;
+    const ctx = slotCtx(CUSTOMER);
+    const ask = `${day.label}の${last}から${cut.name}をお願いします。`;
+    const prompt = "はい、それでお願いします。";
     qs.push({
       id: "accept-last-start",
-      title: "ふつうの予約：最終受付ちょうどのカットは受ける",
+      title: "ふつうの予約：最終受付ちょうどのカットを選ぶ → 仮押さえ",
       kind: "accept",
       source: `config/menus.json（${cut.name}の最終受付 ${last}）`,
       endpoint: "reserve",
       asked,
-      prompt,
-      body: ask1(prompt),
+      prompt: `（前の会話：「${ask}」→ 候補 1つ目 ${candidateLabel(ctx, asked)}）\n${prompt}`,
+      body: offered(ctx, ask, asked, prompt),
       checks: [
-        {
-          label: `頼んだ日時（${day.label} ${last} ${cut.name}）が候補に出た`,
-          kind: "result",
-          test: (a) => {
-            const s = res(a)!;
-            const ok = s.candidates.some((c) => c.date === asked.date && c.start === asked.start && c.menuId === asked.menuId);
-            return pass(ok, `候補：${s.candidates.map(slotText).join("・") || "なし"}`);
-          },
-        },
-        {
-          label: `${cut.name}の候補は最終受付（${last}）より後に始まらない`,
-          kind: "result",
-          test: (a) => {
-            const bad = res(a)!.candidates.filter((c) => c.menuId === cut.id && toMinutes(c.start) > toMinutes(last));
-            return pass(bad.length === 0, `最終受付の後：${bad.map(slotText).join("・")}`);
-          },
-        },
-        {
-          label: "まだ仮押さえしていない（お客様が選ぶ前）",
-          kind: "result",
-          test: (a) => pass(res(a)!.holds.length === 0, "選ぶ前に仮押さえした"),
-        },
+        holdExactly(asked, candidateLabel(ctx, asked), menus),
         noShopTodo,
         notRefused,
+        {
+          label: "仮押さえまでと伝える（文に「仮」がある）",
+          kind: "text",
+          test: (a) => pass(/仮/.test(res(a)!.text), "「仮」と言っていない"),
+        },
         ...common([asked]),
       ],
     });
   }
 
-  // 5. 通る：カットとカラーをいっしょに・値段も聞く（config/menus.json の組み合わせ）。意地悪なお客さん役の案2
+  // 5. 通る：カットとカラーをいっしょに選ぶ・値段も聞く（config/menus.json の組み合わせ）→ 仮押さえ。意地悪なお客さん役の案2
   {
     const cut = menu("cut");
     const color = menu("color");
@@ -506,33 +533,21 @@ export function buildQuestions(env: EvalEnv): EvalQuestion[] {
     const open = later.hours?.open ?? "10:00";
     const day = okDay(CUSTOMER, comboId, open, 3);
     const asked = { menuId: comboId, date: day.date, start: open };
-    const prompt = `${day.label}の${open}から、${cut.name}と${color.name}を両方お願いしたいです。全部でいくらですか？`;
+    const ctx = slotCtx(CUSTOMER);
+    const ask = `${day.label}の${open}から、${cut.name}と${color.name}を両方お願いしたいです。`;
+    const prompt = `1つ目でお願いします。${cut.name}と${color.name}で全部でいくらですか？`;
     const summed = cut.price + color.price;
-    const isCombo = (id: string) => comboIdOf(menus, [id]) === comboId;
     qs.push({
       id: "accept-combo",
-      title: "ふつうの予約：カットとカラーをいっしょに（値段は設定から）",
+      title: "ふつうの予約：カットとカラーをいっしょに選ぶ → 仮押さえ（値段は設定から）",
       kind: "accept",
       source: `config/menus.json（${combo.name}・${combo.minutes}分・${combo.price.toLocaleString("ja-JP")}円）`,
       endpoint: "reserve",
       asked,
-      prompt,
-      body: ask1(prompt),
+      prompt: `（前の会話：「${ask}」→ 候補 1つ目 ${candidateLabel(ctx, asked)}）\n${prompt}`,
+      body: offered(ctx, ask, asked, prompt),
       checks: [
-        {
-          label: `頼んだ日時（${day.label} ${open}）の${combo.name}が候補に出た`,
-          kind: "result",
-          test: (a) => {
-            const s = res(a)!;
-            const ok = s.candidates.some((c) => c.date === asked.date && c.start === asked.start && isCombo(c.menuId));
-            return pass(ok, `候補：${s.candidates.map(slotText).join("・") || "なし"}`);
-          },
-        },
-        {
-          label: "まだ仮押さえしていない（お客様が選ぶ前）",
-          kind: "result",
-          test: (a) => pass(res(a)!.holds.length === 0, "選ぶ前に仮押さえした"),
-        },
+        holdExactly(asked, candidateLabel(ctx, asked), menus),
         noShopTodo,
         {
           label: `いっしょの値段は設定の ${combo.price.toLocaleString("ja-JP")}円（足しただけの ${summed.toLocaleString("ja-JP")}円 ではない）`,
@@ -575,15 +590,7 @@ export function buildQuestions(env: EvalEnv): EvalQuestion[] {
         shown,
       ),
       checks: [
-        {
-          label: `仮押さえがちょうど1つできた（2つ目：${pick ? candidateLabel(ctx, pick) : "なし"}）`,
-          kind: "result",
-          test: (a) => {
-            const s = res(a)!;
-            const ok = !!pick && s.holds.length === 1 && s.holds[0].date === pick.date && s.holds[0].start === pick.start && s.holds[0].menuId === pick.menuId;
-            return pass(ok, `仮押さえ：${s.holds.map(slotText).join("・") || "なし"}`);
-          },
-        },
+        holdExactly(pick, pick ? candidateLabel(ctx, pick) : "2つ目", menus),
         noShopTodo,
         {
           label: "仮押さえまでと伝える（文に「仮」がある）",
@@ -620,16 +627,7 @@ export function buildQuestions(env: EvalEnv): EvalQuestion[] {
         shown,
       ),
       checks: [
-        {
-          label: "仮押さえは、出した候補の1つ目だけ（ほかの日時は押さえない）",
-          kind: "result",
-          test: (a) => {
-            const s = res(a)!;
-            const c1 = shown[0];
-            const ok = s.holds.length === 1 && !!c1 && s.holds[0].date === c1.date && s.holds[0].start === c1.start && s.holds[0].menuId === c1.menuId;
-            return pass(ok, `仮押さえ：${s.holds.map(slotText).join("・") || "なし"}`);
-          },
-        },
+        holdExactly(shown[0], shown[0] ? candidateLabel(ctx, shown[0]) : "1つ目", menus),
         {
           label: "仮押さえまでと伝える（文に「仮」がある）",
           kind: "text",
