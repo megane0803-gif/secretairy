@@ -100,7 +100,8 @@ export function validateOwnerRule(raw: unknown, menuIds?: string[]): Checked<Rul
   // 型のルールの文も AI への指示に入るので、同じように確かめる
   const conflict = lockedConflict(label);
   if (conflict) return { ok: false, reason: conflict };
-  const base = { ...scope, id: r.id } as Rule;
+  // お客様に伝える：true のときだけ残す（無い・ほかの値は「伝えない」）
+  const base = { ...scope, id: r.id, ...(r.tellCustomer === true ? { tellCustomer: true } : {}) } as Rule;
 
   switch (check.kind) {
     case "minLeadMinutes":

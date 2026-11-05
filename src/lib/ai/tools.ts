@@ -15,12 +15,14 @@ import {
   findOnDays,
   findSlots,
   judgeSlot,
+  MAX_CANDIDATES,
   menuName,
   menuOf,
-  noSlotSentence,
+  noSlotOf,
   plainReason,
   previousVisit,
-  refusalSentence,
+  ownerRefusal,
+  refusalOf,
   sameSlot,
   type SlotContext,
   type SlotSearch,
@@ -148,6 +150,17 @@ export type ToolOutcome = {
   hold?: HoldOffer;
   /** 外した仮押さえの id */
   release?: string;
+  /**
+   * お客様に伝えない理由（間をあける・同じ時間に受ける人数 など。rules/tellable.ts）で断った。
+   * このときは AI に返事の文を作らせず、プログラムが「その時間はお受けできません」＋この道具の候補で返す（agent.ts）
+   */
+  hidden?: boolean;
+  /** hidden のときのお客様への1文（無ければ「その時間はお受けできません」） */
+  hiddenReason?: string;
+  /** 組み合わせそのものを受けられない（日を変えても同じ） */
+  combo?: boolean;
+  /** オーナーに見せる理由（店の中の決まりも書く。LINE のオーナー側だけが使う。AI に返す content には入れない） */
+  ownerReason?: string;
 };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -231,17 +244,37 @@ function json(x: unknown): string {
   return JSON.stringify(x);
 }
 
-/** 組み合わせそのものを受けられないとき（「いっしょに受けない組み合わせ」）の答え */
-function comboRefused(ctx: ToolContext, label: string, menuId: string): ToolOutcome | null {
+/**
+ * 組み合わせそのものを受けられないとき（「いっしょに受けない組み合わせ」）の答え。
+ * 伝えるルール（オーナーが「お客様に伝える」にした）なら、ルールの名前を理由に返す（AI が伝える）。
+ * 伝えないルールなら、AI に中身を渡さず（hidden）、その組み合わせにならない代わり（2つのどちらかを外したメニュー）の枠をプログラムが探す。
+ */
+function comboRefused(ctx: ToolContext, label: string, menuId: string, from: { date: string; time?: string; near?: string }): ToolOutcome | null {
   const why = comboRefusal(ctx, menuId);
   if (!why) return null;
+  const steps: Step[] = [
+    { kind: "tool", text: `${label}：${menuName(ctx, menuId)} → ✗ この組み合わせは受けられません` },
+    { kind: "reject", text: `ルールで外した：${why.rule.label}${why.tell ? "（お客様に伝える）" : ""}` },
+  ];
+  if (why.tell)
+    return { content: json({ ok: false, reason: why.text, combo: true, candidates: [] }), combo: true, ownerReason: why.rule.label, steps, candidates: [] };
+  const alt: Candidate[] = [];
+  for (const id of why.without) {
+    const found = findSlots(ctx, id, from, 1, ctx.released).slots[0];
+    if (found && alt.length < MAX_CANDIDATES) alt.push(found);
+  }
+  steps.push({
+    kind: "tool",
+    text: `その組み合わせにならない代わりを調べる：${why.without.map((id) => menuName(ctx, id)).join("・") || "なし"} → ${alt.map((c) => candidateLabel(ctx, c)).join("・") || "見つかりませんでした"}`,
+  });
   return {
-    content: json({ ok: false, reason: why, candidates: [] }),
-    steps: [
-      { kind: "tool", text: `${label}：${menuName(ctx, menuId)} → ✗ この組み合わせは受けられません` },
-      { kind: "reject", text: `ルールで外した：${why}` },
-    ],
-    candidates: [],
+    content: json({ ok: false, reason: why.text, combo: true, candidates: listed(ctx, alt) }),
+    combo: true,
+    hidden: true,
+    hiddenReason: why.text,
+    ownerReason: `「${why.rule.label}」という決まりがあるので、この組み合わせではお受けできません。`,
+    steps,
+    candidates: alt,
   };
 }
 
@@ -293,7 +326,10 @@ export function runTool(ctx: ToolContext, name: string, raw: unknown): ToolOutco
 
     case "find_openings": {
       const menuId = input.menuId!;
-      const refused = comboRefused(ctx, label, menuId);
+      const refused = comboRefused(ctx, label, menuId, {
+        date: input.date ?? input.dates?.[0] ?? (input.month ? `${input.month}-01` : ctx.now.date),
+        time: input.after ?? (input.date ? undefined : ctx.now.time),
+      });
       if (refused) return refused;
       // 日が複数（dates）・幅のある言い方（month と weekday）は、当てはまる日を全部見て、日ごとに1つずつ
       const days = input.dates ?? (input.month ? daysInMonth(ctx, input.month, input.weekday) : null);
@@ -314,13 +350,15 @@ export function runTool(ctx: ToolContext, name: string, raw: unknown): ToolOutco
         fromLabel = `${calDay(ctx.shop, from.date < ctx.today.date ? ctx.today.date : from.date).label}${from.time ? ` ${from.time}` : ""} から`;
       }
       const found = search.slots.map((c) => candidateLabel(ctx, c)).join("・");
+      const none = search.slots.length ? null : noSlotOf(search);
       return {
         content: json({
           menu: menuName(ctx, menuId),
           minutes: menuOf(ctx, menuId)?.minutes,
           candidates: listed(ctx, search.slots),
-          ...(search.slots.length ? { note: "番号の順にお客様へ出す" } : { reason: noSlotSentence(search), note: "空きが見つかりませんでした" }),
+          ...(none ? { reason: none.text, note: "空きが見つかりませんでした" } : { note: "番号の順にお客様へ出す" }),
         }),
+        ...(none && !none.tell ? { hidden: true } : {}),
         steps: [
           { kind: "tool", text: `${label}：${menuName(ctx, menuId)}を ${fromLabel} → ${found || "見つかりませんでした"}` },
           ...excludedSteps(search),
@@ -331,7 +369,7 @@ export function runTool(ctx: ToolContext, name: string, raw: unknown): ToolOutco
 
     case "check_rules": {
       const c = { menuId: input.menuId!, date: input.date!, start: input.start! };
-      const refused = comboRefused(ctx, label, c.menuId);
+      const refused = comboRefused(ctx, label, c.menuId, { date: c.date, time: c.start, near: c.start });
       if (refused) return refused;
       const v = judgeSlot(ctx, c);
       const what = candidateLabel(ctx, c);
@@ -351,8 +389,11 @@ export function runTool(ctx: ToolContext, name: string, raw: unknown): ToolOutco
             text: `ルールで外した：[${scopeTag(r.rule, (id) => menuName(ctx, id))}] ${r.rule.label}（${plainReason(r.reason)}）`,
           })),
       ];
+      const why = refusalOf(ctx, v);
       return {
-        content: json({ ok: false, reason: refusalSentence(ctx, v), candidates: listed(ctx, alt.slots) }),
+        content: json({ ok: false, reason: why.text, candidates: listed(ctx, alt.slots) }),
+        ...(why.tell ? {} : { hidden: true }),
+        ownerReason: ownerRefusal(ctx, v),
         steps: [
           { kind: "tool", text: `${label}：${what} → ✗ 受けられません` },
           ...fails,
@@ -388,10 +429,13 @@ export function runTool(ctx: ToolContext, name: string, raw: unknown): ToolOutco
       const v = judgeSlot(ctx, c);
       if (!v.ok) {
         const alt = alternativesFor(ctx, c, ctx.released);
+        const why = refusalOf(ctx, v);
         return {
-          content: json({ ok: false, reason: refusalSentence(ctx, v), candidates: listed(ctx, alt.slots) }),
+          content: json({ ok: false, reason: why.text, candidates: listed(ctx, alt.slots) }),
+          ...(why.tell ? {} : { hidden: true }),
+          ownerReason: ownerRefusal(ctx, v),
           steps: [
-            { kind: "reject", text: `${label}：もう一度確かめたら受けられませんでした（${what}。${refusalSentence(ctx, v)}）` },
+            { kind: "reject", text: `${label}：もう一度確かめたら受けられませんでした（${what}。${ownerRefusal(ctx, v)}）` },
           ],
           candidates: alt.slots,
         };

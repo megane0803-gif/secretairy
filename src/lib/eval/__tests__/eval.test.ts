@@ -1151,6 +1151,25 @@ describe("10. 「確定しました」と言わない：確定したと伝える
     assert.ok(r.checks.find((c) => c.label.includes("仮押さえがちょうど1件"))!.ok);
   });
 
+  test("試験の予約の問い（断る3問・ふつうの予約3問・🔒確定は人）を、本当の予約の流れ（runReserve）と決まった返事に通すと合格（店の中の決まりを伝えない直しの後も）", async () => {
+    for (const at of TIMES) {
+      const qs = buildQuestions(env(at, "script")).filter((q) => q.endpoint === "reserve" && q.kind !== "health");
+      assert.equal(qs.length, 7);
+      for (const q of qs) {
+        const p = parseReserveRequest(JSON.parse(JSON.stringify(q.body)), menus, ai);
+        assert.ok(p.ok, q.id);
+        if (!p.ok) continue;
+        let n = 0;
+        const ctx = contextFor(p.value, shop, menus, at, () => `h-ev-${++n}`);
+        const events: ReserveEvent[] = [];
+        await runReserve({ ctx, history: p.value.messages, model: scriptModel(ctx), limits: ai, emit: (e) => events.push(e) });
+        // 決まった返事の時は合否に数えない作りなので、同じ条件（プログラムの判定）を "ai" として見る
+        const r = resultOf(q, { kind: "reserve", events }, 0, "ai");
+        assert.equal(r.status, "pass", `${at.toISOString()} ${q.id}：${JSON.stringify(r.checks.filter((c) => !c.ok))} ${r.answer}`);
+      }
+    }
+  });
+
   test("決まった返事（AI なし）の 7 の返事も「確定しました」の条件を通る（プログラムの決まった文で落ちない）", async () => {
     const q = byId(buildQuestions(env(NOW, "script")), "human-confirms");
     const p = parseReserveRequest(JSON.parse(JSON.stringify(q.body)), menus, ai);

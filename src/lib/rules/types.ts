@@ -44,6 +44,11 @@ export type Rule = RuleScope & {
   check: RuleCheck;
   /** 鍵つき。オーナーも消せない・緩められない */
   locked?: boolean;
+  /**
+   * お客様に伝える（オーナーがルールごとに決める）。true のときだけ、断る理由としてルールの文（label）をそのまま伝える。
+   * 欄が無い・false のときは伝えない（前からブラウザに残っているルールも同じ）。rules/tellable.ts
+   */
+  tellCustomer?: boolean;
 };
 
 /**

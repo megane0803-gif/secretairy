@@ -568,6 +568,9 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .rule-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .rule-tags .tag { white-space: normal; }
 .tag.own { background: transparent; color: var(--accent); border: 1px dashed var(--accent); }
+.tag.tell { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.ruleform .tell-customer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
+.ruleform .tell-customer small { flex-basis: 100%; }
 .rule-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 0.9rem; }
 .rule.editing { border-color: var(--accent); }
 .empty { color: var(--muted); margin: 0 0 16px; }
