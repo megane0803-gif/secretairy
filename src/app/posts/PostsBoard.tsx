@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { writeJournal } from "@/lib/journal";
 import { setPostsDesk, usePostsDesk } from "@/lib/posts/deskStore";
+import { KEPT_AFTER_FAIL } from "@/lib/posts/redo";
 import { COULD_NOT_WRITE } from "@/lib/posts/write";
 import { savedByKind, withSavedPost } from "@/lib/posts/state";
 import { usePosts } from "@/lib/posts/usePosts";
@@ -112,6 +113,11 @@ export function PostsBoard({ settings, timezone }: { settings: PostsSettings; ti
               </span>
             </label>
             {draft.cut && <p className="problems">長くなったので、途中までの下書きです。</p>}
+            {desk.failed && (
+              <p className="problems" role="status">
+                作り直しは{failedKind?.label ?? ""}の下書きを{COULD_NOT_WRITE}（{desk.failed.problems.join("。")}）。{KEPT_AFTER_FAIL}
+              </p>
+            )}
             <p className="karte-why">
               理由：お店のメモと材料にある事だけで、{kind.label}の形に書きました{draft.tries > 1 ? "（1回作り直した下書きです）" : ""}。
             </p>
