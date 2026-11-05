@@ -402,8 +402,8 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .slots { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 
 .slot {
-  border-left: 3px solid var(--accent);
-  padding: 2px 0 2px 8px;
+  border-left: 5px solid var(--menu, var(--menu-none));
+  padding: 2px 4px 2px 8px;
   display: flex;
   flex-direction: column;
   font-size: 0.85rem;
@@ -411,10 +411,8 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.slot.hold { border-left-style: dashed; }
 .slot-time { font-weight: 700; }
 .slot-time small { font-weight: 400; color: var(--muted); font-size: 0.8em; white-space: nowrap; }
-.slot-first { font-size: 0.75rem; color: var(--warn); }
 
 .customer { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .tag.fictional { background: transparent; color: var(--muted); border: 1px dashed var(--muted); }
@@ -677,9 +675,6 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .tag.hold { background: transparent; color: var(--warn); border: 1px dashed var(--warn); }
 .tag.ok { background: transparent; color: var(--ok); border: 1px solid var(--ok); }
 
-.slot.confirmed { border-left-color: var(--accent); }
-.slot.confirmed.fresh { background: var(--accent-soft); border-radius: 0 6px 6px 0; }
-.slot.hold { border-left: 3px dashed var(--warn); background: repeating-linear-gradient(-45deg, transparent 0 6px, color-mix(in srgb, var(--warn) 12%, transparent) 6px 12px); border-radius: 0 6px 6px 0; }
 
 .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 8px; font-size: 0.85rem; }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
@@ -690,19 +685,14 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .reset-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
 
 .book-pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; container-type: inline-size; }
-/* 台帳の横に予約サイト（架空）を並べる。狭いときは下に回す */
-@media (min-width: 1024px) {
-  .book-pair { grid-template-columns: minmax(0, 1fr) minmax(0, 280px); }
-}
-@container (max-width: 640px) {
-  .book-pair > * { grid-column: 1 / -1; }
-}
+/* スマホ：日ごとのカードの下に予約サイト（架空）。PC：カードは出さず、予約サイト（架空）が真ん中の列の幅いっぱい */
 
 .site { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; min-width: 0; align-self: start; }
 .site-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 .site-scroll { overflow-x: auto; max-width: 100%; }
-.site-grid { border-collapse: collapse; font-size: 0.7rem; width: 100%; }
-.site-grid th, .site-grid td { padding: 1px 2px; text-align: center; border-bottom: 1px solid var(--line); line-height: 1.3; }
+.site-grid { border-collapse: collapse; font-size: 0.95rem; width: 100%; }
+.site-grid th, .site-grid td { padding: 2px 6px; text-align: center; border-bottom: 1px solid var(--line); line-height: 1.4; white-space: nowrap; }
+.site-grid thead small { font-size: 0.85em; }
 .site-grid thead th { font-weight: 600; white-space: nowrap; }
 .site-grid tbody th { color: var(--muted); font-weight: 400; }
 .site-grid td.free { color: var(--ok); }
@@ -714,7 +704,9 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .bysite-key { text-decoration: underline dotted; }
 .site-grid td.off { color: var(--line); }
 .site-grid td.bychat { outline: 2px solid var(--accent); outline-offset: -2px; }
-.site-legend { font-size: 0.75rem; color: var(--muted); margin: 6px 0 0; }
+.site-legend { font-size: 0.95rem; color: var(--muted); margin: 6px 0 0; }
+.site .hint { font-size: 0.95rem; }
+.site-demo .btn.small { font-size: 0.95rem; padding: 4px 12px; }
 .bychat-key { outline: 2px solid var(--accent); padding: 0 4px; }
 
 .steps-q { margin: 4px 0; font-weight: 600; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -1027,15 +1019,13 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .ai-job-state { margin: 4px 0 0; font-size: 0.9rem; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .ai-job .hint { margin-top: 2px; }
 
-/* ---- だれがした事か（3つの色）。使うのは予約の台帳・AI の手順・日誌の札だけ（src/lib/actors.ts） ----
+/* ---- だれがした事か（3つの色）。使うのは予約の台帳の札・AI の手順・日誌の札など（src/lib/actors.ts。§3.4。予約の台帳の帯の色はメニュー） ----
    AI がした事 = 青緑・人がした事 = 琥珀・外の相手 = 藍。色だけに頼らず、札には必ず「AI」「人」「外」の文字を添える */
 
 :root {
   --who-ai: #0f766e;
   --who-human: #b45309;
   --who-outside: #4338ca;
-  /* 塗りつぶした帯の上の文字 */
-  --who-ink: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -1043,7 +1033,6 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
     --who-ai: #2dd4bf;
     --who-human: #fbbf24;
     --who-outside: #a5b4fc;
-    --who-ink: #1b1a19;
   }
 }
 
@@ -1064,6 +1053,62 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 /* 日誌の札（日誌の作りは変えない） */
 .journal .tag.actor { font-size: 0.75rem; }
 
+/* ---- 予約の台帳の帯の色（メニューごと。6つ）。どのメニューがどの色かは config/menus.json の color（src/lib/book/menuColor.ts） ----
+   だれの3色（青緑・琥珀・藍）や灰色とまぎれにくく、互いに見分けやすい物（OKLab の差で確かめた）。
+   帯は薄い背景（塗りつぶさない）＋左の太い線で、字はふつうの字の色。だれが入れたかは帯の頭の札だけで見せる。
+   設定に色の無いメニュー（設定に無い組み合わせも）は灰色の線（--menu-none） */
+
+:root {
+  --menu-sky: #2987c8;
+  --menu-purple: #c153e0;
+  --menu-pink: #f64da6;
+  --menu-green: #27a833;
+  --menu-rose: #ac064f;
+  --menu-olive: #9f8d0e;
+  --menu-none: #8c8c8c;
+  /* 帯の薄い背景の濃さ */
+  --menu-soft-pct: 12%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --menu-sky: #0d9aec;
+    --menu-purple: #c75ae7;
+    --menu-pink: #fa8cd7;
+    --menu-green: #8def46;
+    --menu-rose: #f74180;
+    --menu-olive: #7ea10f;
+    --menu-none: #8a847e;
+    --menu-soft-pct: 18%;
+  }
+}
+
+.menu-c-sky { --menu: var(--menu-sky); }
+.menu-c-purple { --menu: var(--menu-purple); }
+.menu-c-pink { --menu: var(--menu-pink); }
+.menu-c-green { --menu: var(--menu-green); }
+.menu-c-rose { --menu: var(--menu-rose); }
+.menu-c-olive { --menu: var(--menu-olive); }
+.menu-c-none { --menu: var(--menu-none); }
+/* 薄い背景と枠は、--menu を決めた所で作る（:root で作ると灰色のまま受け継がれるため） */
+.tt-band, .slot, .legend-menu {
+  --menu-soft: color-mix(in srgb, var(--menu, var(--menu-none)) var(--menu-soft-pct), var(--surface));
+  --menu-edge: color-mix(in srgb, var(--menu, var(--menu-none)) 35%, var(--surface));
+}
+
+/* 凡例：メニューの色の見本（小さな帯の形）とメニュー名 */
+.legend-menus { gap: 6px 14px; }
+.legend-menu { display: inline-flex; align-items: center; gap: 6px; }
+.legend-menu::before {
+  content: "";
+  width: 18px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--menu-soft);
+  border: 1px solid var(--menu-edge);
+  border-left: 5px solid var(--menu, var(--menu-none));
+}
+
 /* ---- 予約タブ：上の帯（承認待ち・見出し・時間割の台帳）---- */
 
 .page-top { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
@@ -1081,33 +1126,38 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 @media (min-width: 1024px) {
   .ledger-timetable { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px; min-width: 0; }
   .ledger.ledger-cards { display: none; }
-  /* 台帳は上に出したので、予約サイト（架空）は真ん中の幅いっぱい */
-  .page.has-top .book-pair { grid-template-columns: minmax(0, 1fr); }
+  .ledger-timetable { margin-bottom: 16px; }
 }
 
-/* 台帳の札の説明・日ごとのカードの色（だれが入れたか） */
+/* 台帳の札の説明（札そのものが見本なので、四角の見本は出さない） */
 .legend-item.actor-ai::before,
 .legend-item.actor-human::before,
 .legend-item.actor-outside::before { display: none; }
-.slot.actor-outside { border-left-color: var(--who-outside); }
 /* 予約サイト（架空）から入った予約の札（外の相手 = 藍。文字つき） */
 .tag.from-site { background: transparent; color: var(--who-outside); border: 1px solid var(--who-outside); }
-.slot.actor-human { border-left-color: var(--who-human); background: color-mix(in srgb, var(--who-human) 12%, transparent); }
-.slot.hold.actor-ai {
-  border-left: 3px dashed var(--who-ai);
-  background: repeating-linear-gradient(-45deg, transparent 0 6px, color-mix(in srgb, var(--who-ai) 14%, transparent) 6px 12px);
-}
-.slot .tag.actor { align-self: flex-start; }
+/* 初めての方の札 */
+.tag.first { background: transparent; color: var(--text); border: 1px solid var(--muted); font-weight: 700; }
 
-/* 時間割：横に7日、縦に営業時間。1時間の高さは --tt-hour */
-.tt-wrap { min-width: 0; }
+/* 日ごとのカード（スマホ）：色はメニュー（薄い背景＋左の太い線）、字はふつうの字の色。仮押さえは点線としま模様 */
+.slot { background: var(--menu-soft); border-radius: 0 6px 6px 0; color: var(--text); }
+.slot.hold {
+  border-left-style: dashed;
+  outline: 1px dashed var(--muted);
+  outline-offset: -1px;
+  background: repeating-linear-gradient(-45deg, var(--menu-soft) 0 6px, var(--surface) 6px 12px);
+}
+.slot .tag.actor, .slot .tag.first { align-self: flex-start; }
+
+/* 時間割：横に7日、縦に営業時間。1時間の高さは --tt-hour。
+   真ん中の列（1280 で約668px）に7日を入れる（箱の中の幅 620px まで）。それより狭い時（1024 など）は、この箱の中だけ横に動かす（ページははみ出さない） */
+.tt-wrap { min-width: 0; max-width: 100%; overflow-x: auto; }
 .tt {
-  --tt-hour: 56px;
+  --tt-hour: 84px;
   display: grid;
-  grid-template-columns: 44px repeat(7, minmax(0, 1fr));
+  grid-template-columns: 38px repeat(7, minmax(0, 1fr));
   grid-template-rows: auto calc(var(--tt-hours) * var(--tt-hour));
-  column-gap: 4px;
-  min-width: 0;
+  column-gap: 3px;
+  min-width: 620px;
 }
 .tt-head {
   display: flex;
@@ -1130,6 +1180,7 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .tt-col {
   position: relative;
   min-width: 0;
+  container-type: inline-size;
   border: 1px solid var(--line);
   border-radius: 0 0 8px 8px;
   /* 1時間ごとの線と、30分ごとの薄い線 */
@@ -1169,29 +1220,41 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
   overflow-wrap: anywhere;
   z-index: 1;
 }
-/* 確定は塗りつぶし（外 = 藍・人 = 琥珀） */
-.tt-band.confirmed { background: var(--who); color: var(--who-ink); border: 1px solid var(--who); }
-.tt-band.confirmed .tag { background: transparent; color: inherit; border: 1px solid currentColor; }
-.tt-band.confirmed .tag.actor { background: var(--who-ink); color: var(--who); border-color: var(--who-ink); }
-/* 仮押さえは点線のしま模様（AI = 青緑） */
-.tt-band.hold {
+/* 色はメニュー：薄い背景（塗りつぶさない）＋左の太い線。字はふつうの字の色。確定は実線の枠 */
+.tt-band {
   color: var(--text);
-  border: 2px dashed var(--who);
-  background:
-    repeating-linear-gradient(-45deg, color-mix(in srgb, var(--who) 26%, transparent) 0 6px, color-mix(in srgb, var(--who) 8%, var(--surface)) 6px 12px);
+  background: var(--menu-soft);
+  border: 1px solid var(--menu-edge);
+  border-left: 5px solid var(--menu, var(--menu-none));
+  padding: 1px 2px 1px 3px;
 }
-.tt-band.hold .tag.hold { color: var(--who); border-color: var(--who); background: var(--surface); }
-.tt-band .tag { font-size: 0.65rem; padding: 0 5px; }
-.tt-band .tag.fictional { color: inherit; border-color: currentColor; }
-.tt-band .customer { gap: 2px; }
+/* 仮押さえは形で分ける：点線の枠としま模様（色はメニューのまま） */
+.tt-band.hold {
+  border: 1px dashed var(--muted);
+  border-left: 5px dashed var(--menu, var(--menu-none));
+  background: repeating-linear-gradient(-45deg, var(--menu-soft) 0 6px, var(--surface) 6px 12px);
+}
+/* 札は帯の色に埋もれないよう、ふつうの面の色の上に（どのメニューの色の帯でも読める） */
+.tt-band .tag, .slot .tag { background: var(--surface); }
+.tt-band .tag.actor, .slot .tag.actor { background: color-mix(in srgb, var(--who) 12%, var(--surface)); }
+.tt-band .tag.hold, .slot .tag.hold { color: var(--text); border-color: var(--text); }
+.tt-band .tag { font-size: 0.68rem; padding: 0 4px; }
+/* 長い札（予約サイトから など）は細い帯の中で折り返す（切らない） */
+.tt-band-menu .tag { white-space: normal; overflow-wrap: anywhere; line-height: 1.15; }
+.tt-band .customer { gap: 1px; }
+/* 細い列（1280 の真ん中の列で1列 約80px）でも「○○ 様」と「架空」が1行に入る大きさ */
+.tt-band .tag.fictional { font-size: 0.6rem; padding: 0 1px; }
 .tt-band-top { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .tt-band-time { font-weight: 700; white-space: nowrap; }
 .tt-band-time small { font-weight: 400; font-size: 0.85em; }
-.tt-band-menu { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; }
-.tt-band-first { font-size: 0.65rem; font-weight: 700; }
+.tt-band-menu { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 1px 4px; }
 /* 30分の短い帯は1行に（時刻はホバーと読み上げで） */
 .tt-band.short { flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 3px; white-space: nowrap; }
-.tt-band.short .tt-band-time, .tt-band.short .tt-band-first, .tt-band.short .tt-band-menu .tag { display: none; }
+.tt-band.short .tt-band-time, .tt-band.short .tt-band-menu .tag { display: none; }
+/* 列が細い時（1280 の真ん中の列など）は、終わりの時刻を隠す（ホバーと読み上げの文には入っている） */
+@container (max-width: 96px) {
+  .tt-band-time small { display: none; }
+}
 .tt-band.short .customer { flex-wrap: nowrap; }
 .tt-band.short .tt-band-top { flex: none; }
 .tt-band.short .tt-band-menu { overflow: hidden; text-overflow: ellipsis; display: block; }
