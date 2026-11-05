@@ -3,8 +3,10 @@
 // 発信のタブの右の列：①種類を選ぶ ②材料を入れて「下書きを作る」。
 // 材料・お店のメモ（全部）・ルールを /api/ai/posts へ送り、言葉の門を通った下書きに、
 // 空き枠の日時（台帳から）・お休みの日付（設定から）・ブログのリンクの印をこの画面で入れて、真ん中に出す。
-// 2回とも門に当たったら下書きは出さず、真ん中と日誌に「作れませんでした」。
+// 2回とも門に当たったら下書きは出さず、真ん中と日誌に「作れませんでした」（手で直した下書きがあれば消さずに残す）。
+// 手で直した下書きがある時に「下書きを作る」を押したら、先に「作り直すと今の下書きが置き換わります」と聞く（戻る／作り直す）。
 
+import { useState } from "react";
 import { Fold } from "@/components/parts";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import type { BookData } from "@/lib/book/data";
@@ -12,9 +14,10 @@ import { useBook } from "@/lib/book/useBook";
 import type { PostMemo } from "@/lib/data/types";
 import { writeJournal } from "@/lib/journal";
 import { askPostDraft } from "@/lib/posts/client";
-import { setPostsDesk, usePostsDesk } from "@/lib/posts/deskStore";
+import { getPostsDesk, setPostsDesk, usePostsDesk } from "@/lib/posts/deskStore";
 import { fillPost, periodOf, postFacts } from "@/lib/posts/facts";
 import { gatePost } from "@/lib/posts/gate";
+import { afterFailedRedo, needsRedoConfirm, REDO_CONFIRM } from "@/lib/posts/redo";
 import type { PostsMode } from "@/lib/posts/wire";
 import { COULD_NOT_WRITE } from "@/lib/posts/write";
 import { useRules } from "@/lib/rules/useRules";
@@ -24,6 +27,8 @@ const INSERT_JOURNAL = { openings: "空き枠の日時（台帳から）", close
 
 export function PostsForm({ data, settings, memos, maxChars }: { data: BookData; settings: PostsSettings; memos: PostMemo[]; maxChars: number }) {
   const desk = usePostsDesk();
+  /** 手で直した下書きがある時に、作り直すか聞いている間の作る物 */
+  const [asking, setAsking] = useState<PostsMode | null>(null);
   const book = useBook(data);
   const { rules } = useRules(data.seedRules);
   const kind = settings.kinds.find((k) => k.id === desk.kind) ?? null;
@@ -51,14 +56,14 @@ export function PostsForm({ data, settings, memos, maxChars }: { data: BookData;
         return;
       }
       writeJournal(...res.steps);
-      setPostsDesk(() => ({ busy: false, noAi: false, draft: null, failed: { kind: kind.id, problems: res.problems, checks: res.checks } }));
+      setPostsDesk((s) => ({ busy: false, noAi: false, ...afterFailedRedo(s.draft, { kind: kind.id, problems: res.problems, checks: res.checks }) }));
       return;
     }
     // 受け取った下書きを、この画面でももう一度門で確かめてから出す
     const again = gatePost(res.text, settings.gateWords);
     if (!again.ok) {
       writeJournal(...res.steps, { who: "プログラム", text: `画面の確認で弾いた：${again.problems.join("。")}（${kind.label}の下書きを${COULD_NOT_WRITE}）` });
-      setPostsDesk(() => ({ busy: false, draft: null, failed: { kind: kind.id, problems: again.problems, checks: again.checks } }));
+      setPostsDesk((s) => ({ busy: false, ...afterFailedRedo(s.draft, { kind: kind.id, problems: again.problems, checks: again.checks }) }));
       return;
     }
     // 材料に時期（「年末」など）があれば、その時期の日から空き枠とお休みを出す
@@ -82,6 +87,15 @@ export function PostsForm({ data, settings, memos, maxChars }: { data: BookData;
         topic: materials[first?.id ?? ""] ?? "",
       },
     }));
+  }
+
+  /** 「下書きを作る」：手で直した下書きがあれば、すぐ作らずに先に聞く */
+  function request(useMode: PostsMode) {
+    if (needsRedoConfirm(getPostsDesk().draft)) {
+      setAsking(useMode);
+      return;
+    }
+    void make(useMode);
   }
 
   return (
@@ -152,9 +166,30 @@ export function PostsForm({ data, settings, memos, maxChars }: { data: BookData;
           決まった返事（AI なし）
         </button>
       </div>
-      <button type="button" className="btn primary big" onClick={() => void make(desk.mode)} disabled={!can}>
+      <button type="button" className="btn primary big" onClick={() => request(desk.mode)} disabled={!can || asking !== null}>
         {desk.busy ? "下書きを作っています…" : "下書きを作る"}
       </button>
+      {asking && (
+        <div className="posts-confirm" role="alertdialog" aria-label={REDO_CONFIRM}>
+          <p>{REDO_CONFIRM}</p>
+          <div className="posts-buttons">
+            <button type="button" className="btn" onClick={() => setAsking(null)}>
+              戻る
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => {
+                const m = asking;
+                setAsking(null);
+                void make(m);
+              }}
+            >
+              作り直す
+            </button>
+          </div>
+        </div>
+      )}
       {desk.problem && (
         <p className="problems" role="status">
           {desk.problem}
@@ -169,9 +204,9 @@ export function PostsForm({ data, settings, memos, maxChars }: { data: BookData;
             className="btn small"
             onClick={() => {
               setPostsDesk(() => ({ noAi: false, mode: "script" }));
-              void make("script");
+              request("script");
             }}
-            disabled={!can}
+            disabled={!can || asking !== null}
           >
             決まった返事で試す（AI なし）
           </button>

@@ -16,6 +16,8 @@ import { postsSystem, postsUserText } from "../prompt";
 import { scriptPostsModel } from "../script";
 import { EMPTY_POSTS, parsePosts, savedByKind, withSavedPost } from "../state";
 import { parsePostsRequest } from "../wire";
+import type { PostDraft } from "../deskStore";
+import { afterFailedRedo, handEdited, needsRedoConfirm, REDO_CONFIRM } from "../redo";
 import { COULD_NOT_WRITE, runWrite } from "../write";
 
 const settings = getPostsSettings();
@@ -191,6 +193,51 @@ describe("保存（オーナーのボタン）", () => {
     const full = withSavedPost(s, { kind: "notice", text: "べつの文", mode: "ai" }, { ...opts("px"), maxPerKind: 2 });
     assert.equal(full.ok, false);
     if (!full.ok) assert.equal(full.code, "full");
+  });
+});
+
+describe("手で直した下書きは作り直しで消さない", () => {
+  const draft = (text: string, made: string): PostDraft => ({
+    kind: "notice",
+    text,
+    made,
+    checks: [],
+    inserted: [],
+    tries: 1,
+    cut: false,
+    mode: "script",
+    topic: "冬のヘアケアのお知らせ",
+  });
+
+  test("直したかどうかは text と made を比べて決める", () => {
+    assert.equal(handEdited(null), false);
+    assert.equal(handEdited(draft("冬のお知らせです", "冬のお知らせです")), false);
+    assert.equal(handEdited(draft("冬のお知らせです。寒いですね", "冬のお知らせです")), true);
+  });
+
+  test("手で直した下書きがある時だけ「戻る／作り直す」を聞く", () => {
+    assert.equal(REDO_CONFIRM, "作り直すと今の下書きが置き換わります");
+    assert.equal(needsRedoConfirm(null), false, "下書きが無ければ聞かずに作る");
+    assert.equal(needsRedoConfirm(draft("同じ", "同じ")), false, "直していなければ聞かずに作る");
+    assert.equal(needsRedoConfirm(draft("直した", "作った")), true);
+  });
+
+  test("作り直しが門で2回とも弾かれても、手で直した下書きは残す（直していなければ今までどおり消す）", async () => {
+    const m = fixedModel(["お得なお知らせです", "今だけのお知らせです"]);
+    const r = await runWrite(input(m));
+    assert.equal(r.ok, false);
+    if (r.ok) return;
+    const failed = { kind: "notice", problems: r.problems, checks: r.checks };
+
+    const edited = draft("冬のお知らせです。手で一言足しました", "冬のお知らせです");
+    const kept = afterFailedRedo(edited, failed);
+    assert.equal(kept.draft, edited, "手で直した下書きは消さない");
+    assert.equal(kept.draft?.text, "冬のお知らせです。手で一言足しました");
+    assert.deepEqual(kept.failed, failed, "作れなかった理由もいっしょに出す");
+
+    const plain = afterFailedRedo(draft("冬のお知らせです", "冬のお知らせです"), failed);
+    assert.equal(plain.draft, null, "直していない下書きは今までどおり消える");
+    assert.equal(afterFailedRedo(null, failed).draft, null);
   });
 });
 
