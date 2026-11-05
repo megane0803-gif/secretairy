@@ -5,7 +5,9 @@
 
 import { useState } from "react";
 import { writeJournal } from "@/lib/journal";
+import { CLOSED_UNREADABLE } from "@/lib/posts/closed";
 import { setPostsDesk, usePostsDesk } from "@/lib/posts/deskStore";
+import { CAUTION_HEAD, CLOSED_FROM_LABEL } from "@/lib/posts/facts";
 import { KEPT_AFTER_FAIL } from "@/lib/posts/redo";
 import { COULD_NOT_WRITE } from "@/lib/posts/write";
 import { savedByKind, withSavedPost } from "@/lib/posts/state";
@@ -15,8 +17,14 @@ import type { PostInsert, PostsSettings } from "@/lib/settings";
 /** 入れた物（ブログのリンクの印は「リンクは印だけ」の ✓ と同じなので出さない） */
 const INSERT_LABEL: Partial<Record<PostInsert, string>> = {
   openings: "空き枠の日時（台帳から）",
-  closed: "お休みの日付（店の設定から）",
+  closed: CLOSED_FROM_LABEL.shop,
 };
+
+/** ✓ に出す言葉（お休みは入れ元で分ける。読み取れなかった時はお休みも空き枠も ✓ にしない） */
+function insertLabel(i: PostInsert, draft: { closedFrom?: "materials" | "shop"; unreadable?: boolean }): string | undefined {
+  if (draft.unreadable && (i === "openings" || i === "closed")) return undefined;
+  return i === "closed" ? CLOSED_FROM_LABEL[draft.closedFrom ?? "shop"] : INSERT_LABEL[i];
+}
 
 function timeLabel(iso: string, timeZone: string): string {
   return new Date(iso).toLocaleString("ja-JP", { timeZone, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -90,13 +98,24 @@ export function PostsBoard({ settings, timezone }: { settings: PostsSettings; ti
                 </li>
               ))}
               {draft.inserted
-                .filter((i) => INSERT_LABEL[i])
+                .filter((i) => insertLabel(i, draft))
                 .map((i) => (
                   <li key={i} className="ok">
-                    ✓ {INSERT_LABEL[i]}
+                    ✓ {insertLabel(i, draft)}
                   </li>
                 ))}
             </ul>
+            {draft.unreadable && (
+              <p className="problems" role="status">
+                {CLOSED_UNREADABLE}材料のお休みの日付は推して入れず、空き枠も入れていません。「12月31日から1月5日まで休みます」のように書くと読めます。
+              </p>
+            )}
+            {(draft.cautions ?? []).map((c, i) => (
+              <p key={i} className="problems" role="status">
+                {CAUTION_HEAD}
+                {c}
+              </p>
+            ))}
             <label className="posts-edit">
               <span className="karte-memo-label">下書き（手で直せます）</span>
               <textarea

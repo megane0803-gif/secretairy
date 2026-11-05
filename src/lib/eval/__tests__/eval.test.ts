@@ -418,6 +418,9 @@ describe("3. 判定（プログラム。AI は使わない）", () => {
     for (const t of ["今だけのご案内です。", "１００％ご満足いただけます。", "12月28日まで空いています。", "金曜にお待ちしています。", "https://example.com を見てください。"])
       assert.ok(!allOk(q, post(t)), t);
     assert.ok(allOk(q, post("【空き枠】【お休み】をご覧ください。")), "印の中は見ない");
+    // 発信だけの数の見方：漢字の決まった言い方は通し、数を数える言い方は落とす
+    assert.ok(allOk(q, post("三が日はお休みします。スタッフ一同、今年一年ありがとうございました。")), "三が日・一同・今年一年");
+    for (const t of ["三回までご案内します。", "二万円のコースです。", "十二月にお待ちしています。", "【1月6日から営業再開】します。"]) assert.ok(!allOk(q, post(t)), t);
     const gate: EvalAnswer = { kind: "posts", res: { ok: false, code: "gate", checks: [], problems: ["使わない言葉：今だけ"], tries: 2, steps: [] } };
     assert.ok(allOk(q, gate));
   });

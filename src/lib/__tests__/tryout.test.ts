@@ -445,7 +445,7 @@ describe("D11. 空き枠は本当に空いている時間だけ。お題に時�
     assert.equal(f.openings.length, postsSettings.maxOpeningDays);
     assert.match(f.openings[0], /^12\/20（日）/);
     for (const o of f.openings) assert.match(o, /^12\/2\d/);
-    assert.deepEqual(f.closed, ["12/22（火）", "12/29（火）"], "その時期の定休日");
+    assert.deepEqual(f.closed, ["12月22日（火）", "12月29日（火）"], "その時期の定休日（お休みの形は月日）");
   });
 });
 
