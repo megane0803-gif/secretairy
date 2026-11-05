@@ -532,12 +532,13 @@ export function getKarteEditSettings(): KarteEditSettings {
 }
 
 /**
- * 試験10問（/eval。docs/SPEC.md §1.13）：1問ごとにあける秒数（config/ai.json の eval.minIntervalSeconds）。
- * /api/ai/ は Vercel の Firewall で1分10回までなので、前の問いの答えが来てからこの秒数あけて次を流す。
+ * 試験10問（/eval。docs/SPEC.md §1.13）の上限（config/ai.json の eval）。
+ * minIntervalSeconds = 前の問いの答えが来てから次を流すまであける秒数（/api/ai/ は Vercel の Firewall で1分10回まで）
+ * maxCallsPerRun = 1回の試験で AI の窓口を呼ぶ回数の上限 / maxPasscodeChars = 合言葉の窓口が受け取る長さの上限
  */
-export type EvalSettings = { minIntervalSeconds: number };
+export type EvalSettings = { minIntervalSeconds: number; maxCallsPerRun: number; maxPasscodeChars: number };
 
 export function getEvalSettings(): EvalSettings {
-  const e = (ai as { eval: { minIntervalSeconds: number } }).eval;
-  return { minIntervalSeconds: e.minIntervalSeconds };
+  const e = (ai as { eval: EvalSettings }).eval;
+  return { minIntervalSeconds: e.minIntervalSeconds, maxCallsPerRun: e.maxCallsPerRun, maxPasscodeChars: e.maxPasscodeChars };
 }

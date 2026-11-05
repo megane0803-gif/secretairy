@@ -64,6 +64,8 @@
     "maxRequestChars": 30000
   },
   "eval": {
-    "minIntervalSeconds": 7
+    "minIntervalSeconds": 7,
+    "maxCallsPerRun": 10,
+    "maxPasscodeChars": 200
   }
 }
