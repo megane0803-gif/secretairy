@@ -2,10 +2,11 @@
 // 数（時刻・空き）はここが出す。AI は作らない・変えない。判定は judge.ts（ルールは strictest.ts を通る）。
 
 import { addDays, calDay, toHHMM, toMinutes, type CalDay } from "../calendar";
-import { partsOf, resolveMenu } from "../combo";
+import { comboIdOf, partsOf, resolveMenu } from "../combo";
 import { scopeTag } from "../rules/describe";
 import { judge, type Verdict } from "../rules/judge";
 import { expandMenuIds } from "../rules/strictest";
+import { baseSay, COMBO_REFUSAL, comboSay, INTERNAL_REFUSAL, plainReason, ruleSay, tellsRule } from "../rules/tellable";
 import type { Rule } from "../rules/types";
 import type { Menu, ShopSettings } from "../settings";
 import type { BookedRow, Candidate, Visit } from "./wire";
@@ -77,51 +78,82 @@ export function judgeSlot(ctx: SlotContext, c: Candidate): Verdict {
   });
 }
 
-/** 外した理由の札。ルールなら「[どこに効くか] ルールの文」、店の設定ならその名前 */
-export type Exclusion = { key: string; kind: "rule" | "base"; label: string; reason: string };
+export { plainReason };
+
+/**
+ * 外した理由の札。ルールなら「[どこに効くか] ルールの文」、店の設定ならその名前（AI の手順・日誌に出す。お客様には出さない）。
+ * tell = お客様に理由を伝えてよいか（rules/tellable.ts）。say = 伝えてよいときの、お客様への決まった1文
+ */
+export type Exclusion = {
+  key: string;
+  kind: "rule" | "base";
+  label: string;
+  reason: string;
+  tell: boolean;
+  say?: string;
+};
+
+/** 受けられない理由を全部（店の設定 → ルールの順） */
+export function problems(ctx: Pick<SlotContext, "menus">, v: Verdict): Exclusion[] {
+  const name = (id: string) => menuName(ctx, id);
+  return [
+    ...v.base
+      .filter((x) => !x.ok)
+      .map((b): Exclusion => {
+        const say = baseSay(b.id, b.reason);
+        return { key: `base:${b.id}`, kind: "base", label: b.label, reason: b.reason, tell: say !== null, ...(say ? { say } : {}) };
+      }),
+    ...v.results
+      .filter((x) => !x.ok)
+      .map((r): Exclusion => {
+        const tell = tellsRule(r.rule);
+        return {
+          key: `rule:${r.rule.id}`,
+          kind: "rule",
+          label: `[${scopeTag(r.rule, name)}] ${r.rule.label}`,
+          reason: r.reason,
+          tell,
+          ...(tell ? { say: ruleSay(r.rule) } : {}),
+        };
+      }),
+  ];
+}
 
 /** 受けられない理由のうち、最初の1つ（店の設定 → ルールの順） */
 export function firstProblem(ctx: Pick<SlotContext, "menus">, v: Verdict): Exclusion | null {
-  const b = v.base.find((x) => !x.ok);
-  if (b) return { key: `base:${b.id}`, kind: "base", label: b.label, reason: b.reason };
-  const r = v.results.find((x) => !x.ok);
-  if (r)
-    return {
-      key: `rule:${r.rule.id}`,
-      kind: "rule",
-      label: `[${scopeTag(r.rule, (id) => menuName(ctx, id))}] ${r.rule.label}`,
-      reason: r.reason,
-    };
-  return null;
+  return problems(ctx, v)[0] ?? null;
 }
 
-/** 理由の最後のかっこ（「（24時間前まで）」など）を外す。1文の中でかっこが重ならないように */
-export function plainReason(reason: string): string {
-  return reason.replace(/（[^（）]*）$/, "");
+/**
+ * お客様への断りの1文。tell = 理由を伝えてよいか。
+ * 伝えてよい理由が1つでもあれば、その最初の1つの決まった文（表の文）。
+ * 伝えてよい理由が無ければ「その時間はお受けできません。」だけ（伝えない理由の中身は入れない）。
+ */
+export type Refusal = { text: string; tell: boolean };
+
+export function refusalOf(ctx: Pick<SlotContext, "menus">, v: Verdict): Refusal {
+  const all = problems(ctx, v);
+  if (all.length === 0) return { text: "お受けできます。", tell: true };
+  const told = all.find((p) => p.tell && p.say);
+  if (told) return { text: told.say!, tell: true };
+  return { text: INTERNAL_REFUSAL, tell: false };
 }
 
-/** 受けられない理由を1文で（お客様にそのまま伝えられる言葉） */
+/**
+ * オーナーに見せる理由（LINE のオーナー側の返事・AI の手順）。店の中の決まりもそのまま書く。
+ * お客様への文ではないので、AI（予約チャット）には渡さない。
+ */
+export function ownerRefusal(ctx: Pick<SlotContext, "menus">, v: Verdict): string {
+  const p = firstProblem(ctx, v);
+  if (!p) return "お受けできます。";
+  if (p.tell && p.say) return p.say;
+  if (p.kind === "rule") return `「${p.label.replace(/^\[[^\]]*\] /, "")}」という決まりがあるので、お受けできません（${plainReason(p.reason)}）。`;
+  return `${p.label}で、お受けできません（${p.reason}）。`;
+}
+
+/** 受けられない理由を1文で（お客様にそのまま伝えられる言葉。伝えない理由なら中身は言わない） */
 export function refusalSentence(ctx: Pick<SlotContext, "menus">, v: Verdict): string {
-  const b = v.base.find((x) => !x.ok);
-  if (b) {
-    switch (b.id) {
-      case "future":
-        return "もう過ぎた時刻なので、お受けできません。";
-      case "open-day":
-        return "その日はお休み（定休日）なので、お受けできません。";
-      case "hours":
-        return `営業時間に収まらないので、お受けできません（${plainReason(b.reason)}）。`;
-      case "menu-last":
-        return `最終受付を過ぎるので、お受けできません（${b.reason}）。`;
-      case "seats":
-        return "その時間はもう埋まっているので、お受けできません。";
-      default:
-        return `お受けできません（${b.reason}）。`;
-    }
-  }
-  const r = v.results.find((x) => !x.ok);
-  if (r) return `「${r.rule.label}」という決まりがあるので、お受けできません（${plainReason(r.reason)}）。`;
-  return "お受けできます。";
+  return refusalOf(ctx, v).text;
 }
 
 /** その日の、始められる時刻の並び（開店から、枠の長さごと） */
@@ -152,7 +184,7 @@ function countOut(excluded: Map<string, { ex: Exclusion; count: number }>, ex: E
   excluded.set(ex.key, cur);
 }
 
-const CLOSED_DAY: Exclusion = { key: "base:open-day", kind: "base", label: "営業日", reason: "お休みの日です" };
+const CLOSED_DAY: Exclusion = { key: "base:open-day", kind: "base", label: "営業日", reason: "お休みの日です", tell: true, say: baseSay("open-day", "")! };
 
 /**
  * 始める時刻を、希望の時刻（near）に近い順に並べる。同じ近さなら、希望の時刻より後の方を先に
@@ -276,33 +308,48 @@ export function daysInMonth(ctx: Pick<SlotContext, "today">, month: string, week
 /**
  * 組み合わせそのものが受けられないとき（「いっしょに受けない組み合わせ」のルール）、理由を1文で。受けられれば null。
  * 日時に関係なく断るので、空きを探す前に見る。
+ * tell = オーナーが「お客様に伝える」にしたルールか。伝えるならルールの名前をそのまま、伝えないなら「この組み合わせではお受けできません」。
+ * without = その組み合わせにならない代わりのメニュー（ルールの2つのどちらかを外した物。日時を変えればよいと読まれないように）
  */
-export function comboRefusal(ctx: SlotContext, menuId: string): string | null {
-  const mine = new Set(expandMenuIds(partsOf(ctx.menus, menuId), ctx.menus));
+export function comboRefusal(ctx: Pick<SlotContext, "menus" | "rules">, menuId: string): { text: string; tell: boolean; rule: Rule; without: string[] } | null {
+  const own = partsOf(ctx.menus, menuId);
+  const mine = new Set(expandMenuIds(own, ctx.menus));
   for (const r of ctx.rules) {
     if (r.level !== "menu" || r.check.kind !== "notTogether") continue;
-    if (mine.has(r.menuId) && mine.has(r.check.with))
-      return `「${r.label}」という決まりがあるので、${menuName(ctx, r.menuId)}と${menuName(ctx, r.check.with)}をいっしょにはお受けできません。`;
+    const pair = [r.menuId, r.check.with];
+    if (!pair.every((id) => mine.has(id))) continue;
+    const tell = tellsRule(r);
+    // ルールの2つのどちらかを外した組み合わせ（中のメニューに広げてから外し、もう一度メニューの id に戻す）
+    const flat = expandMenuIds(own, ctx.menus).filter((id) => ctx.menus.some((m) => m.id === id && !m.includes?.length));
+    const without: string[] = [];
+    for (const drop of pair) {
+      const rest = flat.filter((id) => id !== drop);
+      const id = rest.length ? comboIdOf(ctx.menus, rest) : null;
+      if (id && id !== menuId && !without.includes(id)) without.push(id);
+    }
+    return { text: tell ? comboSay(r) : COMBO_REFUSAL, tell, rule: r, without };
   }
   return null;
 }
 
-/** 空きが1つも無かったときの理由（1文）。いちばん多く外した理由から */
-export function noSlotSentence(search: SlotSearch): string {
+/** 空きが1つも無いときの、お客様への1文（伝えない理由のとき） */
+export const NO_SLOT_INTERNAL = "ご希望の日には、お受けできる時間がありません。";
+
+/**
+ * 空きが1つも無かったときの理由（1文）。いちばん多く外した理由から。tell = 理由を伝えてよいか。
+ * 伝えない理由（埋まっている・間をあける・何時間前まで など）なら、中身は言わない。
+ */
+export function noSlotOf(search: SlotSearch): { text: string; tell: boolean } {
   const top = [...search.excluded].filter((e) => e.ex.key !== "base:open-day").sort((a, b) => b.count - a.count)[0];
-  if (!top) return "その日はお休み（定休日）なので、お受けできません。";
-  switch (top.ex.key) {
-    case "base:menu-last":
-      return `最終受付に間に合う枠が無いので、お受けできません（${top.ex.reason}）。`;
-    case "base:hours":
-      return "営業時間の中に収まる枠が無いので、お受けできません。";
-    case "base:seats":
-      return "その日はもう埋まっているので、お受けできません。";
-    default:
-      return top.ex.kind === "rule"
-        ? `「${top.ex.label.replace(/^\[[^\]]*\] /, "")}」という決まりがあるので、お受けできません。`
-        : `お受けできません（${plainReason(top.ex.reason)}）。`;
-  }
+  if (!top) return { text: "その日はお休み（定休日）なので、お受けできません。", tell: true };
+  if (!top.ex.tell) return { text: NO_SLOT_INTERNAL, tell: false };
+  if (top.ex.key === "base:hours") return { text: "営業時間の中に収まる枠が無いので、お受けできません。", tell: true };
+  if (top.ex.key === "base:menu-last") return { text: `最終受付に間に合う枠が無いので、お受けできません（${top.ex.reason}）。`, tell: true };
+  return { text: top.ex.say ?? NO_SLOT_INTERNAL, tell: !!top.ex.say };
+}
+
+export function noSlotSentence(search: SlotSearch): string {
+  return noSlotOf(search).text;
 }
 
 /** その日・その時刻のそばで、代わりの時間（2つまで）。次の日からは頼まれた時刻に近い順。頼まれた枠そのものは入れない */

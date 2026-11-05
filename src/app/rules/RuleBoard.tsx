@@ -137,6 +137,7 @@ function RuleRow({
         ) : (
           <span className="tag check">✓ プログラムが確かめる：{KIND_INFO[rule.check.kind].name}</span>
         )}
+        {rule.tellCustomer === true && <span className="tag tell">お客様に伝える</span>}
         {rule.origin === "added" && <span className="tag own">足した</span>}
         {rule.origin === "changed" && <span className="tag own">直した</span>}
       </div>

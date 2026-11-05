@@ -228,12 +228,12 @@ describe("6. 1回の来店で複数のメニュー", () => {
   });
 
   test("「いっしょに受けない組み合わせ」のルール：受けられない組み合わせは理由を1文で（候補は出さない）", async () => {
-    const own: Rule = { id: "own-nt", level: "menu", menuId: "straight", label: "縮毛矯正とパーマは同じ日に受けない", check: { kind: "notTogether", with: "perm" } };
+    const own: Rule = { id: "own-nt", level: "menu", menuId: "straight", label: "縮毛矯正とパーマは同じ日に受けない", check: { kind: "notTogether", with: "perm" }, tellCustomer: true };
     const c2 = { ...ctx, rules: [...ctx.rules, own] };
     const r = await chat(c2, [{ role: "user", text: "縮毛矯正とパーマを11/7にお願いします" }]);
     assert.deepEqual(r.candidates, []);
     assert.equal(r.holds.length, 0);
-    assert.equal(r.text, "「縮毛矯正とパーマは同じ日に受けない」という決まりがあるので、縮毛矯正とパーマをいっしょにはお受けできません。", "理由を1文で");
+    assert.equal(r.text, "「縮毛矯正とパーマは同じ日に受けない」のため、この組み合わせではお受けできません。", "お客様に伝えるルールは、ルールの名前を理由に1文で");
     assert.ok(r.steps.some((s) => s.kind === "reject"));
   });
 

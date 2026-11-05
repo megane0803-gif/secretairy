@@ -84,6 +84,8 @@ export function RuleForm({
   // 「いっしょに受けない組み合わせ」の2つ目のメニュー（1つ目はどこに効くかのメニュー）
   const [withId, setWithId] = useState(start.withId);
   const [text, setText] = useState(start.text);
+  // お客様に伝える（最初は外れている）。直すときは今の値をそのまま残す（一覧での切り替えはまだ作らない）
+  const [tellCustomer, setTellCustomer] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
   const isText = kind === "text";
@@ -124,7 +126,7 @@ export function RuleForm({
       return;
     }
     const v = validateOwnerRule(
-      { ...scope, id: initial?.id ?? newId(), label, check },
+      { ...scope, id: initial?.id ?? newId(), label, check, ...((initial ? initial.tellCustomer === true : tellCustomer) ? { tellCustomer: true } : {}) },
       menus.map((m) => m.id),
     );
     if (!v.ok) {
@@ -135,6 +137,7 @@ export function RuleForm({
     onSubmit(v.value);
     if (!initial) {
       setText("");
+      setTellCustomer(false);
     }
   };
 
@@ -306,6 +309,16 @@ export function RuleForm({
             <small>（{formatMinutes(check.value)}＝{check.value}分）</small>
           )}
         </p>
+      )}
+      {!initial && (
+        <label className="tell-customer">
+          <input type="checkbox" checked={tellCustomer} onChange={(e) => setTellCustomer(e.target.checked)} />
+          お客様に伝える
+          <small className="hint">
+            {draft ? "言葉で書いた文から足すときも同じです。" : ""}
+            入れると、このルールで断るときに、ルールの文をそのまま理由としてお客様に伝えます。外したままなら、お客様には「その時間はお受けできません」とだけ伝え、代わりの候補を出します。
+          </small>
+        </label>
       )}
       {problem && (
         <p className="form-problem" role="alert">
