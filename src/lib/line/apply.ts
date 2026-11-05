@@ -7,6 +7,7 @@
 
 import { approveAd, pendingAd, withAdSkipped, type AdProposal, type AdsState } from "../ads/state";
 import { proposalLabel } from "../ads/gate";
+import { teamDecisionLine } from "../ads/team/state";
 import { candidateLabel, judgeSlot, menuName, type SlotContext } from "../ai/slots";
 import { parseHoldOffer } from "../ai/wire";
 import { pendingApprovals, withApproved, withHold, withReleased, withTodo, type BookState, type PendingRow } from "../book/state";
@@ -117,16 +118,25 @@ export function applyPress(ev: Extract<ScreenEvent, { kind: "press" }>, book: Bo
     return {
       book: out.book,
       ads: out.ads,
-      journal: out.journal.map((j) => ({ ...j, text: j.text.replace(/^承認：/, "承認（LINE のボタン）：") })),
+      journal: [
+        ...out.journal.map((j) => ({ ...j, text: j.text.replace(/^承認：/, "承認（LINE のボタン）：") })),
+        ...teamLine(p, "approved"),
+      ],
       reply: `✓ ${ctx.adSettings.channel}で ${proposalLabel(p).replace(/を(止める|外す)$/, "")}を${p.action === "stop" ? "止めました" : "外しました"}`,
     };
   }
   return {
     book,
     ads: withAdSkipped(ads, p.id, ctx.nowIso),
-    journal: [{ who: "オーナー", text: `見送り（LINE のボタン）：広告の案「${proposalLabel(p)}」を閉じた（広告は変えていない）` }],
+    journal: [{ who: "オーナー", text: `見送り（LINE のボタン）：広告の案「${proposalLabel(p)}」を閉じた（広告は変えていない）` }, ...teamLine(p, "skipped")],
     reply: `見送りました：広告の案「${proposalLabel(p)}」を閉じました`,
   };
+}
+
+/** 会議の答えを出していた案なら、日誌に「分身の予想：…／オーナー：…」（LINE のボタンもオーナーのボタン） */
+function teamLine(p: AdProposal, decision: "approved" | "skipped"): Journal {
+  const line = teamDecisionLine(p, decision);
+  return line ? [{ who: "プログラム", text: line }] : [];
 }
 
 export type KarteTarget = { customerId: string; surname: string; date: string; saved: boolean } | null;

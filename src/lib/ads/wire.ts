@@ -54,6 +54,30 @@ function parseRows(x: unknown, kind: AdTableRow["kind"]): AdTableRow[] | null {
   return out;
 }
 
+/** 表（画面から送られた物）を確かめる。おかしければ null */
+export function parseAdTable(t: unknown): AdTable | null {
+  if (!isObj(t)) return null;
+  const keywords = parseRows(t.keywords, "keyword");
+  const searchTerms = parseRows(t.searchTerms, "term");
+  if (!keywords || !searchTerms) return null;
+  const nos = [...keywords, ...searchTerms].map((r) => r.no);
+  if (new Set(nos).size !== nos.length) return null;
+  return { keywords, searchTerms };
+}
+
+/** ルール（画面から送られた物）：鍵つきは送られた物を使わず、サーバーで先頭に足しなおす。オーナーのルールは確かめなおす */
+export function parseRulesWithLocked(x: unknown, menuIds: string[]): Rule[] | null {
+  if (!Array.isArray(x) || x.length > 200) return null;
+  const locked = new Set(LOCKED_RULES.map((r) => r.id));
+  const own: Rule[] = [];
+  for (const r of x) {
+    if (isObj(r) && typeof r.id === "string" && locked.has(r.id)) continue; // 鍵つきは送られた物を使わない
+    const v = validateOwnerRule(r, menuIds);
+    if (v.ok) own.push(v.value);
+  }
+  return [...LOCKED_RULES, ...own];
+}
+
 type Parsed = { ok: true; value: AdsRequest } | { ok: false; reason: string };
 
 /** maxFixChars = 直すときのオーナーの一言の長さの上限（config/ai.json の ads.maxFixChars） */

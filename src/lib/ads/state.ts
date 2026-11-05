@@ -14,6 +14,8 @@ import type { GateCheck, GatedProposal } from "./gate";
 import { actionPast, totalOf, type AdAction, type AdTable } from "./report";
 import { parseJudgements, parseReports, type AdJudgement, type AdWeeklyReport } from "./results";
 import type { AdsMode } from "./wire";
+import { parseTeamRecord } from "./team/state";
+import type { TeamRecord } from "./team/types";
 
 export type AdProposalState = "pending" | "approved" | "skipped";
 
@@ -38,6 +40,8 @@ export type AdProposal = {
   before?: { action: AdAction; no: number; text: string };
   /** だれが作ったか（AI / 決まった返事） */
   mode: AdsMode;
+  /** AI のチームの会議の印と答え（1つの案に1回まで。team/state.ts） */
+  team?: TeamRecord;
 };
 
 /** 「広告（架空）の画面」で止めた・外した言葉 */
@@ -104,6 +108,10 @@ export function parseAds(raw: string | null): AdsState {
         fixed: p.fixed === true,
         ...(b && isAction(b.action) && isInt(b.no) && isStr(b.text) ? { before: { action: b.action, no: b.no, text: b.text } } : {}),
         mode: p.mode === "script" ? "script" : "ai",
+        ...(() => {
+          const team = parseTeamRecord(p.team);
+          return team ? { team } : {};
+        })(),
       } satisfies AdProposal;
     });
   const applied: AdApplied[] = arr(d.applied)

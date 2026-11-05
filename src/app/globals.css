@@ -1288,3 +1288,21 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .words-rows div { display: flex; gap: 8px; }
 .words-rows dt { flex: none; width: 5.5em; color: var(--muted); }
 .words-rows dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+
+/* ---- 広告の案の「AI のチーム」の会議（AdTeam.tsx。docs/SPEC.md §1.7.4）。AI の役 = 青緑・プログラム = 灰色 ---- */
+
+.team-start { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; }
+.team { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--line); min-width: 0; }
+.team-head { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.team-voices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 8px; min-width: 0; }
+.voice { border: 1px solid var(--line); border-left: 4px solid var(--muted); border-radius: var(--radius); padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; font-size: 0.9rem; }
+.voice p { margin: 0; }
+.voice-ai { border-left-color: var(--who-ai); background: color-mix(in srgb, var(--who-ai) 6%, transparent); }
+.voice-program { border-left-style: dashed; }
+.voice-head { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.voice-desc { font-size: 0.8rem; color: var(--muted); }
+.voice-guess { font-size: 1rem; }
+.voice-facts { margin: 0; display: flex; flex-direction: column; gap: 2px; }
+.voice-facts > div { display: flex; flex-direction: column; }
+.voice-facts dt { font-size: 0.78rem; color: var(--muted); min-width: 5.5em; }
+.voice-facts dd { margin: 0; min-width: 0; }

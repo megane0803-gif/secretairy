@@ -35,5 +35,9 @@
     {"no": 14, "weeks": [{"clicks": 129, "cost": 7000, "bookings": 3}, {"clicks": 130, "cost": 7050, "bookings": 2}, {"clicks": 131, "cost": 7100, "bookings": 3}]},
     {"no": 15, "weeks": [{"clicks": 128, "cost": 6950, "bookings": 3}, {"clicks": 129, "cost": 7000, "bookings": 3}, {"clicks": 130, "cost": 7050, "bookings": 3}]},
     {"no": 16, "weeks": [{"clicks": 131, "cost": 7100, "bookings": 3}, {"clicks": 132, "cost": 7150, "bookings": 3}, {"clicks": 130, "cost": 7050, "bookings": 3}]}
+  ],
+  "past": [
+    {"id": "past-1", "text": "美容室 深夜", "action": "stop", "decision": "approved", "day": -18, "bookings": 0},
+    {"id": "past-2", "text": "ヘッドスパ 近く", "action": "exclude", "decision": "skipped", "day": -9, "bookings": 1}
   ]
 }
