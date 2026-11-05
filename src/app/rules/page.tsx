@@ -2,7 +2,7 @@ import { TabPage } from "@/components/TabPage";
 import { addDays, calDay, openedDate } from "@/lib/calendar";
 import { getBookData } from "@/lib/book/data";
 import { getSeedRules } from "@/lib/rules/store";
-import { getMenus, getShop } from "@/lib/settings";
+import { getMenus, getRuleWordsMaxChars, getShop } from "@/lib/settings";
 import { RuleBoard } from "./RuleBoard";
 import { RuleSide } from "./RuleSide";
 
@@ -30,6 +30,9 @@ export default function RulesPage() {
           shop={{ timezone: shop.timezone, slotMinutes: shop.slotMinutes }}
           days={days}
           data={getBookData()}
+          // 言葉で書いて足す欄は、AI の鍵がある時だけ出す（鍵の中身は画面に渡さない）
+          wordsOn={Boolean(process.env.ANTHROPIC_API_KEY)}
+          wordsMaxChars={getRuleWordsMaxChars()}
         />
       }
     >

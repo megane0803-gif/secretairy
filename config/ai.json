@@ -67,5 +67,11 @@
     "minIntervalSeconds": 7,
     "maxCallsPerRun": 10,
     "maxPasscodeChars": 200
+  },
+  "ruleWords": {
+    "model": "claude-haiku-5-5",
+    "maxReplyTokens": 600,
+    "maxTextChars": 100,
+    "maxRequestChars": 5000
   }
 }

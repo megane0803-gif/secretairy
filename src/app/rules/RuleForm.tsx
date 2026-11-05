@@ -9,6 +9,7 @@ import type { Rule, RuleCheck, RuleKind, RuleScope } from "@/lib/rules/types";
 import { PROGRAM_KINDS } from "@/lib/rules/types";
 import { LIMITS, PROGRAM_TABS, validateOwnerRule } from "@/lib/rules/validate";
 import { TAB_IDS, TABS, type TabId } from "@/lib/tabs";
+import type { RuleDraft } from "@/lib/rules/words";
 
 export type MenuOption = { id: string; name: string };
 
@@ -27,38 +28,62 @@ function newId(): string {
   return `own-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
+/** 欄の初めの値：直すときは今のルールから、言葉で書いたときは読み取った中身（draft）から */
+function startFields(initial: Rule | undefined, draft: RuleDraft | undefined, menus: MenuOption[]) {
+  const c = initial?.check;
+  const kind: RuleKind = c?.kind ?? draft?.kind ?? "minLeadMinutes";
+  const scope: RuleScope | undefined = initial ?? draft?.scope;
+  const leadMinutes = c?.kind === "minLeadMinutes" ? c.value : !c && draft?.kind === "minLeadMinutes" ? draft.minutes : undefined;
+  const lead = leadMinutes !== undefined ? splitLead(leadMinutes) : { num: "", unit: "時間" as Unit };
+  const plain =
+    c?.kind === "maxNewCustomersPerDay" || c?.kind === "bufferAfterMinutes"
+      ? c.value
+      : !c && draft?.kind === "bufferAfterMinutes"
+        ? draft.minutes
+        : !c && draft?.kind === "maxNewCustomersPerDay"
+          ? draft.count
+          : undefined;
+  return {
+    kind,
+    level: scope?.level ?? "global",
+    tab: scope?.level === "tab" ? scope.tab : ("reservations" as TabId),
+    menuId: scope?.level === "menu" ? scope.menuId : (menus[0]?.id ?? ""),
+    num: kind === "minLeadMinutes" ? lead.num : plain !== undefined ? String(plain) : "",
+    unit: lead.unit,
+    time: c?.kind === "lastStart" ? c.time : (draft?.time ?? "18:00"),
+    withId: c?.kind === "notTogether" ? c.with : (draft?.with ?? ""),
+    text: c?.kind === "text" ? (initial?.label ?? "") : "",
+  };
+}
+
 export function RuleForm({
   menus,
   initial,
+  draft,
   submitLabel,
   onSubmit,
   onCancel,
 }: {
   menus: MenuOption[];
   initial?: Rule;
+  /** 言葉で書いた文から読み取った中身（欄を埋めるだけ。足すのは人の「足す」ボタン） */
+  draft?: RuleDraft;
   submitLabel: string;
   onSubmit: (r: Rule) => void;
   onCancel?: () => void;
 }) {
   const uid = useId();
-  const c = initial?.check;
-  const [kind, setKind] = useState<RuleKind>(c?.kind ?? "minLeadMinutes");
-  const [level, setLevel] = useState<Rule["level"]>(initial?.level ?? "global");
-  const [tab, setTab] = useState<TabId>(initial?.level === "tab" ? initial.tab : "reservations");
-  const [menuId, setMenuId] = useState(initial?.level === "menu" ? initial.menuId : (menus[0]?.id ?? ""));
-  const lead = c?.kind === "minLeadMinutes" ? splitLead(c.value) : { num: "", unit: "時間" as Unit };
-  const [num, setNum] = useState(
-    c?.kind === "minLeadMinutes"
-      ? lead.num
-      : c?.kind === "maxNewCustomersPerDay" || c?.kind === "bufferAfterMinutes"
-        ? String(c.value)
-        : "",
-  );
-  const [unit, setUnit] = useState<Unit>(lead.unit);
-  const [time, setTime] = useState(c?.kind === "lastStart" ? c.time : "18:00");
+  const [start] = useState(() => startFields(initial, draft, menus));
+  const [kind, setKind] = useState<RuleKind>(start.kind);
+  const [level, setLevel] = useState<Rule["level"]>(start.level);
+  const [tab, setTab] = useState<TabId>(start.tab);
+  const [menuId, setMenuId] = useState(start.menuId);
+  const [num, setNum] = useState(start.num);
+  const [unit, setUnit] = useState<Unit>(start.unit);
+  const [time, setTime] = useState(start.time);
   // 「いっしょに受けない組み合わせ」の2つ目のメニュー（1つ目はどこに効くかのメニュー）
-  const [withId, setWithId] = useState(c?.kind === "notTogether" ? c.with : "");
-  const [text, setText] = useState(c?.kind === "text" ? (initial?.label ?? "") : "");
+  const [withId, setWithId] = useState(start.withId);
+  const [text, setText] = useState(start.text);
   const [problem, setProblem] = useState<string | null>(null);
 
   const isText = kind === "text";
@@ -277,7 +302,7 @@ export function RuleForm({
       {label && (
         <p className="preview">
           こう入ります：<strong>{label}</strong> <span className="tag">{scopeTag(scope, menuName)}</span>
-          {kind === "minLeadMinutes" && check && "value" in check && check.value >= 60 && (
+          {(kind === "minLeadMinutes" || kind === "bufferAfterMinutes") && check && "value" in check && check.value >= 60 && (
             <small>（{formatMinutes(check.value)}＝{check.value}分）</small>
           )}
         </p>
