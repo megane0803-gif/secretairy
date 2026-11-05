@@ -1,10 +1,12 @@
 "use client";
 
-// 真ん中：3段のルール一覧。どのルールにも「どこに効くか」の札を出す。
-// 🔒 の2つはいちばん上。消す・直すボタンは出さない。
+// 真ん中：数字3つと 🔒 の2つ（RuleLocked。いちばん上。消す・直すボタンは出さない）と、3段のルール一覧（RuleList）。
+// どのルールにも「どこに効くか」の札を出す。2つに分けてあるのは、スマホで間に右の列（ルールを足す欄）を出すため
+// （TabPage の rightAfterOnPhone={1}。部品は1つずつのまま）。
 
 import { useState } from "react";
 import { BigNumber, Fold } from "@/components/parts";
+import { DEMO_TAG_NOTE } from "@/lib/notices";
 import { KIND_INFO, scopeTag } from "@/lib/rules/describe";
 import type { ListedRule } from "@/lib/rules/overlay";
 import type { Rule } from "@/lib/rules/types";
@@ -17,8 +19,9 @@ const GROUPS: { level: Rule["level"]; title: string }[] = [
   { level: "menu", title: "メニューごと" },
 ];
 
-export function RuleBoard({ seed, menus }: { seed: Rule[]; menus: MenuOption[] }) {
-  const { rules, update, remove, restore, resetAll, changedCount } = useRules(seed);
+/** 数字3つと 🔒 いつも守ること（鍵つき） */
+export function RuleLocked({ seed, menus }: { seed: Rule[]; menus: MenuOption[] }) {
+  const { rules } = useRules(seed);
   const menuName = (id: string) => menus.find((m) => m.id === id)?.name ?? id;
   const locked = rules.filter((r) => r.locked);
   const own = rules.filter((r) => !r.locked);
@@ -48,7 +51,18 @@ export function RuleBoard({ seed, menus }: { seed: Rule[]; menus: MenuOption[] }
           ))}
         </ul>
       </section>
+    </>
+  );
+}
 
+/** 今あるルールの一覧（全体・タブごと・メニューごとの3段）と、ぶつかった時・このブラウザの変更 */
+export function RuleList({ seed, menus }: { seed: Rule[]; menus: MenuOption[] }) {
+  const { rules, update, remove, restore, resetAll, changedCount } = useRules(seed);
+  const menuName = (id: string) => menus.find((m) => m.id === id)?.name ?? id;
+  const own = rules.filter((r) => !r.locked);
+
+  return (
+    <>
       {GROUPS.map((g) => {
         const list = own.filter((r) => r.level === g.level);
         return (
@@ -82,9 +96,15 @@ export function RuleBoard({ seed, menus }: { seed: Rule[]; menus: MenuOption[] }
       </Fold>
       <Fold summary={`このブラウザに残している変更（${changedCount}件）`}>
         <p>足した・直した・消したルールは、このブラウザの中だけに残ります。ほかの人・ほかの端末には届きません。</p>
-        <button type="button" className="btn" disabled={changedCount === 0} onClick={resetAll}>
-          最初の状態（例のルール）に戻す
-        </button>
+        <p className="rule-reset">
+          {/* 「最初の状態に戻す」は試すための物なので「デモ」の札を付ける */}
+          <span className="tag text" title={DEMO_TAG_NOTE}>
+            デモ<span className="sr-only">（{DEMO_TAG_NOTE}）</span>
+          </span>
+          <button type="button" className="btn" disabled={changedCount === 0} onClick={resetAll}>
+            最初の状態（例のルール）に戻す
+          </button>
+        </p>
       </Fold>
     </>
   );

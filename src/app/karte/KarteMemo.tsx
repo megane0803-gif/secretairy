@@ -15,6 +15,7 @@ import type { KarteMode, KarteRequest, KarteResponse } from "@/lib/karte/wire";
 import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
 import { useKarteToday } from "./useKarteToday";
+import { DEMO_TAG_NOTE } from "@/lib/notices";
 
 export function KarteMemo({
   data,
@@ -174,6 +175,10 @@ export function KarteMemo({
       )}
 
       <div className="form-buttons">
+        {/* 「例文を入れる」（架空の話し言葉の例）は試すための物なので「デモ」の札を付ける */}
+        <span className="tag text" title={DEMO_TAG_NOTE}>
+          デモ<span className="sr-only">（{DEMO_TAG_NOTE}）</span>
+        </span>
         <button
           type="button"
           className="btn"

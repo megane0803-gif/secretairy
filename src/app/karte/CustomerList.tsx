@@ -1,6 +1,7 @@
 "use client";
 
 // カルテのタブの「お客様一覧」：全員（みな架空）を出し、名字で探す（部分一致）・50音の行で絞る（プログラム。AI は使わない）。
+// 各行の名前の横に、前回の来店日とメニュー（いちばん新しいカルテから。無ければ「前回の記録なし」）。
 // 1人を開くと、そのお客様の過去のカルテ（最初の状態の物と人が保存した物）を新しい順に並べ、「次回話すこと」も出す。
 // 人が保存したカルテは見出しごとに直せる（KarteRecordBody）。
 
@@ -10,7 +11,7 @@ import type { BookData } from "@/lib/book/data";
 import { useBook } from "@/lib/book/useBook";
 import { calDay } from "@/lib/calendar";
 import { resolveMenu } from "@/lib/combo";
-import { filterCustomers, KANA_ROWS, kanaRowOf, type KanaRowId } from "@/lib/karte/customers";
+import { filterCustomers, KANA_ROWS, kanaRowOf, lastVisitLabel, lastVisitOf, type KanaRowId } from "@/lib/karte/customers";
 import { kartesOf, nextLines } from "@/lib/karte/record";
 import type { KarteEditSettings, KarteHeading } from "@/lib/settings";
 import { useTodos } from "@/lib/todo/useTodos";
@@ -65,6 +66,7 @@ export function CustomerList({ data, headings, editLimits }: { data: BookData; h
         <ul className="karte-customers-list" role="list">
           {list.map((c) => {
             const n = kartesOf(book.kartes, c.id).length;
+            const last = lastVisitOf(book.kartes, c.id);
             const on = open === c.id;
             return (
               <li key={c.id}>
@@ -79,6 +81,7 @@ export function CustomerList({ data, headings, editLimits }: { data: BookData; h
                 >
                   <CustomerName surname={c.surname} fictional={c.fictional} />
                   {c.kana && <small className="hint">{c.kana}</small>}
+                  <span className={last ? "karte-last" : "karte-last none"}>{lastVisitLabel(last, (d) => calDay(data.shop, d).label, menuName)}</span>
                   <span className="hint">
                     カルテ <strong className="num">{n}</strong> 枚
                   </span>
