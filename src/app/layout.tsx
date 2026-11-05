@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { AdsFeeds } from "@/components/AdsFeeds";
+import { HideOnEval } from "@/components/HideOnEval";
 import { LineBridge } from "@/components/LineBridge";
 import { TabNav } from "@/components/TabNav";
 import { TodoFeeds } from "@/components/TodoFeeds";
@@ -32,15 +33,21 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <div className="shell">
-          <TabNav baseSwitches={getTabSwitches()} shopName={getShop().name} />
+          {/* 試験10問（/eval）では左のタブを出さない（開いただけで台帳に書かないように） */}
+          <HideOnEval>
+            <TabNav baseSwitches={getTabSwitches()} shopName={getShop().name} />
+          </HideOnEval>
           {children}
         </div>
-        {/* LINE のつなぎ（オーナー側）。つないでいる間だけ、どのタブでも受け取りに行く。何も描かない */}
-        <LineBridge data={getBookData()} />
-        {/* 予約サイト（架空）で枠が埋まった仮押さえを、ToDo「別の日時を案内」に足す（プログラム）。何も描かない */}
-        <TodoFeeds data={getBookData()} />
-        {/* 広告：判定日が来た言葉を判定する（プログラム）。結果は広告タブ・日誌・ToDo へ。何も描かない */}
-        <AdsFeeds />
+        {/* 下の3つは何も描かない見張り。試験10問（/eval）では動かさない（ふだんの台帳・LINE・日誌に何も残さない） */}
+        <HideOnEval>
+          {/* LINE のつなぎ（オーナー側）。つないでいる間だけ、どのタブでも受け取りに行く。何も描かない */}
+          <LineBridge data={getBookData()} />
+          {/* 予約サイト（架空）で枠が埋まった仮押さえを、ToDo「別の日時を案内」に足す（プログラム）。何も描かない */}
+          <TodoFeeds data={getBookData()} />
+          {/* 広告：判定日が来た言葉を判定する（プログラム）。結果は広告タブ・日誌・ToDo へ。何も描かない */}
+          <AdsFeeds />
+        </HideOnEval>
       </body>
     </html>
   );

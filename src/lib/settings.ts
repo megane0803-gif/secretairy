@@ -532,6 +532,19 @@ export function getKarteEditSettings(): KarteEditSettings {
 }
 
 /**
+ * 試験10問（/eval。docs/SPEC.md §1.13）の上限（config/ai.json の eval）。
+ * minIntervalSeconds = 前の問いの答えが来てから次を流すまであける秒数（/api/ai/ は Vercel の Firewall で1分10回まで）
+ * maxCallsPerRun = 1回の試験で AI の窓口を呼ぶ回数の上限（サーバーでも数える） / maxPasscodeChars = 合言葉の窓口が受け取る長さの上限
+ * lockSeconds = サーバーの「流している印」の期限（窓口を呼ぶたびに付けなおす。止めた時は消し、途中で落ちた時はこの秒数で消える）
+ */
+export type EvalSettings = { minIntervalSeconds: number; maxCallsPerRun: number; maxPasscodeChars: number; lockSeconds: number };
+
+export function getEvalSettings(): EvalSettings {
+  const e = (ai as { eval: EvalSettings }).eval;
+  return { minIntervalSeconds: e.minIntervalSeconds, maxCallsPerRun: e.maxCallsPerRun, maxPasscodeChars: e.maxPasscodeChars, lockSeconds: e.lockSeconds };
+}
+
+/**
  * ルールを言葉で書いて足すときの設定（config/ai.json の ruleWords。モデル名は ANTHROPIC_RULES_MODEL でも差しかえられる）。
  * AI（Haiku）は足す欄を文から埋めるだけ。保存は人の「足す」ボタン（docs/SPEC.md §4.3.2）
  */

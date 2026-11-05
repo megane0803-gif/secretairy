@@ -63,6 +63,12 @@
     "maxItemChars": 200,
     "maxRequestChars": 30000
   },
+  "eval": {
+    "minIntervalSeconds": 7,
+    "maxCallsPerRun": 10,
+    "maxPasscodeChars": 200,
+    "lockSeconds": 180
+  },
   "ruleWords": {
     "model": "claude-haiku-5-5",
     "maxReplyTokens": 600,

@@ -2,6 +2,7 @@
 // 材料・お店のメモ・ルールは画面から毎回受け取り、答えを返すだけ。受け取った物はどこにも残さない（docs/SPEC.md §5.1）。
 // ここでは送信・公開をしない。保存も画面でオーナーがボタンを押したときだけ。
 
+import { evalGate } from "@/lib/eval/guard";
 import { NoAiError } from "@/lib/ai/model";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import { claudePostsModel } from "@/lib/posts/claude";
@@ -9,7 +10,7 @@ import type { PostsModel } from "@/lib/posts/model";
 import { scriptPostsModel } from "@/lib/posts/script";
 import { parsePostsRequest, type PostsResponse } from "@/lib/posts/wire";
 import { runWrite } from "@/lib/posts/write";
-import { getMenus, getPostsAiSettings, getPostsSettings, getShop } from "@/lib/settings";
+import { getMenus, getPostsAiSettings, getPostsSettings, getShop, getEvalSettings } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,9 @@ function reply(r: PostsResponse, status = 200): Response {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // 試験10問（/eval）の札が付いた頼みだけ、サーバーでも「同時に1回だけ」「1回の試験で呼べる回数」を見張る（src/lib/eval/guard.ts）
+  const refused = await evalGate(request, getEvalSettings());
+  if (refused) return refused;
   const menus = getMenus();
   const settings = getPostsSettings();
   const ai = getPostsAiSettings();
