@@ -43,9 +43,9 @@ export function useRules(seed: Rule[]) {
     overlay,
     changedCount: overlay.removed.length + Object.keys(overlay.changed).length + overlay.added.length,
     add: useCallback(
-      (r: Rule) => {
+      (r: Rule, via?: string) => {
         save((o) => withAdded(o, r));
-        writeJournal({ who: "オーナー", text: `ルールを足した：${r.label}` });
+        writeJournal({ who: "オーナー", text: `ルールを足した${via ? `（${via}）` : ""}：${r.label}` });
       },
       [save],
     ),

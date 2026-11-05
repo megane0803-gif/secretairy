@@ -62,5 +62,11 @@
     "maxItems": 30,
     "maxItemChars": 200,
     "maxRequestChars": 30000
+  },
+  "ruleWords": {
+    "model": "claude-haiku-5-5",
+    "maxReplyTokens": 600,
+    "maxTextChars": 100,
+    "maxRequestChars": 5000
   }
 }

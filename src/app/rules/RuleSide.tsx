@@ -16,6 +16,8 @@ import type { BookData } from "@/lib/book/data";
 import { useBook } from "@/lib/book/useBook";
 import { useCapacity } from "@/lib/useCapacity";
 import { RuleForm } from "./RuleForm";
+import { RuleWords } from "./RuleWords";
+import type { RuleDraft } from "@/lib/rules/words";
 
 type Props = {
   seed: Rule[];
@@ -24,11 +26,19 @@ type Props = {
   days: CalDay[];
   /** 台帳（このブラウザの仮押さえ・確定も重ねる） */
   data: BookData;
+  /** 言葉で書いて足す欄を出すか（AI の鍵がある時だけ。無ければ手で足す欄だけ） */
+  wordsOn: boolean;
+  /** 言葉で書く文の長さの上限（字。config/ai.json の ruleWords.maxTextChars） */
+  wordsMaxChars: number;
 };
 
 export function RuleSide(props: Props) {
   const { add } = useRules(props.seed);
   const [added, setAdded] = useState<string | null>(null);
+  // 言葉で書いた文から読み取った中身。入れなおすたびに足す欄を作りなおす（key）
+  const [draft, setDraft] = useState<{ key: number; value: RuleDraft | null } | null>(null);
+  // AI につながらなかったら、言葉の欄だけ出さない（手で足す欄はそのまま）
+  const [noAi, setNoAi] = useState(false);
   return (
     <>
       <Panel title="同じ時間に受ける人数">
@@ -36,12 +46,26 @@ export function RuleSide(props: Props) {
       </Panel>
       <Panel title="ルールを足す">
         <p>種類を選んで、どこに効くかと数を入れます。足したルールは、すぐ次の判定から効きます。</p>
+        {props.wordsOn && !noAi && (
+          <RuleWords
+            maxChars={props.wordsMaxChars}
+            onFill={(value) => {
+              setAdded(null);
+              setDraft((d) => (value || d?.value ? { key: (d?.key ?? 0) + 1, value } : d));
+            }}
+            onNoAi={() => setNoAi(true)}
+          />
+        )}
+        {props.wordsOn && noAi && <p className="hint">今は AI につながらないので、言葉で書く欄は出していません。下の欄で足してください。</p>}
         <RuleForm
+          key={draft?.key ?? 0}
           menus={props.menus}
+          draft={draft?.value ?? undefined}
           submitLabel="足す"
           onSubmit={(r) => {
-            add(r);
+            add(r, draft?.value ? "言葉で書いた文から" : undefined);
             setAdded(r.label);
+            setDraft((d) => (d?.value ? { key: d.key + 1, value: null } : d));
           }}
         />
         {added && (
@@ -91,7 +115,7 @@ function CapacityField() {
   );
 }
 
-function TryPanel({ seed, menus, shop, days, data }: Props) {
+function TryPanel({ seed, menus, shop, days, data }: Omit<Props, "wordsOn" | "wordsMaxChars">) {
   const { rules } = useRules(seed);
   const book = useBook(data);
   const booked: Booked[] = useMemo(
