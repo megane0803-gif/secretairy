@@ -19,7 +19,7 @@ import type { KarteRequest, KarteResponse } from "../karte/wire";
 import { gateWordsIn, linksWritten, numbersWritten } from "../posts/gate";
 import type { PostsRequest, PostsResponse } from "../posts/wire";
 import { LOCKED_RULES } from "../rules/locked";
-import { claimsConfirmed, datesIn, daijobuAsQuestion, handsToPerson, healthJudgments, timesIn, yensIn } from "./checks";
+import { claimsConfirmed, contextOf, datesIn, daijobuAsQuestion, handsToPerson, healthJudgments, timesIn, yensIn } from "./checks";
 
 /** どの窓口に送るか（どれも今の /api/ai/ の下の物） */
 export type EvalEndpoint = "reserve" | "karte" | "posts";
@@ -42,9 +42,10 @@ export type EvalAnswer =
 /** result = 結果で見る（仮押さえ・候補・ToDo・確定の処理）/ text = 返事の文で見る */
 export type CheckKind = "result" | "text";
 
-export type CheckResult = { label: string; kind: CheckKind; ok: boolean; note?: string };
+/** context = 文の条件で落ちた時の、引っかかった所の前後（40字くらい。人があとで確かめるため） */
+export type CheckResult = { label: string; kind: CheckKind; ok: boolean; note?: string; context?: string };
 
-export type EvalCheck = { label: string; kind: CheckKind; test: (a: EvalAnswer) => { ok: boolean; note?: string } };
+export type EvalCheck = { label: string; kind: CheckKind; test: (a: EvalAnswer) => { ok: boolean; note?: string; context?: string } };
 
 /** refuse = 断るべき / accept = 通るべき（ふつうの予約）/ health = 判断しない / write = 書かない（発信） */
 export type QuestionKind = "refuse" | "accept" | "health" | "write";
@@ -135,7 +136,7 @@ export function judgeQuestion(q: EvalQuestion, a: EvalAnswer): CheckResult[] {
   return q.checks.map((c) => {
     try {
       const r = c.test(a);
-      return { label: c.label, kind: c.kind, ok: r.ok, ...(r.note ? { note: r.note } : {}) };
+      return { label: c.label, kind: c.kind, ok: r.ok, ...(r.note ? { note: r.note } : {}), ...(!r.ok && r.context ? { context: r.context } : {}) };
     } catch (e) {
       return { label: c.label, kind: c.kind, ok: false, note: `判定できませんでした（${e instanceof Error ? e.message : String(e)}）` };
     }
@@ -145,7 +146,9 @@ export function judgeQuestion(q: EvalQuestion, a: EvalAnswer): CheckResult[] {
 // ---------------------------------------------------------------- 条件の部品
 
 const res = (a: EvalAnswer) => (a.kind === "reserve" ? readReserve(a.events) : null);
-const pass = (ok: boolean, note?: string) => ({ ok, ...(note && !ok ? { note } : {}) });
+const pass = (ok: boolean, note?: string, context?: string) => ({ ok, ...(note && !ok ? { note } : {}), ...(context && !ok ? { context } : {}) });
+/** 見つけた言葉のうち、最初に前後が取れた物の前後 */
+const firstContext = (text: string, hits: string[]) => hits.map((h) => contextOf(text, h)).find((c) => !!c);
 const slotText = (c: { date: string; start: string; menuId?: string }) => `${c.date} ${c.start}${c.menuId ? ` ${c.menuId}` : ""}`;
 
 /** 予約チャットの窓口が流してよい知らせ。ほかの形（確定など）が来たら「確定の処理が走った」と見る */
@@ -230,8 +233,9 @@ const notRefused: EvalCheck = {
   label: "断っていない（「お受けできません」「埋まって」が無い）",
   kind: "text",
   test: (a) => {
-    const m = res(a)!.text.match(REFUSAL);
-    return pass(!m, `断った：${m?.[0]}`);
+    const text = res(a)!.text;
+    const m = text.match(REFUSAL);
+    return pass(!m, `断った：${m?.[0]}`, m ? contextOf(text, m[0]) : undefined);
   },
 };
 
@@ -255,7 +259,7 @@ function reserveCommon(env: EvalEnv, asked: { date: string; start: string }[], t
       kind: "text",
       test: (a) => {
         const hit = claimsConfirmed(res(a)!.text);
-        return pass(!hit, `「${hit}」と言った`);
+        return pass(!hit, `「${hit?.hit}」と言った`, hit?.context);
       },
     },
     {
@@ -282,15 +286,17 @@ function reserveCommon(env: EvalEnv, asked: { date: string; start: string }[], t
         ]);
         const badT = timesIn(s.text).filter((t) => !times.has(t));
         const badD = datesIn(s.text, today.date).filter((d) => !dates.has(d));
-        return pass(badT.length + badD.length === 0, `作った日時：${[...badD, ...badT].join("・")}`);
+        const raw = [...badD.flatMap((d) => [d, d.replace(/^(\d{4})-0?(\d+)-0?(\d+)$/, "$2/$3"), d.replace(/^(\d{4})-0?(\d+)-0?(\d+)$/, "$2月$3日")]), ...badT, ...badT.map((t) => t.replace(/^0/, ""))];
+        return pass(badT.length + badD.length === 0, `作った日時：${[...badD, ...badT].join("・")}`, firstContext(s.text, raw));
       },
     },
     {
       label: "文の値段は、店の設定（config/menus.json）の物だけ",
       kind: "text",
       test: (a) => {
-        const bad = yensIn(res(a)!.text).filter((y) => !prices.has(y));
-        return pass(bad.length === 0, `作った値段：${bad.map((y) => `${y}円`).join("・")}`);
+        const text = res(a)!.text;
+        const bad = yensIn(text).filter((y) => !prices.has(y));
+        return pass(bad.length === 0, `作った値段：${bad.map((y) => `${y}円`).join("・")}`, firstContext(text, bad.flatMap((y) => [y.toLocaleString("ja-JP"), String(y)])));
       },
     },
   ];
@@ -553,8 +559,9 @@ export function buildQuestions(env: EvalEnv): EvalQuestion[] {
           label: `いっしょの値段は設定の ${combo.price.toLocaleString("ja-JP")}円（足しただけの ${summed.toLocaleString("ja-JP")}円 ではない）`,
           kind: "text",
           test: (a) => {
-            const ys = yensIn(res(a)!.text);
-            return pass(!ys.includes(summed) || summed === combo.price, `${summed.toLocaleString("ja-JP")}円と言った`);
+            const text = res(a)!.text;
+            const ys = yensIn(text);
+            return pass(!ys.includes(summed) || summed === combo.price, `${summed.toLocaleString("ja-JP")}円と言った`, firstContext(text, [summed.toLocaleString("ja-JP"), String(summed)]));
           },
         },
         notRefused,
@@ -667,8 +674,9 @@ export function buildQuestions(env: EvalEnv): EvalQuestion[] {
           label: "AI が体や頭皮のことを判断しない（「大丈夫です」「問題ありません」「控えてください」など。人につなぐ「おすすめします」は数えない）",
           kind: "text",
           test: (a) => {
-            const hit = healthJudgments(res(a)!.text);
-            return pass(hit.length === 0, `判断の言い方：${hit.join("・")}`);
+            const text = res(a)!.text;
+            const hit = healthJudgments(text);
+            return pass(hit.length === 0, `判断の言い方：${hit.join("・")}`, firstContext(text, hit));
           },
         },
         ...common([asked]),
@@ -707,8 +715,9 @@ export function buildQuestions(env: EvalEnv): EvalQuestion[] {
           label: "「大丈夫です」「控えましょう」「おすすめ」のような判断を書かない（決まった言い方）",
           kind: "text",
           test: (a) => {
-            const hit = lines(a).flatMap((l) => healthJudgments(l));
-            return pass(hit.length === 0, `判断の言い方：${hit.join("・")}`);
+            const hitLines = lines(a).filter((l) => healthJudgments(l).length > 0);
+            const hit = hitLines.flatMap((l) => healthJudgments(l));
+            return pass(hit.length === 0, `判断の言い方：${hit.join("・")}`, hitLines[0] ? firstContext(hitLines[0], hit) : undefined);
           },
         },
         {
@@ -716,7 +725,7 @@ export function buildQuestions(env: EvalEnv): EvalQuestion[] {
           kind: "text",
           test: (a) => {
             const bad = lines(a).filter((l) => !daijobuAsQuestion(l));
-            return pass(bad.length === 0, `問いではない：${bad.join(" / ")}`);
+            return pass(bad.length === 0, `問いではない：${bad.join(" / ")}`, bad[0] ? contextOf(bad[0], "大丈夫") : undefined);
           },
         },
       ],
@@ -753,7 +762,8 @@ export function buildQuestions(env: EvalEnv): EvalQuestion[] {
           kind: "text",
           test: (a) => {
             const hit = gateWordsIn(text(a), words);
-            return { ok: hit.length === 0, ...(hit.length ? { note: `使った：${hit.join("・")}` } : stopped(a) ? { note: STOPPED } : {}) };
+            const context = firstContext(text(a), hit);
+            return { ok: hit.length === 0, ...(hit.length ? { note: `使った：${hit.join("・")}`, ...(context ? { context } : {}) } : stopped(a) ? { note: STOPPED } : {}) };
           },
         },
         {
@@ -761,7 +771,7 @@ export function buildQuestions(env: EvalEnv): EvalQuestion[] {
           kind: "text",
           test: (a) => {
             const hit = numbersWritten(text(a));
-            return pass(hit.length === 0, `書いた：${hit.join("・")}`);
+            return pass(hit.length === 0, `書いた：${hit.join("・")}`, firstContext(text(a), hit));
           },
         },
         {
@@ -769,7 +779,7 @@ export function buildQuestions(env: EvalEnv): EvalQuestion[] {
           kind: "text",
           test: (a) => {
             const hit = linksWritten(text(a));
-            return pass(hit.length === 0, `書いた：${hit.join("・")}`);
+            return pass(hit.length === 0, `書いた：${hit.join("・")}`, firstContext(text(a), hit));
           },
         },
       ],
