@@ -1,7 +1,8 @@
 // 予約タブの見た目のテスト（数え方・承認の箱・判定は変えない。出し方だけ）。
-// - 1週間の予約台帳の時間割（PC）：横に今日から7日・縦に営業時間・帯の長さは時間の長さ・確定は塗りつぶし・仮押さえは点線のしま模様
+// - 1週間の予約台帳の時間割（PC）：横に今日から7日・縦に営業時間・帯の長さは時間の長さ・確定は実線・仮押さえは点線のしま模様
 //   今日の列は目立たせ、定休日の列は灰色。帯の中にお客様（架空）とメニュー
-// - PC は予約タブの一番上に横いっぱい。スマホは日ごとのカードのまま（予約チャットが上の並びも今のまま）
+// - 帯の色はメニュー（src/lib/book/menuColor.ts）。だれが入れたか（人・外・AI）は帯の頭の札だけ
+// - PC は真ん中の列の一番上（右の列の予約チャットと横に並ぶ）。スマホは日ごとのカードのまま（予約チャットが上の並びも今のまま）
 // - 予約サイト（架空）の ○△× の表は残す
 
 import assert from "node:assert/strict";
@@ -15,6 +16,7 @@ import { addDays, calDay, toMinutes } from "../../calendar";
 import { getCustomers } from "../../data/seed";
 import { loadBook, resolveChatReservations, weekLedger, type ChatReservation } from "../../reservations";
 import { getMenus, getShop } from "../../settings";
+import { MENU_COLORS, menuColorClass, menuColorOf, menuLegend } from "../menuColor";
 import { bandTitle, timetable } from "../timetable";
 
 const ROOT = join(__dirname, "../../../..");
@@ -196,7 +198,7 @@ describe("2. 時間割の出し方（TimetableGrid）", () => {
     assert.equal(count(html, /class="minibar"/g), open);
   });
 
-  test("帯：確定は塗りつぶし（confirmed）、仮押さえは点線のしま模様（hold）。どの帯にもお客様の「架空」の札とメニュー", () => {
+  test("帯：確定は実線（confirmed）、仮押さえは点線のしま模様（hold）。どの帯にもお客様の「架空」の札とメニュー", () => {
     const bands = tt.columns.flatMap((c) => c.bands);
     assert.equal(count(html, /<li class="tt-band /g), bands.length);
     assert.equal(count(html, /<li class="tt-band confirmed /g), bands.filter((b) => b.status === "confirmed").length);
@@ -216,8 +218,20 @@ describe("2. 時間割の出し方（TimetableGrid）", () => {
     assert.match(html, /class="tag actor actor-outside"[^>]*><b class="actor-mark">外<\/b>/);
   });
 
+  test("帯の色はメニュー（menu-c-<色>）。だれの色（actor-）は帯に付けず、頭の札だけ", () => {
+    const bands = tt.columns.flatMap((c) => c.bands);
+    for (const b of bands) assert.equal(b.menuColor, menuColorOf(menus.find((m) => m.name === b.menuName)), b.menuName);
+    assert.equal(count(html, /<li class="tt-band (confirmed|hold) menu-c-[a-z]+[ "]/g), bands.length);
+    assert.doesNotMatch(html, /<li class="[^"]*actor-/);
+    // 同じメニューは同じ色・仮押さえも予約サイトからもメニューの色
+    assert.match(html, /<li class="tt-band hold menu-c-sky"[^>]*title="15:00–16:00 カット /);
+    assert.match(html, /<li class="tt-band confirmed menu-c-sky"[^>]*title="11:00–12:00 カット [^"]*予約サイトから/);
+    // 初めての方も札（薄い背景の上で読める）
+    assert.doesNotMatch(html, /tt-band-first/);
+  });
+
   test("30分の帯は1行（short）。いまの線は1本", () => {
-    assert.match(html, /<li class="tt-band confirmed actor-human fresh short"/);
+    assert.match(html, /<li class="tt-band confirmed menu-c-olive fresh short"/);
     assert.equal(count(html, /class="tt-now"/g), 1);
   });
 
@@ -228,19 +242,24 @@ describe("2. 時間割の出し方（TimetableGrid）", () => {
   });
 });
 
-describe("3. 予約タブの並び（PC は上に横いっぱい・スマホはカードのまま）", () => {
+describe("3. 予約タブの並び（PC は真ん中の列の一番上・右の列の予約チャットと横に並ぶ・スマホはカードのまま）", () => {
   const page = read("src/app/reservations/page.tsx");
   const frame = read("src/components/TabFrame.tsx");
   const css = read("src/app/globals.css");
 
-  test("予約タブは時間割を TabPage の top に渡し、スマホ用の日ごとのカードと予約サイト（架空）も残す", () => {
-    assert.match(page, /top=\{<WeekTimetable data=\{data\} \/>\}/);
+  test("予約タブは top を使わず、時間割を真ん中の列の一番上（承認待ちの予約より前）に置く。スマホ用の日ごとのカードと予約サイト（架空）も残す", () => {
+    assert.doesNotMatch(page, /\btop=/);
+    const tt = page.indexOf("<WeekTimetable data={data} />");
+    assert.ok(tt > page.indexOf("right={"), "右の列（予約チャット）は right のまま");
+    assert.ok(tt > 0 && tt < page.indexOf('aria-labelledby="res-approvals"'), "台帳 → 承認待ちの予約");
+    assert.ok(page.indexOf('aria-labelledby="res-approvals"') < page.indexOf('aria-labelledby="res-steps"'), "承認待ちの予約 → AI の手順");
+    assert.ok(page.indexOf('aria-labelledby="res-steps"') < page.indexOf("<BookingSite data={data} />"), "AI の手順 → 予約サイト（架空）");
     assert.match(page, /<Ledger data=\{data\} className="ledger-cards" \/>/);
     assert.match(page, /<BookingSite data=\{data\} \/>/);
     assert.match(page, /rightFirstOnPhone/);
   });
 
-  test("top は渡したタブだけ：承認待ち・見出しのあとに横いっぱい（ほかのタブは今までどおり main の中）", () => {
+  test("TabFrame の top の口は残す（渡したタブだけ横いっぱい。渡さないタブは今までどおり main の中に承認待ち・見出しを1つずつ）", () => {
     assert.match(frame, /\{top && \(\s*<header className="page-top">\s*\{pending\}\s*\{head\}\s*\{top\}/);
     assert.match(frame, /\{!top && pending\}\s*\{!top && head\}/);
     assert.match(css, /\.page\.has-top > \.page-top \{ grid-column: 1 \/ -1;/);
@@ -251,11 +270,87 @@ describe("3. 予約タブの並び（PC は上に横いっぱい・スマホは�
     const pc = css.slice(css.indexOf("/* 時間割（PC）と日ごとのカード（スマホ）の出し分け */"));
     assert.match(pc, /@media \(min-width: 1024px\) \{\s*\.ledger-timetable \{ display: block;/);
     assert.match(pc, /\.ledger\.ledger-cards \{ display: none; \}/);
-    assert.match(css, /\.page\.right-first-sp > \.page-top \{ order: -2; \}/);
     assert.match(css, /\.page\.right-first-sp > \.page-right \{ order: -1; \}/);
+    // PC は日ごとのカードを出さないので、予約サイト（架空）の横に空いた列を作らない（has-top の時だけの決まりも外した）
+    assert.doesNotMatch(css, /\.book-pair \{ grid-template-columns: minmax\(0, 1fr\) minmax\(0, 280px\); \}/);
+    assert.doesNotMatch(css, /\.page\.has-top \.book-pair/);
   });
 
-  test("時間割の列は minmax(0, 1fr) で、横にはみ出さない", () => {
-    assert.match(css, /grid-template-columns: 44px repeat\(7, minmax\(0, 1fr\)\);/);
+  test("時間割の列は minmax(0, 1fr)。真ん中の列が狭い時は台帳の箱の中だけ横に動かす（ページははみ出さない）", () => {
+    assert.match(css, /grid-template-columns: 38px repeat\(7, minmax\(0, 1fr\)\);/);
+    assert.match(css, /\.tt-wrap \{ min-width: 0; max-width: 100%; overflow-x: auto; \}/);
+    // 1280×800（左の列は開いたまま）の真ん中の列の中（約634px）に収まる幅
+    const min = Number(css.match(/\.tt \{[^}]*min-width: (\d+)px;/)?.[1]);
+    assert.ok(min > 0 && min <= 634, `${min}`);
+  });
+});
+
+describe("4. 帯の色はメニューごと（src/lib/book/menuColor.ts・globals.css）", () => {
+  const css = read("src/app/globals.css");
+  const block = css.slice(css.indexOf("/* ---- 予約の台帳の帯の色（メニューごと。6つ）"));
+
+  test("設定（config/menus.json）の6つのメニューは、みな違う色を持つ", () => {
+    const colors = menus.map((m) => menuColorOf(m));
+    assert.equal(menus.length, 6);
+    assert.ok(colors.every((c) => c !== "none"), colors.join(","));
+    assert.equal(new Set(colors).size, menus.length, "同じ色のメニューがある");
+  });
+
+  test("設定に色の無いメニュー・知らない名前・設定に無い組み合わせは灰色（none）で落ちない", () => {
+    assert.equal(menuColorOf({}), "none");
+    assert.equal(menuColorOf({ color: "gold" }), "none");
+    assert.equal(menuColorOf({ color: "--menu-sky" }), "none");
+    assert.equal(menuColorOf(undefined), "none");
+    assert.equal(menuColorOf(null), "none");
+    assert.equal(menuColorClass({ color: "sky" }), "menu-c-sky");
+    assert.equal(menuColorClass({}), "menu-c-none");
+    // cut+headspa は設定に無い組み合わせ（時間と値段を足して作る）。色は無いので灰色
+    const combo = loadBook(shop, menus, today, today, chat([{ start: "10:00", menuId: "cut+headspa", status: "hold" }]));
+    const band = timetable(combo.week).columns[0].bands.find((b) => b.id === "chat-0")!;
+    assert.equal(band.menuName, "カット＋ヘッドスパ");
+    assert.equal(band.menuColor, "none");
+    assert.match(render(timetable(combo.week)), /<li class="tt-band hold menu-c-none"/);
+  });
+
+  test("凡例：設定の順に、メニュー名と色", () => {
+    assert.deepEqual(
+      menuLegend(menus).map((m) => m.name),
+      menus.map((m) => m.name),
+    );
+    assert.deepEqual(menuLegend([{ id: "x", name: "トリートメント" }]), [{ id: "x", name: "トリートメント", color: "none" }]);
+  });
+
+  test("色の値は globals.css の変数で、明るい画面と暗い画面の両方に。灰色（none）も", () => {
+    const light = block.match(/:root \{([^}]*)\}/)?.[1] ?? "";
+    const dark = block.match(/@media \(prefers-color-scheme: dark\) \{\s*:root \{([^}]*)\}/)?.[1] ?? "";
+    for (const c of [...MENU_COLORS, "none"]) {
+      assert.match(light, new RegExp(`--menu-${c}: #[0-9a-f]{6};`), `明るい ${c}`);
+      assert.match(dark, new RegExp(`--menu-${c}: #[0-9a-f]{6};`), `暗い ${c}`);
+      assert.match(block, new RegExp(`\\.menu-c-${c} \\{ --menu: var\\(--menu-${c}\\); \\}`), `.menu-c-${c}`);
+    }
+  });
+
+  test("メニューの色はだれの3色（--who-）と別の値。帯は薄い背景＋左の太い線で、だれの色を使わない", () => {
+    const who = [...css.matchAll(/--who-(?:ai|human|outside): (#[0-9a-f]{6});/g)].map((m) => m[1]);
+    const menu = [...block.matchAll(/--menu-[a-z]+: (#[0-9a-f]{6});/g)].map((m) => m[1]);
+    assert.ok(who.length >= 6 && menu.length >= 14);
+    for (const m of menu) assert.ok(!who.includes(m), m);
+    const bandRules = [...css.matchAll(/(^|\n)(\.tt-band[^{]*|\.slot[^{]*)\{([^}]*)\}/g)]
+      .filter((m) => !/\.tag/.test(m[2]))
+      .map((m) => m[3])
+      .join("\n");
+    assert.doesNotMatch(bandRules, /--who/);
+    assert.match(css, /\.tt-band \{\s*color: var\(--text\);\s*background: var\(--menu-soft\);[^}]*border-left: 5px solid var\(--menu, var\(--menu-none\)\);/);
+    // 札は帯の色に埋もれないよう、ふつうの面の色の上に
+    assert.match(css, /\.tt-band \.tag, \.slot \.tag \{ background: var\(--surface\); \}/);
+  });
+
+  test("日ごとのカード（スマホ）も色はメニュー、だれは札だけ。凡例は題名の下にメニューの色と札の意味", () => {
+    const ledger = read("src/app/reservations/Ledger.tsx");
+    assert.match(ledger, /\$\{menuColorClass\(r\.menu\)\}/);
+    assert.doesNotMatch(ledger, /actor-\$\{/);
+    assert.match(ledger, /<ActorTag actor=\{reservationActor\(r\)\} \/>/);
+    assert.match(ledger, /className=\{`legend-menu menu-c-\$\{m\.color\}`\}/);
+    for (const a of ["human", "outside", "ai"]) assert.match(ledger, new RegExp(`<ActorTag actor="${a}" />`));
   });
 });
