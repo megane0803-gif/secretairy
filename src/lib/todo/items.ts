@@ -14,6 +14,7 @@ import { withTodo, withTodoDone } from "../book/state";
 import { addDays, businessDayAt, calDay, openedDate, type CalDay } from "../calendar";
 import type { Todo } from "../data/types";
 import type { ShopSettings } from "../settings";
+import { readMemoKind, type MemoKind } from "./kinds";
 import { CONTACT_SOURCES, memoKey, seedTodoKey, todoKey, todoSource, type TodoSource } from "./keys";
 
 export type TodoItem = {
@@ -25,6 +26,8 @@ export type TodoItem = {
   due?: string;
   /** 投げたメモの元の文 */
   memo?: string;
+  /** 投げたメモで選んだ種類（箱は kinds.ts の todoKind が出どころから決める） */
+  category?: MemoKind;
   createdAt: string;
   done: boolean;
   doneAt?: string;
@@ -64,6 +67,7 @@ export function resolveSeedTodos(shop: ShopSettings, anchor: CalDay, seed: Todo[
       source,
       ...(due ? { due } : {}),
       ...(t.memo ? { memo: t.memo } : {}),
+      ...(readMemoKind(t.category) ? { category: readMemoKind(t.category) } : {}),
       createdAt,
       done: t.done,
       ...(t.done ? { doneAt: createdAt } : {}),
@@ -83,6 +87,7 @@ export function addedItem(t: AddedTodo, shop: Pick<ShopSettings, "timezone">): T
     source,
     ...(due ? { due } : {}),
     ...(t.memo ? { memo: t.memo } : {}),
+    ...(readMemoKind(t.category) ? { category: readMemoKind(t.category) } : {}),
     createdAt: t.createdAt,
     done: t.done,
     ...(t.doneAt ? { doneAt: t.doneAt } : {}),
@@ -194,11 +199,14 @@ export function nextMemoNo(items: Pick<TodoItem, "key">[]): number {
   return max + 1;
 }
 
-/** 投げたメモを ToDo に足す。文は Claude（か決まった返事）が直した物、元のメモはプログラムがそのまましまう。期限はプログラムが読んだ物（due） */
+/**
+ * 投げたメモを ToDo に足す。文は Claude（か決まった返事）が直した物、元のメモはプログラムがそのまましまう。期限はプログラムが読んだ物（due）。
+ * 種類（category）は送る時にオーナーが選んだ物だけ（AI は決めない）。選ばなかった・読めない時は持たない（箱は その他）
+ */
 export function withMemoTodo(
   s: BookState,
   seedItems: TodoItem[],
-  input: { title: string; memo: string; due?: string | null },
+  input: { title: string; memo: string; due?: string | null; category?: string | null },
   nowIso: string,
   shop: Pick<ShopSettings, "timezone">,
 ): { state: BookState; todo: AddedTodo | null } {
@@ -208,6 +216,7 @@ export function withMemoTodo(
   const no = nextMemoNo(todoItems(seedItems, s, shop));
   // 期限はメモの「金曜までに」などからプログラムが読んだ物だけ（todo/due.ts。読めなければ期限なし）
   const due = input.due && /^\d{4}-\d{2}-\d{2}$/.test(input.due) ? input.due : undefined;
+  const category = readMemoKind(input.category);
   const todo: AddedTodo = {
     id: `td-memo-${no}`,
     title,
@@ -217,6 +226,7 @@ export function withMemoTodo(
     key: memoKey(no),
     memo: input.memo.trim(),
     ...(due ? { due } : {}),
+    ...(category ? { category } : {}),
   };
   const next = withTodo(s, todo);
   return next === s ? { state: s, todo: null } : { state: next, todo };

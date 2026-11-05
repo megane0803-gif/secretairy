@@ -187,6 +187,8 @@ export type Todo = {
   key?: string;
   /** 投げたメモの元の文（source が memo の物） */
   memo?: string;
+  /** 投げたメモで選んだ種類（source が memo の物だけ。customer / supply / shop / office。無ければ その他） */
+  category?: "customer" | "supply" | "shop" | "office";
 };
 
 // ---- ここから下は形だけ（中身は後日） ----
@@ -220,6 +222,7 @@ export const TODO_FIELDS: FieldNote[] = [
   { key: "source", label: "どこから入ったか（メモ・カルテ・広告・予約・LINE・チャット）" },
   { key: "key", label: "同じ物を2回足さない鍵（メモ:番号・カルテ:番号・語句:番号・予約:お客様＠日時 など。最初の例は「例:」で始める）" },
   { key: "memo", label: "投げたメモの元の文（プログラムがそのまましまう）" },
+  { key: "category", label: "投げたメモで選んだ種類（お客様・仕入れと材料・お店のこと・お金と事務。無ければ その他。ほかの入口は出どころで箱が決まる）" },
 ];
 
 /**
