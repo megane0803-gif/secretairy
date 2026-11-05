@@ -1,4 +1,4 @@
-// 1週間の予約台帳の「時間割」の形（PC の予約タブの上に横いっぱいで出す）。
+// 1週間の予約台帳の「時間割」の形（PC の予約タブの真ん中の列の一番上に出す。右の列の予約チャットと横に並ぶ）。
 // 横に今日から7日、縦に営業時間。予約は時間の長さの分だけ縦に伸びる帯にする。
 // ここは並べ方の計算だけ（どこに・どの高さで出すか）。数（件数・埋まり）は台帳（reservations.ts の weekLedger）の物をそのまま使う。
 // 同じ時間に受ける人数が2人以上で時間が重なるときは、重なった帯を横に分けて並べる。
@@ -6,20 +6,23 @@
 import { ACTOR_LABEL, ACTOR_MEANING, reservationActor, type Actor } from "../actors";
 import { toHHMM, toMinutes } from "../calendar";
 import type { LedgerDay, Reservation } from "../reservations";
+import { menuColorOf, type MenuColor } from "./menuColor";
 
 /** 縦の位置と高さ（時間割の上から何 %） */
 export type Span = { top: number; height: number };
 
 export type TimetableBand = Span & {
   id: string;
-  /** confirmed = 確定（塗りつぶし）/ hold = 仮押さえ（点線のしま模様） */
+  /** confirmed = 確定（実線の枠）/ hold = 仮押さえ（点線のしま模様） */
   status: Reservation["status"];
   /** 承認で確定した予約（予約チャットから入った確定） */
   fresh: boolean;
   /** 予約サイト（架空）から入った予約（お客様が自分で決めた確定。承認の箱は通らない） */
   site?: boolean;
-  /** だれが入れた物か（仮押さえ = AI・承認で確定と店が受けた確定 = 人・予約サイトから = 外。src/lib/actors.ts） */
+  /** だれが入れた物か（仮押さえ = AI・承認で確定と店が受けた確定 = 人・予約サイトから = 外。src/lib/actors.ts）。帯の頭の札だけに使う */
   actor: Actor;
+  /** 帯の色（メニューごと。src/lib/book/menuColor.ts。設定に色の無いメニューは none = 灰色） */
+  menuColor: MenuColor;
   start: string;
   end: string;
   minutes: number;
@@ -131,6 +134,7 @@ export function timetable(week: LedgerDay[], now?: { date: string; time: string 
         fresh: r.status === "confirmed" && r.source === "chat",
         ...(r.source === "site" ? { site: true } : {}),
         actor: reservationActor(r),
+        menuColor: menuColorOf(r.menu),
         start: r.start,
         end: r.end,
         minutes: r.menu.minutes,

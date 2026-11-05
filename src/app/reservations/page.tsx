@@ -19,8 +19,6 @@ export default function ReservationsPage() {
     <TabPage
       tab="reservations"
       rightFirstOnPhone
-      // PC：一番上に横いっぱいで時間割の台帳。スマホは下の日ごとのカード（予約チャットが上の並びは今のまま）
-      top={<WeekTimetable data={data} />}
       right={
         <Panel title="予約チャット">
           <p className="hint">お客様のスマホのつもりの画面です。AI が空きとルールを確かめて候補を出し、お客様が選ぶと「仮押さえ」まで進めます。</p>
@@ -28,6 +26,9 @@ export default function ReservationsPage() {
         </Panel>
       }
     >
+      {/* PC：真ん中の列の一番上に時間割の台帳（右の列の予約チャットと横に並ぶ）。スマホは隠し、下の日ごとのカードを出す（予約チャットが上の並びは今のまま） */}
+      <WeekTimetable data={data} />
+
       <section className="inline-box" aria-labelledby="res-approvals">
         <h2 id="res-approvals">承認待ちの予約（ホームの承認の箱と同じ行）</h2>
         <ApprovalBox data={data} compact only="reservations" />
