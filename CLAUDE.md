@@ -76,7 +76,7 @@ src/lib/line/      LINE のつなぎ（オーナー側）：署名・Redis・つ
 src/app/api/line/  LINE の窓口（Webhook・つなぐ・受け取り・送る）。画面の処理と混ぜない
 src/lib/jobs/      ホームの「AI の仕事」：これから来る物4行の流れ（run.ts。今の /api/ai/ の窓口をそのまま使う）・済みの印（ブラウザの中に残す形）
 src/lib/brief/     朝の要点の「AI の一言」：材料と印（items.ts。名前は送らない・印を日時とお名前に置きかえる）・門・指示文・流れ・決まった返事（scriptBriefWriter）
-src/lib/eval/      試験10問（/eval。左のタブには出さない）：問い（config と seed から作る。ふつうの予約3問）・判定（checks.ts。文と結果。AI は使わない）・流し方（同時に1回・1問ごとに eval.minIntervalSeconds 秒・eval.maxCallsPerRun 回まで・流せなかった物は数えない）・合言葉（EVAL_PASSCODE。窓口は src/app/api/eval/。AI は呼ばない）・サーバーの見張り（guard.ts。KV の印は SET NX＋期限・回数は INCR。/api/ai/ の窓口が試験の札の見出しを見て数える）・仮押さえの問いは「選んだ枠にちょうど1件・確定0件」の時だけ合格。今の /api/ai/ の窓口を使い、結果は画面の表だけ
+src/lib/eval/      試験10問（/eval。左のタブには出さない）：問い（config と seed から作る。ふつうの予約3問）・判定（checks.ts。文と結果。AI は使わない）・流し方（同時に1回・1問ごとに eval.minIntervalSeconds 秒・eval.maxCallsPerRun 回まで・流せなかった物は数えない）・合言葉（EVAL_PASSCODE。窓口は src/app/api/eval/。AI は呼ばない）・サーバーの見張り（guard.ts。KV の印は SET NX＋期限・回数は INCR。/api/ai/ の窓口が試験の札の見出しを見て数える）・仮押さえの問いは「選んだ枠にちょうど1件・確定0件」の時だけ合格・「確定しました」と言わない、は確定したと伝える文だけ落とす（かぎかっこの中・「〜とお伝えできません」の打ち消しは数えない）・README に写す形は文の条件で落ちた所の前後も出す。今の /api/ai/ の窓口を使い、結果は画面の表だけ
 .claude/agents/   サブエージェント「意地悪なお客さん役」（mean-customer.md）：試験の問いの案を出す。材料は seed と config だけ
 src/lib/reminder.ts 「翌日へ」の前日のお知らせ（決まった形・AI なし・送らない）
 src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理・LINE の預かりをまとめて戻す）

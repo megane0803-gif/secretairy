@@ -181,6 +181,16 @@ async function runAll(questions: EvalQuestion[], opt: EvalRunOptions): Promise<E
   return out;
 }
 
+/**
+ * README に写す形の、落ちた条件の1つ。文の条件なら、引っかかった所の前後（40字くらい）も添える
+ * （あとで人が見て、本当に決まりを破ったのか、見張りが拾いすぎたのかを確かめられるように）。表の「｜」は全角にする。
+ */
+export function failedLine(c: CheckResult): string {
+  const note = c.note ? `（${c.note}）` : "";
+  const context = c.kind === "text" && c.context ? `［前後：「${c.context}」］` : "";
+  return `${c.label}${note}${context}`.replace(/\|/g, "｜");
+}
+
 /** 数（流せなかった物は合格にも不合格にも数えない） */
 export function tally(results: EvalResult[]): { pass: number; fail: number; unrun: number; total: number } {
   const pass = results.filter((r) => r.status === "pass").length;
