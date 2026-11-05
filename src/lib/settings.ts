@@ -646,3 +646,36 @@ export function getAdsTeamLimits(): Omit<AdsTeamAiSettings, "model"> {
   void _model;
   return rest;
 }
+
+/**
+ * 発信の下書きの「AI のチーム」の会議（config/ai.json の postsTeam。docs/SPEC.md §1.10.1）。
+ * Claude を呼ぶのは1回の会議で maxCalls（3。分身・野党・補佐）まで。作り直しはしない。モデルは広告のチームと同じ値。
+ */
+export type PostsTeamAiSettings = {
+  model: string;
+  /** 1回の返事の長さの上限（トークン。役ごと） */
+  maxReplyTokens: number;
+  /** 1回の会議で Claude を呼ぶ回数の上限 */
+  maxCalls: number;
+  /** 分身の直しの数の上限 */
+  maxTwinEdits: number;
+  /** 補佐が選ぶ直しの数の上限 */
+  maxPicks: number;
+  /** 直した文・理由の1文の長さの上限（字） */
+  maxLineChars: number;
+  /** チームに送る下書きの長さの上限（字）。超えたら切り捨てずに「長すぎるのでチームにかけられません」 */
+  maxDraftChars: number;
+  /** 窓口（/api/ai/posts/team）が受け取る大きさの上限（字） */
+  maxRequestChars: number;
+};
+
+export function getPostsTeamAiSettings(): PostsTeamAiSettings {
+  return (ai as { postsTeam: PostsTeamAiSettings }).postsTeam;
+}
+
+/** 画面でも使う会議の上限（鍵や環境変数は読まない） */
+export function getPostsTeamLimits(): Omit<PostsTeamAiSettings, "model"> {
+  const { model: _model, ...rest } = (ai as { postsTeam: PostsTeamAiSettings }).postsTeam;
+  void _model;
+  return rest;
+}

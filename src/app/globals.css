@@ -1357,3 +1357,11 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .tag.wrap { white-space: normal; display: inline-block; }
 .freee-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .freee-connect { margin: 8px 0; }
+
+/* 発信の下書きの「AI のチーム」（docs/SPEC.md §1.10.1）。カードの形と色は広告のチームと同じ .voice */
+.team-edit { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.team-picks { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.team-pick { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px dotted var(--line); min-width: 0; }
+.team-pick:first-child { border-top: 0; padding-top: 0; }
+.voice-checks { margin: 0; }
+.voice-checks li.info { color: var(--muted); }

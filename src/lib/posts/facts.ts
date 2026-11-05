@@ -183,22 +183,35 @@ export type FilledPost = {
   text: string;
   /** プログラムが入れた物（印を置きかえた・足した） */
   inserted: PostInsert[];
+  /**
+   * プログラムが入れた文字（お休み・空き枠の所に入れた言葉・足した行・ブログのリンクの印。重ねない・入れた順）。
+   * 発信のチーム（posts/team/）が「入れた時のまま残っているか」を確かめる。
+   */
+  pieces: string[];
 };
 
 /** 印を置きかえ、その種類に要る物で印が無い物を足す */
 export function fillPost(raw: string, kind: Pick<PostKind, "id" | "insert">, facts: PostFacts): FilledPost {
   const inserted = new Set<PostInsert>();
+  const pieces = new Set<string>();
   let text = raw.replace(/\r\n?/g, "\n").trim();
 
   // ブログのリンクの印は、短い書き方（【ブログのリンク】）も決まった印にそろえる
   text = text.replace(/【ブログのリンク[^】]*】/g, () => {
     inserted.add("blogLink");
+    pieces.add(BLOG_LINK_MARK);
     return BLOG_LINK_MARK;
   });
   text = text.split(OPENINGS_MARK).join(openingsText(facts));
-  if (raw.includes(OPENINGS_MARK)) inserted.add("openings");
+  if (raw.includes(OPENINGS_MARK)) {
+    inserted.add("openings");
+    pieces.add(openingsText(facts));
+  }
   text = text.split(CLOSED_MARK).join(closedText(facts));
-  if (raw.includes(CLOSED_MARK)) inserted.add("closed");
+  if (raw.includes(CLOSED_MARK)) {
+    inserted.add("closed");
+    pieces.add(closedText(facts));
+  }
 
   const add: string[] = [];
   for (const need of kind.insert) {
@@ -206,6 +219,7 @@ export function fillPost(raw: string, kind: Pick<PostKind, "id" | "insert">, fac
     const line = need === "openings" ? OPENINGS_LINE(facts) : need === "closed" ? CLOSED_LINE(facts) : BLOG_LINK_MARK;
     if (!line) continue;
     add.push(line);
+    pieces.add(line);
     inserted.add(need);
   }
   if (add.length) {
@@ -218,5 +232,5 @@ export function fillPost(raw: string, kind: Pick<PostKind, "id" | "insert">, fac
     const tail = lines.slice(at).join("\n");
     text = [head, add.join("\n"), tail].filter((x) => x.trim()).join("\n\n");
   }
-  return { text, inserted: [...inserted] };
+  return { text, inserted: [...inserted], pieces: [...pieces] };
 }

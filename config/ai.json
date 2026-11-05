@@ -51,6 +51,16 @@
     "maxMaterialChars": 300,
     "maxRequestChars": 50000
   },
+  "postsTeam": {
+    "model": "claude-sonnet-5-5",
+    "maxReplyTokens": 1500,
+    "maxCalls": 3,
+    "maxTwinEdits": 2,
+    "maxPicks": 3,
+    "maxLineChars": 80,
+    "maxDraftChars": 700,
+    "maxRequestChars": 30000
+  },
   "recording": {
     "model": "claude-haiku-5-5",
     "maxReplyTokens": 600,
