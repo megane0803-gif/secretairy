@@ -1270,3 +1270,10 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .ad-report-lines { margin: 0; padding-left: 1.6em; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; line-height: 1.5; }
 .ad-report-lines > li > b { display: block; font-size: 0.8rem; color: var(--muted); }
 .ad-report-lines ul { margin: 0; padding-left: 1.1em; }
+
+/* ルールのタブ：言葉で書いて欄を埋める */
+.rule-words { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; min-width: 0; overflow-wrap: anywhere; }
+.rule-words .memo-throw { margin: 0; }
+.words-summary { margin: 4px 0; padding-left: 1.2em; }
+.rule-words .verdict { margin-top: 0; }
+.rule-words .verdict-head { font-size: 1.05rem; }

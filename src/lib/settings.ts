@@ -530,3 +530,27 @@ export type KarteEditSettings = { maxLines: number; maxLineChars: number };
 export function getKarteEditSettings(): KarteEditSettings {
   return (karte as { edit: KarteEditSettings }).edit;
 }
+
+/**
+ * ルールを言葉で書いて足すときの設定（config/ai.json の ruleWords。モデル名は ANTHROPIC_RULES_MODEL でも差しかえられる）。
+ * AI（Haiku）は足す欄を文から埋めるだけ。保存は人の「足す」ボタン（docs/SPEC.md §4.3.2）
+ */
+export type RuleWordsAiSettings = {
+  model: string;
+  /** 1回の返事の長さの上限（トークン） */
+  maxReplyTokens: number;
+  /** 書く文の長さの上限（字）。画面の入力欄も同じ数 */
+  maxTextChars: number;
+  /** 窓口（/api/ai/rules）が受け取る大きさの上限（字） */
+  maxRequestChars: number;
+};
+
+export function getRuleWordsAiSettings(): RuleWordsAiSettings {
+  const a = (ai as { ruleWords: RuleWordsAiSettings }).ruleWords;
+  return { ...a, model: process.env.ANTHROPIC_RULES_MODEL || a.model };
+}
+
+/** 画面で使う、言葉で書く文の長さの上限（字。鍵や環境変数は読まない） */
+export function getRuleWordsMaxChars(): number {
+  return (ai as { ruleWords: RuleWordsAiSettings }).ruleWords.maxTextChars;
+}
