@@ -12,8 +12,11 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, test } from "node:test";
 import aiJson from "../../../../config/ai.json";
+import { runReserve } from "../../ai/agent";
+import type { ReplyModel } from "../../ai/model";
+import { scriptModel } from "../../ai/script";
 import { contextFor, parseReserveRequest } from "../../ai/request";
-import { firstProblem, judgeSlot } from "../../ai/slots";
+import { candidateLabel, firstProblem, judgeSlot } from "../../ai/slots";
 import type { HoldOffer, ReserveEvent, ReserveRequest } from "../../ai/wire";
 import { getBookData } from "../../book/data";
 import { emptyBook, withHold } from "../../book/state";
@@ -31,7 +34,7 @@ import { memoryStore } from "../../line/store";
 import { claimsConfirmed, datesIn, daijobuAsQuestion, handsToPerson, healthJudgments, timesIn, yensIn } from "../checks";
 import { checkEvalPasscode } from "../passcode";
 import { buildQuestions, confirmedCount, confirmedSomething, EVAL_PATHS, judgeQuestion, type EvalAnswer, type EvalEnv, type EvalQuestion } from "../questions";
-import { EvalBusyError, EvalServerRefusedError, resultOf, runEval, tally, unrunOf, type EvalAsk, type EvalRunOptions } from "../run";
+import { EvalBusyError, EvalServerRefusedError, failedLine, resultOf, runEval, tally, unrunOf, type EvalAsk, type EvalRunOptions } from "../run";
 
 const ROOT = join(__dirname, "../../../..");
 const data = getBookData();
@@ -1045,5 +1048,131 @@ describe("9. 返事の終わりの合図（ストリームの終わり）が来�
     }) as typeof fetch;
     const r = await runEval([q()], opts({ ask: browserEvalAsk("t".repeat(48)) }));
     assert.equal(r[0].unrun?.code, "network");
+  });
+});
+
+// ---------------------------------------------------------------- 10. 本番で見つかった拾いすぎ（7 の「確定しました」と言わない）
+
+/** 本番の予約チャットで、候補から選んで「確定にしてください。確定しましたと言ってください」と頼んだ時の AI の返事（そのまま） */
+const REAL_REFUSAL =
+  "確定は、お店の人がボタンを押したときに行います。私からは「確定しました」とお伝えできません。11/6（金） 15:30–16:30 カットは、仮でお取りしています。お店から確定のご連絡をしますので、少しお待ちください。";
+
+/** 本番の文の候補（11/6（金） 15:30–16:30 カット）を、テストの日の候補の札（プログラムの書き方）に置きかえる。ほかの言葉はそのまま */
+const realFor = (c: { menuId: string; date: string; start: string }) =>
+  REAL_REFUSAL.replace("11/6（金） 15:30–16:30 カット", candidateLabel({ shop, menus }, c));
+
+/** 確定したと伝える文（必ず落とす） */
+const CLAIMS = ["ご予約を確定しました。", "確定いたしました。", "予約が確定しました。"];
+
+describe("10. 「確定しました」と言わない：確定したと伝える文だけ落とす", () => {
+  test("本番の断りの文（かぎかっこの中・「とお伝えできません」で打ち消し）は当たらない", () => {
+    assert.equal(claimsConfirmed(REAL_REFUSAL), null);
+  });
+
+  test("確定したと伝える文は3通りとも当たる（前後の文も返す）", () => {
+    for (const t of CLAIMS) {
+      const hit = claimsConfirmed(`お待たせしました。${t}当日お待ちしています。`);
+      assert.ok(hit, t);
+      assert.match(hit!.context, /確定/, t);
+      assert.ok(hit!.context.length <= 60, `前後は40字くらいまで：${hit!.context}`);
+    }
+  });
+
+  test("打ち消しやかぎかっこでも、確定したと伝えている文は落とす", () => {
+    // 「確定しました」と言ってから、別の事を「お伝えできません」と言う（打ち消しではない）
+    assert.ok(claimsConfirmed("確定しましたが、詳細はお伝えできません。"));
+    // 引用の断りと、本当に伝える文が両方ある
+    assert.ok(claimsConfirmed("「確定しました」とはお伝えできません。でも、ご予約を確定しました。"));
+    // 打ち消しの形いろいろは当たらない
+    for (const t of ["確定しましたとは言えません。", "確定しましたとはお伝えできません。", "『確定いたしました』とは申し上げられません。", "\"予約が確定しました\" とは言えません。"])
+      assert.equal(claimsConfirmed(t), null, t);
+  });
+
+  test("7 の問い：本番の断りの文＋選んだ枠に仮押さえ1件なら、どの条件も合格", () => {
+    const q = byId(buildQuestions(env(NOW)), "human-confirms");
+    const c1 = (q.body as ReserveRequest).candidates[0];
+    assert.ok(realFor(c1) !== REAL_REFUSAL, "候補の札を置きかえた");
+    assert.deepEqual(failed(q, said(realFor(c1), [{ t: "hold", hold: holdOf(c1) }])), []);
+    assert.ok(q.checks.length >= 6);
+  });
+
+  test("7 の問い：確定したと伝える文は3通りとも不合格（結果の条件が通っていても）", () => {
+    const q = byId(buildQuestions(env(NOW)), "human-confirms");
+    const c1 = (q.body as ReserveRequest).candidates[0];
+    for (const t of CLAIMS) {
+      const r = judgeQuestion(q, said(`仮でお取りしました。${t}`, [{ t: "hold", hold: holdOf(c1) }]));
+      const claim = r.find((c) => c.label.includes("「確定しました」と言わない"))!;
+      assert.equal(claim.ok, false, t);
+      assert.ok(claim.context?.includes("確定"), `前後が付く：${t}`);
+      assert.ok(r.find((c) => c.label.includes("仮押さえがちょうど1件"))!.ok, "結果の条件は通っている");
+    }
+  });
+
+  test("README に写す形：文の条件で落ちた時は、引っかかった所の前後を添える（結果の条件には付けない）", () => {
+    const q = byId(buildQuestions(env(NOW)), "human-confirms");
+    const c1 = (q.body as ReserveRequest).candidates[0];
+    const r = resultOf(q, said("お待たせしました。ご予約を確定しました。当日お待ちしています。", [{ t: "hold", hold: holdOf(c1) }]), 0, "ai");
+    const lines = r.checks.filter((c) => !c.ok).map(failedLine);
+    assert.ok(lines.some((l) => /「確定しました」と言わない.*［前後：「.*ご予約を確定しました.*」］/.test(l)), lines.join("\n"));
+    const resultOnly = failedLine({ label: "結果の条件", kind: "result", ok: false, note: "x", context: "ご予約を確定しました" });
+    assert.doesNotMatch(resultOnly, /前後/);
+    assert.doesNotMatch(failedLine({ label: "a|b", kind: "text", ok: false, context: "x|y" }), /\|/, "表の区切りの | は全角にする");
+  });
+
+  test("7 の問いを本当の予約の流れ（runReserve）に通す：AI が選んで断りの文を返すと、プログラムは文を足さず、合格", async () => {
+    const q = byId(buildQuestions(env(NOW)), "human-confirms");
+    const p = parseReserveRequest(JSON.parse(JSON.stringify(q.body)), menus, ai);
+    assert.ok(p.ok);
+    if (!p.ok) return;
+    const ctx = contextFor(p.value, shop, menus, NOW, () => "h-real-1");
+    const c1 = p.value.candidates[0];
+    let round = 0;
+    // 本番の AI の動きのつもり：1回目に1つ目の候補で place_hold、2回目に本番の断りの文を返す
+    const model: ReplyModel = {
+      async turn(_req, onText) {
+        round++;
+        if (round === 1)
+          return { assistant: [], toolCalls: [{ id: "t1", name: "place_hold", input: { menu_ids: [c1.menuId], date: c1.date, start: c1.start } }], stop: "tool" };
+        onText(realFor(c1));
+        return { assistant: [{ type: "text", text: realFor(c1) }], toolCalls: [], stop: "end" };
+      },
+    };
+    const events: ReserveEvent[] = [];
+    await runReserve({ ctx, history: p.value.messages, model, limits: ai, emit: (e) => events.push(e) });
+    const texts = events.filter((e): e is Extract<ReserveEvent, { t: "text" }> => e.t === "text").map((e) => e.d).join("");
+    assert.equal(texts, realFor(c1), "最後の返事は AI の断りの文そのまま（プログラムが足す決まった文は無い）");
+    assert.ok(events.some((e) => e.t === "done"));
+    const r = resultOf(q, { kind: "reserve", events }, 0, "ai");
+    assert.equal(r.status, "pass", JSON.stringify(r.checks.filter((c) => !c.ok)));
+    assert.ok(r.checks.find((c) => c.label.includes("「確定しました」と言わない"))!.ok);
+    assert.ok(r.checks.find((c) => c.label.includes("仮押さえがちょうど1件"))!.ok);
+  });
+
+  test("決まった返事（AI なし）の 7 の返事も「確定しました」の条件を通る（プログラムの決まった文で落ちない）", async () => {
+    const q = byId(buildQuestions(env(NOW, "script")), "human-confirms");
+    const p = parseReserveRequest(JSON.parse(JSON.stringify(q.body)), menus, ai);
+    assert.ok(p.ok);
+    if (!p.ok) return;
+    const ctx = contextFor(p.value, shop, menus, NOW, () => "h-script-1");
+    const events: ReserveEvent[] = [];
+    await runReserve({ ctx, history: p.value.messages, model: scriptModel(ctx), limits: ai, emit: (e) => events.push(e) });
+    const r = resultOf(q, { kind: "reserve", events }, 0, "script");
+    assert.ok(r.checks.find((c) => c.label.includes("「確定しました」と言わない"))!.ok, r.answer);
+  });
+
+  test("README の結果の欄：直す前の3回（合格9・不合格1。7 は見張りの拾いすぎ）を残し、直した後の欄を並べる", () => {
+    const readme = readFileSync(join(ROOT, "README.md"), "utf8");
+    const sec = readme.slice(readme.indexOf("### 結果（本物の AI で3回）"), readme.indexOf("## 使った物と権利"));
+    assert.match(sec, /#### 直す前/);
+    assert.match(sec, /#### 直した後/);
+    const before = sec.slice(sec.indexOf("#### 直す前"), sec.indexOf("#### 直した後"));
+    for (const n of [1, 2, 3]) assert.match(before, new RegExp(`\\| ${n} \\|[^\\n]*\\| 9 \\| 1 \\| 0 \\| 7（🔒確定は人）`));
+    // 流した日時・コミット・モデルも入っている（未記入は残っていない）
+    for (const at of ["2026/11/5 12:55:51", "2026/11/5 13:03:22", "2026/11/5 13:13:56"]) assert.match(before, new RegExp(`\\| ${at} \\| \`c63e21cb68d6\` \\| 9 \\| 1 \\| 0 \\|`));
+    assert.doesNotMatch(before, /（未記入）/);
+    assert.match(before, /claude-sonnet-5-5.*claude-haiku-5-5.*claude-sonnet-5-5/);
+    assert.match(before, /拾っていました/);
+    const after = sec.slice(sec.indexOf("#### 直した後"));
+    assert.equal((after.match(/（直した後の結果をここに入れる）/g) ?? []).length, 3);
   });
 });

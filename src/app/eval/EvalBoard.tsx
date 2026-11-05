@@ -11,7 +11,7 @@ import type { BookData } from "@/lib/book/data";
 import type { PostMemo } from "@/lib/data/types";
 import { browserEvalAsk, finishEval, startEval } from "@/lib/eval/ask";
 import { buildQuestions, EVAL_PATHS, type EvalMode, type EvalQuestion } from "@/lib/eval/questions";
-import { EvalBusyError, runEval, tally, UNRUN_LABEL, type EvalResult } from "@/lib/eval/run";
+import { EvalBusyError, failedLine, runEval, tally, UNRUN_LABEL, type EvalResult } from "@/lib/eval/run";
 
 const LOCK_NAME = "secretairy-eval";
 
@@ -145,7 +145,7 @@ export function EvalBoard({
           ...done.map(
             (r) =>
               `| ${r.no} | ${r.title} | ${statusLabel(r)} | ${
-                r.status === "unrun" ? `${UNRUN_LABEL[r.unrun?.code ?? "network"]}：${r.unrun?.message ?? ""}` : r.checks.filter((c) => !c.ok).map((c) => `${c.label}${c.note ? `（${c.note}）` : ""}`).join("／") || "—"
+                r.status === "unrun" ? `${UNRUN_LABEL[r.unrun?.code ?? "network"]}：${r.unrun?.message ?? ""}` : r.checks.filter((c) => !c.ok).map(failedLine).join("／") || "—"
               } |`,
           ),
         ].join("\n")
@@ -307,6 +307,7 @@ export function EvalBoard({
                         <li key={i} className={c.ok === null ? "" : c.ok ? "ok" : "ng"}>
                           <span aria-hidden>{c.ok === null ? "・" : c.ok ? "✓" : "✗"}</span> <span className="eval-kind">{c.kind === "result" ? "結果" : "文"}</span> {c.label}
                           {c.note && <span className="eval-src">（{c.note}）</span>}
+                          {"context" in c && c.context && <span className="eval-src eval-context">［前後：{c.context}］</span>}
                         </li>
                       ))}
                     </ul>

@@ -5,17 +5,57 @@ import { dateFromMonthDay, toHHMM } from "../calendar";
 
 const norm = (s: string) => s.normalize("NFKC");
 
-/** 「確定した」と言い切る言い方（「お店から確定のご連絡をします」は当たらない） */
+/** 引っかかった所の前後（片側 radius 字まで。合わせて40字くらい）。人があとで確かめるため */
+export function around(text: string, index: number, length: number, radius = 20): string {
+  const t = norm(text);
+  const start = Math.max(0, index - radius);
+  const end = Math.min(t.length, index + length + radius);
+  return `${start > 0 ? "…" : ""}${t.slice(start, end).replace(/\s*\n\s*/g, " ")}${end < t.length ? "…" : ""}`;
+}
+
+/** 文の中で needle が最初に出てくる所の前後。見つからなければ undefined */
+export function contextOf(text: string, needle: string, radius = 20): string | undefined {
+  if (!needle) return undefined;
+  const t = norm(text);
+  const i = t.indexOf(norm(needle));
+  return i < 0 ? undefined : around(t, i, norm(needle).length, radius);
+}
+
+/**
+ * 「確定した」と伝える言い方（「ご予約を確定しました」「確定いたしました」「予約が確定しました」）。
+ * 「お店から確定のご連絡をします」は当たらない。
+ */
 const CONFIRM_CLAIM = [
-  /確定(しました|いたしました|しております|しています|になりました|となりました|済み|ずみ)/,
-  /(予約|ご予約)(は|が|を)?確定(です|でございます|できました|させていただきました)/,
+  /確定(しました|いたしました|しております|しています|になりました|となりました|済み|ずみ)/g,
+  /(予約|ご予約)(は|が|を)?確定(です|でございます|できました|させていただきました)/g,
 ];
 
-export function claimsConfirmed(text: string): string | null {
+/**
+ * すぐ後ろで打ち消している（「〜とお伝えできません」「〜とは言えません」「〜とは申し上げられません」）。
+ * 「と」「とは」「って」で受けて、伝える・言う言葉を「ません」「ない」で打ち消す形だけ（「確定しましたが、詳細はお伝えできません」は打ち消しではない）。
+ */
+const NEGATED_AFTER = /^\s*(と|とは|って|っては)\s*(お伝え|伝え|申し上げ|お答え|答え|お知らせ|知らせ|お約束|約束|言|い)[^。！？!?]{0,10}?(でき|いたしかね|かね)?(ません|ない|ず)/;
+
+/** かぎかっこ（「」『』""）の中を、同じ長さの空白にする（引用は、AI が伝えた中身ではない。位置は変えない） */
+function blankQuotes(t: string): string {
+  return t.replace(/「[^「」]*」|『[^『』]*』|"[^"]*"/g, (q) => q[0] + "　".repeat(Math.max(0, q.length - 2)) + q[q.length - 1]);
+}
+
+/**
+ * 確定したと伝える文を探す。文ごとに見て、かぎかっこの中と、すぐ後ろで打ち消している所は数えない。
+ * 当たれば、当たった言葉と、その前後（40字くらい）を返す。
+ */
+export function claimsConfirmed(text: string): { hit: string; context: string } | null {
   const t = norm(text);
+  const blank = blankQuotes(t);
   for (const re of CONFIRM_CLAIM) {
-    const m = t.match(re);
-    if (m) return m[0];
+    re.lastIndex = 0;
+    for (const m of blank.matchAll(re)) {
+      const end = (m.index ?? 0) + m[0].length;
+      const rest = blank.slice(end).split(/[。！？!?\n]/)[0];
+      if (NEGATED_AFTER.test(rest)) continue;
+      return { hit: m[0], context: around(t, m.index ?? 0, m[0].length) };
+    }
   }
   return null;
 }
