@@ -13,6 +13,7 @@ import { useAdResults } from "@/lib/ads/useResults";
 import { dueLabel } from "@/lib/ads/verdict";
 import { reportLines, withNote } from "@/lib/ads/weekly";
 import { writeJournal } from "@/lib/journal";
+import { DEMO_TAG_NOTE } from "@/lib/notices";
 import type { ShopSettings } from "@/lib/settings";
 
 const MARK: Record<AdJudgement["verdict"], string> = { worked: "✓", revert: "↩", unknown: "？" };
@@ -166,10 +167,9 @@ export function AdsResults() {
     <>
       <section className="inline-box ad-results" aria-labelledby="ad-judge">
         <h2 id="ad-judge">効いたかの判定</h2>
-        <p className="hint">
-          承認して止めた（外した）言葉ごとに、判定日（承認の{ads.settings.checkAfterDays}日後）に、前と後の数をプログラムが比べます。お金が減って予約が減っていなければ「効いた」、予約が減ったら「戻す案」（承認の箱へ）、数が少なければ「まだ分からない」。
-        </p>
-        {waiting.length > 0 ? (
+        <p className="section-desc">承認した案が効いたかを、承認の{ads.settings.checkAfterDays}日後に、前と後の数でプログラムが比べます</p>
+        {judgements.length === 0 && <p className="hint">まだ判定はありません。案を承認すると、{ads.settings.checkAfterDays}日後にここに出ます。</p>}
+        {waiting.length > 0 && (
           <>
             <ul className="ad-waiting">
               {waiting.map((w) => (
@@ -180,6 +180,9 @@ export function AdsResults() {
               ))}
             </ul>
             <div className="reset-row">
+              <span className="tag text" title={DEMO_TAG_NOTE}>
+                デモ<span className="sr-only">（{DEMO_TAG_NOTE}）</span>
+              </span>
               <button type="button" className="btn" onClick={demo}>
                 判定日まで進める（デモ）
               </button>
@@ -188,8 +191,6 @@ export function AdsResults() {
               </small>
             </div>
           </>
-        ) : (
-          judgements.length === 0 && <p className="hint">まだ判定を待っている言葉はありません。承認の箱で広告の案を承認すると、ここに判定日が出ます。</p>
         )}
         {msg && (
           <p className="hint" role="status">

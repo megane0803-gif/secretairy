@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Children, type ReactNode } from "react";
 import type { TabSwitches } from "@/lib/settings";
 import { TABS, type TabId } from "@/lib/tabs";
 import { useTabSwitches } from "@/lib/useTabSwitches";
@@ -13,6 +13,7 @@ export function TabFrame({
   pending: pendingBar,
   right,
   rightFirstOnPhone = false,
+  rightAfterOnPhone,
   top,
   beside,
   children,
@@ -28,6 +29,12 @@ export function TabFrame({
   right: ReactNode;
   /** スマホ（1列）で、右の列（そのタブの入力欄）を見出しのすぐ下・ページの上に出す */
   rightFirstOnPhone?: boolean;
+  /**
+   * スマホ（1列）で、右の列を真ん中の列の途中に出す：真ん中の列の children の何個目の欄の後に出すか（広告タブは 1＝4週分のすぐ下）。
+   * 渡したときだけ、children を前（page-lead）と後（page-rest）の2つに包み、スマホでは CSS の並べ替えで「前 → 右の列 → 後」にする。
+   * 右の列の部品は1つのまま（2つ作らない）。PC は今までどおり。渡さないタブは今までどおり。rightFirstOnPhone と一緒には使わない。
+   */
+  rightAfterOnPhone?: number;
   /**
    * PC で、承認待ち・見出しのすぐ下に横いっぱい（真ん中と右の列をまたいで）出す物（予約タブの時間割の台帳）。
    * 渡したときだけ、承認待ち・見出しと top を真ん中の上の帯（page-top）に出す。渡さないタブは今までどおり。
@@ -75,6 +82,18 @@ export function TabFrame({
     pendingBar
   );
 
+  // rightAfterOnPhone を渡したタブだけ、真ん中の欄を前と後に分けて包む（スマホで右の列をその間に出すため）
+  const split = !rightFirstOnPhone && rightAfterOnPhone !== undefined;
+  const items = split ? Children.toArray(children) : [];
+  const body = split ? (
+    <>
+      <div className="page-lead">{items.slice(0, rightAfterOnPhone)}</div>
+      <div className="page-rest">{items.slice(rightAfterOnPhone)}</div>
+    </>
+  ) : (
+    children
+  );
+
   const head = (
     <div className="page-head">
       <h1>
@@ -84,7 +103,7 @@ export function TabFrame({
   );
 
   return (
-    <div className={`${rightFirstOnPhone ? "page right-first-sp" : "page"}${top ? " has-top" : ""}`}>
+    <div className={`${rightFirstOnPhone ? "page right-first-sp" : "page"}${split ? " right-after-sp" : ""}${top ? " has-top" : ""}`}>
       {top && (
         <header className="page-top">
           {pending}
@@ -95,7 +114,7 @@ export function TabFrame({
       <main className="page-main">
         {!top && pending}
         {!top && head}
-        {children}
+        {body}
         {/* 表示スイッチは見出しの横に出さず、ページの終わりに畳んでおく（必須のタブは隠せないので出さない） */}
         {!def.required && (
           <details className="fold tab-switch-fold">
