@@ -38,6 +38,8 @@ export type FreeeEnv = {
   /** FREEE_COMPANY_ID に数でない物が入っている */
   companyIdBad: boolean;
   cookieKey: Buffer | null;
+  /** FREEE_COOKIE_KEY に何か入っている（32バイトでない時に「無い」と分けて出すため） */
+  cookieKeyGiven: boolean;
 };
 
 export type FreeeDeps = {
@@ -59,12 +61,34 @@ export function envFrom(e: Record<string, string | undefined>, cookieKey: Buffer
     companyId: ok ? Number(raw) : null,
     companyIdBad: raw !== "" && !ok,
     cookieKey,
+    cookieKeyGiven: !!e.FREEE_COOKIE_KEY?.trim(),
   };
+}
+
+/**
+ * つなぐのに要る環境変数のうち、サーバーが読めていない物の名前（中身は出さない）。空ならつなげる。
+ * FREEE_COMPANY_ID が空なのは問題にしない（許可の後に番号を出して止めるため）。
+ */
+export function envProblems(env: FreeeEnv): string[] {
+  const out: string[] = [];
+  if (!env.clientId) out.push("FREEE_CLIENT_ID");
+  if (!env.clientSecret) out.push("FREEE_CLIENT_SECRET");
+  if (!env.cookieKey) out.push(env.cookieKeyGiven ? "FREEE_COOKIE_KEY（32バイトを base64 にした文字ではない）" : "FREEE_COOKIE_KEY");
+  if (env.companyIdBad) out.push("FREEE_COMPANY_ID（数ではない）");
+  return out;
 }
 
 // ---- 返事 ----
 
-const NO_STORE = { "Cache-Control": "no-store, max-age=0", Pragma: "no-cache", "Referrer-Policy": "no-referrer" };
+// どの返事も、ブラウザにも本番の CDN にも覚えさせない（cookie の有る無しで答えが変わるので Vary: Cookie も）
+const NO_STORE = {
+  "Cache-Control": "no-store, max-age=0",
+  "CDN-Cache-Control": "no-store",
+  "Vercel-CDN-Cache-Control": "no-store",
+  Vary: "Cookie",
+  Pragma: "no-cache",
+  "Referrer-Policy": "no-referrer",
+};
 
 function json(body: unknown, status = 200, cookies: string[] = []): Response {
   const h = new Headers({ ...NO_STORE, "Content-Type": "application/json; charset=utf-8" });
@@ -104,7 +128,7 @@ type Guarded = { ok: true; session: Session | null } | { ok: false; response: Re
  * どの窓口も最初に通す。
  * method：受ける形（ほかは 405）。session：cookie の鍵が要るか。
  */
-export function guard(request: Request, deps: FreeeDeps, p: { method: "GET" | "POST"; session: boolean; needCompany?: boolean }): Guarded {
+export function guard(request: Request, deps: FreeeDeps, p: { method: "GET" | "POST"; session: boolean; needCompany?: boolean; envCheck?: boolean }): Guarded {
   const { env, settings } = deps;
   const site = new URL(settings.siteOrigin);
   // プレビュー・手元・本番の別の URL では、freee の窓口を全部止める
@@ -117,11 +141,18 @@ export function guard(request: Request, deps: FreeeDeps, p: { method: "GET" | "P
     if (origin !== site.origin || (fetchSite !== null && fetchSite !== "same-origin"))
       return { ok: false, response: json({ ok: false, code: "origin", message: "本番のサイトから来た呼び出しではないので受けません" }, 403) };
   }
-  if (!env.clientId || !env.clientSecret || !env.cookieKey || env.companyIdBad)
-    return { ok: false, response: json({ ok: false, code: "not-set", message: "freee の環境変数がそろっていません" }, 503) };
+  if (p.envCheck === false) return { ok: true, session: null };
+  const missing = envProblems(env);
+  if (missing.length) {
+    // 名前だけをログに出す（中身は出さない）
+    console.warn(`freee: 環境変数を読めていません：${missing.join("・")}`);
+    return { ok: false, response: json({ ok: false, code: "not-set", message: "freee の環境変数がそろっていません", missing }, 503) };
+  }
   if (p.needCompany !== false && env.companyId === null)
     return { ok: false, response: json({ ok: false, code: "no-company-id", message: "FREEE_COMPANY_ID がまだ空です" }, 503) };
   if (!p.session) return { ok: true, session: null };
+  // 鍵の cookie を読むには暗号の鍵が要る（ここまで来て無いのは envCheck を外した時だけ。受けない）
+  if (!env.cookieKey) return { ok: false, response: json({ ok: false, code: "not-set", message: "freee の環境変数がそろっていません", missing: envProblems(env) }, 503) };
 
   const sealed = readCookie(request, TOKEN_COOKIE);
   if (!sealed) return { ok: false, response: json({ ok: false, code: "no-cookie", message: "freee とつながっていません" }, 401) };
@@ -240,10 +271,34 @@ export async function handleCallback(request: Request, deps: FreeeDeps): Promise
 
 // ---- つながっているか（GET /api/freee/status） ----
 
+/**
+ * cookie が無い・読めない・鍵が切れた時は、環境変数の確かめより先に「つながっていない」（401）で返す。
+ * canConnect：つなぐのに要る環境変数をサーバーが読めているか。missing：読めていない名前（中身は出さない）。
+ * 環境変数が本当に欠けている時も、cookie が無ければ「つながっていない」＋ canConnect: false（画面はつなぐ所に名前を出す）。
+ */
 export async function handleStatus(request: Request, deps: FreeeDeps): Promise<Response> {
+  const pre = guard(request, deps, { method: "GET", session: false, envCheck: false });
+  if (!pre.ok) return pre.response;
+  const missing = envProblems(deps.env);
+  const canConnect = missing.length === 0;
+  const notConnected = (code: "no-cookie" | "expired", cookies: string[] = []) =>
+    json(
+      {
+        ok: false,
+        code,
+        message: code === "expired" ? "freee の鍵が切れました。もう一度 freee とつないでください" : "freee とつながっていません",
+        canConnect,
+        ...(missing.length ? { missing } : {}),
+      },
+      401,
+      cookies,
+    );
+  if (!readCookie(request, TOKEN_COOKIE) || !deps.env.cookieKey) return notConnected("no-cookie");
   const g = guard(request, deps, { method: "GET", session: true });
-  if (!g.ok) return g.response;
-  return json({ ok: true, connected: true, expiresAt: new Date(g.session!.expiresAt).toISOString() });
+  if (g.ok) return json({ ok: true, connected: true, expiresAt: new Date(g.session!.expiresAt).toISOString() });
+  const code = ((await g.response.clone().json()) as { code?: unknown }).code;
+  if (code === "no-cookie" || code === "expired") return notConnected(code, g.response.headers.getSetCookie());
+  return g.response;
 }
 
 // ---- つなぎを外す（POST /api/freee/disconnect） ----

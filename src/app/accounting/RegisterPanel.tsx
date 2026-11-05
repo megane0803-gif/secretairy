@@ -20,7 +20,8 @@ import { FreeeConnectForm, useCallbackNote } from "./FreeePanel";
 export function RegisterPanel({ freee }: { freee: ReturnType<typeof useFreee> }) {
   const callbackNote = useCallbackNote();
   // 「freee とつなぐ」は、本番のサイトで freee の環境変数がそろっている時だけ出す（cookie が無い・鍵が切れた・事業所の番号がまだ空）
-  const canConnect = freee.status === "none" || freee.status === "expired" || freee.status === "no-company-id";
+  // cookie が無い・切れた時も出す。環境変数が本当に欠けている時は、読めていない名前も出す
+  const canConnect = freee.canConnect;
   const acct = useAccounting();
   const { seed, settings, state, gate } = acct;
   const [trial, setTrial] = useState(false);
@@ -109,6 +110,11 @@ export function RegisterPanel({ freee }: { freee: ReturnType<typeof useFreee> })
         <Fold summary="オーナー用">
           <FreeeConnectForm label="freee とつなぐ" />
           <p className="hint">許可の画面で、テスト事業所を選んでください。ほかの事業所を選ぶと、鍵を捨てて止めます。</p>
+          {freee.missing.length > 0 && (
+            <p className="problems small" role="alert">
+              サーバーが次の環境変数を読めていません：{freee.missing.join("・")}。このままでは、つなぐ所で止まります。
+            </p>
+          )}
         </Fold>
       )}
 
