@@ -530,3 +530,14 @@ export type KarteEditSettings = { maxLines: number; maxLineChars: number };
 export function getKarteEditSettings(): KarteEditSettings {
   return (karte as { edit: KarteEditSettings }).edit;
 }
+
+/**
+ * 試験10問（/eval。docs/SPEC.md §1.13）：1問ごとにあける秒数（config/ai.json の eval.minIntervalSeconds）。
+ * /api/ai/ は Vercel の Firewall で1分10回までなので、前の問いの答えが来てからこの秒数あけて次を流す。
+ */
+export type EvalSettings = { minIntervalSeconds: number };
+
+export function getEvalSettings(): EvalSettings {
+  const e = (ai as { eval: { minIntervalSeconds: number } }).eval;
+  return { minIntervalSeconds: e.minIntervalSeconds };
+}

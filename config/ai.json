@@ -62,5 +62,8 @@
     "maxItems": 30,
     "maxItemChars": 200,
     "maxRequestChars": 30000
+  },
+  "eval": {
+    "minIntervalSeconds": 7
   }
 }

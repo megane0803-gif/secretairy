@@ -1270,3 +1270,37 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .ad-report-lines { margin: 0; padding-left: 1.6em; display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; line-height: 1.5; }
 .ad-report-lines > li > b { display: block; font-size: 0.8rem; color: var(--muted); }
 .ad-report-lines ul { margin: 0; padding-left: 1.1em; }
+
+/* ---- 試験10問（/eval。左のタブには出さない） ---- */
+
+.eval { padding: 16px; min-width: 0; }
+@media (min-width: 1024px) { .eval { padding: 24px; } }
+.eval-lead { margin: 0 0 8px; overflow-wrap: anywhere; }
+.eval-notes { margin: 0 0 16px; padding-left: 1.2em; color: var(--muted); font-size: 0.9rem; }
+.eval-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 16px; }
+.eval-mode { font-size: 0.9rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.eval-score { margin-bottom: 16px; }
+.eval-table-wrap { min-width: 0; }
+.table.eval-table { max-width: none; width: 100%; table-layout: fixed; }
+.eval-table th:nth-child(1), .eval-table td:nth-child(1) { width: 3em; }
+.eval-table th:nth-child(4), .eval-table td:nth-child(4) { width: 8em; }
+.eval-table td { vertical-align: top; overflow-wrap: anywhere; }
+.eval-text { white-space: pre-wrap; font-size: 0.85rem; }
+.eval-src { color: var(--muted); font-size: 0.78rem; }
+.eval-status { font-weight: 700; }
+.eval-table tr.is-pass .eval-status { color: var(--ok); }
+.eval-table tr.is-fail .eval-status { color: var(--warn); }
+.eval-table tr.is-running { background: var(--accent-soft); }
+.eval-checks { list-style: none; margin: 0; padding: 0; font-size: 0.82rem; }
+.eval-checks li.ok > span:first-child { color: var(--ok); }
+.eval-checks li.ng { color: var(--warn); }
+.eval-copy { width: 100%; font-family: ui-monospace, monospace; font-size: 0.8rem; }
+
+/* スマホ：表の行をカードのように縦に並べる（横にはみ出さない） */
+@media (max-width: 860px) {
+  .eval-table thead { display: none; }
+  .table.eval-table, .eval-table tbody, .eval-table tr, .eval-table td { display: block; width: 100% !important; }
+  .eval-table tr { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px; margin-bottom: 12px; background: var(--surface); }
+  .eval-table td { border: 0; padding: 4px 0; }
+  .eval-table td::before { content: attr(data-label); display: block; color: var(--muted); font-size: 0.75rem; }
+}
