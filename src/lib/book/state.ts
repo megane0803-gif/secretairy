@@ -12,6 +12,7 @@ import { MAX_DAY_OFFSET } from "../calendar";
 import type { SavedKarte } from "../karte/record";
 import type { ChatReservation } from "../reservations";
 import { chatKey, reserveKey, SEED_TODO_KEYS, todoKey, TODO_SOURCES, type TodoSource } from "../todo/keys";
+import { readMemoKind, type MemoKind } from "../todo/kinds";
 
 /**
  * withdrawn = お客様が予約チャットで「ずらしたい」「やめたい」と言ったので、承認の前に外した
@@ -45,6 +46,8 @@ export type AddedTodo = {
   source?: TodoSource;
   /** 投げたメモの元の文（プログラムがそのまましまう。行の印を押すと開く） */
   memo?: string;
+  /** 投げたメモで、送る時にオーナーが選んだ種類（お客様・仕入れと材料・お店のこと・お金と事務。src/lib/todo/kinds.ts）。無ければ その他 */
+  category?: MemoKind;
   /** 済みにした時（「済み」のタブで新しい順に並べる） */
   doneAt?: string;
 };
@@ -146,6 +149,7 @@ export function parseBook(raw: string | null): BookState | null {
       ...(isStr(t.key) && t.key.length <= 120 ? { key: t.key } : {}),
       ...(TODO_SOURCES.includes(t.source as TodoSource) ? { source: t.source as TodoSource } : {}),
       ...(isStr(t.memo) ? { memo: t.memo.slice(0, 400) } : {}),
+      ...(readMemoKind(t.category) ? { category: readMemoKind(t.category) } : {}),
       ...(isStr(t.doneAt) ? { doneAt: t.doneAt } : {}),
     }));
   const todoMarks: Record<string, TodoMark> = {};

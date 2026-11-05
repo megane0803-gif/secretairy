@@ -10,13 +10,15 @@
   { "id": "ts-09", "source": "karte", "key": "例:カルテ:k-p02", "title": "青木（架空）様：前髪を短めにするか相談（ほか1行はカルテに）", "done": false },
   { "id": "ts-10", "source": "karte", "key": "例:カルテ:k-p03", "title": "加藤（架空）様：2か月後ごろ、同じ色で", "done": false },
   { "id": "ts-11", "source": "karte", "key": "例:カルテ:k-p04", "title": "石田（架空）様：次回は少し明るめも相談（ほか1行はカルテに）", "done": true },
-  { "id": "ts-12", "source": "memo", "key": "例:メモ:1", "title": "カラー剤の7番を2本発注", "memo": "えーと、カラー剤の7番がもう残り少ないから2本くらい頼んでおかないと", "done": false },
+  { "id": "ts-12", "source": "memo", "key": "例:メモ:1", "category": "supply", "title": "カラー剤の7番を2本発注", "memo": "えーと、カラー剤の7番がもう残り少ないから2本くらい頼んでおかないと", "done": false },
   { "id": "ts-13", "source": "memo", "key": "例:メモ:2", "title": "タオルの業者に週2回にできるか聞く", "memo": "タオルの業者さん、週2回にできないか聞いてみる", "done": false },
-  { "id": "ts-14", "source": "memo", "key": "例:メモ:3", "title": "年末の営業日をお知らせに書く", "memo": "年末いつまでやるか、お知らせに書いとかなきゃ", "done": false },
-  { "id": "ts-15", "source": "memo", "key": "例:メモ:4", "title": "シャンプー台の下の水もれを業者に見てもらう", "memo": "シャンプー台の下がちょっと濡れてる。業者に見てもらう", "done": false },
-  { "id": "ts-16", "source": "memo", "key": "例:メモ:5", "title": "釣り銭の千円札を銀行で両替", "memo": "釣り銭の千円札が足りない、銀行で両替", "done": true },
+  { "id": "ts-14", "source": "memo", "key": "例:メモ:3", "category": "shop", "title": "年末の営業日をお知らせに書く", "memo": "年末いつまでやるか、お知らせに書いとかなきゃ", "done": false },
+  { "id": "ts-15", "source": "memo", "key": "例:メモ:4", "category": "shop", "title": "シャンプー台の下の水もれを業者に見てもらう", "memo": "シャンプー台の下がちょっと濡れてる。業者に見てもらう", "done": false },
+  { "id": "ts-16", "source": "memo", "key": "例:メモ:5", "category": "office", "title": "釣り銭の千円札を銀行で両替", "memo": "釣り銭の千円札が足りない、銀行で両替", "done": true },
   { "id": "ts-17", "source": "line", "key": "例:LINE:1", "title": "ドライヤーの替えを買う", "done": false },
   { "id": "ts-18", "source": "line", "key": "例:LINE:2", "title": "ポイントカードを刷り直す", "done": false },
   { "id": "ts-19", "source": "line", "key": "例:LINE:3", "title": "床のワックスがけを頼む", "done": true },
-  { "id": "ts-20", "source": "reserve", "key": "例:予約:c10＠3 16:30", "title": "佐野（架空）様に別の日時を案内", "due": -1, "done": true }
+  { "id": "ts-20", "source": "reserve", "key": "例:予約:c10＠3 16:30", "title": "佐野（架空）様に別の日時を案内", "due": -1, "done": true },
+  { "id": "ts-21", "source": "memo", "key": "例:メモ:6", "category": "customer", "title": "お客様アンケートの答えを読む", "memo": "この前のお客様アンケート、まだ読めてない。読んでおく", "done": false },
+  { "id": "ts-22", "source": "memo", "key": "例:メモ:7", "category": "office", "title": "今月の家賃の振り込みを確かめる", "memo": "今月の家賃、振り込んだか確かめる", "done": false }
 ]

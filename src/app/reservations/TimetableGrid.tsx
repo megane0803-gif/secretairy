@@ -1,14 +1,15 @@
 // 1週間の予約台帳の時間割（見た目だけ。並べ方は src/lib/book/timetable.ts）。
-// 横に今日から7日、縦に営業時間。予約は時間の長さの分だけ縦に伸びる帯で、確定は塗りつぶし、仮押さえは点線のしま模様。
+// 横に今日から7日、縦に営業時間。予約は時間の長さの分だけ縦に伸びる帯で、確定は実線、仮押さえは点線のしま模様（形で分ける）。
 // 今日の列は目立たせ、定休日の列は灰色。列の頭に件数（大きい数字）と埋まり（小さい棒）。
-// 帯の色はだれが入れたか（仮押さえ = AI 青緑・承認で確定 = 人 琥珀・前からの確定 = 外 藍）。色だけに頼らず帯の頭に「AI」「人」「外」の札。
+// 帯の色はメニュー（薄い背景＋左の太い線。src/lib/book/menuColor.ts・globals.css の --menu-<名前>）。字はふつうの字の色。
+// だれが入れたか（AI・人・外）は色ではなく、帯の頭の札（ActorTag）だけで見せる。
 
 import type { CSSProperties } from "react";
 import { ActorTag, CustomerName, MiniBar } from "@/components/parts";
 import { bandTitle, type Timetable, type TimetableBand } from "@/lib/book/timetable";
 
 function bandClass(b: TimetableBand): string {
-  return ["tt-band", b.status === "hold" ? "hold" : "confirmed", `actor-${b.actor}`, b.fresh ? "fresh" : "", b.minutes <= 30 ? "short" : ""]
+  return ["tt-band", b.status === "hold" ? "hold" : "confirmed", `menu-c-${b.menuColor}`, b.fresh ? "fresh" : "", b.minutes <= 30 ? "short" : ""]
     .filter(Boolean)
     .join(" ");
 }
@@ -83,7 +84,7 @@ export function TimetableGrid({ tt }: { tt: Timetable }) {
                   {b.status === "hold" && <span className="tag hold">仮押さえ</span>}
                   {b.fresh && <span className="tag ok">承認で確定</span>}
                   {b.site && <span className="tag from-site">予約サイトから</span>}
-                  {b.firstVisit && <span className="tt-band-first">初めての方</span>}
+                  {b.firstVisit && <span className="tag first">初めての方</span>}
                 </span>
               </li>
             ))}

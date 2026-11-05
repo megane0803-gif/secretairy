@@ -66,13 +66,14 @@ src/components/    共通の部品
 src/app/api/ai/    AI を呼ぶ窓口（サーバーの側。受け取った物は残さない）
 src/lib/           設定の読み込み・ルール（言葉で書いて足す入口は rules/words.ts）
 src/lib/ai/        予約チャットの道具・流れ・料金の答え（prices.ts）・決まった返事（テスト用）
-src/lib/book/      台帳・承認の箱・保存したカルテ・「翌日へ」（ブラウザの中に残す形）・予約サイト（架空）から入る予約（site.ts。承認の箱は通さない・AI なし）
+src/lib/book/      台帳・承認の箱・保存したカルテ・「翌日へ」（ブラウザの中に残す形）・予約サイト（架空）から入る予約（site.ts。承認の箱は通さない・AI なし）・台帳の帯の色（menuColor.ts。メニューごと・config/menus.json の color・値は globals.css の --menu-*。だれは帯の頭の札だけ）
 src/lib/karte/     カルテ：見出しに分ける・整える（tidy.ts。重ねない・次回の希望は次回提案にも）・言葉の門・保存と ToDo・Claude（Haiku）と決まった返事・人が直す（edit.ts。案も保存したカルテも最初の状態のカルテも。人の行は門を通さない）・お客様一覧（customers.ts）
 src/lib/recording/ カルテの「録音からメモを作る」（PC だけ）：区切る・黙っている所を飛ばす・Whisper（Web Worker）・要点（Haiku）・フォルダ・画面の録音（IndexedDB に残す）
 src/lib/ads/       広告の数・門・道具・流れ・決まった返事・広告の承認の箱（ブラウザの中に残す形）
 src/lib/ads/team/  広告の案の「AI のチーム」の会議：リサーチャー（research.ts。プログラム）・欄ごとの言葉の門（gate.ts）・流れ（run.ts）・決まった返事（script.ts）・会議の印（state.ts）
 src/lib/accounting/ 経理：売上の数・通販の明細の仕分け（自動のルール）・門・登録（ブラウザの中に残す形。AI は使わない）
 src/lib/todo/      ToDo：入口ごとの鍵・並べ方（items.ts。Claude は並べない）・枠が埋まった時・メモを投げる（Haiku は文だけ・門・決まった返事）・メモの期限（due.ts。プログラムが読む）
+src/lib/todo/kinds.ts ToDo の種類の箱（お客様・仕入れと材料・お店のこと・お金と事務・広告・その他）：出どころからプログラムが決める（todoKind。画面に依らない）。投げたメモだけ送る時に選んだ種類（選ばなければ その他）。AI には決めさせない・送らない
 src/lib/posts/     発信：言葉の門・日時を入れる（台帳と設定から。本当に空いている時間・材料の時期）・お休みの日付は材料から読む（closed.ts。全部読み切れなければ読めないと出す）・ぶつかったら確かめての注意・発信だけの数の見方（postNumbersWritten）・指示文・流れ（作り直し1回）・決まった返事・保存した下書き（ブラウザの中に残す形）
 src/lib/posts/team/ 発信の下書きの「AI のチーム」：候補にしてよいかの確かめ（gate.ts。1回だけ出てくる1文まるごと・数字・日付・印・URL なし・置きかえた後の全文）・リサーチャー（research.ts。プログラム。画面で今の台帳と設定から毎回）・指示（prompt.ts）・流れ（run.ts）・決まった返事（script.ts）・下書きの番号・版・会議の番号と「入れる」（state.ts）
 src/lib/line/      LINE のつなぎ（オーナー側）：署名・Redis・つなぎと預かり（bridge）・一言の振り分け（sort）・画面での入れ方（apply）
