@@ -114,6 +114,7 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 @media (max-width: 1023.98px) {
   .page.right-first-sp > .page-main { display: contents; }
   .page.right-first-sp > .page-main > .pending { order: -3; }
+  .page.right-first-sp > .page-main > .pending-row { order: -3; }
   .page.right-first-sp > .page-main > .page-head { order: -2; margin: 0; }
   .page.right-first-sp > .page-right { order: -1; }
 }
@@ -1006,7 +1007,6 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 
 /* ---- ホームの「AI の仕事」 ---- */
 
-.ai-jobs .page-head h2 { margin: 0; }
 .ai-jobs-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0; }
 .ai-jobs-list { margin-top: 8px; }
 .ai-job.done { border-left-color: var(--ok); }
@@ -1353,6 +1353,97 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .voice-facts dt { font-size: 0.78rem; color: var(--muted); min-width: 5.5em; }
 .voice-facts dd { margin: 0; min-width: 0; }
 
+/* ---- 承認待ちの1行の隣（TabFrame の beside。渡したタブだけ。今はホームの「AI の仕事をまとめて動かす」）----
+   真ん中の列が狭い時は折り返す。スマホは承認待ちの下に、ボタンを横いっぱいで */
+
+.pending-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; min-width: 0; }
+.pending-row > .pending { flex: 0 1 auto; min-width: 0; }
+.pending-row > :not(.pending) { flex: 1 1 260px; min-width: 0; }
+.ai-jobs-run { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ai-jobs-run .ai-jobs-top { margin: 0; min-height: 44px; }
+@media (max-width: 1023.98px) {
+  .pending-row { flex-direction: column; align-items: stretch; }
+  .pending-row > :not(.pending) { flex: none; }
+  .ai-jobs-run .ai-jobs-top > .btn.primary { width: 100%; }
+}
+
+/* ---- ホームの欄：題名＋だれの札＋題名の下の1行（parts.tsx の SectionHead・RememberFold）---- */
+
+.section-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.section-title { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+h3.section-title { font-size: 1rem; }
+.section-aside { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
+.section-desc { margin: 2px 0 8px; color: var(--muted); font-size: 0.85rem; overflow-wrap: anywhere; }
+.panel .section-head { margin: 0; }
+
+/* 畳める欄（RememberFold）。見出しの行を押すと開く・閉じる。閉じても中身は外さず、見えなくするだけ */
+.rfold-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.rfold-title { margin: 0; flex: 1 1 auto; min-width: 0; }
+.rfold-toggle {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  padding: 2px 0;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rfold-toggle:hover .rfold-name { color: var(--accent); }
+.rfold-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.rfold-mark::before { content: "▶"; display: inline-block; width: 1em; font-size: 0.75rem; color: var(--muted); }
+.rfold[data-state="open"] .rfold-mark::before { content: "▼"; }
+.rfold-count { margin-left: auto; font-size: 0.85rem; font-weight: 400; color: var(--muted); white-space: nowrap; }
+.rfold-aside { flex: none; }
+.rfold-body[hidden] { display: none; }
+.rfold > .section-desc { margin-left: calc(0.75rem + 8px); }
+.rfold[data-state="closed"] > .section-desc { margin-bottom: 0; }
+/* 最初の描画（幅も覚えた物もまだ読めない間）は、PC／スマホの最初の状態で見せ分ける */
+@media (min-width: 1024px) {
+  .rfold[data-state="auto"][data-pc="closed"] > .rfold-body { display: none; }
+  .rfold[data-state="auto"][data-pc="open"] .rfold-mark::before { content: "▼"; }
+}
+@media (max-width: 1023.98px) {
+  .rfold[data-state="auto"][data-sp="closed"] > .rfold-body { display: none; }
+  .rfold[data-state="auto"][data-sp="open"] .rfold-mark::before { content: "▼"; }
+}
+.brief.rfold { margin: 12px 0; }
+.page-right .rfold.panel { padding: 12px 16px; }
+
+/* ---- ホームの朝の要点：数字3枚は中身の幅で左に、空いた右に「まずやる3つ」。真ん中の列が狭い時（640px 未満）は上下に積む ----
+   小さくするのはホームの朝の要点だけ（BigNumber 自体・ほかのタブの数字は今のまま） */
+
+.home-morning { margin: 0 0 16px; }
+.morning-wrap { container-type: inline-size; }
+.morning-row { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.home-bignums { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.home-bignums .bignum { flex: none; padding: 8px 12px; }
+.morning-top { min-width: 0; }
+.morning-top .todos { margin-bottom: 4px; }
+.morning-top .hint { margin: 0; }
+@container (min-width: 640px) {
+  .morning-row { flex-direction: row; align-items: flex-start; gap: 16px; }
+  .home-bignums { display: grid; grid-template-columns: max-content; flex: none; }
+  .home-bignums .bignum { flex-direction: row; align-items: baseline; gap: 6px; padding: 6px 12px; }
+  .home-bignums .bignum-label { margin-right: auto; padding-right: 8px; }
+  .morning-top { flex: 1 1 auto; }
+}
+
+/* 思いついたことを一言メモ：字数と「AI／決まった返事」を1行に */
+.home-memo { margin: 0 0 16px; }
+.home-memo .memo-throw { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 12px; margin: 0; }
+.home-memo .memo-throw > * { grid-column: 1 / -1; }
+.home-memo .memo-throw > .karte-count { grid-column: 1; margin: 0; }
+.home-memo .memo-throw > .chat-mode { grid-column: 2; justify-content: flex-end; }
+
+.home-bottom { margin-top: 16px; }
+.home-bottom .fold { margin-top: 0; }
 /* 経理：freee（テスト事業所）の札・数（長い札は折り返す） */
 .tag.wrap { white-space: normal; display: inline-block; }
 .freee-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }

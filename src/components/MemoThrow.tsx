@@ -16,7 +16,8 @@ import { maskNames, restoreNames } from "@/lib/todo/names";
 import { useTodos } from "@/lib/todo/useTodos";
 import type { TodoMode, TodoRequest, TodoResponse } from "@/lib/todo/wire";
 
-export function MemoThrow({ data, maxChars }: { data: BookData; maxChars: number }) {
+/** label・hideLabel は渡した時だけ使う（ホームは欄の題名を外に出すので、入力欄の名前は読み上げだけにする） */
+export function MemoThrow({ data, maxChars, label = "メモを投げる", hideLabel = false }: { data: BookData; maxChars: number; label?: string; hideLabel?: boolean }) {
   const id = useId();
   const todos = useTodos(data);
   const { rules } = useRules(data.seedRules);
@@ -86,8 +87,8 @@ export function MemoThrow({ data, maxChars }: { data: BookData; maxChars: number
         if (canSend) void send(mode);
       }}
     >
-      <label htmlFor={`${id}-text`} className="memo-throw-label">
-        メモを投げる
+      <label htmlFor={`${id}-text`} className={hideLabel ? "sr-only" : "memo-throw-label"}>
+        {label}
       </label>
       <div className="memo-throw-row">
         <input

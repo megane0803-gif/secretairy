@@ -75,7 +75,7 @@ describe("3. 色は3つの変数で、使う所は台帳・AI の手順・日誌
     assert.match(block, /@media \(prefers-color-scheme: dark\) \{\s*:root \{\s*--who-ai: #[0-9a-f]{6};\s*--who-human: #[0-9a-f]{6};\s*--who-outside: #[0-9a-f]{6};/);
   });
 
-  test("ActorTag・actor- の札・--who- の色を使うのは、台帳・時間割・AI の手順・日誌（と部品）だけ", () => {
+  test("ActorTag・actor- の札・--who- の色を使うのは、台帳・時間割・AI の手順・日誌・ホームの欄の題名（と部品）だけ", () => {
     const allowed = new Set([
       "src/app/reservations/Ledger.tsx",
       "src/app/reservations/TimetableGrid.tsx",
@@ -85,6 +85,11 @@ describe("3. 色は3つの変数で、使う所は台帳・AI の手順・日誌
       "src/components/AdTeam.tsx",
       // AI のチームのカードの形と色（広告の案の会議と発信の下書きの会議で共有。§1.7.4・§1.10.1）
       "src/components/TeamVoice.tsx",
+      // ホームの欄の題名の「だれの欄か」の札（§3.4。札の部品 ActorTag をそのまま使う）
+      "src/app/home/page.tsx",
+      "src/app/home/HomeSummary.tsx",
+      "src/app/home/BriefNotes.tsx",
+      "src/app/home/AiJobs.tsx",
       "src/components/parts.tsx",
       "src/lib/actors.ts",
       "src/lib/book/timetable.ts",

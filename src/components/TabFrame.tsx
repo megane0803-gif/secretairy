@@ -10,15 +10,21 @@ import { Splitter } from "./Splitter";
 export function TabFrame({
   tab,
   baseSwitches,
-  pending,
+  pending: pendingBar,
   right,
   rightFirstOnPhone = false,
   top,
+  beside,
   children,
 }: {
   tab: TabId;
   baseSwitches: TabSwitches;
   pending: ReactNode;
+  /**
+   * 承認待ちの1行の隣に置く物（ホームの「AI の仕事をまとめて動かす」）。承認待ちの1行はまるごとリンクなので、その外の隣に置く。
+   * 渡したときだけ、承認待ちと beside を1つの行（pending-row。狭い時は折り返す）に入れる。渡さないタブは今までどおり。
+   */
+  beside?: ReactNode;
   right: ReactNode;
   /** スマホ（1列）で、右の列（そのタブの入力欄）を見出しのすぐ下・ページの上に出す */
   rightFirstOnPhone?: boolean;
@@ -58,6 +64,16 @@ export function TabFrame({
       </div>
     );
   }
+
+  // beside を渡したタブだけ、承認待ちの1行と beside を1つの行に入れる
+  const pending = beside ? (
+    <div className="pending-row">
+      {pendingBar}
+      {beside}
+    </div>
+  ) : (
+    pendingBar
+  );
 
   const head = (
     <div className="page-head">

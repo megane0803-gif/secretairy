@@ -39,6 +39,11 @@ function Rows({ list, timezone }: { list: ReturnType<typeof useJournal>; timezon
   );
 }
 
+/** 日誌の行の数（ホームの「これまでの動き」の見出しの右） */
+export function JournalCount() {
+  return <>{useJournal().length}行</>;
+}
+
 export function JournalList({ timezone }: { timezone: string }) {
   const list = useJournal();
   if (list.length === 0) return <p className="empty">まだありません。AI が道具を呼ぶ・人がボタンを押すと、ここに1行ずつ入ります。</p>;
