@@ -1,5 +1,5 @@
-// LINE のつなぎだけに使う、短い間の置き場所（Upstash Redis。サーバーの側だけ）。
-// 置くのは「合言葉のつなぎ」と「画面が受け取りに来るまでの LINE の知らせ」だけ。どれも期限つきで消える。
+// LINE のつなぎと試験10問の見張りだけに使う、短い間の置き場所（Upstash Redis。サーバーの側だけ）。
+// 置くのは「合言葉のつなぎ」「画面が受け取りに来るまでの LINE の知らせ」と、試験10問の「流している印」「呼んだ回数」（src/lib/eval/guard.ts）だけ。どれも期限つきで消える。
 // お客様の記録・台帳・日誌はここに置かない（それは見ている人のブラウザの中だけ。docs/SPEC.md §5.1）。
 //
 // 環境変数は Vercel が Upstash をつないだときに自動で入れる名前を使う：
@@ -19,6 +19,8 @@ export interface KvStore {
   rpush(key: string, value: string, ex: number): Promise<void>;
   /** 前から count 個取り出す（取り出した物は消える） */
   lpop(key: string, count: number): Promise<string[]>;
+  /** 期限（秒）を付けなおす。鍵が無ければ false */
+  expire(key: string, ex: number): Promise<boolean>;
 }
 
 /** 置き場所がつながっていない（環境変数が無い・止まっている など） */
@@ -79,6 +81,7 @@ export function upstashStore(conf = storeEnv()): KvStore {
       const r = await one("LPOP", k, count);
       return Array.isArray(r) ? r.filter((x): x is string => typeof x === "string") : [];
     },
+    expire: async (k, ex) => Number(await one("EXPIRE", k, Math.max(1, Math.ceil(ex)))) === 1,
   };
 }
 
@@ -128,6 +131,12 @@ export function memoryStore(now: () => number = Date.now): KvStore & { keys(): s
       if (rest.length) m.set(k, { v: rest, until: e.until });
       else m.delete(k);
       return out;
+    },
+    expire: async (k, ex) => {
+      const e = live(k);
+      if (!e) return false;
+      m.set(k, { v: e.v, until: now() + ex * 1000 });
+      return true;
     },
   };
 }

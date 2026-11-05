@@ -157,6 +157,14 @@ describe("AI の仕事：1行ずつ動く", () => {
     assert.equal(again.w.jobs.done.ads, undefined, "済みにしない");
   });
 
+  test("広告の見直し：AI のチームの会議は開かない（会議の窓口は呼ばず、会議の印も声も日誌に出さない）", async () => {
+    const { w, env, calls } = setup();
+    await runJob("ads", env, budget());
+    assert.deepEqual(calls, ["ads"]);
+    assert.equal(pendingAd(w.ads)?.team, undefined);
+    for (const j of w.journal) assert.doesNotMatch(j.text, /会議|リサーチャー|分身|野党|補佐/, j.text);
+  });
+
   test("メモ：今の ToDo の足し方（メモ:番号）で ToDo へ", async () => {
     const { w, env, calls } = setup();
     const r = await runJob("memo", env, budget());

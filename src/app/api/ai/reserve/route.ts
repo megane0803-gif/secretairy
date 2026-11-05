@@ -4,11 +4,12 @@
 
 import { runReserve } from "@/lib/ai/agent";
 import { claudeModel } from "@/lib/ai/claude";
+import { evalGate } from "@/lib/eval/guard";
 import { NoAiError, type ReplyModel } from "@/lib/ai/model";
 import { contextFor, parseReserveRequest } from "@/lib/ai/request";
 import { scriptModel } from "@/lib/ai/script";
 import { NO_AI_MESSAGE, type ReserveEvent } from "@/lib/ai/wire";
-import { getAiSettings, getMenus, getShop } from "@/lib/settings";
+import { getAiSettings, getMenus, getShop, getEvalSettings } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,9 @@ function line(e: ReserveEvent): Uint8Array {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // 試験10問（/eval）の札が付いた頼みだけ、サーバーでも「同時に1回だけ」「1回の試験で呼べる回数」を見張る（src/lib/eval/guard.ts）
+  const refused = await evalGate(request, getEvalSettings());
+  if (refused) return refused;
   const shop = getShop();
   const menus = getMenus();
   const ai = getAiSettings();

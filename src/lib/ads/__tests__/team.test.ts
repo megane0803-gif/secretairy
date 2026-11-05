@@ -422,6 +422,74 @@ describe("3. 過去が0件の時・野党が欠けた時・「直す」とぶつ
   });
 });
 
+describe("会議の途中で LINE のボタンで決まった時・日誌の形・出さない所", () => {
+  for (const how of ["approve", "skip"] as const)
+    test(`会議の途中で LINE のボタン（${how === "approve" ? "承認" : "見送り"}）で決まったら、答えを出さない`, async () => {
+      let s = await scriptProposal();
+      const p = pendingAd(s)!;
+      s = withTeamStarted(s, p.id, NOW, p.mode);
+      const result = (await meet(inputFor(s), "script", scriptTeamWriter, limits))!;
+      const line = applyPress({ id: "e1", at: NOW, kind: "press", approvalId: p.id, target: "ad", how }, emptyBook(ANCHOR), s, {
+        nowIso: NOW,
+        today: ANCHOR,
+        shop,
+        adSettings: settings,
+        menus: getMenus(),
+        customers: [],
+      });
+      // 答えをまだ出していないので、分身の予想の1行も書かない
+      assert.ok(!line.journal.some((j) => j.text.startsWith("分身の予想")));
+      const out = withTeamResult(line.ads, p.id, NOW, result);
+      assert.equal(out.arrival, "decided");
+      assert.equal(out.state.proposals[0].team?.result, undefined);
+      assert.equal(shownTeam(out.state.proposals[0]), null);
+    });
+
+  test("会議の中身は、役の名前つきで短く日誌に（AI の役は「AI」・リサーチャーはプログラム）", async () => {
+    const s = await scriptProposal();
+    const p = pendingAd(s)!;
+    for (const [mode, writer] of [
+      ["ai", fakeClaude(GOOD)],
+      ["script", scriptTeamWriter()],
+    ] as const) {
+      const r = (await runTeam(inputFor(s), writer, limits, mode))!;
+      const lines = teamJournal(p, r);
+      assert.deepEqual(
+        lines.map((l) => l.text.split(/[（：]/)[0]),
+        ["リサーチャー", "分身", "野党", "補佐"],
+      );
+      assert.equal(lines[0].who, "プログラム");
+      for (const l of lines.slice(1)) assert.equal(l.who, mode === "ai" ? "AI" : "プログラム");
+      // 短く：数字はリサーチャーの番号だけ・1行は欄の長さの合計まで
+      const max = team.maxTwinChars + team.maxLineChars * 3 + 20;
+      for (const l of lines) assert.ok([...l.text].length <= max, `${l.text}（${[...l.text].length}字）`);
+    }
+  });
+
+  test("ホームの「AI の仕事」と予約の「AI の手順」には出さない（会議の部品を使うのは広告の案の行だけ）", async () => {
+    const { readdirSync, readFileSync, statSync } = await import("node:fs");
+    const { join, relative } = await import("node:path");
+    const root = join(__dirname, "../../../..");
+    const walk = (d: string): string[] => readdirSync(d).flatMap((n) => (statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : [join(d, n)]));
+    const users = walk(join(root, "src"))
+      .filter((f) => /\.(ts|tsx)$/.test(f) && !f.includes("__tests__") && !f.includes(join("src", "lib", "ads", "team")))
+      // 会議の部品を import している所（と、会議の窓口の URL を書いている所）
+      .filter((f) => /from "[^"]*(ads\/team|\.\/team\/|AdTeam)[^"]*"|"\/api\/ai\/ads\/team"/.test(readFileSync(f, "utf8")))
+      .map((f) => relative(root, f).split("\\").join("/"))
+      .sort();
+    assert.deepEqual(users, [
+      "src/app/api/ai/ads/team/route.ts",
+      "src/components/AdApprovalRows.tsx",
+      "src/components/AdTeam.tsx",
+      "src/lib/ads/state.ts",
+      "src/lib/line/apply.ts",
+    ]);
+    // AI の仕事（src/lib/jobs・ホームの欄）と AI の手順（予約チャット・AiSteps）は、会議に触れない
+    for (const f of [...walk(join(root, "src/lib/jobs")), join(root, "src/app/home/AiJobs.tsx"), join(root, "src/components/AiSteps.tsx"), ...walk(join(root, "src/lib/ai")), ...walk(join(root, "src/app/reservations"))].filter((f) => !f.includes("__tests__")))
+      assert.doesNotMatch(readFileSync(f, "utf8"), /ads\/team|AdTeam|分身|野党|補佐|リサーチャー/, relative(root, f));
+  });
+});
+
 describe("言葉の門（欄ごと）", () => {
   const opts = { maxSentences: 1, maxChars: team.maxLineChars, gateWords: settings.gateWords, material: "" };
 
