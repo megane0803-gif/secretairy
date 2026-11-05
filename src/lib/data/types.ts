@@ -89,6 +89,23 @@ export type AdReport = {
    * 判定日（承認の checkAfterDays 日後）に、前の同じ週の数（weeks の最後の週から）と比べる（src/lib/ads/verdict.ts）。
    */
   after?: AdAfter[];
+  /**
+   * 前のオーナーの判断（架空。この表の前の見直しで決めた案）。AI のチームの「分身」が読む（src/lib/ads/team/）。
+   * 持つのは対象・止める／外す・承認か見送りか・決めた日（何番目の営業日。負の数は過去）・その時の4週の予約の数だけ。理由は持たない。
+   */
+  past?: AdPastDecision[];
+};
+
+/** 前のオーナーの判断1つ（架空の最初の状態） */
+export type AdPastDecision = {
+  id: string;
+  text: string;
+  action: "stop" | "exclude";
+  decision: "approved" | "skipped";
+  /** 決めた日（起点の日から数えた営業日。負の数 = 過去） */
+  day: BusinessDay;
+  /** その時の4週の予約の数 */
+  bookings: number;
 };
 
 /** 止めた（外した）言葉の番号と、その後の週ごとの数（架空） */
