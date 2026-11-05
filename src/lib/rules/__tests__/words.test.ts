@@ -48,9 +48,14 @@ const reading = (r: Partial<RuleReading>): RuleReading => ({
   number: "",
   time: "",
   uncovered: "",
+  read_words: [],
   loosens_locked: false,
   ...r,
 });
+
+/** AI が文の全部を読み、「表せない所なし」と返した読みに見立てて、プログラムに通す */
+const see = (text: string, r: Partial<RuleReading>, answers?: WordsAnswers) =>
+  interpretWords(text, reading({ read_words: [text], ...r }), MENUS, answers);
 
 function filled(r: WordsResult) {
   assert.equal(r.status, "filled", JSON.stringify(r));
@@ -112,12 +117,12 @@ describe("今の形で表せる文は、欄を埋めて読み取った結果を�
 
   test("AI の数（分に直した数・文に無い数）は使わない", () => {
     const text = "予約は来店の3時間前まで";
-    for (const number of ["180", "5"]) assert.equal(filled(interpretWords(text, reading({ kind: "minLeadMinutes", number }), MENUS)).draft.minutes, 180);
+    for (const number of ["180", "5"]) assert.equal(filled(see(text, { kind: "minLeadMinutes", number })).draft.minutes, 180);
   });
 
   test("1日の上限・最終受付・当日の予約は不可・いっしょに受けない組み合わせ", () => {
     assert.deepEqual(filled(read("初めてのお客様は1日3人まで")).draft, { kind: "maxNewCustomersPerDay", scope: { level: "global" }, count: 3 });
-    const at = (text: string) => filled(interpretWords(text, reading({ kind: "lastStart", level: "menu", menu_id: "perm" }), MENUS));
+    const at = (text: string) => filled(see(text, { kind: "lastStart", level: "menu", menu_id: "perm" }));
     assert.equal(at("パーマの最終受付は18時").draft.time, "18:00");
     assert.equal(at("パーマの最終受付は１８：３０").draft.time, "18:30");
     assert.equal(at("パーマの最終受付は午後5時半").draft.time, "17:30");
@@ -157,7 +162,7 @@ describe("文の一部しか表せないときは、欄を埋めずに「この�
   }
 
   test("AI が「表せない所がある」と読んだときも埋めない", () => {
-    const r = partial(interpretWords("カラーの後は15分あける", reading({ kind: "bufferAfterMinutes", level: "menu", menu_id: "color", uncovered: "指名の時だけ" }), MENUS));
+    const r = partial(see("カラーの後は15分あける", { kind: "bufferAfterMinutes", level: "menu", menu_id: "color", uncovered: "指名の時だけ" }));
     assert.ok(r.parts.some((p) => p.includes("指名の時だけ")));
   });
 
@@ -166,6 +171,76 @@ describe("文の一部しか表せないときは、欄を埋めずに「この�
     assert.equal(body.ok, true);
     assert.equal(body.result.status, "partial");
     assert.equal(body.result.draft, undefined);
+  });
+});
+
+describe("文の全部を1つの種類で最後まで言えた時だけ埋める。迷ったら埋めない", () => {
+  /** AI が「間を空ける・カラー・表せない所なし・文の全部を読んだ」と返した読み */
+  const allRead = (text: string) => see(text, { kind: "bufferAfterMinutes", level: "menu", menu_id: "color", number: "15", uncovered: "" });
+
+  for (const text of ["カラーの開始前と終了後は15分ずつあける", "カラーの後は15分あける、当日の予約は受けない"]) {
+    test(`「${text}」は、AI が「表せない所なし」と返しても埋めない`, async () => {
+      const r = partial(allRead(text));
+      assert.ok(!("draft" in r));
+      // 決まった読みでも、窓口からでも埋めない
+      assert.equal(read(text).status, "partial");
+      const body = await (await post({ mode: "script", text })).json();
+      assert.equal(body.result.status, "partial");
+    });
+  }
+
+  test("後ろの間の種類で、文に「前」の字があれば埋めない", () => {
+    assert.ok(partial(allRead("カラーの開始前と終了後は15分ずつあける")).parts.some((p) => p.startsWith("「前」の間")));
+    assert.ok(partial(allRead("カラーの施術前は15分あける")).parts.some((p) => p.startsWith("「前」の間")));
+  });
+
+  test("ほかの種類の手がかりの言葉が同じ文に出たら埋めない（当日・初めて・〜時まで・〜時間前・同じ日）", () => {
+    const cases: [string, Partial<RuleReading>, string][] = [
+      ["カラーの後は15分あけて当日の予約は受けない", { kind: "bufferAfterMinutes", level: "menu", menu_id: "color" }, "当日の予約は不可"],
+      ["カラーの後は15分あけて初めての方は受けない", { kind: "bufferAfterMinutes", level: "menu", menu_id: "color" }, "1日の上限（初めての方）"],
+      ["初めてのお客様は1日3人で18時まで", { kind: "maxNewCustomersPerDay" }, "最終受付"],
+      ["パーマの最終受付は18時で3時間前までに予約", { kind: "lastStart", level: "menu", menu_id: "perm" }, "何分前まで"],
+      ["ヘッドスパは当日の予約を受けずパーマと同じ日に受けない", { kind: "noSameDay", level: "menu", menu_id: "headspa" }, "いっしょに受けない組み合わせ"],
+    ];
+    for (const [text, r, other] of cases) {
+      const p = partial(see(text, r));
+      assert.ok(p.parts.some((x) => x.includes(`別の種類「${other}」`)), `${text}：${p.parts.join(" / ")}`);
+    }
+  });
+
+  test("「、」で区切った後ろに別の決まり（〜ない・〜する など）が続いたら埋めない。「、」だけなら埋める", () => {
+    const p = partial(see("予約は来店の3時間前まで、電話では受けない", { kind: "minLeadMinutes" }));
+    assert.ok(p.parts.some((x) => x.startsWith("「、」の後ろの「電話では受けない」")));
+    assert.equal(filled(see("カラーの後は、15分あける", { kind: "bufferAfterMinutes", level: "menu", menu_id: "color" })).draft.minutes, 15);
+  });
+
+  test("AI が読んでいない言葉が残れば埋めない。読んだ言葉を返さなかった時も埋めない", () => {
+    const r: Partial<RuleReading> = { kind: "bufferAfterMinutes", level: "menu", menu_id: "color" };
+    // 読んだ言葉が文の全部を覆えば埋める
+    assert.equal(filled(interpretWords("カラーの後は15分あける", reading({ ...r, read_words: ["カラー", "後", "15分", "あける"] }), MENUS)).draft.minutes, 15);
+    const p = partial(interpretWords("ベテランが担当する日はカラーの後は15分あける", reading({ ...r, read_words: ["カラー", "後", "15分", "あける"] }), MENUS));
+    assert.ok(p.parts.some((x) => x.includes("読んでいない言葉「ベテラン」「担当」")), p.parts.join(" / "));
+    assert.ok(partial(interpretWords("カラーの後は15分あける", reading({ ...r, read_words: [] }), MENUS)).parts.some((x) => x.includes("どの言葉を読んだか")));
+    // 文に無い言葉を「読んだ」と言っても、読んだことにはならない
+    assert.equal(interpretWords("ベテランの日はカラーの後は15分あける", reading({ ...r, read_words: ["カラーの後は15分あける", "全部"] }), MENUS).status, "partial");
+  });
+
+  test("「この部分はまだ足せません」の下の文に、プログラムの中の名前（英字）を出さない", () => {
+    const p = partial(see("カラーの後は15分あける", { kind: "bufferAfterMinutes", level: "menu", menu_id: "color", uncovered: "noSameDay と bufferAfterMinutes の2つ（menu_id: color）" }));
+    const ai = p.parts.find((x) => x.includes("AI が表せないと読んだ所")) ?? "";
+    assert.match(ai, /当日の予約は不可/);
+    assert.match(ai, /間を空ける/);
+    assert.match(ai, /カラー/);
+    const texts = [
+      "カラーの開始前と終了後は15分ずつあける",
+      "カラーの後は15分あける、当日の予約は受けない",
+      "カラーの後は15分あけて初めての方は受けない",
+      "縮毛矯正とパーマとカラーは同じ日に受けない",
+      "土曜はカラーの後は15分あける",
+    ];
+    for (const r of [p, ...texts.map((t) => partial(read(t)))]) {
+      for (const x of [...r.parts, r.message]) assert.doesNotMatch(x.replace(/AI/g, ""), /[A-Za-z]/, x); // 「AI」は画面の言葉。ほかの英字は出さない
+    }
   });
 });
 
@@ -183,35 +258,35 @@ describe("あいまいなときは聞き返す（単位・効く所・メニュ�
   });
 
   test("時刻：午前か午後か分からない「6時」・「時」の無い「18」は聞き返す", () => {
-    const r = reading({ kind: "lastStart", level: "menu", menu_id: "perm" });
-    assert.deepEqual(asked(interpretWords("パーマの最終受付は6時", r, MENUS)).choices.map((c) => c.answer), ["06:00", "18:00"]);
-    assert.equal(asked(interpretWords("パーマの最終受付は18", r, MENUS)).choices[0].answer, "18:00");
-    assert.equal(filled(interpretWords("パーマの最終受付は6時", r, MENUS, { time: "18:00" })).label, "パーマの最終受付は18:00");
+    const r: Partial<RuleReading> = { kind: "lastStart", level: "menu", menu_id: "perm" };
+    assert.deepEqual(asked(see("パーマの最終受付は6時", r)).choices.map((c) => c.answer), ["06:00", "18:00"]);
+    assert.equal(asked(see("パーマの最終受付は18", r)).choices[0].answer, "18:00");
+    assert.equal(filled(see("パーマの最終受付は6時", r, { time: "18:00" })).label, "パーマの最終受付は18:00");
   });
 
   test("メニューの名前が文と同じでない（AI が言いかえを読んだ）→ そのメニューか全体かを聞く", () => {
     const text = "ストパーの後は30分あける";
-    const r = reading({ kind: "bufferAfterMinutes", level: "menu", menu_id: "straight" });
-    const a = asked(interpretWords(text, r, MENUS));
+    const r: Partial<RuleReading> = { kind: "bufferAfterMinutes", level: "menu", menu_id: "straight" };
+    const a = asked(see(text, r));
     assert.deepEqual(a.choices.map((c) => c.label), ["メニュー：縮毛矯正", "全体"]);
-    assert.deepEqual(filled(interpretWords(text, r, MENUS, { scope: "menu:straight" })).draft.scope, { level: "menu", menuId: "straight" });
-    assert.deepEqual(filled(interpretWords(text, r, MENUS, { scope: "global" })).draft.scope, { level: "global" });
+    assert.deepEqual(filled(see(text, r, { scope: "menu:straight" })).draft.scope, { level: "menu", menuId: "straight" });
+    assert.deepEqual(filled(see(text, r, { scope: "global" })).draft.scope, { level: "global" });
     // 無いメニューの答えでは埋めない
-    assert.equal(interpretWords(text, r, MENUS, { scope: "menu:nail" }).status, "ask");
+    assert.equal(see(text, r, { scope: "menu:nail" }).status, "ask");
   });
 
   test("文にメニューの名前があるのに AI が「全体」と読んだ・メニューを読めなかった → 聞き返す", () => {
-    const a = asked(interpretWords("カラーの後は15分あける", reading({ kind: "bufferAfterMinutes", level: "global" }), MENUS));
+    const a = asked(see("カラーの後は15分あける", { kind: "bufferAfterMinutes", level: "global" }));
     assert.deepEqual(a.choices.map((c) => c.answer), ["menu:color", "global"]);
-    const b = asked(interpretWords("あのメニューの後は15分あける", reading({ kind: "bufferAfterMinutes", level: "menu", menu_id: "" }), MENUS));
+    const b = asked(see("あのメニューの後は15分あける", { kind: "bufferAfterMinutes", level: "menu", menu_id: "" }));
     assert.deepEqual(b.choices.map((c) => c.answer), [...IDS.map((id) => `menu:${id}`), "global"]);
   });
 
   test("いっしょに受けない組み合わせで、名前が文と同じでない → 2つでよいかを聞く", () => {
-    const r = reading({ kind: "notTogether", level: "menu", menu_id: "straight", with_menu_id: "perm" });
-    const a = asked(interpretWords("ストパーとパーマ液は同じ日に受けない", r, MENUS));
+    const r: Partial<RuleReading> = { kind: "notTogether", level: "menu", menu_id: "straight", with_menu_id: "perm" };
+    const a = asked(see("ストパーとパーマ液は同じ日に受けない", r));
     assert.equal(a.choices[0].answer, "straight+perm");
-    assert.equal(filled(interpretWords("ストパーとパーマ液は同じ日に受けない", r, MENUS, { pair: "straight+perm" })).draft.with, "perm");
+    assert.equal(filled(see("ストパーとパーマ液は同じ日に受けない", r, { pair: "straight+perm" })).draft.with, "perm");
   });
 });
 
@@ -245,7 +320,7 @@ describe("🔒 鍵つきの2つは言葉で緩められない", () => {
   }
 
   test("AI が「緩める中身」と読んだときも断る", () => {
-    const r = interpretWords("仮押さえはそのまま本決まりにする", reading({ kind: "noSameDay", loosens_locked: true }), MENUS);
+    const r = see("仮押さえはそのまま本決まりにする", { kind: "noSameDay", loosens_locked: true });
     assert.deepEqual(r, { status: "locked", reason: LOCKED_BY_AI_REASON });
   });
 
@@ -267,7 +342,7 @@ describe("サーバー（/api/ai/rules）でも確かめる。画面だけに頼
   });
 
   test("AI が無いメニュー・おかしな種類を返したら、サーバーで埋めない", async () => {
-    const bad: RuleReader = { async read() { return { reading: { ...reading({ kind: "bufferAfterMinutes", level: "menu", menu_id: "nail" }) }, stop: "end" }; } };
+    const bad: RuleReader = { async read() { return { reading: { ...reading({ kind: "bufferAfterMinutes", level: "menu", menu_id: "nail", read_words: ["ネイルの後は15分あける"] }) }, stop: "end" }; } };
     const a = await runRuleWords({ text: "ネイルの後は15分あける", reader: bad, menus: MENUS, maxTokens: 100 });
     assert.equal(a.result.status, "ask");
     const odd: RuleReader = { async read() { return { reading: { kind: "deleteAll" }, stop: "end" }; } };
@@ -290,7 +365,7 @@ describe("サーバー（/api/ai/rules）でも確かめる。画面だけに頼
       const odd = await (await post({ mode: "ai", text, reading: { ...first.reading, kind: "text" }, answers: {} })).json();
       assert.equal(odd.result.status, "cannot");
       // 無いメニューは空にして、もう一度聞き返す
-      const nail = await (await post({ mode: "ai", text: "あのメニューの後は15分あける", reading: { ...first.reading, menu_id: "nail" }, answers: { scope: "menu:nail" } })).json();
+      const nail = await (await post({ mode: "ai", text: "あのメニューの後は15分あける", reading: { ...first.reading, menu_id: "nail", read_words: ["あのメニューの後は15分あける"] }, answers: { scope: "menu:nail" } })).json();
       assert.equal(nail.result.status, "ask");
     });
   });

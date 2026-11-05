@@ -3,7 +3,8 @@
 // 読みを欄の中身に直すのはここ（プログラム。サーバーの窓口で通す。聞き返しの答えもサーバーでもう一度通す）：
 //   1. 🔒 鍵つきの2つを緩める文は、欄を埋めずに理由をつけて断る（validate.ts の lockedConflict。AI の印でも断る）
 //   2. 今の種類に当てはまらない文は「まだ足せません」。新しい種類は作らない
-//   3. 文の一部しか今の形で表せない（「前後」・条件・2つ以上の決まり）ときは、欄を埋めずに「この部分はまだ足せません」
+//   3. 文の全部を1つの種類で最後まで言えた時だけ埋める。迷ったら埋めない（AI が「表せない所なし」と返しても、プログラムが迷えば埋めない）。
+//      「前」の字・ほかの種類の手がかりの言葉・「、」の後ろの別の決まり・AI が読んでいない言葉 が残れば「この部分はまだ足せません」
 //   4. 効く所・メニューがあいまいなとき、数に単位が無いときは聞き返す
 //   5. 数と単位は AI の答えではなく文から読み直す（「3時間」→ 180分）。今の上限と下限の中か、メニューが本当にあるかも確かめる
 // 足すのは人の「足す」ボタンだけで、今の確かめ（validate.ts の validateOwnerRule）をそのまま通す。
@@ -33,11 +34,15 @@ export type RuleReading = {
   time: string;
   /** 選んだ種類では表せない条件や決まり（無ければ空） */
   uncovered: string;
+  /** 欄を埋めるのに読んだ言葉（文のとおりに抜き出した物）。読んでいない言葉が残れば埋めない */
+  read_words: string[];
   loosens_locked: boolean;
 };
 
 const WORDS_KINDS: WordsKind[] = [...PROGRAM_KINDS, "none"];
 const WORDS_LEVELS: WordsLevel[] = ["global", "reservations", "menu"];
+/** 読んだ言葉の数の上限（文は100字までなので、これより多くは要らない） */
+const MAX_READ_WORDS = 30;
 
 /** Claude に返させる形（structured outputs の JSON Schema） */
 export const READING_SCHEMA = {
@@ -49,10 +54,11 @@ export const READING_SCHEMA = {
     with_menu_id: { type: "string", description: "いっしょに受けない組み合わせの2つ目のメニューの id。無ければ空" },
     number: { type: "string", description: "文に書いてある数を半角の数字で。無ければ空。単位は付けない・直さない" },
     time: { type: "string", description: "最終受付の時刻が書いてあれば HH:MM（24時間）。無ければ空" },
-    uncovered: { type: "string", description: "文の中で、選んだ種類では表せない条件や決まり（例「前」「土曜」「2つ目の決まり」）。無ければ空" },
+    uncovered: { type: "string", description: "文の中で、選んだ種類では表せない条件や決まりを日本語で（例「前」「土曜」「2つ目の決まり」）。無ければ空。英字の名前は使わない" },
+    read_words: { type: "array", items: { type: "string" }, description: "欄を埋めるのに読んだ言葉を、文のとおりに抜き出して並べる（例「カラー」「後」「15分」「あける」）" },
     loosens_locked: { type: "boolean", description: "🔒 の2つ（確定は人・健康や医療の判断はしない）を緩める・外す中身なら true" },
   },
-  required: ["kind", "level", "menu_id", "with_menu_id", "number", "time", "uncovered", "loosens_locked"],
+  required: ["kind", "level", "menu_id", "with_menu_id", "number", "time", "uncovered", "read_words", "loosens_locked"],
   additionalProperties: false,
 } as const;
 
@@ -76,6 +82,7 @@ export function parseReading(raw: unknown, menuIds: string[]): RuleReading | nul
     number: /^\d+(?:\.\d+)?$/.test(number) ? number : "",
     time: /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : "",
     uncovered: str(r.uncovered),
+    read_words: Array.isArray(r.read_words) ? r.read_words.slice(0, MAX_READ_WORDS).map((w) => str(w)).filter(Boolean) : [],
     loosens_locked: r.loosens_locked === true,
   };
 }
@@ -95,7 +102,9 @@ export function ruleWordsSystem(menus: WordsMenu[]): string {
   lines.push("  - noSameDay：当日（来店と同じ日）の予約は受けない");
   lines.push("  - lastStart：最終受付の時刻");
   lines.push("  - notTogether：2つのメニューを同じ日に受けない（menu_id と with_menu_id に2つ）");
-  lines.push("- 文の一部しかその種類で表せないとき（「前後」の前・曜日や天気などの条件・1文に2つ以上の決まり）は、表せない所を uncovered に短く書く。表せた所だけで済ませない。");
+  lines.push("- 文の全部を1つの種類で最後まで言えた時だけ欄を埋める。迷ったら kind を none にする。");
+  lines.push("- 文の一部しかその種類で表せないとき（「前」の間・曜日や天気などの条件・1文に2つ以上の決まり）は、表せない所を uncovered に日本語で短く書く。英字の名前（種類の id など）は書かない。表せた所だけで済ませない。");
+  lines.push("- read_words には、欄を埋めるのに読んだ言葉を、文のとおりに抜き出して全部並べる（例「カラーの後は15分あける」なら「カラー」「後」「15分」「あける」）。");
   lines.push("- level：メニューの名前があれば menu、「予約のタブ」とあれば reservations、ほかは global。");
   lines.push("- menu_id・with_menu_id は下のメニュー一覧の id だけ。無ければ空の文字。");
   lines.push("- number は文に書いてある数を半角の数字で（漢数字も数字に）。書いてなければ空。自分で数を作らない。単位は付けず、分に直さない（直すのはプログラム）。");
@@ -249,20 +258,84 @@ export function menusInText(text: string, menus: WordsMenu[]): string[] {
   return found.sort((a, b) => a.at - b.at).map((f) => f.id);
 }
 
-// 文の一部しか表せない、の手がかり（プログラムが見る。AI の uncovered と合わせる）
-const FRONT_GAP = /(前後|前と後|前も|の前(に|は|を|の))/;
+// 文の一部しか表せない、の手がかり（プログラムが見る。AI の uncovered・read_words と合わせる）。迷ったら埋めない
 const CONDITION = /(月曜|火曜|水曜|木曜|金曜|土曜|日曜|平日|週末|土日|祝日|祭日|休日|雨|雪|午前中|繁忙期|閑散期|年末|年始|お盆|連休|学生|子ども|子供|男性|女性|常連|リピーター|指名|カップル|家族)/;
 const CONJUNCTION = /(かつ|且つ|および|及び|ならびに|並びに|それと|それから|さらに|加えて|しかも|または|又は|もしくは|あと、)/;
+/** 種類ごとの手がかりの言葉。選んだ種類のほかの手がかりが同じ文に出たら、2つ目の決まりかもしれないので埋めない */
+const KIND_CLUES: Record<ProgramKind, RegExp> = {
+  minLeadMinutes: /(\d+(?:\.\d+)?(?:分|時間半?|時間\d+分|日|週間)前|前日|前まで)/,
+  maxNewCustomersPerDay: /(初めて|新規|初回)/,
+  bufferAfterMinutes: /(あけ|空け|開け|間を|インターバル)/,
+  noSameDay: /(当日|同じ日の予約|同日の予約|その日の予約|即日)/,
+  lastStart: /(最終受付|受付は|\d+時(?:半|\d+分)?まで|\d+:\d{2}まで|までに始め)/,
+  notTogether: /(一緒|いっしょ|同時に|同じ日に(?:は)?受けない|同日に(?:は)?受けない)/,
+};
+/** 「、」で区切った1つずつが、決まりの言い切り（〜ない・〜する・〜まで など）で終わっているか */
+const CLAUSE_END = /(ない|ません|ず|する|します|しない|あける|あけます|空ける|開ける|受ける|受けます|受け付ける|まで|までに|不可|禁止|だけ|にする|取る|とる|です|だ)$/;
+/** 読んでいない言葉として数えない、どの決まりにも出てくる言葉（漢字・カタカナの並び） */
+const GENERIC_RUNS = new Set(["予約", "来店", "客様", "客", "様", "施術", "店", "当店", "後", "日", "時", "分", "人", "名"]);
 
-/** 文の中で、今の形で表せない所（無ければ空） */
+/** AI の書いた所から、プログラムの中の名前（英字）を日本語に言いかえる・消す */
+export function japaneseOnly(s: string, menus: WordsMenu[]): string {
+  let out = s;
+  for (const k of [...PROGRAM_KINDS].sort((a, b) => b.length - a.length)) out = out.split(k).join(KIND_INFO[k].name);
+  for (const m of [...menus].sort((a, b) => b.id.length - a.id.length)) out = out.replace(new RegExp(`\\b${m.id}\\b`, "g"), m.name);
+  const FIELD: Record<string, string> = {
+    with_menu_id: "2つ目のメニュー",
+    menu_id: "メニュー",
+    read_words: "",
+    uncovered: "",
+    loosens_locked: "",
+    kind: "種類",
+    level: "効く所",
+    global: "全体",
+    reservations: "予約のタブ",
+    menu: "メニュー",
+    number: "数",
+    time: "時刻",
+    text: "文",
+    none: "",
+  };
+  for (const [k, v] of Object.entries(FIELD)) out = out.replace(new RegExp(`\\b${k}\\b`, "gi"), v);
+  // それでも残った英字の名前は消す
+  return out.replace(/[A-Za-z_][A-Za-z0-9_]*/g, "").replace(/\s+/g, " ").replace(/^[\s:：、,]+|[\s:：、,]+$/g, "").trim();
+}
+
+/** 文の中で、AI が読んでいない言葉（漢字・カタカナの並び。メニューの名前・数・どこにでも出る言葉は除く） */
+function unreadWords(t: string, reading: RuleReading, menus: WordsMenu[]): string[] {
+  let rest = t;
+  const cut = (w: string) => {
+    if (w) rest = rest.split(w).join("　");
+  };
+  for (const w of [...reading.read_words].map(prepareText).sort((a, b) => b.length - a.length)) cut(w);
+  for (const m of menus) cut(m.name.normalize("NFKC").replace(/\s+/g, ""));
+  rest = rest.replace(/(午前|午後|夜|夕方)?\d+(?:\.\d+)?(?::\d{2}|時間半|時間\d+分|時間|週間|時半|時\d+分|時|分|日|人|名)?/g, "　");
+  const runs = rest.match(/[\p{Script=Han}\p{Script=Katakana}ー]+/gu) ?? [];
+  return [...new Set(runs.filter((r) => !GENERIC_RUNS.has(r)))];
+}
+
+/** 文の中で、今の形で表せない所（無ければ空）。1つでもあれば埋めない */
 function uncoveredParts(text: string, t: string, reading: RuleReading, menus: WordsMenu[]): string[] {
   const parts: string[] = [];
   const kind = reading.kind as ProgramKind;
+  const kindName = KIND_INFO[kind].name;
   const sentences = text.split(/[。！!？?\n]+/).map((s) => s.trim()).filter(Boolean);
   if (sentences.length > 1) parts.push(`2つ目の文「${sentences[1]}」（1文に1つの決まりだけ足せます）`);
+  // 「、」の後ろに別の決まり（言い切りで終わる所が2つ以上）
+  const clauses = text.normalize("NFKC").split(/[、,，]/).map((c) => c.replace(/[。！!？?\s]+$/g, "").trim()).filter(Boolean);
+  const ends = clauses.filter((c) => CLAUSE_END.test(c));
+  if (ends.length > 1) parts.push(`「、」の後ろの「${ends[1]}」（別の決まりです。1つずつ書いてください）`);
   const conj = CONJUNCTION.exec(t);
   if (conj) parts.push(`「${conj[1]}」で続く2つ目の決まり（1つずつ書いてください）`);
-  if (kind === "bufferAfterMinutes" && FRONT_GAP.test(t)) parts.push("「前」の間（今の「間を空ける」は施術の後ろの間だけです）");
+  // 後ろの間の種類で「前」の字があれば埋めない（前の間は表せない）
+  if (kind === "bufferAfterMinutes" && t.includes("前")) parts.push("「前」の間（今の「間を空ける」は施術の後ろの間だけです）");
+  if (kind === "bufferAfterMinutes" && /(あけ|空け|開け)(ない|なく|ず)/.test(t)) parts.push("「あけない」（今の「間を空ける」はあける間だけです）");
+  // ほかの種類の手がかりの言葉
+  for (const other of PROGRAM_KINDS) {
+    if (other === kind) continue;
+    const hit = KIND_CLUES[other].exec(t);
+    if (hit) parts.push(`「${hit[1]}」（別の種類「${KIND_INFO[other].name}」の言葉です。この文は「${kindName}」として読んだので、1つの文に2つの決まりがあるかもしれません）`);
+  }
   const cond = CONDITION.exec(t);
   if (cond) parts.push(`「${cond[1]}」という条件（今の種類は条件を持てません）`);
   // メニュー：1つのルールは1つのメニュー（いっしょに受けない組み合わせは2つ）
@@ -279,7 +352,14 @@ function uncoveredParts(text: string, t: string, reading: RuleReading, menus: Wo
     const ts = timesIn(t);
     if (ts.length > 1) parts.push(`2つ目の時刻「${ts[1].text}」（1つのルールに時刻は1つだけ）`);
   }
-  if (reading.uncovered && !parts.some((p) => p.includes(reading.uncovered))) parts.push(`「${reading.uncovered}」`);
+  // AI が読んでいない言葉が残れば埋めない（読んだ言葉を返さなかった時も）
+  if (reading.read_words.length === 0) parts.push("AI がどの言葉を読んだかが分かりませんでした");
+  else {
+    const unread = unreadWords(t, reading, menus);
+    if (unread.length) parts.push(`読んでいない言葉「${unread.slice(0, 3).join("」「")}」（文の全部を1つの種類で言えた時だけ埋めます）`);
+  }
+  const ai = reading.uncovered ? japaneseOnly(reading.uncovered, menus) : "";
+  if (reading.uncovered && !parts.some((p) => ai && p.includes(ai))) parts.push(ai ? `「${ai}」（AI が表せないと読んだ所）` : "AI が表せない所があると読みました");
   return parts;
 }
 
@@ -473,6 +553,8 @@ export function scriptReading(text: string, menus: WordsMenu[]): RuleReading {
     number,
     time: "",
     uncovered: "",
+    // 決まった読みは文の全部を読んだことにする（読んだ言葉の確かめは、AI の読みに見立てたテストで見る）
+    read_words: [text],
     loosens_locked: false,
   };
 }
