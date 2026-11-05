@@ -5,7 +5,16 @@
 // 当たったら載せない（作り直しはしない）。AI は使わない。
 
 import { gateWordsIn, numbersWritten } from "../posts/gate";
-import { oneSentence } from "./gate";
+
+const MAX_REASON = 80;
+
+/** 理由を1文にする（最初の「。」まで。長すぎる時は切る） */
+export function oneSentence(s: string): string {
+  const t = s.replace(/\s+/g, " ").trim();
+  const i = t.search(/[。！？!?]/);
+  const first = i >= 0 ? t.slice(0, i + 1) : t;
+  return first.length > MAX_REASON ? `${first.slice(0, MAX_REASON - 1)}…` : first;
+}
 
 export type AdWordGate = { ok: true; text: string } | { ok: false; problems: string[] };
 

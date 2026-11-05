@@ -6,7 +6,9 @@
 
 import type { ToolCall } from "../ai/model";
 import { actionFor, actionVerb, findRow, townIn, type AdAction, type AdTable } from "./report";
+import { getAdSettings } from "../settings";
 import { AD_TOOL_ACTION, isAdTool } from "./tools";
+import { gateAdSentence } from "./words";
 
 export type GateCheckId = "exists" | "noAdd" | "town";
 
@@ -37,15 +39,8 @@ export type GateResult =
   | { ok: true; proposal: GatedProposal; checks: GateCheck[] }
   | { ok: false; checks: GateCheck[]; problems: string[] };
 
-const MAX_REASON = 80;
-
-/** 理由を1文にする（最初の「。」まで） */
-export function oneSentence(s: string): string {
-  const t = s.replace(/\s+/g, " ").trim();
-  const i = t.search(/[。！？!?]/);
-  const first = i >= 0 ? t.slice(0, i + 1) : t;
-  return first.length > MAX_REASON ? `${first.slice(0, MAX_REASON - 1)}…` : first;
-}
+// 理由を1文にする（最初の「。」まで）は words.ts（広告の言葉の門と同じ物を使う）
+export { oneSentence } from "./words";
 
 export function draftFrom(call: ToolCall): AdDraft {
   const input = call.input && typeof call.input === "object" ? (call.input as Record<string, unknown>) : {};
@@ -58,8 +53,12 @@ export function draftFrom(call: ToolCall): AdDraft {
   };
 }
 
-/** 1つの案を門で確かめる（画面でも、受け取った案をもう一度ここで確かめる） */
-export function checkDraft(table: AdTable, towns: string[], d: AdDraft): GateResult {
+/**
+ * 1つの案を門で確かめる（画面でも、受け取った案をもう一度ここで確かめる）。
+ * 理由の文は、毎週の見直しの報告と同じ広告の言葉の門（words.ts の gateAdSentence）に通す。
+ * なので、カードに出る理由と報告に載る理由はいつも同じ結果になる。
+ */
+export function checkDraft(table: AdTable, towns: string[], d: AdDraft, words: string[] = getAdSettings().gateWords): GateResult {
   const problems: string[] = [];
 
   // 2. 言葉を足していないか
@@ -103,10 +102,13 @@ export function checkDraft(table: AdTable, towns: string[], d: AdDraft): GateRes
   const checks = [exists, noAdd, town];
   for (const c of checks) if (c.ok === false && c.reason) problems.push(c.reason);
 
-  // 形：理由が1文あって、数字を書いていない
-  const reason = typeof d.reason === "string" ? oneSentence(d.reason) : "";
-  if (!reason) problems.push("理由の1文がありません");
-  else if (/[0-9０-９]/.test(reason)) problems.push("理由の文に数字を書いています。数はプログラムが表から入れるので、数字なしの1文にしてください");
+  // 形：理由が1文あって、広告の言葉の門を通る（数字・漢数字・曜日・使わない言葉・英字が無い。報告と同じ門）
+  const said = gateAdSentence(typeof d.reason === "string" ? d.reason : "", words);
+  const reason = said.ok ? said.text : "";
+  if (!said.ok) {
+    if (typeof d.reason !== "string" || !d.reason.trim()) problems.push("理由の1文がありません");
+    else problems.push(`理由の文が言葉の門を通りません：${said.problems.join("。")}。数はプログラムが表から入れるので、数字なしの1文にしてください`);
+  }
 
   if (problems.length > 0 || !row || !d.action) return { ok: false, checks, problems };
   return { ok: true, proposal: { action: d.action, no: row.no, text: row.text, reason }, checks };

@@ -14,7 +14,10 @@ import { buildTable, type AdTable } from "../report";
 import { runReview } from "../review";
 import { scriptAdsModel } from "../script";
 import { approveAd, parseAds, pendingAd, withAdFixed, withAdSkipped, withProposal, EMPTY_ADS, type AdsState } from "../state";
+import { checkDraft } from "../gate";
 import { gateTeamText } from "../team/gate";
+import { buildWeeklyReport } from "../weekly";
+import { gateAdSentence } from "../words";
 import { meet } from "../team/meet";
 import { materialText, pastDecisions, research, snapshotOf } from "../team/research";
 import { runTeam, type TeamInput, type TeamWriteRequest, type TeamWriteResult, type TeamWriter } from "../team/run";
@@ -553,5 +556,167 @@ describe("上限は config に・窓口は /api/ai/ の下", () => {
     for (const t of [route, view]) assert.doesNotMatch(t, /maxCalls:\s*\d|maxTokens:\s*\d|\d+_000\b/);
     // 画面の部品は確定・承認の変え方を呼ばない（決めるのは承認の箱のボタン）
     assert.doesNotMatch(view, /approveAd|withAdApproved|withAdSkipped|withApproved/);
+  });
+});
+
+// ---- 本番で本物の Claude（3番「美容院 安い」を止める案）で3役とも出なかった時の落ち方 ----
+// 1. 分身：長くなって途中で切れた 2. 野党の危ない所：2文・数字 3. 野党の代わりの選び方：数字・「様子を見」
+// 門はゆるめず、指示と出力の上限で直す。ここでは落ちる見本と、門で落ちない見本の両方を確かめる。
+
+describe("本番の3つの落ち方（落ちる見本・落ちない見本）", () => {
+  /** 3番「美容院 安い」を止める案（本番と同じ案） */
+  async function stop3(): Promise<AdsState> {
+    const p = { action: "stop" as const, no: 3, text: "美容院 安い", reason: "押されてお金はかかっていますが、予約につながっていません。" };
+    return withProposal(EMPTY_ADS, p, table, { id: "ad-3", checks: [], nowIso: NOW, mode: "ai" }, settings);
+  }
+  const OK3 = {
+    twin: { guess: "approve", text: "前も予約につながらない言葉から見直した。お金がかかっているので止めそうです。" },
+    opposition: { stance: "against", risk: "止めると、値段で探している方に広告が出なくなる。", alternative: "今回は残して次の見直しで確かめたい。" },
+    aide: { adopt: "opposition", conclusion: "今回は止めずに残す考えです。", reason: "値段で探している方に届かなくなるからです。", next: "次の見直しで、この言葉の予約をもう一度確かめます。" },
+  };
+
+  test("落ちない見本：3役とも門を通り、補佐まで呼ぶ（呼ぶのは3回）", async () => {
+    const s = await stop3();
+    const w = fakeClaude(OK3);
+    const r = (await runTeam(inputFor(s), w, limits, "ai"))!;
+    assert.deepEqual(r.dropped, []);
+    assert.ok(r.twin && r.opposition && r.aide);
+    assert.equal(r.calls, 3);
+    assert.equal(r.aide?.next, OK3.aide.next);
+  });
+
+  test("1. 分身が途中で切れた：出さない（落ちる見本）。出力の上限は目安の字数に足りる大きさで、その数で呼ぶ", async () => {
+    const s = await stop3();
+    const cut: TeamWriter & { seen: TeamWriteRequest[] } = {
+      claude: true,
+      seen: [],
+      async write(req) {
+        this.seen.push(req);
+        return req.role === "twin" ? { raw: null, stop: "max_tokens" } : { raw: OK3[req.role], stop: "end" };
+      },
+    };
+    const r = (await runTeam(inputFor(s), cut, limits, "ai"))!;
+    assert.equal(r.twin, null);
+    assert.ok(r.dropped.some((d) => d.role === "twin" && d.problems[0] === "長くなって途中で切れました"));
+    assert.equal(r.aide?.adopt, "opposition", "野党は出て、補佐も呼ぶ");
+    // 上限：3つの欄（1文60字くらい）を JSON で書いて、考える分も足りる大きさ（日本語は1字で数トークンになることもある）
+    const need = (team.maxLineChars * 3 + 100) * 3;
+    assert.ok(team.maxReplyTokens >= need, `maxReplyTokens ${team.maxReplyTokens} >= ${need}`);
+    for (const req of cut.seen) assert.equal(req.maxTokens, team.maxReplyTokens);
+  });
+
+  test("会議のモデルは Sonnet（config/ai.json の adsTeam）。1回の会議で3回までは変えない", () => {
+    assert.match(team.model, /sonnet/);
+    assert.equal(team.maxCalls, 3);
+  });
+
+  test("2. 野党の危ない所：2文・数字（「4」「5000」「0」）は落ちる。1文・言葉で言えば通る", async () => {
+    const s = await stop3();
+    const badRisk = "4週で5000円かかって予約は0件です。止めると探す方に届かなくなります。";
+    const r = (await runTeam(inputFor(s), fakeClaude({ ...OK3, opposition: { ...OK3.opposition, risk: badRisk } }), limits, "ai"))!;
+    assert.equal(r.opposition, null);
+    const d = r.dropped.find((x) => x.role === "opposition" && x.field === "危ない所")!;
+    assert.ok(d.problems.some((p) => p.includes("1文より多く")));
+    assert.ok(d.problems.some((p) => p.includes("「4」") && p.includes("「5000」") && p.includes("「0」")));
+    const good = (await runTeam(inputFor(s), fakeClaude({ ...OK3, opposition: { ...OK3.opposition, risk: "止めると、値段で探している方に広告が出なくなる。" } }), limits, "ai"))!;
+    assert.ok(good.opposition);
+  });
+
+  test("3. 野党の代わりの選び方：数字（「0」）と「様子を見」は落ちる。「次の見直しで確かめる」なら通る", async () => {
+    const s = await stop3();
+    const bad = "予約が0件のまま様子を見る。";
+    const r = (await runTeam(inputFor(s), fakeClaude({ ...OK3, opposition: { ...OK3.opposition, alternative: bad } }), limits, "ai"))!;
+    assert.equal(r.opposition, null);
+    const d = r.dropped.find((x) => x.role === "opposition" && x.field === "代わりの選び方")!;
+    assert.ok(d.problems.some((p) => p.includes("「0」")));
+    assert.ok(d.problems.some((p) => p.includes("「様子を見」")));
+    for (const alt of ["予約がないまま、次の見直しで確かめたい。", "今回は残して次の見直しで確かめたい。"]) {
+      const g = (await runTeam(inputFor(s), fakeClaude({ ...OK3, opposition: { ...OK3.opposition, alternative: alt } }), limits, "ai"))!;
+      assert.ok(g.opposition, alt);
+    }
+  });
+
+  test("補佐を呼ぶのは分身か野党が門を通った時だけ（本番は2つとも落ちて calls 2）", async () => {
+    const s = await stop3();
+    const prod = {
+      opposition: { stance: "against", risk: "4週で5000円かかって予約は0件です。止めると探す方に届かなくなります。", alternative: "予約が0件のまま様子を見る。" },
+    };
+    const w: TeamWriter & { seen: TeamWriteRequest[] } = {
+      claude: true,
+      seen: [],
+      async write(req) {
+        this.seen.push(req);
+        return req.role === "twin" ? { raw: null, stop: "max_tokens" } : { raw: prod.opposition, stop: "end" };
+      },
+    };
+    const r = (await runTeam(inputFor(s), w, limits, "ai"))!;
+    assert.equal(r.calls, 2);
+    assert.equal(r.twin, null);
+    assert.equal(r.opposition, null);
+    assert.equal(r.aide, null);
+  });
+
+  test("指示に「数字を書かない」「1文」「60字」「様子を見るは使わず次の見直しで確かめる」が入っている（3役とも）・欄ごとの JSON の形", async () => {
+    const s = await stop3();
+    const w = fakeClaude(OK3);
+    await runTeam(inputFor(s), w, limits, "ai");
+    assert.equal(w.seen.length, 3);
+    for (const req of w.seen) {
+      for (const must of ["数字を書かない", "1文", "60字", "「様子を見る」は使わず", "次の見直しで確かめる", "予約がない", "お金がかかっている", "値段", "日付"])
+        assert.ok(req.system.includes(must), `${req.role}：${must}`);
+      // 欄ごとの JSON：欄が決まっていて、ほかの欄は受けない。文の欄の説明にも数字と1文の決まり
+      assert.equal(req.schema.additionalProperties, false);
+      const props = req.schema.properties as Record<string, { type: string; description?: string }>;
+      for (const [k, v] of Object.entries(props)) if (v.type === "string" && !("enum" in v)) assert.match(v.description ?? "", /数字/, `${req.role}.${k}`);
+    }
+    const sys = (role: string) => w.seen.find((x) => x.role === role)!.system;
+    assert.match(sys("twin"), /1〜2文/);
+    assert.match(sys("opposition"), /risk：[^\n]*1文だけ/);
+    assert.match(sys("opposition"), /alternative：[^\n]*1文だけ/);
+    assert.match(sys("aide"), /3つとも、それぞれ1文だけ/);
+    // 材料に、数を言葉で言った物（数字なし）が入る
+    const user = w.seen.find((x) => x.role === "twin")!.user;
+    const words = user.slice(user.indexOf("# 数を言葉で言うと"));
+    assert.match(words, /予約：ずっと予約がない/);
+    assert.match(words, /お金：毎週お金がかかっている/);
+    assert.doesNotMatch(words.split("\n\n")[0], /[0-9０-９]/);
+  });
+
+  test("言葉の門と🔒の言葉のリストはゆるめていない", () => {
+    const opts = { maxSentences: 1, maxChars: team.maxLineChars, gateWords: settings.gateWords, material: "" };
+    for (const t of ["様子を見たい。", "予約は0件です。", "三週間待ちたい。", "止めると効果が下がる。", "安全に残したい。"]) assert.equal(gateTeamText(t, opts).ok, false, t);
+  });
+});
+
+describe("広告の理由の「一」：カードと報告で同じ結果", () => {
+  const reasons: [string, boolean][] = [
+    ["費用がかさむ一方で、ずっと予約につながっていないため。", true],
+    ["一度も予約につながっていません。", true],
+    ["ほかの言葉と一緒に見ても、予約につながっていません。", true],
+    ["一回も予約がありません。", false],
+    ["予約は一件だけです。", false],
+    ["一万円近くかかっています。", false],
+  ];
+
+  test("「一方」「一度」「一緒」の「一」は数えない。「一回」「一件」「一万」は今までどおり落とす", () => {
+    for (const [t, ok] of reasons) assert.equal(gateAdSentence(t, settings.gateWords).ok, ok, t);
+  });
+
+  test("案のカード（checkDraft）と毎週の報告（buildWeeklyReport）で、同じ文はいつも同じ結果", () => {
+    for (const [reason, ok] of reasons) {
+      const card = checkDraft(table, settings.towns, { tool: "stop_keyword", action: "stop", no: 3, reason, extraKeys: [] });
+      assert.equal(card.ok, ok, `カード：${reason}`);
+      const report = buildWeeklyReport({
+        id: "r1",
+        nowIso: NOW,
+        today: ANCHOR,
+        table,
+        shop,
+        settings,
+        mode: "ai",
+        proposal: { action: "stop", no: 3, text: "美容院 安い", reason, id: "ad-x" },
+      });
+      assert.equal(report.proposal?.reason === reason, ok, `報告：${reason}`);
+    }
   });
 });
