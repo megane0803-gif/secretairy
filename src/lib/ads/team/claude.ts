@@ -1,11 +1,18 @@
 // 会議の役（分身・野党・補佐）を Claude（config/ai.json の adsTeam）で答えさせる。サーバーの側だけで使う（鍵は .env.local の ANTHROPIC_API_KEY）。
 // 返させるのは JSON だけ（structured outputs）。道具は渡さない（確定も承認もできない）。1回の呼び出しは1つの役だけ。
+// Claude を呼ぶ薄い所だけ。発信のチーム（src/lib/posts/team/）も同じ物を使う（指示・流れ・門はそれぞれが持つ）。
 
 import Anthropic from "@anthropic-ai/sdk";
 import { NoAiError } from "../../ai/model";
-import type { TeamWriter } from "./run";
 
-export function claudeTeamWriter(model: string, apiKey: string | undefined = process.env.ANTHROPIC_API_KEY): TeamWriter {
+/** 1つの役に答えさせる時に Claude が読む物（指示・材料・返させる JSON の形・返事の長さ）だけ */
+export type TeamJsonRequest = { system: string; user: string; schema: Record<string, unknown>; maxTokens: number };
+export type TeamJsonResult = { raw: unknown; stop: "end" | "max_tokens" | "refusal" };
+
+/** 本物の Claude で役に答えさせる物。広告のチームの TeamWriter にも、発信のチームの PostTeamWriter にも合う形 */
+export type ClaudeJsonWriter = { readonly claude: true; write(req: TeamJsonRequest): Promise<TeamJsonResult> };
+
+export function claudeTeamWriter(model: string, apiKey: string | undefined = process.env.ANTHROPIC_API_KEY): ClaudeJsonWriter {
   if (!apiKey) throw new NoAiError("ANTHROPIC_API_KEY がありません");
   const client = new Anthropic({ apiKey, maxRetries: 1, timeout: 25_000 });
   return {

@@ -23,6 +23,7 @@ npm run build      # 本番ビルド（push の前に通す）
 - 最初の状態はリポジトリのファイル（`config/` など）。画面で触った後の変化は、見ている人のブラウザの中だけに残す。
 - サーバーにファイルやデータベースで書き込む作りにしない（`data/` は作らない）。公開 URL を見た人どうしでデータが混ざらないようにするため。
 - 例外は LINE のつなぎと試験10問の見張りだけ：Redis（Upstash）に「合言葉のつなぎ」と「画面が受け取りに来るまでの LINE の知らせ」（仕様書 §1.9）、試験の「流している印」と「呼んだ回数」（`src/lib/eval/guard.ts`。仕様書 §1.13）を期限つきで置く。お客様の記録・台帳・日誌は置かない。
+- 経理の freee（テスト事業所）の鍵は、サーバーには置かず、つないだブラウザの暗号化した cookie にだけ持たせる（仕様書 §1.8.1）。
 - AI を呼ぶ API はブラウザから要るデータとルールを毎回受け取り、答えを返すだけ。受け取った物を残さない。
 - AI を呼ぶ窓口は全部 `src/app/api/ai/` の下（Vercel の Firewall で `/api/ai/` を1分10回まで）。上限の数（字数・返事の長さ・道具の回数・送る通数・受け取る大きさ）は `config/` に置き、コードに直に書かない。
 
@@ -73,8 +74,11 @@ src/lib/ads/team/  広告の案の「AI のチーム」の会議：リサーチ�
 src/lib/accounting/ 経理：売上の数・通販の明細の仕分け（自動のルール）・門・登録（ブラウザの中に残す形。AI は使わない）
 src/lib/todo/      ToDo：入口ごとの鍵・並べ方（items.ts。Claude は並べない）・枠が埋まった時・メモを投げる（Haiku は文だけ・門・決まった返事）・メモの期限（due.ts。プログラムが読む）
 src/lib/posts/     発信：言葉の門・日時を入れる（台帳と設定から。本当に空いている時間・材料の時期）・お休みの日付は材料から読む（closed.ts。全部読み切れなければ読めないと出す）・ぶつかったら確かめての注意・発信だけの数の見方（postNumbersWritten）・指示文・流れ（作り直し1回）・決まった返事・保存した下書き（ブラウザの中に残す形）
+src/lib/posts/team/ 発信の下書きの「AI のチーム」：候補にしてよいかの確かめ（gate.ts。1回だけ出てくる1文まるごと・数字・日付・印・URL なし・置きかえた後の全文）・リサーチャー（research.ts。プログラム。画面で今の台帳と設定から毎回）・指示（prompt.ts）・流れ（run.ts）・決まった返事（script.ts）・下書きの番号・版・会議の番号と「入れる」（state.ts）
 src/lib/line/      LINE のつなぎ（オーナー側）：署名・Redis・つなぎと預かり（bridge）・一言の振り分け（sort）・画面での入れ方（apply）
 src/app/api/line/  LINE の窓口（Webhook・つなぐ・受け取り・送る）。画面の処理と混ぜない
+src/lib/freee/     経理の freee（テスト事業所）：暗号化した cookie（seal.ts）・API（api.ts。公式の定義で確かめた形だけ）・照らし合わせと状態の分け方（match.ts）・窓口の中身と守り（server.ts）・画面の記録（state.ts）・1件ずつ送る流れ（run.ts）。AI は呼ばない
+src/app/api/freee/ freee の窓口（つなぐ・戻り先・つながっているか・外す・明細を入れる・登録・読み直す）。中身は src/lib/freee/server.ts
 src/lib/home/      ホームの欄の開け閉め：最初の状態（PC／スマホ）と覚えた物の読み方（folds.ts。画面に依らない）・画面で使う形（useHomeFolds.ts）
 src/lib/jobs/      ホームの「AI に頼める仕事」：これから来る物4行の流れ（run.ts。今の /api/ai/ の窓口をそのまま使う）・済みの印（ブラウザの中に残す形）
 src/lib/brief/     朝の要点の「AI の一言」：材料と印（items.ts。名前は送らない・印を日時とお名前に置きかえる）・門・指示文・流れ・決まった返事（scriptBriefWriter）
@@ -103,11 +107,15 @@ src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理�
   - 分身に渡す前の判断は、対象・止める／外す・承認か見送りか・決めた日・その時の予約だけ（記録の理由は AI の理由なので渡さない）。最初の状態の判断は `seed/ads.json` の `past`。
   - AI につながらない時・決まった返事の案の時も、決まった返事（`team/script.ts`）で4つの声を出し「AI なし」と出す。テストは Claude を呼ばず、`scriptTeamWriter` か決まった答えを返す物に置きかえる（`src/lib/ads/__tests__/team.test.ts`）。
 - 発信の下書きは `src/lib/posts/`（窓口は `/api/ai/posts`。Sonnet）。種類が違っても仕組みは1本で、変わるのは `config/posts.json` の指示文と材料だけ。Claude には日時と数字を書かせない（空き枠・お休みは画面が台帳と設定から入れる。ブログのリンクは印だけ）。言葉の門（`gate.ts`）に当たったら1回だけ作り直し、2回とも当たったら保存しない。保存はオーナーのボタンだけ（承認の箱は通さない）。送信・公開はしない。テストでは `scriptPostsModel` か決まった文を返す物に置きかえる。
+- 発信の下書きの「AI のチーム」（`src/lib/posts/team/`・窓口は `/api/ai/posts/team`・画面は `src/components/PostTeam.tsx`。仕様書 §1.10.1）：今の下書きのカードの下に「チームに読んでもらう」（保存した下書き・ほかのタブには出さない。1つの下書きに1回・作り直したらまた押せる・`postsTeam.maxDraftChars` より長ければ切り捨てずに「長すぎるのでチームにかけられません」で呼ばない）。AI は下書きを書きかえない。直しを入れるのはオーナーの「入れる」ボタンだけ（下書きの番号・版・会議の番号を照合し、手で直したら残りは使えない）。
+  - リサーチャーはプログラム（数・日時はここだけ）。分身の材料は店のルールとお店のメモだけ（保存した下書きは使わない）。補佐は確かめ済みの候補の番号だけを選び、文は候補の文をそのまま使う。Claude は1回の会議で3回まで・作り直しなし・道具なし・🔒 はどの指示も先頭。
+  - 元の文は1回だけ出てくる1文まるごと。数字・日付・曜日・印・URL の入った文は候補にしない。置きかえた後の全文に作る時の門（`gatePost`）は掛けない（正しい日付まで当たる）。広告のチームと共有するのは役の名前・カードの見た目（`TeamVoice.tsx`）・Claude を呼ぶ薄い所（`ads/team/claude.ts`）まで。テストは Claude を呼ばず、`scriptPostTeamWriter` か決まった答えを返す物に置きかえる（`src/lib/posts/__tests__/team.test.ts`）。
 
 - LINE（オーナー側）の窓口は `src/app/api/line/` に分け、画面の処理と混ぜない。画面が開いている間だけ動く（受け取るのは `src/components/LineBridge.tsx`）。
   - 届いた知らせは `LINE_CHANNEL_SECRET` で署名を確かめ、違う物は捨てる。合言葉でつないでいない LINE では何も動かさない。
   - LINE のボタンで確定してよいのは、サーバーが「つないだ人・その画面の行・1回だけの印」を確かめた press の知らせだけ。一言（文）や AI の答えからは確定しない。
   - 送る通数を減らす（返事で済む時は返事。1日の上限は `config/line.json`）。鍵・LINE の人の番号は画面・日誌・ログに出さない。
   - 一言の振り分けの道具は `src/lib/line/sort.ts` の3つ（仮押さえ・ToDo・カルテのメモ）だけ。テストでは `scriptSortModel` と置きかえた LINE・`memoryStore` を使う（Claude と LINE は呼ばない）。お客さん側の LINE はまだ。
-- ホームの「AI の仕事」（`src/lib/jobs/`）は、今の窓口（予約・広告・メモ）と今の変え方（仮押さえ・承認の箱・ToDo）をそのまま呼ぶだけ。確定は呼ばない。1回押した時に AI を呼ぶ回数は `config/ai.json` の `jobs.maxAiCallsPerPress` まで。テストでは決まった返事に置きかえる（`src/lib/jobs/__tests__/jobs.test.ts`）。
-- 秘密の鍵（Claude API キー・LINE の秘密 `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・オーナー用の合言葉 `LINE_OWNER_PASSCODE`（任意）・試験の合言葉 `EVAL_PASSCODE`（試験を流す時）・Redis の `KV_REST_API_URL`／`KV_REST_API_TOKEN`）は `.env.local`（Vercel では環境変数）に置く。`.env` で始まるファイルはコミットしない。
+- ホームの「AI に頼める仕事」（`src/lib/jobs/`）は、今の窓口（予約・広告・メモ）と今の変え方（仮押さえ・承認の箱・ToDo）をそのまま呼ぶだけ。確定は呼ばない。1回押した時に AI を呼ぶ回数は `config/ai.json` の `jobs.maxAiCallsPerPress` まで。テストでは決まった返事に置きかえる（`src/lib/jobs/__tests__/jobs.test.ts`）。
+- 経理の freee（テスト事業所。仕様書 §1.8.1）：AI は呼ばない（科目も金額も AI は決めない）。登録するのは人の「登録」ボタンの分だけで、1件ずつ・書く直前に freee の明細を読んで照らし合わせる。窓口は本番のサイト（`VERCEL_ENV=production` と `secretairy.vercel.app`）だけ・書く物は POST と Origin の確かめ・cookie が無い呼び出しは受けない・事業所の番号は鍵の返事の番号と `FREEE_COMPANY_ID` だけ（ブラウザから来た番号は使わない）。鍵の自動の更新・freee 側を消して戻すボタン・売上を送ること・自動登録ルールとの同期は作らない。「結果が分からない」は送り直さない（「freee から読み直す」の後でだけ）。明細を入れる・登録・読み直す・「最初に戻す」は同じ排他（Web Locks。`run.ts` の `withFreeeLock`）の中だけ。明細を入れた結果が分からない時は待つ期限（`importHold`）を残す。サーバーは持ち時間（`serverBudgetSeconds`）で区切る。テストは fetch と Web Locks を置きかえる（`src/lib/freee/__tests__/freee.test.ts`。freee は呼ばない）。freee の名前を画面に出すのは、つながっている時の札・つなぐボタン・つながっていない画面の札だけ。
+- 秘密の鍵（Claude API キー・LINE の秘密 `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・オーナー用の合言葉 `LINE_OWNER_PASSCODE`（任意）・試験の合言葉 `EVAL_PASSCODE`（試験を流す時）・Redis の `KV_REST_API_URL`／`KV_REST_API_TOKEN`・freee の `FREEE_CLIENT_ID`／`FREEE_CLIENT_SECRET`／`FREEE_COMPANY_ID`／`FREEE_COOKIE_KEY`（Production だけ））は `.env.local`（Vercel では環境変数）に置く。`.env` で始まるファイルはコミットしない。

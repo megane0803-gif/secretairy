@@ -11,13 +11,19 @@ import { merchantName, ruleLabel, USE_LABEL } from "@/lib/accounting/sort";
 import { withAutoNext, withChoice } from "@/lib/accounting/state";
 import { useAccounting } from "@/lib/accounting/useAccounting";
 import type { CardItem, CardUse } from "@/lib/data/types";
+import { useFreeeLocked } from "@/lib/freee/useFreee";
 
 type Acct = ReturnType<typeof useAccounting>;
 
 function UseButtons({ acct, item }: { acct: Acct; item: CardItem }) {
   const cur = acct.state.choices[String(item.no)];
-  const locked = !!acct.state.registered;
-  const pick = (use: CardUse) => acct.update((s) => withChoice(acct.seed, s, item.no, use));
+  // 登録の後と、freee（テスト事業所）に送り始めた後は、選びを固定する
+  const freeeLocked = useFreeeLocked();
+  const locked = !!acct.state.registered || freeeLocked;
+  const pick = (use: CardUse) => {
+    if (locked) return;
+    acct.update((s) => withChoice(acct.seed, s, item.no, use));
+  };
   return (
     <span className="acct-use" role="group" aria-label={`${item.no}番は店用か私用か`}>
       {(["shop", "private"] as const).map((u) => (
@@ -38,13 +44,14 @@ function UseButtons({ acct, item }: { acct: Acct; item: CardItem }) {
 
 function AutoNext({ acct, merchantId }: { acct: Acct; merchantId: string }) {
   const on = acct.state.autoNext.includes(merchantId);
+  const freeeLocked = useFreeeLocked();
   return (
     <label className={on ? "acct-auto on" : "acct-auto"}>
       <input
         type="checkbox"
         checked={on}
-        disabled={!!acct.state.registered}
-        onChange={(e) => acct.update((s) => withAutoNext(acct.seed, s, merchantId, e.target.checked))}
+        disabled={!!acct.state.registered || freeeLocked}
+        onChange={(e) => !freeeLocked && acct.update((s) => withAutoNext(acct.seed, s, merchantId, e.target.checked))}
       />
       次から自動
     </label>

@@ -83,6 +83,8 @@ describe("3. 色は3つの変数で、使う所は台帳・AI の手順・日誌
       "src/components/JournalList.tsx",
       // 広告の案の「AI のチーム」の会議の声（AI の役 = 青緑。§1.7.4・§3.4）
       "src/components/AdTeam.tsx",
+      // AI のチームのカードの形と色（広告の案の会議と発信の下書きの会議で共有。§1.7.4・§1.10.1）
+      "src/components/TeamVoice.tsx",
       // ホームの欄の題名の「だれの欄か」の札（§3.4。札の部品 ActorTag をそのまま使う）
       "src/app/home/page.tsx",
       "src/app/home/HomeSummary.tsx",

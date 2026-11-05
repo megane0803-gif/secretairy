@@ -205,13 +205,61 @@ export function getAdsAiSettings(): AdsAiSettings {
   return { model: getAiSettings().model, ...a };
 }
 
-/** 経理のタブの設定（config/accounting.json）。実在の会計サービスの名前は書かない */
+/** 経理のタブの設定（config/accounting.json）。札は「会計（架空）」。実在の会計サービスの名前（freee）は、freee（テスト事業所）のつなぎの札（freee.label・freee.unconnectedNote）にだけ書く（docs/SPEC.md §1.8） */
 export type AccountingSettings = {
-  /** 明細を取り込み、登録する先（画面の札。例「会計（架空）」） */
+  /** 明細を取り込み、登録する先（画面の札。例「会計（架空）」）。オーナーのブラウザで freee（テスト事業所）につながっている時は freee の札（freee.label） */
   service: string;
   /** 明細の出どころ（例「カード会社（架空）」） */
   cardSource: string;
+  /** freee（テスト事業所）とのつなぎ（オーナーのブラウザだけ。鍵・秘密は環境変数。docs/SPEC.md §1.8.1） */
+  freee: FreeeSettings;
 };
+
+export type FreeeSettings = {
+  /** つながっている時の札 */
+  label: string;
+  /** つながっていない画面の札 */
+  unconnectedNote: string;
+  /** 本番のサイト（ここから来た呼び出しだけ受ける） */
+  siteOrigin: string;
+  /** 許可の戻り先の道（freee のアプリに入れた物と同じ） */
+  callbackPath: string;
+  authorizeUrl: string;
+  tokenUrl: string;
+  apiBase: string;
+  /** 使うカードの口座の名前（プログラムでは作らない。ちょうど1つの時だけ使う） */
+  cardName: string;
+  /** 店用の科目の名前（freee から名前で引く） */
+  accountItemName: string;
+  /** 店用の税区分の名前（freee の画面の名前 name_ja） */
+  taxName: string;
+  /** 摘要の印の頭（「SecretAIry:<データの版>:<明細の番号>」） */
+  markPrefix: string;
+  /** 許可の行き来の合図（state）の期限（分） */
+  stateMinutes: number;
+  /** アクセスの鍵を持たせる長さの上限（秒。6時間） */
+  maxTokenSeconds: number;
+  /** 明細を読む時の1ページの件数（freee の上限は100） */
+  pageLimit: number;
+  /** めくるページの上限 */
+  maxPages: number;
+  /** freee の返事を待つ秒数 */
+  timeoutSeconds: number;
+  /** 窓口が受け取る大きさ（字） */
+  maxRequestChars: number;
+  /** 「送っている」の印が、この秒数より古ければ止まった物とみなす */
+  sendingStaleSeconds: number;
+  /** サーバーの1回の呼び出しで使ってよい秒数（窓口の時間の上限より短く。返事の時間を残して、次の書き込みを止める） */
+  serverBudgetSeconds: number;
+  /** 「freee に明細を入れる」の結果が分からない時に待つ秒数（この間は入れない） */
+  importUnknownWaitSeconds: number;
+  /** 「freee に明細を入れる」1回の押しで、画面が窓口を続けて呼ぶ回数の上限 */
+  maxImportCalls: number;
+};
+
+export function getFreeeSettings(): FreeeSettings {
+  return getAccountingSettings().freee;
+}
 
 export function getAccountingSettings(): AccountingSettings {
   return accounting as AccountingSettings;
@@ -595,6 +643,39 @@ export function getAdsTeamAiSettings(): AdsTeamAiSettings {
 /** 画面でも使う会議の上限（鍵や環境変数は読まない） */
 export function getAdsTeamLimits(): Omit<AdsTeamAiSettings, "model"> {
   const { model: _model, ...rest } = (ai as { adsTeam: AdsTeamAiSettings }).adsTeam;
+  void _model;
+  return rest;
+}
+
+/**
+ * 発信の下書きの「AI のチーム」の会議（config/ai.json の postsTeam。docs/SPEC.md §1.10.1）。
+ * Claude を呼ぶのは1回の会議で maxCalls（3。分身・野党・補佐）まで。作り直しはしない。モデルは広告のチームと同じ値。
+ */
+export type PostsTeamAiSettings = {
+  model: string;
+  /** 1回の返事の長さの上限（トークン。役ごと） */
+  maxReplyTokens: number;
+  /** 1回の会議で Claude を呼ぶ回数の上限 */
+  maxCalls: number;
+  /** 分身の直しの数の上限 */
+  maxTwinEdits: number;
+  /** 補佐が選ぶ直しの数の上限 */
+  maxPicks: number;
+  /** 直した文・理由の1文の長さの上限（字） */
+  maxLineChars: number;
+  /** チームに送る下書きの長さの上限（字）。超えたら切り捨てずに「長すぎるのでチームにかけられません」 */
+  maxDraftChars: number;
+  /** 窓口（/api/ai/posts/team）が受け取る大きさの上限（字） */
+  maxRequestChars: number;
+};
+
+export function getPostsTeamAiSettings(): PostsTeamAiSettings {
+  return (ai as { postsTeam: PostsTeamAiSettings }).postsTeam;
+}
+
+/** 画面でも使う会議の上限（鍵や環境変数は読まない） */
+export function getPostsTeamLimits(): Omit<PostsTeamAiSettings, "model"> {
+  const { model: _model, ...rest } = (ai as { postsTeam: PostsTeamAiSettings }).postsTeam;
   void _model;
   return rest;
 }

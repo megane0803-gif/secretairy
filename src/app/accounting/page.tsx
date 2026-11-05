@@ -1,29 +1,20 @@
 import { TabPage } from "@/components/TabPage";
-import { FieldList, Fold, Panel } from "@/components/parts";
+import { FieldList, Fold } from "@/components/parts";
 import { CARD_GATE_LABELS } from "@/lib/accounting/sort";
 import { CARD_FIELDS } from "@/lib/data/types";
-import { getAccountingSettings } from "@/lib/settings";
 import { CardStatement } from "./CardStatement";
 import { JobStatement } from "./JobStatement";
-import { RegisterPanel } from "./RegisterPanel";
+import { RegisterColumn } from "./RegisterColumn";
 import { SalesReport } from "./SalesReport";
 
 /**
  * 経理のタブ。上に架空の1か月の売上（見るだけ）、その下に通販の明細（架空）の仕分け。
  * AI の予想は使わない：購入先ごとの自動のルールでプログラムが分け、ルールの無い物だけ人が店用か私用を選ぶ。
- * 承認の箱は使わない。登録は右の列の人のボタンだけ。
+ * 承認の箱は使わない。登録は右の列の人のボタンだけ（オーナーのブラウザで freee（テスト事業所）とつながっている時は、そちらに登録。§1.8.1）。
  */
 export default function AccountingPage() {
-  const settings = getAccountingSettings();
   return (
-    <TabPage
-      tab="accounting"
-      right={
-        <Panel title={`${settings.service}に登録`}>
-          <RegisterPanel />
-        </Panel>
-      }
-    >
+    <TabPage tab="accounting" right={<RegisterColumn />}>
       <SalesReport />
       <JobStatement />
       <CardStatement />

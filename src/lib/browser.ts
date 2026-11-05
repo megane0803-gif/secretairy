@@ -47,6 +47,8 @@ export const BOOK_KEY = "book";
 export const ADS_KEY = "ads";
 /** 経理：通販の明細で選んだ印・会計（架空）への登録・足した自動のルール（accounting/state.ts） */
 export const ACCOUNTING_KEY = "accounting";
+/** 経理：freee（テスト事業所）の記録（freee/state.ts）。会計（架空）の記録（accounting）とは分けて持つ。鍵は持たない（鍵は HttpOnly の cookie） */
+export const FREEE_KEY = "freee";
 /** LINE のつなぎ（line/state.ts）。その画面だけが持つ印と、届けた・受け取った物の id（LINE の人の番号は持たない） */
 export const LINE_KEY = "line";
 /** カルテの「録音からメモを作る」を出す・隠す（最初の状態は config/recording.json の visible） */

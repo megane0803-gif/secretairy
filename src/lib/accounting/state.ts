@@ -132,10 +132,7 @@ export function register(seed: AccountingSeed, s: AccountingState, ctx: { nowIso
   const manual = manualItems(sorted);
   const useOf = (i: CardItem): CardUse => sorted.auto.find((a) => a.item.no === i.no)?.use ?? s.choices[String(i.no)];
   const amountOf = (u: CardUse) => seed.statement.items.filter((i) => useOf(i) === u).reduce((a, i) => a + i.amount, 0);
-  const have = new Set(effectiveRules(seed.rules, s).map((r) => r.merchantId));
-  const added: MerchantRule[] = manualMerchants(sorted)
-    .filter((m) => s.autoNext.includes(m) && !have.has(m))
-    .map((m) => ({ merchantId: m, use: s.choices[String(manual.find((i) => i.merchantId === m)!.no)] }));
+  const added = rulesToAdd(seed, s);
   const registration: Registration = {
     at: ctx.nowIso,
     total: seed.statement.items.length,
@@ -159,6 +156,36 @@ export function register(seed: AccountingSeed, s: AccountingState, ctx: { nowIso
     journal,
     message: registrationMessage(seed, registration),
   };
+}
+
+/** 「次から自動」に印のある購入先を、今回の印で自動のルールにする（もうある購入先は足さない） */
+export function rulesToAdd(seed: AccountingSeed, s: AccountingState): MerchantRule[] {
+  const sorted = sortCurrent(seed);
+  const manual = manualItems(sorted);
+  const have = new Set(effectiveRules(seed.rules, s).map((r) => r.merchantId));
+  return manualMerchants(sorted)
+    .filter((m) => s.autoNext.includes(m) && !have.has(m))
+    .map((m) => ({ merchantId: m, use: s.choices[String(manual.find((i) => i.merchantId === m)!.no)] }))
+    .filter((r) => !!r.use);
+}
+
+/** 明細ごとの店用／私用（自動のルールの分と、人が選んだ分）。選んでいない行は入れない */
+export function usesOf(seed: AccountingSeed, s: AccountingState): Record<string, CardUse> {
+  const sorted = sortCurrent(seed);
+  const out: Record<string, CardUse> = {};
+  for (const a of sorted.auto) out[String(a.item.no)] = a.use;
+  for (const i of manualItems(sorted)) if (s.choices[String(i.no)]) out[String(i.no)] = s.choices[String(i.no)];
+  return out;
+}
+
+/**
+ * freee（テスト事業所）の登録が全部済んだ（登録した・もう処理済み）時：「次から自動」の購入先を自動のルールに足す。
+ * 会計（架空）の記録（registered）は変えない（freee の記録とは分けて持つ）。
+ */
+export function withRulesFromFreee(seed: AccountingSeed, s: AccountingState, nowIso: string): { state: AccountingState; added: MerchantRule[] } {
+  const added = rulesToAdd(seed, s);
+  if (!added.length) return { state: s, added };
+  return { state: { ...s, addedRules: [...s.addedRules, ...added.map((r) => ({ ...r, addedAt: nowIso }))] }, added };
 }
 
 /** 「自動 15件・人が選んだ 8件。自動のルールに「タオルの通販F＝店用」を足しました」 */

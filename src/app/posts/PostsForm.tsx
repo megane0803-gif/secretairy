@@ -88,6 +88,8 @@ export function PostsForm({ data, settings, memos, maxChars }: { data: BookData;
       noAi: useMode === "ai" ? false : s.noAi,
       failed: null,
       draft: {
+        id: `pd-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+        version: 0,
         kind: kind.id,
         text: filled.text,
         made: filled.text,
@@ -100,6 +102,12 @@ export function PostsForm({ data, settings, memos, maxChars }: { data: BookData;
         closedFrom: facts.closedFrom,
         unreadable: facts.unreadable,
         cautions: facts.cautions,
+        // 発信のチームのリサーチャーが、今の台帳と店の設定で確かめなおすための物
+        closedDates: owner.kind === "dates" ? owner.dates : undefined,
+        pieces: filled.pieces,
+        openings: facts.openings,
+        closed: facts.closed,
+        period,
       },
     }));
   }
