@@ -418,6 +418,9 @@ describe("3. 判定（プログラム。AI は使わない）", () => {
     for (const t of ["今だけのご案内です。", "１００％ご満足いただけます。", "12月28日まで空いています。", "金曜にお待ちしています。", "https://example.com を見てください。"])
       assert.ok(!allOk(q, post(t)), t);
     assert.ok(allOk(q, post("【空き枠】【お休み】をご覧ください。")), "印の中は見ない");
+    // 発信だけの数の見方：漢字の決まった言い方は通し、数を数える言い方は落とす
+    assert.ok(allOk(q, post("三が日はお休みします。スタッフ一同、今年一年ありがとうございました。")), "三が日・一同・今年一年");
+    for (const t of ["三回までご案内します。", "二万円のコースです。", "十二月にお待ちしています。", "【1月6日から営業再開】します。"]) assert.ok(!allOk(q, post(t)), t);
     const gate: EvalAnswer = { kind: "posts", res: { ok: false, code: "gate", checks: [], problems: ["使わない言葉：今だけ"], tries: 2, steps: [] } };
     assert.ok(allOk(q, gate));
   });
@@ -1160,7 +1163,7 @@ describe("10. 「確定しました」と言わない：確定したと伝える
     assert.ok(r.checks.find((c) => c.label.includes("「確定しました」と言わない"))!.ok, r.answer);
   });
 
-  test("README の結果の欄：直す前の3回（合格9・不合格1。7 は見張りの拾いすぎ）を残し、直した後の欄を並べる", () => {
+  test("README の結果の欄：直す前の3回（合格9・不合格1。7 は見張りの拾いすぎ）を残し、直した後の3回（合格10）を並べる", () => {
     const readme = readFileSync(join(ROOT, "README.md"), "utf8");
     const sec = readme.slice(readme.indexOf("### 結果（本物の AI で3回）"), readme.indexOf("## 使った物と権利"));
     assert.match(sec, /#### 直す前/);
@@ -1173,6 +1176,14 @@ describe("10. 「確定しました」と言わない：確定したと伝える
     assert.match(before, /claude-sonnet-5-5.*claude-haiku-5-5.*claude-sonnet-5-5/);
     assert.match(before, /拾っていました/);
     const after = sec.slice(sec.indexOf("#### 直した後"));
-    assert.equal((after.match(/（直した後の結果をここに入れる）/g) ?? []).length, 3);
+    // 直した後の3回：日時・コミット・10・0・0（入れる前の文は残っていない）
+    for (const [at, commit] of [
+      ["2026/11/5 14:46:50", "0ae6a0026d9b"],
+      ["2026/11/5 14:50:13", "9c003af6171e"],
+      ["2026/11/5 14:52:34", "9c003af6171e"],
+    ])
+      assert.match(after, new RegExp(`\\| ${at} \\| \`${commit}\` \\| 10 \\| 0 \\| 0 \\|`));
+    assert.doesNotMatch(after, /直した後の結果をここに入れる/);
+    assert.match(after, /claude-sonnet-5-5.*claude-haiku-5-5.*claude-sonnet-5-5/);
   });
 });

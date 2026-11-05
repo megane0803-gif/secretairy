@@ -21,6 +21,12 @@ export type PostDraft = {
   mode: PostsMode;
   /** 前：何から作ったか（材料の1つ目） */
   topic: string;
+  /** お休みの日付の入れ元（材料に書いた日付か、店の設定か） */
+  closedFrom?: "materials" | "shop";
+  /** 材料のお休みの日付を読み取れなかった（お休みも空き枠も入れていない） */
+  unreadable?: boolean;
+  /** 確かめてください（材料のお休みが台帳・店の設定とぶつかる所） */
+  cautions?: string[];
 };
 
 export type PostsDesk = {

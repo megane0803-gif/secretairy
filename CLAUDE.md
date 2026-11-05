@@ -72,7 +72,7 @@ src/lib/ads/       広告の数・門・道具・流れ・決まった返事・�
 src/lib/ads/team/  広告の案の「AI のチーム」の会議：リサーチャー（research.ts。プログラム）・欄ごとの言葉の門（gate.ts）・流れ（run.ts）・決まった返事（script.ts）・会議の印（state.ts）
 src/lib/accounting/ 経理：売上の数・通販の明細の仕分け（自動のルール）・門・登録（ブラウザの中に残す形。AI は使わない）
 src/lib/todo/      ToDo：入口ごとの鍵・並べ方（items.ts。Claude は並べない）・枠が埋まった時・メモを投げる（Haiku は文だけ・門・決まった返事）・メモの期限（due.ts。プログラムが読む）
-src/lib/posts/     発信：言葉の門・日時を入れる（台帳と設定から。本当に空いている時間・材料の時期）・指示文・流れ（作り直し1回）・決まった返事・保存した下書き（ブラウザの中に残す形）
+src/lib/posts/     発信：言葉の門・日時を入れる（台帳と設定から。本当に空いている時間・材料の時期）・お休みの日付は材料から読む（closed.ts。全部読み切れなければ読めないと出す）・ぶつかったら確かめての注意・発信だけの数の見方（postNumbersWritten）・指示文・流れ（作り直し1回）・決まった返事・保存した下書き（ブラウザの中に残す形）
 src/lib/line/      LINE のつなぎ（オーナー側）：署名・Redis・つなぎと預かり（bridge）・一言の振り分け（sort）・画面での入れ方（apply）
 src/app/api/line/  LINE の窓口（Webhook・つなぐ・受け取り・送る）。画面の処理と混ぜない
 src/lib/freee/     経理の freee（テスト事業所）：暗号化した cookie（seal.ts）・API（api.ts。公式の定義で確かめた形だけ）・照らし合わせと状態の分け方（match.ts）・窓口の中身と守り（server.ts）・画面の記録（state.ts）・1件ずつ送る流れ（run.ts）。AI は呼ばない

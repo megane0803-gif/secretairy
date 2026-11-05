@@ -2,7 +2,8 @@
 
 // 発信のタブの右の列：①種類を選ぶ ②材料を入れて「下書きを作る」。
 // 材料・お店のメモ（全部）・ルールを /api/ai/posts へ送り、言葉の門を通った下書きに、
-// 空き枠の日時（台帳から）・お休みの日付（設定から）・ブログのリンクの印をこの画面で入れて、真ん中に出す。
+// 空き枠の日時（台帳から）・お休みの日付（材料に書いた日付を先に。無ければ店の設定から）・ブログのリンクの印をこの画面で入れて、真ん中に出す。
+// 材料のお休みの日付を読み取れなかった時は推して入れず（空き枠も入れない）、ぶつかる所があれば「確かめてください」を出す。
 // 2回とも門に当たったら下書きは出さず、真ん中と日誌に「作れませんでした」（手で直した下書きがあれば消さずに残す）。
 // 手で直した下書きがある時に「下書きを作る」を押したら、先に「作り直すと今の下書きが置き換わります」と聞く（戻る／作り直す）。
 
@@ -15,7 +16,8 @@ import type { PostMemo } from "@/lib/data/types";
 import { writeJournal } from "@/lib/journal";
 import { askPostDraft } from "@/lib/posts/client";
 import { getPostsDesk, setPostsDesk, usePostsDesk } from "@/lib/posts/deskStore";
-import { fillPost, periodOf, postFacts } from "@/lib/posts/facts";
+import { CLOSED_UNREADABLE, readOwnerClosed } from "@/lib/posts/closed";
+import { CAUTION_HEAD, CLOSED_FROM_LABEL, fillPost, periodOf, postFacts } from "@/lib/posts/facts";
 import { gatePost } from "@/lib/posts/gate";
 import { afterFailedRedo, needsRedoConfirm, REDO_CONFIRM } from "@/lib/posts/redo";
 import type { PostsMode } from "@/lib/posts/wire";
@@ -23,7 +25,7 @@ import { COULD_NOT_WRITE } from "@/lib/posts/write";
 import { useRules } from "@/lib/rules/useRules";
 import type { PostsSettings } from "@/lib/settings";
 
-const INSERT_JOURNAL = { openings: "空き枠の日時（台帳から）", closed: "お休みの日付（店の設定から）", blogLink: "ブログのリンクの印" } as const;
+const INSERT_JOURNAL = { openings: "空き枠の日時（台帳から）", blogLink: "ブログのリンクの印" } as const;
 
 export function PostsForm({ data, settings, memos, maxChars }: { data: BookData; settings: PostsSettings; memos: PostMemo[]; maxChars: number }) {
   const desk = usePostsDesk();
@@ -66,11 +68,21 @@ export function PostsForm({ data, settings, memos, maxChars }: { data: BookData;
       setPostsDesk((s) => ({ busy: false, ...afterFailedRedo(s.draft, { kind: kind.id, problems: again.problems, checks: again.checks }) }));
       return;
     }
-    // 材料に時期（「年末」など）があれば、その時期の日から空き枠とお休みを出す
+    // 材料に時期（「年末」など）があれば、その時期の日から空き枠とお休みを出す。材料に書いたお休みの日付は先に使う
     const period = periodOf(kind.materials.map((f) => materials[f.id] ?? "").join(" "), book.today.date, settings.periods);
-    const facts = postFacts(book.shop, settings, book.today, book.now, book.all, period);
+    const owner = readOwnerClosed(kind.materials.map((f) => materials[f.id] ?? "").join("\n"), book.today.date);
+    const facts = postFacts(book.shop, settings, book.today, book.now, book.all, period, owner);
     const filled = fillPost(res.text, kind, facts);
-    writeJournal(...res.steps, ...(filled.inserted.length ? [{ who: "プログラム" as const, text: `${kind.label}の下書きに入れた：${filled.inserted.map((i) => INSERT_JOURNAL[i]).join("・")}${period ? `（時期「${period.label}」の日から）` : ""}` }] : []));
+    const put = filled.inserted.filter((i) => !(facts.unreadable && (i === "openings" || i === "closed")));
+    const putLabel = (i: (typeof put)[number]) => (i === "closed" ? CLOSED_FROM_LABEL[facts.closedFrom] : INSERT_JOURNAL[i]);
+    writeJournal(
+      ...res.steps,
+      ...(put.length ? [{ who: "プログラム" as const, text: `${kind.label}の下書きに入れた：${put.map(putLabel).join("・")}${period ? `（時期「${period.label}」の日から）` : ""}` }] : []),
+      ...(facts.unreadable
+        ? [{ who: "プログラム" as const, text: `${kind.label}の下書き：材料のお休みの日付を読み取れなかったので、お休みは「${CLOSED_UNREADABLE}」とし、空き枠も入れなかった（推して入れていない）` }]
+        : []),
+      ...facts.cautions.map((c) => ({ who: "プログラム" as const, text: `${kind.label}の下書き：${CAUTION_HEAD}${c}` })),
+    );
     setPostsDesk((s) => ({
       busy: false,
       noAi: useMode === "ai" ? false : s.noAi,
@@ -85,6 +97,9 @@ export function PostsForm({ data, settings, memos, maxChars }: { data: BookData;
         cut: res.cut,
         mode: useMode,
         topic: materials[first?.id ?? ""] ?? "",
+        closedFrom: facts.closedFrom,
+        unreadable: facts.unreadable,
+        cautions: facts.cautions,
       },
     }));
   }

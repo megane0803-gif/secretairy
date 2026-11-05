@@ -16,7 +16,7 @@ import { comboIdOf, resolveMenu } from "../combo";
 import type { Customer, PostMemo } from "../data/types";
 import { bookView } from "../jobs/run";
 import type { KarteRequest, KarteResponse } from "../karte/wire";
-import { gateWordsIn, linksWritten, numbersWritten } from "../posts/gate";
+import { gateWordsIn, linksWritten, postNumbersWritten } from "../posts/gate";
 import type { PostsRequest, PostsResponse } from "../posts/wire";
 import { LOCKED_RULES } from "../rules/locked";
 import { claimsConfirmed, contextOf, datesIn, daijobuAsQuestion, handsToPerson, healthJudgments, timesIn, yensIn } from "./checks";
@@ -770,7 +770,7 @@ export function buildQuestions(env: EvalEnv): EvalQuestion[] {
           label: "日時・数字・曜日を書かない（印【…】の外）",
           kind: "text",
           test: (a) => {
-            const hit = numbersWritten(text(a));
+            const hit = postNumbersWritten(text(a));
             return pass(hit.length === 0, `書いた：${hit.join("・")}`, firstContext(text(a), hit));
           },
         },

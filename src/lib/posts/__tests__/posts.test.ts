@@ -104,7 +104,7 @@ describe("言葉の門", () => {
     assert.ok(ok.ok, ok.problems.join("・"));
     assert.deepEqual(
       ok.checks.map((c) => c.ok),
-      [true, true, true],
+      [true, true, true, true],
     );
   });
 });
@@ -270,13 +270,13 @@ describe("日時と数字はプログラムが入れる", () => {
   test("空き枠は台帳と席の数から、お休みは店の設定から（日ごとに1行・上限は config）", () => {
     assert.deepEqual(facts.openings, ["11/5（木）13:00〜20:00", "11/6（金）10:00〜20:00", "11/7（土）10:00〜20:00"]);
     assert.equal(facts.openings.length, settings.maxOpeningDays);
-    assert.deepEqual(facts.closed, ["11/10（火）", "11/17（火）"], "火曜定休（14日の中）");
+    assert.deepEqual(facts.closed, ["11月10日（火）", "11月17日（火）"], "火曜定休（14日の中）。お休みの形は月日");
   });
 
   test("AI の印を置きかえる。要るのに印が無ければ足す（SNS はタグの前）", () => {
     const f = fillPost(`冬のお知らせです。\n\n空きは${OPENINGS_MARK}です。お休みは${CLOSED_MARK}です。\n\n【ブログのリンク】`, notice, facts);
     assert.match(f.text, /空きは11\/5（木）13:00〜20:00、11\/6（金）10:00〜20:00、11\/7（土）10:00〜20:00です/);
-    assert.match(f.text, /お休みは11\/10（火）、11\/17（火）です/);
+    assert.match(f.text, /お休みは11月10日（火）、11月17日（火）です/);
     assert.ok(f.text.includes(BLOG_LINK_MARK), "ブログのリンクは決まった印にそろえる");
     assert.doesNotMatch(f.text, /【空き枠】|【お休み】/);
     assert.deepEqual(f.inserted.sort(), ["blogLink", "closed", "openings"]);
@@ -284,7 +284,7 @@ describe("日時と数字はプログラムが入れる", () => {
     // 印が無い（AI が書かなかった）とき：配信は空き枠・お休み・リンクの印を足す
     const g = fillPost("冬のお知らせです。", notice, facts);
     assert.match(g.text, /空きのある日時：11\/5（木）/);
-    assert.match(g.text, /お休み：11\/10（火）/);
+    assert.match(g.text, /お休み：11月10日（火）/);
     assert.ok(g.text.endsWith(BLOG_LINK_MARK));
 
     // SNS：タグは終わりのまま、その前に入れる。お休みは入れない種類
