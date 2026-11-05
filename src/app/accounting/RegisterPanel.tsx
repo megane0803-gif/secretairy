@@ -14,6 +14,7 @@ import { register, registrationMessage, sortTrial } from "@/lib/accounting/state
 import { useAccounting } from "@/lib/accounting/useAccounting";
 import type { useFreee } from "@/lib/freee/useFreee";
 import { writeJournal, type JournalWho } from "@/lib/journal";
+import { DEMO_TAG_NOTE } from "@/lib/notices";
 import { FreeeConnectForm, useCallbackNote } from "./FreeePanel";
 
 /** freee（テスト事業所）とつながっていない画面（cookie が無い・審査員の画面も）。今のまま会計（架空）に登録する */
@@ -120,9 +121,15 @@ export function RegisterPanel({ freee }: { freee: ReturnType<typeof useFreee> })
 
       {reg && (
         <>
-          <button type="button" className="btn" onClick={() => setTrial(true)} disabled={trial}>
-            次の明細（試し）
-          </button>
+          <p className="demo-row">
+            {/* 「次の明細（試し）」は試すための物なので「デモ」の札を付ける */}
+            <span className="tag text" title={DEMO_TAG_NOTE}>
+              デモ<span className="sr-only">（{DEMO_TAG_NOTE}）</span>
+            </span>
+            <button type="button" className="btn" onClick={() => setTrial(true)} disabled={trial}>
+              次の明細（試し）
+            </button>
+          </p>
           {t && (
             <div className="acct-trial" role="status">
               <p className="ad-change">

@@ -103,7 +103,9 @@ describe("1. TabFrame の rightAfterOnPhone（渡した時だけ使う口）", (
   });
 
   test("ほかのタブは rightAfterOnPhone を渡さない", () => {
-    for (const tab of ["home", "reservations", "karte", "accounting", "posts", "rules", "todo"])
+    // ルールタブも、スマホで「🔒 鍵つき → ルールを足す欄（右の列）→ 一覧」にするので同じ口を使う（UI4。新しい口は作らない）
+    assert.match(read("src/app/rules/page.tsx"), /rightAfterOnPhone=\{1\}/);
+    for (const tab of ["home", "reservations", "karte", "accounting", "posts", "todo"])
       assert.doesNotMatch(read(`src/app/${tab}/page.tsx`), /rightAfterOnPhone/, tab);
     assert.match(frame, /rightAfterOnPhone\?: number;/);
   });

@@ -1,6 +1,6 @@
 "use client";
 
-// 発信のタブの右の列：①種類を選ぶ ②材料を入れて「下書きを作る」。
+// 発信のタブの真ん中の列の一番上（スマホもページの一番上）：①種類を選ぶ ②材料を入れて「下書きを作る」。
 // 材料・お店のメモ（全部）・ルールを /api/ai/posts へ送り、言葉の門を通った下書きに、
 // 空き枠の日時（台帳から）・お休みの日付（材料に書いた日付を先に。無ければ店の設定から）・ブログのリンクの印をこの画面で入れて、真ん中に出す。
 // 材料のお休みの日付を読み取れなかった時は推して入れず（空き枠も入れない）、ぶつかる所があれば「確かめてください」を出す。
@@ -22,6 +22,7 @@ import { gatePost } from "@/lib/posts/gate";
 import { afterFailedRedo, needsRedoConfirm, REDO_CONFIRM } from "@/lib/posts/redo";
 import type { PostsMode } from "@/lib/posts/wire";
 import { COULD_NOT_WRITE } from "@/lib/posts/write";
+import { draftName } from "@/lib/posts/draftName";
 import { useRules } from "@/lib/rules/useRules";
 import type { PostsSettings } from "@/lib/settings";
 
@@ -45,11 +46,11 @@ export function PostsForm({ data, settings, memos, maxChars }: { data: BookData;
   async function make(useMode: PostsMode) {
     if (!kind || desk.busy) return;
     setPostsDesk(() => ({ busy: true, failed: null, problem: null, mode: useMode }));
-    writeJournal({ who: "オーナー", text: `${kind.label}の下書きを頼んだ（${useMode === "script" ? "決まった返事・AI なし" : "AI"}）` });
+    writeJournal({ who: "オーナー", text: `${draftName(kind.label)}を頼んだ（${useMode === "script" ? "決まった返事・AI なし" : "AI"}）` });
     const res = await askPostDraft({ mode: useMode, kind: kind.id, materials, memos, rules: rules.filter((r) => !r.locked) });
     if (!res.ok) {
       if (res.code === "no-ai") {
-        writeJournal({ who: "プログラム", text: `${NO_AI_MESSAGE}でした。${kind.label}の下書きは作っていません` });
+        writeJournal({ who: "プログラム", text: `${NO_AI_MESSAGE}でした。${draftName(kind.label)}は作っていません` });
         setPostsDesk(() => ({ busy: false, noAi: true }));
         return;
       }
@@ -64,7 +65,7 @@ export function PostsForm({ data, settings, memos, maxChars }: { data: BookData;
     // 受け取った下書きを、この画面でももう一度門で確かめてから出す
     const again = gatePost(res.text, settings.gateWords);
     if (!again.ok) {
-      writeJournal(...res.steps, { who: "プログラム", text: `画面の確認で弾いた：${again.problems.join("。")}（${kind.label}の下書きを${COULD_NOT_WRITE}）` });
+      writeJournal(...res.steps, { who: "プログラム", text: `画面の確認で弾いた：${again.problems.join("。")}（${draftName(kind.label)}を${COULD_NOT_WRITE}）` });
       setPostsDesk((s) => ({ busy: false, ...afterFailedRedo(s.draft, { kind: kind.id, problems: again.problems, checks: again.checks }) }));
       return;
     }
@@ -77,11 +78,11 @@ export function PostsForm({ data, settings, memos, maxChars }: { data: BookData;
     const putLabel = (i: (typeof put)[number]) => (i === "closed" ? CLOSED_FROM_LABEL[facts.closedFrom] : INSERT_JOURNAL[i]);
     writeJournal(
       ...res.steps,
-      ...(put.length ? [{ who: "プログラム" as const, text: `${kind.label}の下書きに入れた：${put.map(putLabel).join("・")}${period ? `（時期「${period.label}」の日から）` : ""}` }] : []),
+      ...(put.length ? [{ who: "プログラム" as const, text: `${draftName(kind.label)}に入れた：${put.map(putLabel).join("・")}${period ? `（時期「${period.label}」の日から）` : ""}` }] : []),
       ...(facts.unreadable
-        ? [{ who: "プログラム" as const, text: `${kind.label}の下書き：材料のお休みの日付を読み取れなかったので、お休みは「${CLOSED_UNREADABLE}」とし、空き枠も入れなかった（推して入れていない）` }]
+        ? [{ who: "プログラム" as const, text: `${draftName(kind.label)}：材料のお休みの日付を読み取れなかったので、お休みは「${CLOSED_UNREADABLE}」とし、空き枠も入れなかった（推して入れていない）` }]
         : []),
-      ...facts.cautions.map((c) => ({ who: "プログラム" as const, text: `${kind.label}の下書き：${CAUTION_HEAD}${c}` })),
+      ...facts.cautions.map((c) => ({ who: "プログラム" as const, text: `${draftName(kind.label)}：${CAUTION_HEAD}${c}` })),
     );
     setPostsDesk((s) => ({
       busy: false,

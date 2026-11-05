@@ -144,6 +144,18 @@ export function FreeePanel({ freee }: { freee: Freee }) {
       <p>
         <span className="tag ok">{settings.label}</span> {connected ? <span className="hint">つながっています</span> : null}
       </p>
+      {/* よく使う「freee に明細を入れる」は、つながっているかの行のすぐ下（説明の文はボタンの下） */}
+      <button type="button" className="btn" onClick={onImport} disabled={!connected || busy || sending || !!freee.importWait}>
+        freee に明細を入れる
+      </button>
+      {freee.importWait && (
+        <p className="problems" role="alert">
+          前に入れた結果が分からないので、{timeOf(freee.importWait.until)}まで待ってください。その後に押すと、freee から読み直して、まだ無い物だけ入れます。
+        </p>
+      )}
+      <p className="hint">
+        経理タブと同じ架空のカード明細 {nos.length}件（日付・購入先・金額）を、口座「{settings.cardName}」に入れます。同じ印の明細がもうあれば入れません。
+      </p>
       {callbackNote && (
         <p className="checked" role="status">
           {callbackNote}
@@ -181,17 +193,6 @@ export function FreeePanel({ freee }: { freee: Freee }) {
         </>
       )}
 
-      <button type="button" className="btn" onClick={onImport} disabled={!connected || busy || sending || !!freee.importWait}>
-        freee に明細を入れる
-      </button>
-      {freee.importWait && (
-        <p className="problems" role="alert">
-          前に入れた結果が分からないので、{timeOf(freee.importWait.until)}まで待ってください。その後に押すと、freee から読み直して、まだ無い物だけ入れます。
-        </p>
-      )}
-      <p className="hint">
-        経理タブと同じ架空のカード明細 {nos.length}件（日付・購入先・金額）を、口座「{settings.cardName}」に入れます。同じ印の明細がもうあれば入れません。
-      </p>
 
       <button
         type="button"

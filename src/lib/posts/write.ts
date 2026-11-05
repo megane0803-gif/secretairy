@@ -10,6 +10,7 @@ import type { PostKind } from "../settings";
 import { gatePost, type PostGateCheck } from "./gate";
 import type { PostsMessage, PostsModel } from "./model";
 import { postsSystem, postsUserText } from "./prompt";
+import { draftName } from "./draftName";
 
 /** 日誌に書く1行（書くのは画面の側） */
 export type PostStep = { who: JournalWho; text: string };
@@ -63,10 +64,10 @@ export async function runWrite(input: WriteInput): Promise<WriteResult> {
   for (i = 1; i <= tries; i++) {
     const turn = await model.turn({ system, messages, maxTokens: input.maxTokens });
     if (turn.stop === "refusal") {
-      steps.push({ who: "プログラム", text: `${kind.label}の下書きを${COULD_NOT_WRITE}（AI が答えなかった。保存していない）` });
+      steps.push({ who: "プログラム", text: `${draftName(kind.label)}を${COULD_NOT_WRITE}（AI が答えなかった。保存していない）` });
       return { ok: false, checks, problems: ["AI が答えませんでした"], tries: i, steps };
     }
-    steps.push({ who: "AI", text: `${kind.label}の下書きを作った${i > 1 ? `（作り直し${i - 1}回目）` : ""}（${[...turn.text].length}字）` });
+    steps.push({ who: "AI", text: `${draftName(kind.label)}を作った${i > 1 ? `（作り直し${i - 1}回目）` : ""}（${[...turn.text].length}字）` });
     const g = gatePost(turn.text, input.gateWords);
     checks = g.checks;
     problems = g.problems;
@@ -101,6 +102,6 @@ export async function runWrite(input: WriteInput): Promise<WriteResult> {
     });
   }
 
-  steps.push({ who: "プログラム", text: `${kind.label}の下書きを${COULD_NOT_WRITE}（言葉の門に${Math.min(i, tries)}回当たった。保存していない）` });
+  steps.push({ who: "プログラム", text: `${draftName(kind.label)}を${COULD_NOT_WRITE}（言葉の門に${Math.min(i, tries)}回当たった。保存していない）` });
   return { ok: false, checks, problems, tries: Math.min(i, tries), steps };
 }

@@ -2,6 +2,7 @@
 // 行は名字のよみ（seed/customers.json の kana）の1文字目で決める。
 
 import type { Customer } from "../data/types";
+import { kartesOf, type KarteRecord } from "./record";
 
 export const KANA_ROWS = [
   { id: "a", label: "あ", chars: "あいうえおぁぃぅぇぉゔ" },
@@ -37,4 +38,20 @@ export function filterCustomers<C extends Pick<Customer, "surname" | "kana">>(li
     .filter((c) => !row || kanaRowOf(c.kana) === row)
     .filter((c) => !q || c.surname.includes(q) || toHiragana(c.kana ?? "").includes(q))
     .sort((a, b) => (a.kana ?? a.surname).localeCompare(b.kana ?? b.surname, "ja"));
+}
+
+/** 前回の来店（そのお客様のいちばん新しいカルテ＝来店の記録）。日付とメニュー。カルテが無ければ null */
+export type LastVisit = { date: string; menuId: string };
+
+/** そのお客様のいちばん新しいカルテ（日付 → 保存した時刻の新しい順の先頭）から、前回の来店日とメニューを取る */
+export function lastVisitOf(kartes: KarteRecord[], customerId: string): LastVisit | null {
+  const k = kartesOf(kartes, customerId)[0];
+  return k ? { date: k.date, menuId: k.menuId } : null;
+}
+
+export const NO_LAST_VISIT = "前回の記録なし";
+
+/** お客様一覧の1行に出す言葉：「前回 10/24（金）カット＋カラー」。記録が無ければ「前回の記録なし」 */
+export function lastVisitLabel(last: LastVisit | null, dayLabel: (date: string) => string, menuName: (id: string) => string): string {
+  return last ? `前回 ${dayLabel(last.date)}${menuName(last.menuId)}` : NO_LAST_VISIT;
 }

@@ -644,6 +644,9 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .form-problem { margin: 0; color: var(--warn); font-weight: 600; }
 .form-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 .form-buttons .btn { flex: 1 1 auto; }
+.form-buttons > .tag { align-self: center; }
+/* 「デモ」の札とボタンを1行に（ルールの「最初の状態に戻す」・経理の「次の明細（試し）」） */
+.rule-reset, .demo-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0; }
 
 .tryform label { display: flex; flex-direction: column; gap: 2px; font-size: 0.9rem; }
 .tryform .check-row { flex-direction: row; align-items: center; gap: 8px; }
@@ -817,6 +820,9 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .karte-pick.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; background: var(--accent-soft); }
 .karte-pick-time { font-weight: 700; }
 .karte-pick-menu { color: var(--muted); font-size: 0.9rem; }
+/* お客様一覧の名前の横：前回の来店日とメニュー（狭い時は折り返す） */
+.karte-last { font-size: 0.9rem; min-width: 0; overflow-wrap: anywhere; }
+.karte-last.none { color: var(--muted); }
 
 .karte-now { margin-bottom: 20px; }
 .karte-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
@@ -913,7 +919,9 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .acct-sales { margin-bottom: 24px; }
 /* 売上は桁が多いので、狭い画面では1つずつの段にする */
 .acct-sales .bignums { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
-.acct-sales .bignum { min-width: 0; overflow-wrap: anywhere; }
+/* 数字は桁の途中で折り返さない（1行のまま）。札の幅が足りない時は、札の幅に合わせて字を少し小さくする（経理の売上だけ） */
+.acct-sales .bignum { min-width: 0; container-type: inline-size; }
+.acct-sales .bignum-value { white-space: nowrap; font-size: min(2.6rem, 20cqi); }
 .acct-h3 { font-size: 1rem; margin: 12px 0 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .acct-h4 { font-size: 0.95rem; margin: 12px 0 4px; }
 .daybars { display: flex; align-items: flex-end; gap: 2px; height: 72px; min-width: 0; }

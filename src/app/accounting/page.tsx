@@ -11,10 +11,11 @@ import { SalesReport } from "./SalesReport";
  * 経理のタブ。上に架空の1か月の売上（見るだけ）、その下に通販の明細（架空）の仕分け。
  * AI の予想は使わない：購入先ごとの自動のルールでプログラムが分け、ルールの無い物だけ人が店用か私用を選ぶ。
  * 承認の箱は使わない。登録は右の列の人のボタンだけ（オーナーのブラウザで freee（テスト事業所）とつながっている時は、そちらに登録。§1.8.1）。
+ * スマホでは右の列（登録の欄・freee の欄）をページの上に出す（予約チャットと同じ rightFirstOnPhone）。PC の右の列の場所は今まで通り。
  */
 export default function AccountingPage() {
   return (
-    <TabPage tab="accounting" right={<RegisterColumn />}>
+    <TabPage tab="accounting" right={<RegisterColumn />} rightFirstOnPhone>
       <SalesReport />
       <JobStatement />
       <CardStatement />

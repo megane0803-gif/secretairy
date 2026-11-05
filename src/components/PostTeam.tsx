@@ -31,6 +31,7 @@ import { useRules } from "@/lib/rules/useRules";
 import type { PostKind, PostsSettings } from "@/lib/settings";
 import { getPostsTeamLimits } from "@/lib/settings";
 import { TeamVoice } from "./TeamVoice";
+import { draftName } from "@/lib/posts/draftName";
 
 const LIMITS = getPostsTeamLimits();
 
@@ -242,7 +243,7 @@ export function PostTeam({
     if (!snap) return;
     setBusy(true);
     setNote(null);
-    writeJournal({ who: "オーナー", text: `${kind.label}の下書きを AI のチームに読んでもらった${snap.mode === "script" ? "（決まった返事）" : ""}` });
+    writeJournal({ who: "オーナー", text: `${draftName(kind.label)}を AI のチームに読んでもらった${snap.mode === "script" ? "（決まった返事）" : ""}` });
     const ask = await askPostsTeam(snap, { kind, memos, rules, gateWords: settings.gateWords, limits: LIMITS });
     setBusy(false);
     const ref = { draftId: snap.id, meetingId };

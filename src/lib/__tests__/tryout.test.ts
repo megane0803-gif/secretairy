@@ -48,8 +48,10 @@ describe("A1. スマホで予約タブを開くと、予約チャットがペー
     assert.match(read("src/app/reservations/page.tsx"), /<TabPage[\s\S]*?rightFirstOnPhone[\s\S]*?right=\{/);
     const frame = read("src/components/TabFrame.tsx");
     assert.match(frame, /rightFirstOnPhone \? "page right-first-sp" : "page"/);
+    // 経理タブも、スマホで freee の欄（右の列）をページの上に出すので同じ口を使う（UI4）
+    assert.match(read("src/app/accounting/page.tsx"), /<TabPage tab="accounting"[\s\S]*?rightFirstOnPhone>/);
     // ほかのタブは今のまま（札を付けない）
-    for (const tab of ["home", "karte", "ads", "accounting", "posts", "rules", "todo"])
+    for (const tab of ["home", "karte", "ads", "posts", "rules", "todo"])
       assert.doesNotMatch(read(`src/app/${tab}/page.tsx`), /rightFirstOnPhone/, tab);
   });
 
