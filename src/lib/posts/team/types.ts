@@ -30,6 +30,16 @@ export const CONCERN_LABEL: Record<PostConcern, string> = {
   pushy: "押しつけに聞こえる",
 };
 
+/**
+ * 画面に出す「〜所」の言い方（カードの見出しと日誌の行。AI あり・なしで共通）。種類ごとにこの1か所で持つ。
+ * CONCERN_LABEL は Claude への指示の言葉なので変えない（「誤解されそう」に「所」をそのまま付けると「な」が抜けるため、別に持つ）。
+ */
+export const CONCERN_HEADING: Record<PostConcern, string> = {
+  unclear: "分かりにくい所",
+  misleading: "誤解されそうな所",
+  pushy: "押しつけに聞こえる所",
+};
+
 /** 野党の答え（門を通った物）：引っかかる所1つと、代わりの言い方1つ */
 export type OppositionPostVoice = { concern: PostConcern; why: string; edit: PostEdit };
 

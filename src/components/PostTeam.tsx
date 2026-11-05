@@ -26,7 +26,7 @@ import {
   type PickRef,
   type PostTeamArrival,
 } from "@/lib/posts/team/state";
-import { CONCERN_LABEL, DRAFT_CHANGED, POST_ROLE_DESC, POST_ROLE_NAME, type PostTeamResult, type PostTeamRole } from "@/lib/posts/team/types";
+import { CONCERN_HEADING, DRAFT_CHANGED, POST_ROLE_DESC, POST_ROLE_NAME, type PostTeamResult, type PostTeamRole } from "@/lib/posts/team/types";
 import { useRules } from "@/lib/rules/useRules";
 import type { PostKind, PostsSettings } from "@/lib/settings";
 import { getPostsTeamLimits } from "@/lib/settings";
@@ -149,7 +149,7 @@ function Voices({ draft, result, research, gateWords }: { draft: PostDraft; resu
           {result.opposition ? (
             <dl className="voice-facts">
               <div>
-                <dt>{CONCERN_LABEL[result.opposition.concern]}所</dt>
+                <dt>{CONCERN_HEADING[result.opposition.concern]}</dt>
                 <dd>{result.opposition.why}</dd>
               </div>
               <div>

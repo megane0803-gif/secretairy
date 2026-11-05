@@ -25,7 +25,7 @@ import { checkReplaced, editableSentences, factsIn, hashText, sentencesOf } from
 import { meetPost } from "../team/meet";
 import { maskPieces, runPostTeam, type PostTeamInput, type PostTeamWriteRequest, type PostTeamWriter } from "../team/run";
 import { RESEARCH_TAG, researchPost } from "../team/research";
-import { AVOID_CONTAINING, SHOP_FILLS } from "../team/prompt";
+import { AVOID_CONTAINING, postOppositionSystem, SHOP_FILLS } from "../team/prompt";
 import {
   applyPostPick,
   canMeetPost,
@@ -37,7 +37,7 @@ import {
   withPostTeamResult,
   withPostTeamStarted,
 } from "../team/state";
-import { DRAFT_CHANGED, POST_ROLE_DESC, POST_ROLE_NAME, TOO_LONG, type PostTeamResult } from "../team/types";
+import { CONCERN_HEADING, CONCERN_LABEL, DRAFT_CHANGED, POST_ROLE_DESC, POST_ROLE_NAME, TOO_LONG, type PostConcern, type PostTeamResult } from "../team/types";
 import { parsePostTeamRequest } from "../team/wire";
 import type { TeamJsonResult } from "../../ads/team/claude";
 
@@ -401,6 +401,29 @@ describe("6. 野党が賛成の言いかえ・欠けた", () => {
       const j = postTeamJournal(r, researchPost(d, ctxOf(notice)));
       assert.ok(j.some((l) => l.text === "野党：反対意見を確かめられませんでした"));
     }
+  });
+});
+
+describe("野党の見出し「〜所」（カードの見出しと日誌の行。AI あり・なしで共通）", () => {
+  const HEADINGS: Record<PostConcern, string> = { unclear: "分かりにくい所", misleading: "誤解されそうな所", pushy: "押しつけに聞こえる所" };
+
+  test("3つの種類の言い方は1か所（CONCERN_HEADING）に持ち、日誌の行もそこから取る", async () => {
+    assert.deepEqual(CONCERN_HEADING, HEADINGS);
+    const d = await NEW_YEAR();
+    for (const concern of Object.keys(HEADINGS) as PostConcern[]) {
+      const r = (await runPostTeam(inputOf(d), fakeClaude({ ...GOOD, opposition: { ...GOOD.opposition, concern } }), limits, "ai"))!;
+      assert.equal(r.opposition!.concern, concern);
+      const line = postTeamJournal(r, researchPost(d, ctxOf(notice))).find((l) => l.text.startsWith("野党："))!;
+      assert.ok(line.text.startsWith(`野党：${HEADINGS[concern]}。${GOOD.opposition.why}`), line.text);
+      assert.doesNotMatch(line.text, /誤解されそう所/);
+    }
+  });
+
+  test("Claude への指示の言葉は直す前と同じ（concern の説明・CONCERN_LABEL は変えない）", () => {
+    assert.deepEqual(CONCERN_LABEL, { unclear: "分かりにくい", misleading: "誤解されそう", pushy: "押しつけに聞こえる" });
+    const sys = postOppositionSystem(rules, (id) => id, words, { maxLineChars: TL.maxLineChars, maxTwinEdits: TL.maxTwinEdits, maxPicks: TL.maxPicks });
+    assert.ok(sys.includes("- concern：引っかかる所の種類を1つ（unclear = 分かりにくい / misleading = 誤解されそう / pushy = 押しつけに聞こえる）。"));
+    assert.doesNotMatch(sys, /誤解されそうな所/);
   });
 });
 

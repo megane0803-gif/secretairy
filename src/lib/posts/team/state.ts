@@ -11,7 +11,7 @@ import type { PostsMode } from "../wire";
 import { checkEdit, hashText, replaceOnce } from "./gate";
 import { draftTooLong } from "./run";
 import { researchJournal, type PostResearch } from "./research";
-import { CONCERN_LABEL, DRAFT_CHANGED, POST_ROLE_NAME, TOO_LONG, type AidePick, type PostTeamRecord, type PostTeamResult } from "./types";
+import { CONCERN_HEADING, DRAFT_CHANGED, POST_ROLE_NAME, TOO_LONG, type AidePick, type PostTeamRecord, type PostTeamResult } from "./types";
 
 export type MeetCheck = { ok: true } | { ok: false; reason: "none" | "done" | "empty" | "long"; message: string };
 
@@ -149,7 +149,7 @@ export function postTeamJournal(r: PostTeamResult, research: PostResearch): { wh
   );
   out.push(
     r.opposition
-      ? { who: ai, text: `${N.opposition}${tag}：${CONCERN_LABEL[r.opposition.concern]}所。${r.opposition.why}${q(r.opposition.edit.from)}→${q(r.opposition.edit.to)}` }
+      ? { who: ai, text: `${N.opposition}${tag}：${CONCERN_HEADING[r.opposition.concern]}。${r.opposition.why}${q(r.opposition.edit.from)}→${q(r.opposition.edit.to)}` }
       : { who: "プログラム", text: `${N.opposition}：反対意見を確かめられませんでした` },
   );
   out.push(
