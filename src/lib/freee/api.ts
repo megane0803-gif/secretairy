@@ -28,6 +28,8 @@ export class FreeeServerError extends Error {
 }
 /** 返事の形が定義と違う */
 export class FreeeBadShape extends Error {}
+/** サーバーの持ち時間が残っていないので、送らずに止めた（freee には何も送っていない） */
+export class FreeeOutOfTime extends Error {}
 
 export type WalletableType = "bank_account" | "credit_card" | "wallet";
 
@@ -66,9 +68,15 @@ function messagesOf(body: unknown): string[] {
   return out.slice(0, 5);
 }
 
-export function freeeClient(p: { fetch: FetchLike; settings: FreeeSettings; accessToken: string }) {
+/**
+ * deadline：この時刻（ms）までに返事を待ち終えられない呼び出しは、送らずに FreeeOutOfTime で止める
+ * （1件ずつの待つ時間 timeoutSeconds を足して、持ち時間を超えるなら送らない）。
+ */
+export function freeeClient(p: { fetch: FetchLike; settings: FreeeSettings; accessToken: string; now?: () => number; deadline?: number | null }) {
   const { settings, accessToken } = p;
+  const now = p.now ?? (() => Date.now());
   const call = async (method: "GET" | "POST", path: string, opts: { query?: Record<string, string | number>; body?: unknown } = {}): Promise<unknown> => {
+    if (p.deadline != null && now() + settings.timeoutSeconds * 1000 > p.deadline) throw new FreeeOutOfTime("持ち時間が残っていないので送りませんでした");
     const url = new URL(path, settings.apiBase);
     for (const [k, v] of Object.entries(opts.query ?? {})) url.searchParams.set(k, String(v));
     let res: Response;
@@ -113,16 +121,19 @@ export function freeeClient(p: { fetch: FetchLike; settings: FreeeSettings; acce
 
     /**
      * 口座明細を全部（GET /api/1/wallet_txns。limit は100まで・offset でめくる）。
+     * range：取引日で絞る（start_date／end_date。架空の明細の期間）。明細の番号（id）で重なりを除く。
      * 1ページが limit より少なければ終わり。maxPages をこえたら止める（読み切れない時は進まない）。
+     * （読んでいる間に freee の側で明細が足された・消された時の読み落としまでは防げない）
      */
-    async walletTxns(companyId: number, walletable: { type: WalletableType; id: number }): Promise<WalletTxn[]> {
-      const out: WalletTxn[] = [];
+    async walletTxns(companyId: number, walletable: { type: WalletableType; id: number }, range?: { from: string; to: string }): Promise<WalletTxn[]> {
+      const out = new Map<number, WalletTxn>();
       for (let page = 0; page < settings.maxPages; page++) {
         const b = (await call("GET", "/api/1/wallet_txns", {
           query: {
             company_id: companyId,
             walletable_type: walletable.type,
             walletable_id: walletable.id,
+            ...(range ? { start_date: range.from, end_date: range.to } : {}),
             limit: settings.pageLimit,
             offset: page * settings.pageLimit,
           },
@@ -131,9 +142,9 @@ export function freeeClient(p: { fetch: FetchLike; settings: FreeeSettings; acce
         for (const t of b.wallet_txns) {
           const x = toTxn(t);
           if (!x) throw new FreeeBadShape("口座明細の形が違います");
-          out.push(x);
+          out.set(x.id, x);
         }
-        if (b.wallet_txns.length < settings.pageLimit) return out;
+        if (b.wallet_txns.length < settings.pageLimit) return [...out.values()];
       }
       throw new FreeeBadShape(`口座明細が${settings.maxPages}ページより多く、読み切れません`);
     },

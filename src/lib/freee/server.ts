@@ -17,6 +17,7 @@ import {
   FreeeBadShape,
   FreeeExpired,
   FreeeNoAnswer,
+  FreeeOutOfTime,
   FreeeRejected,
   FreeeServerError,
   type FetchLike,
@@ -265,7 +266,9 @@ const expired = () => json({ ok: false, code: "expired", message: "freee の鍵�
 function readFailure(e: unknown): Response {
   if (e instanceof FreeeExpired) return expired();
   const message =
-    e instanceof FreeeRejected
+    e instanceof FreeeOutOfTime
+      ? "持ち時間の中で freee を読み終わりませんでした"
+      : e instanceof FreeeRejected
       ? `freee が受けませんでした（${e.status}）${e.messages.length ? `：${e.messages.join(" / ")}` : ""}`
       : e instanceof FreeeBadShape
         ? `freee の返事の形が違います：${e.message}`
@@ -277,28 +280,57 @@ function versionOf(seed: AccountingSeed): string {
   return seed.statement.version ?? "v1";
 }
 
+/** 明細の期間（freee の明細を読む時に、取引日で絞る） */
+function rangeOf(seed: AccountingSeed): { from: string; to: string } {
+  return { from: seed.statement.from, to: seed.statement.to };
+}
+
+/** この呼び出しの持ち時間（窓口の時間の上限より短く。返事の時間を残す） */
+function clientFor(deps: FreeeDeps, s: Session): FreeeClient {
+  return freeeClient({
+    fetch: deps.fetch,
+    settings: deps.settings,
+    accessToken: s.accessToken,
+    now: deps.now,
+    deadline: deps.now() + deps.settings.serverBudgetSeconds * 1000,
+  });
+}
+
 async function cardOf(api: FreeeClient, deps: FreeeDeps, companyId: number) {
   return pickCardAccount(await api.walletables(companyId), deps.settings.cardName);
 }
 
-export type ImportResult = { ok: true; total: number; created: number; existed: number; check: number; stopped: null | { no: number; kind: "unknown" | "failed"; reason: string } };
+/**
+ * stopped.kind：unknown（入れた結果が分からない。画面は待つ期限を出す）・failed（freee が受けなかった）・
+ * time（持ち時間が残っていないので、次の書き込みの前に止めた。何も分からない物は無い。画面が続きを呼ぶ）。
+ * done：20件を全部見終わった。
+ */
+export type ImportResult = {
+  ok: true;
+  total: number;
+  created: number;
+  existed: number;
+  check: number;
+  done: boolean;
+  stopped: null | { no: number; kind: "unknown" | "failed" | "time"; reason: string };
+};
 
 /** 経理タブと同じ架空のカード明細を、1件ずつ freee の明細として入れる。同じ印の明細がもうあれば入れない */
 export async function handleImport(request: Request, deps: FreeeDeps): Promise<Response> {
   const g = guard(request, deps, { method: "POST", session: true });
   if (!g.ok) return g.response;
   const s = g.session!;
-  const api = freeeClient({ fetch: deps.fetch, settings: deps.settings, accessToken: s.accessToken });
+  const api = clientFor(deps, s);
   const items = deps.seed.statement.items;
   let card, txns;
   try {
     card = await cardOf(api, deps, s.companyId);
     if (!card.ok) return json({ ok: false, code: "card", message: card.reason }, 409);
-    txns = await api.walletTxns(s.companyId, card.walletable);
+    txns = await api.walletTxns(s.companyId, card.walletable, rangeOf(deps.seed));
   } catch (e) {
     return readFailure(e);
   }
-  const out: ImportResult = { ok: true, total: items.length, created: 0, existed: 0, check: 0, stopped: null };
+  const out: ImportResult = { ok: true, total: items.length, created: 0, existed: 0, check: 0, done: false, stopped: null };
   for (const item of items) {
     const mark = markOf(deps.settings.markPrefix, versionOf(deps.seed), item.no);
     const l = lookup(txns, { companyId: s.companyId, walletableId: card.walletable.id, mark, item });
@@ -324,6 +356,11 @@ export async function handleImport(request: Request, deps: FreeeDeps): Promise<R
       out.created++;
     } catch (e) {
       if (e instanceof FreeeExpired) return expired();
+      if (e instanceof FreeeOutOfTime) {
+        // 送る前に止めた（何も分からない物は無い）。画面が続きを呼ぶ
+        out.stopped = { no: item.no, kind: "time", reason: "持ち時間の中で入れ終わらないので、ここで区切りました" };
+        break;
+      }
       // 送った後に返事が途切れた時は、ここで止める（もう一度押すと、読み直して残りだけ入れる）
       const unknown = e instanceof FreeeNoAnswer || e instanceof FreeeServerError;
       out.stopped = {
@@ -336,6 +373,7 @@ export async function handleImport(request: Request, deps: FreeeDeps): Promise<R
       break;
     }
   }
+  out.done = out.stopped === null;
   return json(out);
 }
 
@@ -374,7 +412,7 @@ export async function handleRegister(request: Request, deps: FreeeDeps): Promise
 }
 
 async function registerOne(deps: FreeeDeps, s: Session, item: CardItem, use: CardUse): Promise<RegisterAnswer | "expired"> {
-  const api = freeeClient({ fetch: deps.fetch, settings: deps.settings, accessToken: s.accessToken });
+  const api = clientFor(deps, s);
   const no = item.no;
   const failed = (reason: string): RegisterAnswer => ({ ok: true, no, result: "failed", reason });
   let verdict: Verdict;
@@ -391,7 +429,7 @@ async function registerOne(deps: FreeeDeps, s: Session, item: CardItem, use: Car
       line = { account_item_id: a.value.id, tax_code: t.value.code };
     }
     // 書く直前に読む
-    const txns = await api.walletTxns(s.companyId, card.walletable);
+    const txns = await api.walletTxns(s.companyId, card.walletable, rangeOf(deps.seed));
     verdict = verdictOf(lookup(txns, { companyId: s.companyId, walletableId: card.walletable.id, mark: markOf(deps.settings.markPrefix, versionOf(deps.seed), no), item }));
   } catch (e) {
     if (e instanceof FreeeExpired) return "expired";
@@ -414,13 +452,17 @@ async function registerOne(deps: FreeeDeps, s: Session, item: CardItem, use: Car
     return { ok: true, no, result: "registered", dealIds: [dealId] };
   } catch (e) {
     if (e instanceof FreeeExpired) return "expired";
+    // 持ち時間が残っていないので、送る前に止めた（freee には何も送っていない）
+    if (e instanceof FreeeOutOfTime) return failed("持ち時間が足りないので送りませんでした（freee には何も書いていません）。もう一度押してください");
     if (e instanceof FreeeRejected) return failed(`freee が受けませんでした（${e.status}）${e.messages.length ? `：${e.messages.join(" / ")}` : ""}`);
     // つながらない・待ちきれない・500 台・返事の形が違う：freee の中で済んだかもしれない
     return { ok: true, no, result: "unknown", reason: "送った後に freee の返事が途切れました。送り直さずに、freee から読み直して照らし合わせてください" };
   }
 }
 
-export type CheckAnswer = { ok: true; items: { no: number; kind: "ready" | "done" | "check" | "missing"; reason?: string }[] };
+/** setup：店用の科目・税区分・カードの口座が、freee で「使える物1つ」に決まるか（読むだけ。本番の最初の確かめに使う） */
+export type SetupCheck = { card: string | null; accountItem: { name: string; count: number }; tax: { name: string; count: number } };
+export type CheckAnswer = { ok: true; items: { no: number; kind: "ready" | "done" | "check" | "missing"; reason?: string }[]; setup: SetupCheck };
 
 /** 読み直して照らし合わせる（書かない）。「結果が分からない」の後と、「最初に戻す」の後に使う */
 export async function handleCheck(request: Request, deps: FreeeDeps): Promise<Response> {
@@ -432,13 +474,20 @@ export async function handleCheck(request: Request, deps: FreeeDeps): Promise<Re
   const items = nos?.map((n) => deps.seed.statement.items.find((i) => i.no === n));
   if (!items || items.length === 0 || items.length > deps.seed.statement.items.length || items.some((i) => !i))
     return json({ ok: false, code: "bad-request", message: "形がおかしいです" }, 400);
-  const api = freeeClient({ fetch: deps.fetch, settings: deps.settings, accessToken: s.accessToken });
+  const api = clientFor(deps, s);
   try {
     const card = await cardOf(api, deps, s.companyId);
     if (!card.ok) return json({ ok: false, code: "card", message: card.reason }, 409);
-    const txns = await api.walletTxns(s.companyId, card.walletable);
+    const txns = await api.walletTxns(s.companyId, card.walletable, rangeOf(deps.seed));
+    const [accountItems, taxes] = [await api.accountItems(s.companyId), await api.taxes(s.companyId)];
+    const setup: SetupCheck = {
+      card: card.walletable.name,
+      accountItem: { name: deps.settings.accountItemName, count: accountItems.filter((x) => x.name === deps.settings.accountItemName && x.available).length },
+      tax: { name: deps.settings.taxName, count: taxes.filter((x) => x.name_ja === deps.settings.taxName && x.available).length },
+    };
     const out: CheckAnswer = {
       ok: true,
+      setup,
       items: (items as CardItem[]).map((item) => {
         const v = verdictOf(lookup(txns, { companyId: s.companyId, walletableId: card.walletable.id, mark: markOf(deps.settings.markPrefix, versionOf(deps.seed), item.no), item }));
         return v.kind === "check" ? { no: item.no, kind: "check", reason: v.reason } : { no: item.no, kind: v.kind };

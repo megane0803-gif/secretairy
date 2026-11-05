@@ -22,6 +22,9 @@ export type FreeeItem = { state: FreeeItemState; dealIds?: number[]; reason?: st
 
 export type FreeeRun = { at: string; registered: number; already: number; failed: number; unknown: number; dealIds: number[] };
 
+/** 「freee に明細を入れる」の結果が分からない時の、待つ期限（読み込み直しても残す） */
+export type ImportHold = { until: string; reason: string };
+
 export type FreeeRecord = {
   v: 1;
   /** 送り始めた時に固定した店用／私用（明細の番号 → 店用 / 私用）。まだ送っていなければ null */
@@ -31,9 +34,11 @@ export type FreeeRecord = {
   sendingAt: string | null;
   /** 最後の登録の数 */
   lastRun: FreeeRun | null;
+  /** 「freee に明細を入れる」の結果が分からない時：この時刻までは入れない（過ぎても、読み直して照らし合わせてから、まだ無い物だけ入れる） */
+  importHold: ImportHold | null;
 };
 
-export const EMPTY_FREEE: FreeeRecord = { v: 1, uses: null, items: {}, sendingAt: null, lastRun: null };
+export const EMPTY_FREEE: FreeeRecord = { v: 1, uses: null, items: {}, sendingAt: null, lastRun: null, importHold: null };
 
 const STATES = new Set<FreeeItemState>(["pending", "sending", "registered", "already", "failed", "unknown"]);
 const isStr = (x: unknown): x is string => typeof x === "string";
@@ -73,7 +78,30 @@ export function parseFreee(raw: string | null): FreeeRecord {
     r && typeof r === "object" && isStr(r.at) && isCount(r.registered) && isCount(r.already) && isCount(r.failed) && isCount(r.unknown)
       ? { at: r.at, registered: r.registered, already: r.already, failed: r.failed, unknown: r.unknown, dealIds: ids(r.dealIds) }
       : null;
-  return { v: 1, uses, items, sendingAt: isStr(d.sendingAt) ? d.sendingAt : null, lastRun };
+  const h = d.importHold as Record<string, unknown> | null | undefined;
+  const importHold: ImportHold | null = h && typeof h === "object" && isStr(h.until) && Number.isFinite(Date.parse(h.until)) ? { until: h.until, reason: isStr(h.reason) ? h.reason.slice(0, 300) : "" } : null;
+  return { v: 1, uses, items, sendingAt: isStr(d.sendingAt) ? d.sendingAt : null, lastRun, importHold };
+}
+
+/** 明細を入れるのを待っているか（期限の前） */
+export function importHeld(r: FreeeRecord, nowMs: number): boolean {
+  return !!r.importHold && Date.parse(r.importHold.until) > nowMs;
+}
+
+export function withImportHold(r: FreeeRecord, nowMs: number, waitSeconds: number, reason: string): FreeeRecord {
+  return { ...r, importHold: { until: new Date(nowMs + waitSeconds * 1000).toISOString(), reason } };
+}
+
+/**
+ * 「最初に戻す」の後にも残す物：明細を入れる待つ期限と、「結果が分からない」の明細。
+ * 送ったかどうか分からない物は、戻した後も読み直して照らし合わせるまで送らない。
+ */
+export function keptOnReset(r: FreeeRecord, nowMs: number): FreeeRecord | null {
+  const items: Record<string, FreeeItem> = {};
+  for (const [k, v] of Object.entries(r.items)) if (v.state === "unknown" || v.state === "sending") items[k] = { ...v, state: "unknown" };
+  const importHold = importHeld(r, nowMs) ? r.importHold : null;
+  if (!importHold && Object.keys(items).length === 0) return null;
+  return { ...EMPTY_FREEE, items, importHold };
 }
 
 export function stateOf(r: FreeeRecord, no: number): FreeeItemState {
@@ -129,15 +157,21 @@ export function withRunEnd(r: FreeeRecord, run: FreeeRun): FreeeRecord {
   return { ...r, sendingAt: null, lastRun: run };
 }
 
-/** 読み直した結果を入れる（書かない）。もう処理済み → もう処理済み・未処理 → まだ・確かめが要る → 失敗 */
+/**
+ * 読み直した結果を入れる（書かない）。もう処理済み → もう処理済み・未処理 → まだ・確かめが要る → 失敗。
+ * startedAtMs：読み直しを始めた時刻。それより新しい記録（読み直しの間にほかの画面が登録した など）は上書きしない。
+ */
 export function withChecked(
   r: FreeeRecord,
   answers: { no: number; kind: "ready" | "done" | "check" | "missing"; reason?: string }[],
   nowIso: string,
+  startedAtMs: number,
 ): FreeeRecord {
   let out = r;
   for (const a of answers) {
     const cur = stateOf(out, a.no);
+    const prev = out.items[String(a.no)];
+    if (prev && Date.parse(prev.at) >= startedAtMs) continue; // 読み直しを始めた後の記録の方が新しい
     if (cur === "registered" && a.kind === "done") continue; // 登録した記録はそのまま
     if (cur === "sending") continue;
     const item: Omit<FreeeItem, "at"> =

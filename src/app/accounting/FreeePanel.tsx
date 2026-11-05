@@ -21,6 +21,12 @@ import { writeJournal } from "@/lib/journal";
 
 type Freee = ReturnType<typeof useFreee>;
 
+/** 「14:05」 */
+function timeOf(iso: string): string {
+  const d = new Date(iso);
+  return Number.isFinite(d.getTime()) ? d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }) : iso;
+}
+
 /** 「freee とつなぐ」：form で送る（サーバーが許可の画面へ 303 で送る） */
 export function FreeeConnectForm({ label }: { label: string }) {
   return (
@@ -69,18 +75,18 @@ export function FreeePanel({ freee }: { freee: Freee }) {
   const needsCheck = counts.unknown > 0 || counts.failed > 0;
 
   const onImport = async (e: React.MouseEvent) => {
-    if (!e.nativeEvent.isTrusted || busy || sending) return;
+    if (!e.nativeEvent.isTrusted || busy || sending || freee.importWait) return;
     setBusy(true);
-    setNote("freee に明細を入れています…");
+    setNote("freee から読み直して、まだ無い明細だけ入れています…");
     const r = await freee.importStatements();
     setBusy(false);
-    const b = r.body as { ok?: boolean; created?: number; existed?: number; check?: number; stopped?: { reason: string } | null; message?: string } | null;
-    if (r.status === 200 && b?.ok) {
-      setNote(
-        `入れた ${b.created ?? 0}件・もうあった ${b.existed ?? 0}件${b.check ? `・確かめが要る ${b.check}件（入れていません）` : ""}${b.stopped ? `。${b.stopped.reason}` : ""}`,
-      );
-    } else setNote(b?.message ?? "うまくいきませんでした。もう一度押すと、まだ無い物だけ入れます。");
-    void freee.refresh();
+    if (!r.ok) {
+      setNote(r.reason);
+      return;
+    }
+    const head = `入れた ${r.created}件・もうあった ${r.existed}件${r.check ? `・確かめが要る ${r.check}件（入れていません）` : ""}`;
+    if (r.holdUntil) setNote(`${head}。${r.stopped ?? ""}。${timeOf(r.holdUntil)}まで待ってから、もう一度押してください（freee から読み直して、まだ無い物だけ入れます）`);
+    else setNote(r.stopped ? `${head}。${r.stopped}` : head);
   };
 
   const onRegister = async (e: React.MouseEvent) => {
@@ -95,9 +101,10 @@ export function FreeePanel({ freee }: { freee: Freee }) {
       return;
     }
     if ("run" in r) {
-      // 日誌には、登録できた件数だけを書く
-      writeJournal({ who: "オーナー", text: `人が登録：テスト事業所の帳簿に、通販の明細 ${r.run.registered}件を取引として登録した` });
-      setNote(r.stoppedBy ? `止めました：${r.stoppedBy}` : null);
+      // 日誌には、登録できた件数だけを書く（0件の時は書かない）
+      if (r.run.registered > 0) writeJournal({ who: "オーナー", text: `人が登録：テスト事業所の帳簿に、通販の明細 ${r.run.registered}件を取引として登録した` });
+      const skipped = [r.skipped.check ? `確かめが要る ${r.skipped.check}件` : "", r.skipped.missing ? `freee に明細が無い ${r.skipped.missing}件` : ""].filter(Boolean).join("・");
+      setNote([skipped ? `${skipped}は送っていません` : "", r.stoppedBy ? `止めました：${r.stoppedBy}` : ""].filter(Boolean).join("。") || null);
       // 全部済んだら（登録した・もう処理済み）、「次から自動」の購入先を自動のルールに足す（会計（架空）の記録は変えない）
       const after = countsOf(readFreeeRecord(), nos);
       if (after.registered + after.already === nos.length) {
@@ -117,7 +124,10 @@ export function FreeePanel({ freee }: { freee: Freee }) {
     setBusy(true);
     const r = await freee.check(nos.filter((no) => stateOf(record, no) !== "registered"));
     setBusy(false);
-    setNote(r.ok ? "freee から読み直して照らし合わせました（何も書いていません）" : r.reason);
+    if (!r.ok) return setNote(r.reason);
+    const s = r.setup as { accountItem?: { name: string; count: number }; tax?: { name: string; count: number } } | null;
+    const one = (x?: { name: string; count: number }) => (x ? `「${x.name}」${x.count === 1 ? "✓ 1つ" : `${x.count}つ（1つに決まりません）`}` : "");
+    setNote(`freee から読み直して照らし合わせました（何も書いていません）。${s ? `科目${one(s.accountItem)}・税区分${one(s.tax)}` : ""}`);
   };
 
   const onDisconnect = async (e: React.MouseEvent) => {
@@ -171,9 +181,14 @@ export function FreeePanel({ freee }: { freee: Freee }) {
         </>
       )}
 
-      <button type="button" className="btn" onClick={onImport} disabled={!connected || busy || sending}>
+      <button type="button" className="btn" onClick={onImport} disabled={!connected || busy || sending || !!freee.importWait}>
         freee に明細を入れる
       </button>
+      {freee.importWait && (
+        <p className="problems" role="alert">
+          前に入れた結果が分からないので、{timeOf(freee.importWait.until)}まで待ってください。その後に押すと、freee から読み直して、まだ無い物だけ入れます。
+        </p>
+      )}
       <p className="hint">
         経理タブと同じ架空のカード明細 {nos.length}件（日付・購入先・金額）を、口座「{settings.cardName}」に入れます。同じ印の明細がもうあれば入れません。
       </p>

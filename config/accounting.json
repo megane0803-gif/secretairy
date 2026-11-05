@@ -19,6 +19,9 @@
     "maxPages": 50,
     "timeoutSeconds": 15,
     "maxRequestChars": 2000,
-    "sendingStaleSeconds": 120
+    "sendingStaleSeconds": 120,
+    "serverBudgetSeconds": 45,
+    "importUnknownWaitSeconds": 120,
+    "maxImportCalls": 25
   }
 }

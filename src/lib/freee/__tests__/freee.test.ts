@@ -12,7 +12,7 @@ import type { CardItem } from "../../data/types";
 import { getFreeeSettings } from "../../settings";
 import type { WalletTxn } from "../api";
 import { hasMark, lookup, markOf, pickCardAccount, verdictOf } from "../match";
-import { runCheck, runRegister, type Post, type RunDeps } from "../run";
+import { BUSY_REASON, pressCheck, pressImport, pressRegister, recoverIfIdle, runCheck, runRegister, withFreeeLock, type LockLike, type Post, type RunDeps } from "../run";
 import { cookieKeyFrom, seal, unseal } from "../seal";
 import {
   envFrom,
@@ -27,7 +27,8 @@ import {
   TOKEN_COOKIE,
   type FreeeDeps,
 } from "../server";
-import { EMPTY_FREEE, isSending, parseFreee, stateOf, withRunStart, withStaleRecovered, type FreeeRecord } from "../state";
+import { EMPTY_FREEE, importHeld, isSending, keptOnReset, parseFreee, stateOf, withChecked, withItem, withRunStart, withStaleRecovered, type FreeeRecord } from "../state";
+import { resetAllWrites } from "../../reset";
 
 const settings = getFreeeSettings();
 const seed = getAccounting();
@@ -70,6 +71,8 @@ class FakeFreee {
   /** 入れる明細の何件目で返事を途切れさせるか（1から） */
   dropCreateAt: number | null = null;
   created = 0;
+  /** サーバーの時計（持ち時間のテストで、freee を呼ぶたびに進める）。null なら NOW のまま */
+  serverNow: number | null = null;
 
   fetch = async (input: string, init?: RequestInit): Promise<Response> => {
     const url = new URL(input);
@@ -150,8 +153,8 @@ function makeDeps(freee: FakeFreee, env: Partial<Record<string, string>> = {}): 
     env: envFrom({ VERCEL_ENV: "production", FREEE_CLIENT_ID: "cid", FREEE_CLIENT_SECRET: "csecret", FREEE_COMPANY_ID: String(COMPANY), ...env }, cookieKeyFrom(env.FREEE_COOKIE_KEY ?? KEY_B64)),
     settings,
     seed,
-    fetch: freee.fetch,
-    now: () => NOW,
+    fetch: (input, init) => freee.fetch(input, init),
+    now: () => freee.serverNow ?? NOW,
     random: (len) => Buffer.alloc(len, ++n),
   };
 }
@@ -642,30 +645,44 @@ describe("freee：画面の記録と流れ", () => {
   });
 
   /** 画面の窓口の呼び出しを、本当の窓口（handleRegister / handleCheck）とテストの中の freee につなぐ */
+  /**
+   * 画面の窓口の呼び出しを、本当の窓口（handleImport / handleRegister / handleCheck）とテストの中の freee につなぐ。
+   * box：記録の置き場所（2つのタブで同じ物を渡すと、同じブラウザの localStorage のつもり）。locks：タブどうしの排他。
+   */
   function wire(
     freee: FakeFreee,
-    opts: { during?: (rec: FreeeRecord) => void; transport?: (path: string, body: unknown) => Promise<{ status: number; body: unknown }> | null; realClock?: boolean } = {},
+    opts: {
+      during?: (rec: FreeeRecord) => void;
+      transport?: (path: string, body: unknown) => Promise<{ status: number; body: unknown }> | null;
+      realClock?: boolean;
+      box?: { rec: FreeeRecord };
+      locks?: LockLike | null;
+      clock?: { ms: number };
+    } = {},
   ) {
-    let rec: FreeeRecord = EMPTY_FREEE;
-    let clock = opts.realClock ? Date.now() : NOW;
+    const box = opts.box ?? { rec: EMPTY_FREEE };
+    const clock = opts.clock ?? { ms: opts.realClock ? Date.now() : NOW };
     const sent: { path: string; body: unknown }[] = [];
     const post: Post = async (path, body) => {
       sent.push({ path, body });
-      opts.during?.(rec);
+      opts.during?.(box.rec);
       const t = opts.transport?.(path, body);
       if (t) return t;
-      const h = path === "/api/freee/register" ? handleRegister : handleCheck;
+      const h = path === "/api/freee/register" ? handleRegister : path === "/api/freee/import" ? handleImport : handleCheck;
       const r = await h(req(path, { body }), makeDeps(freee));
       return { status: r.status, body: await r.json() };
     };
     const deps: RunDeps = {
-      read: () => rec,
-      write: (r) => (rec = r),
+      read: () => box.rec,
+      write: (r) => (box.rec = r),
       post,
-      now: () => new Date((clock += 1000)),
+      now: () => new Date((clock.ms += 1000)),
       staleSeconds: settings.sendingStaleSeconds,
+      locks: opts.locks ?? null,
+      importWaitSeconds: settings.importUnknownWaitSeconds,
+      maxImportCalls: settings.maxImportCalls,
     };
-    return { deps, sent, get rec() { return rec; }, set rec(r: FreeeRecord) { rec = r; } };
+    return { deps, sent, clock, get rec() { return box.rec; }, set rec(r: FreeeRecord) { box.rec = r; } };
   }
 
   const usesAll = () => {
@@ -779,5 +796,248 @@ describe("freee：画面の記録と流れ", () => {
     assert.equal(r.sendingAt, null);
     // 形のおかしい記録は落とす
     assert.deepEqual(parseFreee('{"items":{"x":{"state":"done"}}}').items, {});
+  });
+
+  // ---- レビューの直し：取り合いを止める鍵・明細を入れる時の時間切れ・読み込み直し・読み直しの競合 ----
+
+  class FakeLocks implements LockLike {
+    held = new Set<string>();
+    async request<T>(name: string, _o: { ifAvailable: true }, cb: (lock: unknown | null) => Promise<T>): Promise<T> {
+      if (this.held.has(name)) return cb(null);
+      this.held.add(name);
+      try {
+        return await cb({ name });
+      } finally {
+        this.held.delete(name);
+      }
+    }
+  }
+  const deferred = () => {
+    let resolve!: () => void;
+    const p = new Promise<void>((r) => (resolve = r));
+    return { p, resolve };
+  };
+  const real = async (freee: FakeFreee, path: string, body: unknown) => {
+    const h = path === "/api/freee/register" ? handleRegister : path === "/api/freee/import" ? handleImport : handleCheck;
+    const r = await h(req(path, { body }), makeDeps(freee));
+    return { status: r.status, body: (await r.json()) as unknown };
+  };
+
+  test("取り合いを止める鍵：明細を入れる・登録（前の読み直しから終わるまで）・読み直す・最初に戻すは、同じ排他。ほかのタブは始めない", async () => {
+    const freee = new FakeFreee();
+    const locks = new FakeLocks();
+    const box = { rec: EMPTY_FREEE };
+    const gate = deferred();
+    // タブ A：明細を入れている途中（返事を待っている）
+    const a = wire(freee, { box, locks, transport: (path, body) => gate.p.then(() => real(freee, path, body)) });
+    const running = pressImport(a.deps);
+    await Promise.resolve();
+    // タブ B：同じブラウザのほかのタブ
+    const b = wire(freee, { box, locks });
+    for (const r of [await pressImport(b.deps), await pressRegister(b.deps, { uses: usesAll(), nos }), await pressCheck(b.deps, nos)]) {
+      assert.equal(r.ok, false);
+      if (!r.ok) assert.equal(r.reason, BUSY_REASON);
+    }
+    let resetRan = false;
+    const reset = await withFreeeLock(locks, async () => (resetRan = true));
+    assert.equal(resetRan, false, "やりとりしている間は「最初に戻す」も動かない");
+    assert.equal((reset as { ok: boolean }).ok, false);
+    assert.equal(b.sent.length, 0, "タブ B は何も送っていない");
+    gate.resolve();
+    const done = await running;
+    assert.ok(done.ok && done.done);
+    assert.equal(freee.txns.length, items.length);
+    // 終わったら、ほかのタブも始められる
+    assert.ok((await pressCheck(b.deps, [1])).ok);
+
+    // 登録の前の読み直しから、登録が終わるまで排他を持つ
+    const gate2 = deferred();
+    const c = wire(freee, { box, locks, transport: (path, body) => (path === "/api/freee/check" ? gate2.p.then(() => real(freee, path, body)) : null) });
+    const reg = pressRegister(c.deps, { uses: usesAll(), nos: nos.slice(0, 2) });
+    await Promise.resolve();
+    const other = await pressRegister(b.deps, { uses: usesAll(), nos: nos.slice(0, 2) });
+    assert.equal(other.ok, false);
+    gate2.resolve();
+    const out = await reg;
+    assert.ok(out.ok);
+    assert.equal(freee.writes().filter((x) => /create_/.test(x.path)).length, 2, "二重に登録していない");
+  });
+
+  for (const mode of ["つながらない", "504", "読めない返事", "200 でも中が「結果が分からない」"] as const) {
+    test(`明細を入れる：${mode} → 「結果が分からない」で待つ期限を残し（読み込み直しても残る）、期限の後は読み直して、まだ無い物だけ入れる`, async () => {
+      const freee = new FakeFreee();
+      if (mode === "200 でも中が「結果が分からない」") freee.dropCreateAt = 7;
+      let first = true;
+      const w = wire(freee, {
+        locks: new FakeLocks(),
+        transport: (path, body) => {
+          if (!first || mode === "200 でも中が「結果が分からない」") return null;
+          first = false;
+          // サーバーは freee に書いた（20件）が、返事が画面に届かなかった
+          return real(freee, path, body).then(() => {
+            if (mode === "つながらない") throw new TypeError("network");
+            if (mode === "504") return { status: 504, body: null };
+            return { status: 200, body: null };
+          });
+        },
+      });
+      const r1 = await pressImport(w.deps);
+      assert.ok(r1.ok && r1.holdUntil, "待つ期限を出す");
+      // 読み込み直しても残る（記録に保存）
+      const reloaded = parseFreee(JSON.stringify(w.rec));
+      assert.ok(reloaded.importHold);
+      assert.ok(importHeld(reloaded, w.clock.ms));
+      // 期限の前は、押しても呼ばない
+      const sentBefore = w.sent.length;
+      const r2 = await pressImport(w.deps);
+      assert.equal(r2.ok, false);
+      assert.equal(w.sent.length, sentBefore);
+      // 期限の後：読み直して、まだ無い物だけ入れる（書き終わったとは見なさない）
+      freee.dropCreateAt = null;
+      w.clock.ms += settings.importUnknownWaitSeconds * 1000;
+      const r3 = await pressImport(w.deps);
+      assert.ok(r3.ok && r3.done);
+      assert.equal(w.rec.importHold, null);
+      assert.equal(freee.txns.length, items.length, "同じ印の明細を2件にしない");
+      for (const i of items) assert.equal(freee.txns.filter((x) => hasMark(x.description, mark(i.no))).length, 1, `${i.no}番`);
+    });
+  }
+
+  test("明細を入れる：サーバーにも持ち時間。返事の時間を残して次の書き込みを止め、そこまでの結果を返す。画面が続きを呼ぶ", async () => {
+    const freee = new FakeFreee();
+    freee.serverNow = NOW;
+    const base = freee.fetch;
+    freee.fetch = async (input, init) => {
+      freee.serverNow! += 4000; // freee の1回の呼び出しに4秒
+      return base(input, init);
+    };
+    // 1回の呼び出し：持ち時間の中で止める
+    const t0 = freee.serverNow;
+    const one = await bodyOf(await handleImport(req("/api/freee/import"), makeDeps(freee)));
+    assert.equal(one.done, false);
+    assert.equal(one.stopped.kind, "time");
+    assert.ok(one.created > 0 && one.created < items.length);
+    assert.ok(freee.serverNow - t0 <= settings.serverBudgetSeconds * 1000, "持ち時間の中で返事をする");
+    // 画面が続きを呼ぶ
+    const w = wire(freee, { locks: new FakeLocks() });
+    const r = await pressImport(w.deps);
+    assert.ok(r.ok && r.done);
+    assert.ok(w.sent.length >= 2, "続けて呼んだ");
+    assert.equal(r.holdUntil, null, "区切っただけなので、待つ期限は出さない");
+    assert.equal(freee.txns.length, items.length);
+    // 登録も、持ち時間が足りない時は送らない
+    const late = new FakeFreee();
+    late.addTxn(SHOP_ITEM.no);
+    late.serverNow = NOW;
+    const lb = late.fetch;
+    late.fetch = async (input, init) => {
+      late.serverNow! += 10_000;
+      return lb(input, init);
+    };
+    const g = await bodyOf(await handleRegister(req("/api/freee/register", { body: { no: SHOP_ITEM.no, use: "shop" } }), makeDeps(late)));
+    assert.equal(g.result, "failed");
+    assert.equal(late.writes().length, 0);
+  });
+
+  test("読み込み直した時の「送っている」：排他が空いていれば「結果が分からない」に。同じ押しでは読み直しにも入れず、送らない", async () => {
+    const freee = new FakeFreee();
+    await handleImport(req("/api/freee/import"), makeDeps(freee));
+    const locks = new FakeLocks();
+    const w = wire(freee, { locks });
+    // 送っている途中で読み込み直した（印はまだ新しい）
+    const fresh = new Date(w.clock.ms).toISOString();
+    w.rec = { ...EMPTY_FREEE, uses: usesAll(), sendingAt: fresh, items: { "3": { state: "sending", at: fresh } } };
+    await recoverIfIdle(w.deps);
+    assert.equal(stateOf(w.rec, 3), "unknown");
+    assert.equal(w.rec.sendingAt, null);
+
+    // 直していない記録のまま登録を押しても、3番は読み直しにも登録にも入らない
+    w.rec = { ...EMPTY_FREEE, uses: usesAll(), sendingAt: fresh, items: { "3": { state: "sending", at: fresh } } };
+    const out = await pressRegister(w.deps, { uses: usesAll(), nos });
+    assert.ok(out.ok);
+    const checked = w.sent.filter((s) => s.path === "/api/freee/check").flatMap((s) => (s.body as { nos: number[] }).nos);
+    assert.ok(!checked.includes(3), "読み直しに入れない");
+    assert.ok(!w.sent.some((s) => s.path === "/api/freee/register" && (s.body as { no: number }).no === 3), "送らない");
+    assert.equal(stateOf(w.rec, 3), "unknown");
+    // もう一度押しても送らない。「freee から読み直す」の後でだけ送る
+    await pressRegister(w.deps, { uses: usesAll(), nos });
+    assert.ok(!w.sent.some((s) => s.path === "/api/freee/register" && (s.body as { no: number }).no === 3));
+    assert.ok((await pressCheck(w.deps, [3])).ok);
+    assert.equal(stateOf(w.rec, 3), "pending");
+    await pressRegister(w.deps, { uses: usesAll(), nos });
+    assert.equal(stateOf(w.rec, 3), "registered");
+  });
+
+  test("読み直しの競合：遅れて届いた読み直しの答えは、読み直しを始めた後の記録（登録した）を「まだ」に戻さない", async () => {
+    const freee = new FakeFreee();
+    const w = wire(freee, {
+      transport: (path) => {
+        if (path !== "/api/freee/check") return null;
+        // 読み直しの答えが届く前に、ほかの画面が1番を登録した
+        w.rec = withItem(w.rec, 1, { state: "registered", dealIds: [42] }, new Date((w.clock.ms += 1000)).toISOString());
+        return Promise.resolve({ status: 200, body: { ok: true, items: [{ no: 1, kind: "ready" }, { no: 2, kind: "done" }], setup: null } });
+      },
+    });
+    const r = await runCheck(w.deps, [1, 2]);
+    assert.ok(r.ok);
+    assert.equal(stateOf(w.rec, 1), "registered", "上書きしない");
+    assert.deepEqual(w.rec.items["1"].dealIds, [42]);
+    assert.equal(stateOf(w.rec, 2), "already");
+    // 関数そのもの：始めた時刻より古い記録だけ書きかえる
+    const old = withItem(EMPTY_FREEE, 5, { state: "failed", reason: "x" }, "2026-11-05T00:00:00.000Z");
+    assert.equal(stateOf(withChecked(old, [{ no: 5, kind: "ready" }], "2026-11-05T02:00:00.000Z", Date.parse("2026-11-05T01:00:00.000Z")), 5), "pending");
+    assert.equal(stateOf(withChecked(old, [{ no: 5, kind: "ready" }], "2026-11-05T02:00:00.000Z", Date.parse("2026-11-04T23:00:00.000Z")), 5), "failed");
+  });
+
+  test("同じ押しの中で「確かめが要る」「明細が無い」になった明細は送らず、件数だけ返す", async () => {
+    const freee = new FakeFreee();
+    await handleImport(req("/api/freee/import"), makeDeps(freee));
+    freee.txns.find((x) => hasMark(x.description, mark(2)))!.status = 3; // 無視
+    freee.txns = freee.txns.filter((x) => !hasMark(x.description, mark(4))); // 明細が無い
+    const w = wire(freee, { locks: new FakeLocks() });
+    const out = await pressRegister(w.deps, { uses: usesAll(), nos });
+    assert.ok(out.ok);
+    if (!out.ok) return;
+    assert.deepEqual(out.skipped, { check: 1, missing: 1 });
+    const sentNos = w.sent.filter((s) => s.path === "/api/freee/register").map((s) => (s.body as { no: number }).no);
+    assert.ok(!sentNos.includes(2) && !sentNos.includes(4));
+    assert.equal(out.run.registered, items.length - 2);
+    // 送る物が無い押し：登録0件（画面は日誌を書かない）
+    const again = await pressRegister(w.deps, { uses: usesAll(), nos });
+    assert.ok(again.ok && again.run.registered === 0);
+  });
+
+  test("最初に戻す：画面の記録は戻すが、「結果が分からない」の明細と、明細を入れるのを待つ期限は残す", () => {
+    const now = Date.parse("2026-11-05T05:00:00.000Z");
+    const rec: FreeeRecord = {
+      ...EMPTY_FREEE,
+      uses: { "1": "shop" },
+      items: { "1": { state: "registered", at: "x", dealIds: [1] }, "5": { state: "unknown", at: "x" } },
+      importHold: { until: "2026-11-05T05:01:00.000Z", reason: "r" },
+    };
+    const w = resetAllWrites("2026-11-05", null, JSON.stringify(rec), now).find((x) => x.key === FREEE_KEY)!;
+    const kept = parseFreee(w.value);
+    assert.equal(kept.uses, null, "選びは戻す");
+    assert.equal(stateOf(kept, 1), "pending");
+    assert.equal(stateOf(kept, 5), "unknown");
+    assert.ok(kept.importHold);
+    assert.equal(keptOnReset({ ...rec, items: {}, importHold: { until: "2026-11-05T04:00:00.000Z", reason: "" } }, now), null);
+  });
+
+  test("明細は期間（start_date／end_date）で読み、明細の番号で重なりを除く。読み直しは科目・税区分が1つに決まるかも返す", async () => {
+    const freee = new FakeFreee();
+    const tx = freee.addTxn(SHOP_ITEM.no);
+    freee.txns.push(tx); // 同じ明細が2回返ってきた
+    const r = await bodyOf(await handleRegister(req("/api/freee/register", { body: { no: SHOP_ITEM.no, use: "shop" } }), makeDeps(freee)));
+    assert.equal(r.result, "registered", "重なりは1件として数える（候補2件にしない）");
+    const q = freee.calls.find((c) => c.path === "/api/1/wallet_txns" && c.method === "GET")!.query;
+    assert.equal(q.get("start_date"), seed.statement.from);
+    assert.equal(q.get("end_date"), seed.statement.to);
+    const c = await bodyOf(await handleCheck(req("/api/freee/check", { body: { nos: [SHOP_ITEM.no] } }), makeDeps(freee)));
+    assert.deepEqual(c.setup, { card: settings.cardName, accountItem: { name: settings.accountItemName, count: 1 }, tax: { name: settings.taxName, count: 1 } });
+    freee.accountItems.push({ id: 503, name: settings.accountItemName, available: true });
+    const c2 = await bodyOf(await handleCheck(req("/api/freee/check", { body: { nos: [SHOP_ITEM.no] } }), makeDeps(freee)));
+    assert.equal(c2.setup.accountItem.count, 2);
+    assert.equal(freee.writes().filter((x) => /create_/.test(x.path)).length, 1, "読み直しは書かない");
   });
 });

@@ -205,9 +205,9 @@ export function getAdsAiSettings(): AdsAiSettings {
   return { model: getAiSettings().model, ...a };
 }
 
-/** 経理のタブの設定（config/accounting.json）。実在の会計サービスの名前は書かない */
+/** 経理のタブの設定（config/accounting.json）。札は「会計（架空）」。実在の会計サービスの名前（freee）は、freee（テスト事業所）のつなぎの札（freee.label・freee.unconnectedNote）にだけ書く（docs/SPEC.md §1.8） */
 export type AccountingSettings = {
-  /** 明細を取り込み、登録する先（画面の札。例「会計（架空）」） */
+  /** 明細を取り込み、登録する先（画面の札。例「会計（架空）」）。オーナーのブラウザで freee（テスト事業所）につながっている時は freee の札（freee.label） */
   service: string;
   /** 明細の出どころ（例「カード会社（架空）」） */
   cardSource: string;
@@ -249,6 +249,12 @@ export type FreeeSettings = {
   maxRequestChars: number;
   /** 「送っている」の印が、この秒数より古ければ止まった物とみなす */
   sendingStaleSeconds: number;
+  /** サーバーの1回の呼び出しで使ってよい秒数（窓口の時間の上限より短く。返事の時間を残して、次の書き込みを止める） */
+  serverBudgetSeconds: number;
+  /** 「freee に明細を入れる」の結果が分からない時に待つ秒数（この間は入れない） */
+  importUnknownWaitSeconds: number;
+  /** 「freee に明細を入れる」1回の押しで、画面が窓口を続けて呼ぶ回数の上限 */
+  maxImportCalls: number;
 };
 
 export function getFreeeSettings(): FreeeSettings {
