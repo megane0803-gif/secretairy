@@ -114,18 +114,36 @@ export function useFreeeSending(): boolean {
   return useMemo(() => on || isSending(parseFreee(raw), Date.now(), getFreeeSettings().sendingStaleSeconds), [raw, on, tick]);
 }
 
-async function fetchStatus(): Promise<FreeeStatus> {
+/** つながっているか（サーバーの答え）と、サーバーが読めていない環境変数の名前（中身は来ない） */
+export type FreeeStatusAnswer = { status: FreeeStatus; missing: string[] };
+
+/**
+ * サーバーの答えを読む。cookie が無い・切れた時は「つながっていない」（none / expired）。
+ * 環境変数が本当に欠けている時は、その名前（missing）も読む。画面のテストでも同じ物を使う。
+ */
+export function readStatusAnswer(httpStatus: number, body: unknown): FreeeStatusAnswer {
+  if (httpStatus === 200) return { status: "connected", missing: [] };
+  const b = body as { code?: unknown; missing?: unknown } | null;
+  const missing = Array.isArray(b?.missing) ? b.missing.filter((x): x is string => typeof x === "string").slice(0, 10) : [];
+  const code = b?.code;
+  if (code === "expired") return { status: "expired", missing };
+  if (code === "no-cookie") return { status: "none", missing };
+  if (code === "not-set" || code === "no-company-id" || code === "wrong-company") return { status: code, missing };
+  return { status: "off", missing: [] };
+}
+
+/** 「オーナー用」の「freee とつなぐ」を出すか：つながっていない（cookie が無い・切れた）・事業所の番号がまだ空・環境変数が読めていない時 */
+export function showConnect(a: FreeeStatusAnswer): boolean {
+  return a.status === "none" || a.status === "expired" || a.status === "no-company-id" || (a.status === "not-set" && a.missing.length > 0);
+}
+
+async function fetchStatus(): Promise<FreeeStatusAnswer> {
   try {
     const res = await fetch("/api/freee/status", { credentials: "same-origin", cache: "no-store" });
-    if (res.status === 200) return "connected";
-    const b = (await res.json().catch(() => null)) as { code?: unknown } | null;
-    const code = b?.code;
-    if (code === "expired") return "expired";
-    if (code === "no-cookie") return "none";
-    if (code === "not-set" || code === "no-company-id" || code === "wrong-company") return code;
-    return "off";
+    const body = res.status === 200 ? null : await res.json().catch(() => null);
+    return readStatusAnswer(res.status, body);
   } catch {
-    return "off";
+    return { status: "off", missing: [] };
   }
 }
 
@@ -133,13 +151,14 @@ export function useFreee() {
   const raw = useSyncExternalStore(subscribeBrowser, read, () => null);
   const record = useMemo(() => parseFreee(raw), [raw]);
   const running = useSyncExternalStore(subscribeActive, () => active, () => false);
-  const [status, setStatus] = useState<FreeeStatus>("loading");
+  const [answer, setAnswer] = useState<FreeeStatusAnswer>({ status: "loading", missing: [] });
+  const status = answer.status;
   const settings = getFreeeSettings();
 
-  const refresh = useCallback(async () => setStatus(await fetchStatus()), []);
+  const refresh = useCallback(async () => setAnswer(await fetchStatus()), []);
   useEffect(() => {
     let alive = true;
-    void fetchStatus().then((s) => alive && setStatus(s));
+    void fetchStatus().then((s) => alive && setAnswer(s));
     // 開いた時：排他が空いていれば、前に止まった「送っている」を「結果が分からない」にする（読み込み直した時も）
     void recoverIfIdle(runDeps());
     return () => {
@@ -196,7 +215,7 @@ export function useFreee() {
   const nowMs = Date.now();
   const sending = running || isSending(record, nowMs, settings.sendingStaleSeconds);
   const importWait = importHeld(record, nowMs) ? record.importHold : null;
-  return { record, status, settings, sending, importWait, started: hasStarted(record), refresh, disconnect, importStatements, register, check };
+  return { record, status, missing: answer.missing, canConnect: showConnect(answer), settings, sending, importWait, started: hasStarted(record), refresh, disconnect, importStatements, register, check };
 }
 
 /** 記録だけ（サーバーには聞かない）。経理の明細の行で、送り始めた後（選びを固定した後）に選びを止めるのに使う */

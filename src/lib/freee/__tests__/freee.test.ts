@@ -1041,3 +1041,100 @@ describe("freee：画面の記録と流れ", () => {
     assert.equal(freee.writes().filter((x) => /create_/.test(x.path)).length, 1, "読み直しは書かない");
   });
 });
+
+// ---- 本番で見つかった直し：cookie が無い・切れた時は「つながっていない」（環境変数が欠けている時と分ける） ----
+
+describe("freee：つながっているか（cookie が無い・切れた時と、環境変数が欠けている時を分ける）", () => {
+  test("環境変数がそろっていて cookie が無い → 401「つながっていない」・canConnect（503 の「環境変数がそろっていません」にしない）", async () => {
+    const freee = new FakeFreee();
+    const r = await handleStatus(req("/api/freee/status", { method: "GET", cookie: null }), makeDeps(freee));
+    assert.equal(r.status, 401);
+    const b = await bodyOf(r);
+    assert.equal(b.code, "no-cookie");
+    assert.equal(b.canConnect, true);
+    assert.equal(b.missing, undefined);
+    assert.equal(freee.calls.length, 0);
+    // 同じ環境変数で、つなぐ窓口も動く
+    assert.equal((await handleStart(req("/api/freee/start", { cookie: null }), makeDeps(freee))).status, 303);
+  });
+
+  test("鍵が切れた cookie・読めない cookie → 401「つながっていない」・canConnect。cookie は消す", async () => {
+    const freee = new FakeFreee();
+    const expired = await handleStatus(req("/api/freee/status", { method: "GET", cookie: tokenCookie(COMPANY, NOW - 1) }), makeDeps(freee));
+    assert.equal(expired.status, 401);
+    const e = await bodyOf(expired);
+    assert.equal(e.code, "expired");
+    assert.equal(e.canConnect, true);
+    assert.ok(setCookies(expired).some((c) => c.startsWith(`${TOKEN_COOKIE}=;`) && /Max-Age=0/.test(c)));
+    const broken = await handleStatus(req("/api/freee/status", { method: "GET", cookie: `${TOKEN_COOKIE}=1.AAAA` }), makeDeps(freee));
+    assert.equal(broken.status, 401);
+    assert.equal((await bodyOf(broken)).canConnect, true);
+  });
+
+  test("環境変数が本当に欠けている時：cookie が無ければ「つながっていない」＋ canConnect: false と読めていない名前（中身は出さない）", async () => {
+    const freee = new FakeFreee();
+    for (const [env, name] of [
+      [{ FREEE_CLIENT_ID: "" }, "FREEE_CLIENT_ID"],
+      [{ FREEE_CLIENT_SECRET: "" }, "FREEE_CLIENT_SECRET"],
+      [{ FREEE_COOKIE_KEY: Buffer.alloc(16, 1).toString("base64") }, "FREEE_COOKIE_KEY（32バイトを base64 にした文字ではない）"],
+      [{ FREEE_COMPANY_ID: "12a" }, "FREEE_COMPANY_ID（数ではない）"],
+    ] as const) {
+      const deps = makeDeps(freee, env);
+      const r = await handleStatus(req("/api/freee/status", { method: "GET", cookie: null }), deps);
+      assert.equal(r.status, 401, name);
+      const b = await bodyOf(r);
+      assert.equal(b.code, "no-cookie");
+      assert.equal(b.canConnect, false);
+      assert.deepEqual(b.missing, [name]);
+      assert.ok(!JSON.stringify(b).includes("csecret") && !JSON.stringify(b).includes(KEY_B64), "中身は出さない");
+      // つなぐ窓口は、欠けていれば今までどおり 503（名前つき）
+      const s = await handleStart(req("/api/freee/start", { cookie: null }), deps);
+      assert.equal(s.status, 503);
+      assert.deepEqual((await bodyOf(s)).missing, [name]);
+    }
+    // FREEE_COOKIE_KEY が無い時は「無い」
+    const none = makeDeps(freee);
+    const r = await handleStatus(req("/api/freee/status", { method: "GET", cookie: null }), { ...none, env: { ...none.env, cookieKey: null, cookieKeyGiven: false } });
+    assert.deepEqual((await bodyOf(r)).missing, ["FREEE_COOKIE_KEY"]);
+  });
+
+  test("cookie がある時は今までどおり：つながっている 200・事業所の番号が空なら 503 no-company-id・違う事業所は 403", async () => {
+    const freee = new FakeFreee();
+    assert.equal((await handleStatus(req("/api/freee/status", { method: "GET" }), makeDeps(freee))).status, 200);
+    const empty = await handleStatus(req("/api/freee/status", { method: "GET" }), makeDeps(freee, { FREEE_COMPANY_ID: "" }));
+    assert.equal(empty.status, 503);
+    assert.equal((await bodyOf(empty)).code, "no-company-id");
+    assert.equal((await handleStatus(req("/api/freee/status", { method: "GET", cookie: tokenCookie(999) }), makeDeps(freee))).status, 403);
+  });
+
+  test("返事は CDN にも覚えさせない（cookie の有る無しで答えが変わるので Vary: Cookie）", async () => {
+    const r = await handleStatus(req("/api/freee/status", { method: "GET", cookie: null }), makeDeps(new FakeFreee()));
+    assert.match(r.headers.get("cache-control")!, /no-store/);
+    assert.equal(r.headers.get("cdn-cache-control"), "no-store");
+    assert.equal(r.headers.get("vercel-cdn-cache-control"), "no-store");
+    assert.match(r.headers.get("vary")!, /Cookie/);
+  });
+
+  test("画面：cookie が無い・切れた・事業所の番号が空の時は「オーナー用」の「freee とつなぐ」を出す。プレビューでは出さない", async () => {
+    const { readStatusAnswer, showConnect } = await import("../useFreee");
+    const deps = makeDeps(new FakeFreee());
+    const answerOf = async (r: Response) => readStatusAnswer(r.status, r.status === 200 ? null : await r.json());
+    const noCookie = await answerOf(await handleStatus(req("/api/freee/status", { method: "GET", cookie: null }), deps));
+    assert.deepEqual(noCookie, { status: "none", missing: [] });
+    assert.equal(showConnect(noCookie), true);
+    const expired = await answerOf(await handleStatus(req("/api/freee/status", { method: "GET", cookie: tokenCookie(COMPANY, NOW - 1) }), deps));
+    assert.equal(expired.status, "expired");
+    assert.equal(showConnect(expired), true);
+    const emptyId = await answerOf(await handleStatus(req("/api/freee/status", { method: "GET" }), makeDeps(new FakeFreee(), { FREEE_COMPANY_ID: "" })));
+    assert.equal(showConnect(emptyId), true);
+    // 環境変数が欠けていても、cookie が無ければ出す（名前を添える）
+    const missing = await answerOf(await handleStatus(req("/api/freee/status", { method: "GET", cookie: null }), makeDeps(new FakeFreee(), { FREEE_CLIENT_SECRET: "" })));
+    assert.deepEqual(missing, { status: "none", missing: ["FREEE_CLIENT_SECRET"] });
+    assert.equal(showConnect(missing), true);
+    // つながっている・プレビューでは出さない
+    assert.equal(showConnect(await answerOf(await handleStatus(req("/api/freee/status", { method: "GET" }), deps))), false);
+    const preview = await answerOf(await handleStatus(req("/api/freee/status", { method: "GET", cookie: null }), makeDeps(new FakeFreee(), { VERCEL_ENV: "preview" })));
+    assert.equal(preview.status, "off");
+    assert.equal(showConnect(preview), false);
+  });
+});
