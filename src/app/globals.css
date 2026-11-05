@@ -771,6 +771,17 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .memo-throw-row input { flex: 1 1 auto; min-width: 0; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); }
 .memo-throw-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .memo-throw-row .btn { flex: none; }
+/* 一言メモの種類の札（1つだけ選ぶ。選んだ物は ✓ と太い枠でも分かる） */
+.memo-kinds { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.memo-kind { font: inherit; font-size: 0.8rem; line-height: 1.4; padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.memo-kind:hover { color: var(--text); }
+.memo-kind.on { border: 2px solid var(--accent); padding: 1px 9px; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.memo-kind:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* ToDo のタブの種類の箱（枠で囲み、題名と件数） */
+.todo-box { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 10px 2px; margin: 0 0 12px; min-width: 0; }
+.todo-box-head { font-size: 0.95rem; margin: 0 0 8px; }
+.todo-box-head .num { font-size: 1.05rem; }
+.todo-box .todos { margin-bottom: 8px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* ToDo のタブ：PC は右の列に「メモを投げる」と今やる3件、スマホはページの上にメモの欄だけ */
 .pc-only { display: none; }
@@ -1507,6 +1518,8 @@ h3.section-title { font-size: 1rem; }
 .home-memo .memo-throw > * { grid-column: 1 / -1; }
 .home-memo .memo-throw > .karte-count { grid-column: 1; margin: 0; }
 .home-memo .memo-throw > .chat-mode { grid-column: 2; justify-content: flex-end; }
+.home-memo .memo-kind { font-size: 0.72rem; padding: 0 8px; }
+.home-memo .memo-kind.on { padding: 0 7px; }
 
 .home-bottom { margin-top: 16px; }
 .home-bottom .fold { margin-top: 0; }

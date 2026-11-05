@@ -4,6 +4,8 @@
 // プログラムが ToDo の「投げたメモ」に足す（鍵は「メモ:番号」。元のメモはそのまましまい、行の印を押すと開く）。
 // Claude が決めるのは文だけ（期限・並べ方・出どころはプログラム）。お客様の名字は〔お客様〕に置きかえてから送る。
 // ホームと ToDo のタブ（PC は右の列・スマホはページの上）に1つずつ置く。Enter でも投げられる。
+// 入力欄の下に種類の札を4つ（お客様・仕入れと材料・お店のこと・お金と事務）。1つだけ選べ、もう一度押すと外す。
+// 選ばなくても送れる（ToDo の「その他」の箱に入る）。種類はオーナーが選んだ物だけで、AI には送らない・決めさせない。
 
 import { useId, useState } from "react";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
@@ -12,6 +14,7 @@ import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
 import { memoDue } from "@/lib/todo/due";
 import { withMemoTodo } from "@/lib/todo/items";
+import { KIND_LABEL, MEMO_KINDS, type MemoKind } from "@/lib/todo/kinds";
 import { maskNames, restoreNames } from "@/lib/todo/names";
 import { useTodos } from "@/lib/todo/useTodos";
 import type { TodoMode, TodoRequest, TodoResponse } from "@/lib/todo/wire";
@@ -26,6 +29,7 @@ export function MemoThrow({ data, maxChars, label = "メモを投げる", hideLa
   const [busy, setBusy] = useState(false);
   const [noAi, setNoAi] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [kind, setKind] = useState<MemoKind | null>(null);
 
   const length = [...text].length;
   const over = length > maxChars;
@@ -57,7 +61,7 @@ export function MemoThrow({ data, maxChars, label = "メモを投げる", hideLa
       const title = restoreNames(out.title, memo, found);
       let added: string | null = null;
       todos.book.update((s) => {
-        const r = withMemoTodo(s, todos.seedItems, { title, memo, due: memoDue(memo, todos.today) }, new Date().toISOString(), data.shop);
+        const r = withMemoTodo(s, todos.seedItems, { title, memo, due: memoDue(memo, todos.today), category: kind }, new Date().toISOString(), data.shop);
         added = r.todo?.title ?? null;
         return r.state;
       });
@@ -70,6 +74,7 @@ export function MemoThrow({ data, maxChars, label = "メモを投げる", hideLa
         ...(out.note ? [{ who: "プログラム" as const, text: `メモを投げる：${out.note}` }] : []),
       );
       setText("");
+      setKind(null);
       if (how === "ai") setNoAi(false);
       setNote(`✓ 足しました：${title}${out.note ? `（${out.note}）` : ""}`);
     } catch {
@@ -104,6 +109,20 @@ export function MemoThrow({ data, maxChars, label = "メモを投げる", hideLa
         <button type="submit" className="btn primary" disabled={!canSend}>
           {busy ? "直しています…" : "投げる"}
         </button>
+      </div>
+      <div className="memo-kinds" role="group" aria-label="種類（選ばなくても送れます。選ばなければ その他）">
+        {MEMO_KINDS.map((k) => (
+          <button
+            key={k}
+            type="button"
+            className={kind === k ? "memo-kind on" : "memo-kind"}
+            aria-pressed={kind === k}
+            onClick={() => setKind((v) => (v === k ? null : k))}
+          >
+            {kind === k && <span aria-hidden>✓ </span>}
+            {KIND_LABEL[k]}
+          </button>
+        ))}
       </div>
       <p id={`${id}-count`} className={over ? "karte-count over" : "karte-count"}>
         <span className="num">{length}</span>/{maxChars}字{over && "（多すぎます。短くしてください）"}
