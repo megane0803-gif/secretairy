@@ -1,31 +1,23 @@
 "use client";
 
-// 「言葉で書いて欄を埋める」：100字までの文（例「縮毛矯正の日は前後を3時間あける」）を AI（Haiku。/api/ai/rules）が読み、
+// 「言葉で書いて欄を埋める」：100字までの文（例「カラーの後は15分あける」）を AI（Haiku。/api/ai/rules）が読み、
 // 下の足す欄（種類・どこに効くか・メニュー・数）を埋めるだけ。AI は保存しない。足すのは人の「足す」ボタン（今の確かめを通す）。
-// 数と単位はプログラムが文から読み直して「3時間（180分）」の形で出す。単位が無ければ聞き返す。
+// 保存の前に、もとの文と読み取った結果（種類・数と単位・効く所・メニュー）を並べて出す。
+// 文の一部しか表せないときは埋めずに「この部分はまだ足せません」。効く所・メニュー・単位があいまいなときは聞き返す
+// （答えもサーバーの /api/ai/rules でもう一度確かめる。そのときは AI を呼ばない）。
 // 🔒 を緩める文は欄を埋めずに理由をつけて断り、日誌に1行。今の種類に当てはまらなければ「まだ足せません」。
 // AI が使えないときは、この欄を出さない（手で足す欄はそのまま）。
 
 import { useId, useState } from "react";
 import { writeJournal } from "@/lib/journal";
 import { lockedConflict } from "@/lib/rules/validate";
-import {
-  interpretWords,
-  type RuleDraft,
-  type RuleReading,
-  type RuleWordsRequest,
-  type RuleWordsResponse,
-  type WordsMenu,
-  type WordsResult,
-} from "@/lib/rules/words";
+import type { RuleDraft, RuleReading, RuleWordsRequest, RuleWordsResponse, WordsAnswers, WordsResult } from "@/lib/rules/words";
 
 export function RuleWords({
-  menus,
   maxChars,
   onFill,
   onNoAi,
 }: {
-  menus: WordsMenu[];
   maxChars: number;
   /** 読み取った中身で下の足す欄を埋める（保存はしない）。null = 前に埋めた中身を消す（断った・聞き返し中・まだ足せない） */
   onFill: (draft: RuleDraft | null) => void;
@@ -35,8 +27,8 @@ export function RuleWords({
   const id = useId();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
-  // 聞き返しに答えるときは、同じ文と読みをプログラムに通しなおす（AI はもう呼ばない）
-  const [asked, setAsked] = useState<{ text: string; reading: RuleReading } | null>(null);
+  // 読んだ文と、聞き返しに答えるときに送り返す読みと答え
+  const [asked, setAsked] = useState<{ text: string; reading: RuleReading | null; answers: WordsAnswers } | null>(null);
   const [result, setResult] = useState<WordsResult | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
@@ -49,29 +41,9 @@ export function RuleWords({
     writeJournal({ who: "プログラム", text: `ルールを言葉で足す：🔒 とぶつかるので欄を埋めなかった（「${sentence}」。${reason}）` });
   };
 
-  const show = (sentence: string, reading: RuleReading | null, r: WordsResult) => {
-    setResult(r);
-    setAsked(r.status === "ask" && reading ? { text: sentence, reading } : null);
-    if (r.status === "locked") refuse(sentence, r.reason);
-    // 前の文で埋めた中身が残らないように、埋めないときは足す欄を空に戻す
-    onFill(r.status === "filled" ? r.draft : null);
-  };
-
-  async function send() {
-    const sentence = text.replace(/\s+/g, " ").trim();
-    if (!sentence || [...sentence].length > maxChars || busy) return;
-    setNote(null);
-    setAsked(null);
-    // 🔒 を緩める文は送らずに断る（サーバーでも同じように確かめる）
-    const locked = lockedConflict(sentence);
-    if (locked) {
-      refuse(sentence, locked);
-      onFill(null);
-      return;
-    }
+  async function ask(body: RuleWordsRequest) {
     setBusy(true);
-    setResult(null);
-    const body: RuleWordsRequest = { mode: "ai", text: sentence };
+    setNote(null);
     try {
       const res = await fetch("/api/ai/rules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       let out: RuleWordsResponse | null = null;
@@ -88,7 +60,12 @@ export function RuleWords({
         setNote(`うまくいきませんでした。${out.message}。`);
         return;
       }
-      show(sentence, out.reading, out.result);
+      const r = out.result;
+      setResult(r);
+      setAsked({ text: body.text, reading: out.reading, answers: body.answers ?? {} });
+      if (r.status === "locked") refuse(body.text, r.reason);
+      // 前の文で埋めた中身が残らないように、埋めないときは足す欄を空に戻す
+      onFill(r.status === "filled" ? r.draft : null);
     } catch {
       onNoAi();
     } finally {
@@ -96,10 +73,34 @@ export function RuleWords({
     }
   }
 
-  const answer = (a: string) => {
-    if (!asked) return;
-    show(asked.text, asked.reading, interpretWords(asked.text, asked.reading, menus, a));
+  function send() {
+    const sentence = text.replace(/\s+/g, " ").trim();
+    if (!sentence || [...sentence].length > maxChars || busy) return;
+    setAsked(null);
+    // 🔒 を緩める文は送らずに断る（サーバーでも同じように確かめる）
+    const locked = lockedConflict(sentence);
+    if (locked) {
+      setAsked({ text: sentence, reading: null, answers: {} });
+      refuse(sentence, locked);
+      onFill(null);
+      return;
+    }
+    setResult(null);
+    void ask({ mode: "ai", text: sentence });
+  }
+
+  // 聞き返しに答える：前の読みと答えをサーバーに送り返し、プログラムでもう一度通す（AI は呼ばない）
+  const answer = (key: keyof WordsAnswers, value: string) => {
+    if (!asked?.reading || busy) return;
+    void ask({ mode: "ai", text: asked.text, reading: asked.reading, answers: { ...asked.answers, [key]: value } });
   };
+
+  const original = asked && (
+    <div className="words-original">
+      <span className="words-col-head">もとの文</span>
+      <p>「{asked.text}」</p>
+    </div>
+  );
 
   return (
     <div className="rule-words">
@@ -107,7 +108,7 @@ export function RuleWords({
         className="memo-throw"
         onSubmit={(e) => {
           e.preventDefault();
-          if (canSend) void send();
+          if (canSend) send();
         }}
       >
         <label htmlFor={`${id}-text`} className="memo-throw-label">
@@ -119,7 +120,7 @@ export function RuleWords({
             type="text"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="例：縮毛矯正の日は前後を3時間あける"
+            placeholder="例：カラーの後は15分あける"
             aria-describedby={`${id}-count`}
             enterKeyHint="send"
             autoComplete="off"
@@ -131,39 +132,42 @@ export function RuleWords({
         <p id={`${id}-count`} className={over ? "karte-count over" : "karte-count"}>
           <span className="num">{length}</span>/{maxChars}字{over && "（多すぎます。短くしてください）"}
         </p>
-        <small className="hint">AI は下の欄を埋めるだけで、足しません。見直して「足す」を押したときだけ足します。</small>
+        <small className="hint">AI は下の欄を埋めるだけで、足しません。見直して「足す」を押したときだけ足します。1文に1つの決まりを書いてください。</small>
       </form>
 
-      {note && <p className="form-problem" role="alert">{note}</p>}
+      {note && (
+        <p className="form-problem" role="alert">
+          {note}
+        </p>
+      )}
 
       {result?.status === "filled" && (
         <div className="verdict ok" role="status">
           <p className="verdict-head">こう読みました（下の欄に入れました）</p>
-          <ul className="words-summary">
-            {result.summary.map((s) => (
-              <li key={s}>{s}</li>
-            ))}
-          </ul>
-          {result.readback && (
-            <p>
-              数の読み直し：<strong className="num">{result.readback}</strong>
-            </p>
-          )}
-          {result.notes.map((n) => (
-            <p key={n} className="hint">
-              {n}
-            </p>
-          ))}
-          {result.problem && <p className="form-problem">このままでは足せません。{result.problem}</p>}
+          <div className="words-compare">
+            {original}
+            <div>
+              <span className="words-col-head">読み取った結果</span>
+              <dl className="words-rows">
+                {result.rows.map((r) => (
+                  <div key={r.label}>
+                    <dt>{r.label}</dt>
+                    <dd>{r.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </div>
           <p className="hint">ちがうときは、下の欄で直してから「足す」を押してください。</p>
         </div>
       )}
       {result?.status === "ask" && (
         <div className="verdict" role="status">
           <p className="verdict-head">{result.question}</p>
+          {original}
           <div className="form-buttons">
             {result.choices.map((c) => (
-              <button key={c.answer} type="button" className="btn" onClick={() => answer(c.answer)}>
+              <button key={`${c.key}:${c.answer}`} type="button" className="btn" disabled={busy} onClick={() => answer(c.key, c.answer)}>
                 {c.label}
               </button>
             ))}
@@ -180,15 +184,29 @@ export function RuleWords({
           </div>
         </div>
       )}
-      {result?.status === "unsupported" && (
+      {result?.status === "partial" && (
         <div className="verdict ng" role="status">
-          <p className="verdict-head">{result.message}</p>
-          <p className="hint">文のまま AI に読ませたいときは、下の欄で「文（AI が読む）」を選んで書けます。</p>
+          <p className="verdict-head">この部分はまだ足せません</p>
+          {original}
+          <ul className="words-summary">
+            {result.parts.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+          <p className="hint">{result.message.replace(/^この部分はまだ足せません。/, "")}</p>
+        </div>
+      )}
+      {(result?.status === "unsupported" || result?.status === "cannot") && (
+        <div className="verdict ng" role="status">
+          <p className="verdict-head">{result.status === "unsupported" ? "まだ足せません" : "欄を埋めませんでした"}</p>
+          {original}
+          <p>{result.message}</p>
         </div>
       )}
       {result?.status === "locked" && (
         <div className="verdict ng" role="alert">
           <p className="verdict-head">🔒 欄を埋めませんでした</p>
+          {original}
           <p>{result.reason}</p>
         </div>
       )}

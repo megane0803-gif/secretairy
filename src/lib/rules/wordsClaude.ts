@@ -3,7 +3,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { NoAiError } from "../ai/model";
-import { parseReading, READING_SCHEMA, ruleWordsUserText, type RuleReader } from "./words";
+import { READING_SCHEMA, ruleWordsUserText, type RuleReader } from "./words";
 
 export function claudeRuleReader(model: string, apiKey: string | undefined = process.env.ANTHROPIC_API_KEY): RuleReader {
   if (!apiKey) throw new NoAiError("ANTHROPIC_API_KEY がありません");
@@ -37,7 +37,8 @@ export function claudeRuleReader(model: string, apiKey: string | undefined = pro
       } catch {
         raw = null;
       }
-      return { reading: parseReading(raw), stop: "end" };
+      // 形（種類・メニューが本当にあるか・数）は runRuleWords がサーバーで確かめる
+      return { reading: raw, stop: "end" };
     },
   };
 }

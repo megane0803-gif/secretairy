@@ -48,7 +48,6 @@ export function RuleSide(props: Props) {
         <p>種類を選んで、どこに効くかと数を入れます。足したルールは、すぐ次の判定から効きます。</p>
         {props.wordsOn && !noAi && (
           <RuleWords
-            menus={props.menus.map((m) => ({ id: m.id, name: m.name }))}
             maxChars={props.wordsMaxChars}
             onFill={(value) => {
               setAdded(null);

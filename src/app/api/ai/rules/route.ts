@@ -1,5 +1,6 @@
 // ルールを言葉で書いて足す窓口（サーバーの側。AI を呼ぶ所）。文を画面から受け取り、
 // Claude（Haiku。config/ai.json の ruleWords）で足す欄に当てはめ、プログラム（src/lib/rules/words.ts）が欄の中身に直して返すだけ。
+// AI が返した種類・数（今の上限と下限の中か）・メニュー（本当にあるか）は、ここ（サーバー）で確かめる。聞き返しの答えもここを通す。
 // 保存はしない（足すのは画面の人の「足す」ボタン）。受け取った物はどこにも残さない（docs/SPEC.md §5.1）。
 // 🔒 を緩める文は AI に送らずに断る。
 
@@ -33,7 +34,9 @@ export async function POST(request: Request): Promise<Response> {
   try {
     // Claude は文を読むときに作る（🔒 の文は AI に送らずに断るので、鍵が無くても断れる）
     const reader: RuleReader = parsed.value.mode === "script" ? scriptRuleReader(menus) : { read: (req) => claudeRuleReader(ai.model).read(req) };
-    const out = await runRuleWords({ text: parsed.value.text, reader, menus, maxTokens: ai.maxReplyTokens });
+    // 聞き返しの答え（reading と answers）のときは AI を呼ばず、読みと答えをここでもう一度確かめる（画面だけに頼らない）
+    const { text, reading, answers } = parsed.value;
+    const out = await runRuleWords({ text, reader, menus, maxTokens: ai.maxReplyTokens, ...(reading !== undefined ? { reading, answers } : {}) });
     return reply({ ok: true, ...out });
   } catch (e) {
     if (e instanceof RuleWordsRefusedError)
