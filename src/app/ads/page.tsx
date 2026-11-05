@@ -5,7 +5,7 @@ import { GATE_LABELS } from "@/lib/ads/gate";
 import { AD_FIELDS } from "@/lib/data/types";
 import { getSeedRules } from "@/lib/rules/store";
 import { getAdSettings, getShop } from "@/lib/settings";
-import { AdsReport } from "./AdsReport";
+import { AdsReport, AdsWeeks } from "./AdsReport";
 import { AdsResults } from "./AdsResults";
 import { AdsReview } from "./AdsReview";
 
@@ -14,6 +14,8 @@ export const dynamic = "force-dynamic";
 /**
  * 広告のタブ。架空の広告の4週分を見て、AI が「止める言葉」か「外す言葉」を1つ提案し、
  * プログラムの門を通してから承認の箱へ。決めるのはオーナー（承認／直す／見送り）。
+ * 真ん中の並び（PC・スマホとも）：4週分 → 承認待ち → 効いたかの判定 → 毎週の見直しの報告 → 広告（架空）の画面 → 2つの一覧 → くわしく。
+ * スマホでは右の列（AI に見直してもらう）を4週分のすぐ下に出す（rightAfterOnPhone={1}。部品は1つのまま）。
  */
 export default function AdsPage() {
   const seedRules = getSeedRules();
@@ -22,12 +24,15 @@ export default function AdsPage() {
   return (
     <TabPage
       tab="ads"
+      rightAfterOnPhone={1}
       right={
         <Panel title="AI に見直してもらう">
           <AdsReview seedRules={seedRules} timezone={shop.timezone} />
         </Panel>
       }
     >
+      <AdsWeeks />
+
       <section className="inline-box" aria-labelledby="ads-approvals">
         <h2 id="ads-approvals">承認待ち（ホームの承認の箱と同じ行）</h2>
         <AdApprovalRows seedRules={seedRules} standalone />
@@ -48,7 +53,7 @@ export default function AdsPage() {
           案は{ads.oncePerDays}日に1つまで。承認すると、{ads.checkAfterDays}日後を期限に ToDo「効いたか見る」を足します。数（回数・お金・予約）は AI に書かせず、表からプログラムが入れます。
         </p>
         <p>
-          効いたかの判定は、判定日（承認の{ads.checkAfterDays}日後）に前と後の数をプログラムが比べます。その言葉の押された回数が{ads.judge.minWordClicks}回より少ない時・前と後の予約を足して{ads.judge.minBookings}件より少ない時は「まだ分からない」。後の数は最初の状態に置いた架空の数です。
+          効いたかの判定は、判定日（承認の{ads.checkAfterDays}日後）に前と後の数をプログラムが比べます。お金が減って予約が減っていなければ「効いた」、予約が減ったら「戻す案」（承認の箱へ）、数が少なければ「まだ分からない」。その言葉の押された回数が{ads.judge.minWordClicks}回より少ない時・前と後の予約を足して{ads.judge.minBookings}件より少ない時は「まだ分からない」。後の数は最初の状態に置いた架空の数です。
           戻す案は承認の箱に入り、戻すのはオーナーの「承認」だけです。
         </p>
         <FieldList fields={AD_FIELDS} />

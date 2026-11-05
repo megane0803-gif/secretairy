@@ -119,6 +119,19 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
   .page.right-first-sp > .page-right { order: -1; }
 }
 
+/* スマホ（1列）で右の列を真ん中の列の途中に出すタブ（広告タブ。TabFrame の rightAfterOnPhone）：
+   承認待ち → 見出し → 前の欄（page-lead）→ 右の列 → 後の欄（page-rest）→ 表示スイッチ。PC は今までどおり */
+@media (max-width: 1023.98px) {
+  .page.right-after-sp > .page-main { display: contents; }
+  .page.right-after-sp > .page-main > .pending { order: -1; }
+  .page.right-after-sp > .page-main > .pending-row { order: -1; }
+  .page.right-after-sp > .page-main > .page-head { order: -1; margin: 0; }
+  .page.right-after-sp > .page-main > .page-lead { order: -1; }
+  .page.right-after-sp > .page-right { order: 0; }
+  .page.right-after-sp > .page-main > .page-rest { order: 1; }
+  .page.right-after-sp > .page-main > .tab-switch-fold { order: 1; }
+}
+
 
 /* ---- 左のタブ ---- */
 
@@ -882,6 +895,12 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .ad-fix input { flex: 1 1 160px; min-width: 0; font: inherit; font-size: 0.9rem; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
 .ad-review { display: flex; flex-direction: column; gap: 8px; }
 .ad-review .btn.big { font-size: 1.05rem; padding: 10px 14px; }
+/* 押せない時の理由と次に頼める日時は、ボタンのすぐ下にふつうの字の大きさで（小さい hint にしない） */
+.ad-review-why { margin: 0; font-size: 1rem; color: var(--text); overflow-wrap: anywhere; }
+.ad-review-reset { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.ad-review-reset p { margin: 0; font-size: 0.9rem; color: var(--muted); }
+/* 広告タブの一番上の「4週分」と、その下の承認待ちの箱の間をあける */
+.ad-weeks { margin-bottom: 16px; }
 
 /* ---- 経理タブ ---- */
 

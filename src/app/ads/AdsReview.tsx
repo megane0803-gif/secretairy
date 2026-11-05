@@ -3,6 +3,8 @@
 // 広告タブの右の列：「AI に見直してもらう」。表とルールを /api/ai/ads へ送り、門を通った案を1つ承認の箱に入れる。
 // 門を2回通らなかったら案は出さず、日誌に書く。1週間に1つまで・もう案がある時は新しく出さない。
 // AI につながらない時は「今は AI につながりません」と出し、決まった返事（AI なし）で同じ流れを試せる。
+// 押せない時（7日に1つまで・承認待ちがある）は、ボタンのすぐ下にふつうの字で理由と次に頼める日時を出し、
+// その下に「デモ」の札と「広告（架空）を最初に戻す」を出す。押せる時は「最初に戻す」を欄の一番下に出す（いつも1か所だけ）。
 
 import { useState } from "react";
 import { GateChecks } from "@/components/AdApprovalRows";
@@ -19,6 +21,7 @@ import type { AdsMode } from "@/lib/ads/wire";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import { useBookState } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
+import { DEMO_TAG_NOTE } from "@/lib/notices";
 import type { Rule } from "@/lib/rules/types";
 import { useRules } from "@/lib/rules/useRules";
 
@@ -121,6 +124,19 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
     setShown({ kind: "note", text: "広告（架空）を最初に戻しました。" });
   };
 
+  // 「最初に戻す」は試すための物なので「デモ」の札を付ける。部品は1つで、押せる時と押せない時で置く所だけ変える
+  const demoTag = (
+    <span className="tag text" title={DEMO_TAG_NOTE}>
+      デモ<span className="sr-only">（{DEMO_TAG_NOTE}）</span>
+    </span>
+  );
+  const resetButton = (
+    <button type="button" className="btn small" onClick={reset}>
+      広告（架空）を最初に戻す
+    </button>
+  );
+  const resetNote = <small className="hint">止めた・外した言葉と案・判定・報告を消します（日誌には残ります）</small>;
+
   return (
     <div className="ad-review">
       <p className="hint">
@@ -144,10 +160,18 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
         {busy ? "見直しています…" : "AI に見直してもらう"}
       </button>
       {!can.ok && (
-        <p className="hint" role="status">
-          {can.reason}
-          {nextLabel && ` 次は ${nextLabel} から頼めます。`}
-        </p>
+        <>
+          <p className="ad-review-why" role="status">
+            {can.reason}
+            {nextLabel && `次は ${nextLabel} から頼めます。`}
+          </p>
+          <div className="ad-review-reset">
+            <p>
+              {demoTag} 広告を最初に戻すと、もう一度試せます
+            </p>
+            {resetButton}
+          </div>
+        </>
       )}
 
       {noAi && (
@@ -199,12 +223,13 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
         </p>
       )}
 
-      <div className="reset-row">
-        <button type="button" className="btn small" onClick={reset}>
-          広告（架空）を最初に戻す
-        </button>
-        <small className="hint">止めた・外した言葉と案・判定・報告を消します（日誌には残ります）</small>
-      </div>
+      {can.ok && (
+        <div className="reset-row">
+          {resetButton}
+          {demoTag}
+          {resetNote}
+        </div>
+      )}
     </div>
   );
 }
