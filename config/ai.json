@@ -19,8 +19,8 @@
     "maxRequestChars": 200000
   },
   "adsTeam": {
-    "model": "claude-haiku-5-5",
-    "maxReplyTokens": 400,
+    "model": "claude-sonnet-5-5",
+    "maxReplyTokens": 1500,
     "maxCalls": 3,
     "maxTwinChars": 90,
     "maxLineChars": 60,

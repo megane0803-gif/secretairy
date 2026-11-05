@@ -122,6 +122,8 @@ export function materialText(
   if (r.featured) lines.push("- 売りのメニューの言葉");
   if (r.town) lines.push(`- 町の名前（${r.town}）が入った言葉`);
   lines.push(`- 前の判定：${judgementText(r)}`);
+  lines.push("", "# 数を言葉で言うと（答えにはこの言い方を使い、数字・日付・値段は書かない）");
+  for (const w of researchWords(r)) lines.push(`- ${w}`);
   lines.push("", "# 広告の記録にある、前のオーナーの判断（対象・止める／外す・承認か見送りか・決めた日。理由は残っていません）");
   if (past.length === 0) lines.push("- （過去の判断はまだありません）");
   for (const d of past)
@@ -129,6 +131,25 @@ export function materialText(
       `- ${calDay(shop, d.date).label}：「${d.text}」を${actionVerb(d.action)}案 → ${decisionWord(d.decision)}（その時の4週の予約${d.bookings}件${d.bookings === 0 ? "・予約につながっていなかった" : ""}）`,
     );
   return lines.join("\n");
+}
+
+/**
+ * リサーチャーの数を、数字を使わない言葉にする（プログラム）。AI は答えにこの言い方を使う（数字・日付・値段は書かない）。
+ * 例：「予約がない（予約につながっていない）」「お金がかかっている」「押された回数は増えている」
+ */
+export function researchWords(r: Research): string[] {
+  const first = r.weeks[0]?.clicks ?? 0;
+  const last = r.weeks[r.weeks.length - 1]?.clicks ?? 0;
+  const withBooking = r.weeks.filter((w) => w.bookings > 0).length;
+  return [
+    r.total.bookings === 0
+      ? "予約：ずっと予約がない（予約につながっていない）"
+      : withBooking < r.weeks.length
+        ? "予約：予約は少しある（予約のない週もある）"
+        : "予約：毎週予約につながっている",
+    r.total.cost > 0 ? "お金：毎週お金がかかっている" : "お金：お金はかかっていない",
+    last > first ? "押された回数：だんだん増えている" : last < first ? "押された回数：だんだん減っている" : "押された回数：あまり変わらない",
+  ];
 }
 
 /** 「外す」→「外さずに残す」のように、案のとおりにしない言い方 */
