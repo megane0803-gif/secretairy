@@ -94,7 +94,7 @@ async function linked(): Promise<string> {
 async function sendCard(token: string, approvalId: string): Promise<{ approve: string; skip: string }> {
   const res = await sendFromScreen(d, {
     token,
-    messages: [{ type: "approval", card: { approvalId, target: "reservation", what: "青木（架空）様 カット", when: "11/5（木）15:00–16:00", why: "理由", check: "✓" } }],
+    messages: [{ type: "approval", card: { approvalId, target: "reservation", what: "青木様 カット", when: "11/5（木）15:00–16:00", why: "理由", check: "✓" } }],
   });
   assert.ok(res.ok);
   const flex = sent[sent.length - 1].messages[0] as { contents: { footer: { contents: { action: { data: string } }[] } } };
@@ -440,11 +440,11 @@ describe("一言の振り分け（決まった返事で。Claude と LINE は呼
     // 仮押さえで承認の箱に1行。確定はしていない
     assert.equal(out.book.chat[0].status, "hold");
     assert.equal(pendingApprovals(out.book, now.toISOString()).length, 1);
-    assert.match(out.reply, /^仮押さえしました：青木（架空）様/);
+    assert.match(out.reply, /^仮押さえしました：青木様/);
     assert.equal(out.card?.approvalId, `ap-${res.hold.id}`);
   });
 
-  test("ルールで受けられない日時は仮押さえせず、理由と代わりを1行で返す", async () => {
+  test("ルールで受けられない日時は仮押さえせず、理由と代わり（1行に1つ）を返す", async () => {
     // 例のルール「予約は来店の3時間前まで」：いま 9:00 なので、今日の 11:00 は受けられない
     const res = await ask("今日11時に石田さんカットで仮押さえ").run;
     assert.ok(res.ok && res.kind === "hold-no", JSON.stringify(res));
@@ -520,8 +520,8 @@ describe("朝の要点の文（プログラムが作る）", () => {
       slotMinutes: 30,
     });
     assert.match(text, /今日の予約 2件/);
-    assert.match(text, /青木（架空）様 カット\n　前回の次回提案：前髪を短く/);
-    assert.match(text, /石田（架空）様 カラー（仮押さえ）\n　前回の記録なし/);
+    assert.match(text, /青木様 カット\n　前回の次回提案：前髪を短く/);
+    assert.match(text, /石田様 カラー（仮押さえ）\n　前回の記録なし/);
     assert.match(text, /15:00–17:00 空き2席/);
   });
 });
@@ -541,7 +541,7 @@ describe("承認待ちを LINE に届ける形", () => {
     });
     const row = pendingApprovals(book, now.toISOString())[0];
     const card = reservationCard(row, { shop, menus, customers }, true);
-    assert.equal(card.what, "青木（架空）様 カット");
+    assert.equal(card.what, "青木様 カット");
     assert.match(card.when, /^\d+\/\d+（.） \d{2}:\d{2}–\d{2}:\d{2}$/);
     assert.equal(card.why, "お客様が選びました");
     assert.match(card.check, /^✓/);

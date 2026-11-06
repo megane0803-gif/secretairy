@@ -1,7 +1,7 @@
 "use client";
 
 // LINE のつなぎ（オーナー側）の、画面の側の働き手。どのタブを開いていても動く（layout.tsx に置く）。何も描かない。
-// - つながっている（か合言葉を出している）間だけ、数秒ごとに /api/line/poll へ受け取りに行く（画面が開いている印にもなる）。
+// - つながっている（かつなぐ番号を出している）間だけ、数秒ごとに /api/line/poll へ受け取りに行く（画面が開いている印にもなる）。
 // - オーナーの一言 → /api/ai/line で振り分け（予約は仮押さえまで）→ 台帳・ToDo・カルテのメモに入れる → LINE に1行で返事。
 // - 承認のボタン（合言葉でつないだ LINE から押した物だけ。サーバーが確かめ済み）→ 承認の箱の画面のボタンと同じ変え方。
 // - 承認の箱に新しい行が入ったら、LINE に「何を・いつ・理由」とボタンを届ける（1行1回。1日の上限まで）。
@@ -17,6 +17,7 @@ import { writeJournal, type JournalWho } from "@/lib/journal";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import { adCard, applyAsk, applyPress, karteTargetFor, reservationCard, stillOk, type ApplyOutcome } from "@/lib/line/apply";
 import type { LineAskResponse } from "@/lib/line/ask";
+import { LINE_TEXT, sentStatus } from "@/lib/line/messages";
 import { maskNames } from "@/lib/line/sort";
 import { codeExpired, linkExpired, withHandled, withLinked, withNotified } from "@/lib/line/state";
 import { lineApi, problemText, readLineState, setLineStatus, updateLineState, useLineState } from "@/lib/line/useLine";
@@ -46,7 +47,7 @@ export function LineBridge({ data }: { data: BookData }) {
   const active = !!s && (s.linked ? !linkExpired(s, nowIso) : !codeExpired(s, nowIso));
   const token = s?.token ?? null;
 
-  // 期限の切れたつなぎ・合言葉は消す
+  // 期限の切れたつなぎ・つなぐ番号は消す
   useEffect(() => {
     if (s && !active) {
       updateLineState(() => null);
@@ -79,7 +80,7 @@ export function LineBridge({ data }: { data: BookData }) {
           const L = latest.current;
           const ids = [...L.book.pending.map((p) => p.approval.id), ...(L.ads.pending ? [L.ads.pending.id] : [])];
           updateLineState((x) => (x && x.token === token ? withLinked(x, res.until, ids) : x));
-          writeJournal({ who: "LINE", text: `合言葉で LINE とつないだ（期限 ${when(res.until, data.shop.timezone)} まで。画面を開いている間だけ動く）` });
+          writeJournal({ who: "LINE", text: `つなぐ番号で LINE とつないだ（期限 ${when(res.until, data.shop.timezone)} まで。画面を開いている間だけ動く）` });
         }
         for (const ev of res.events) await handle(ev, token);
       } finally {
@@ -174,7 +175,7 @@ export function LineBridge({ data }: { data: BookData }) {
     if (!res.ok) {
       writeJournal({ who: "プログラム", text: `LINE に返事を送れなかった（${res.code === "limit" ? "送る上限" : "うまくいかなかった"}）：${text.slice(0, 60)}` });
       setLineStatus({ problem: problemText(res.code, res.message) });
-    } else setLineStatus({ last: `LINE に${res.via === "push" ? "送りました（数える方）" : "返事しました"}：${text.slice(0, 40)}` });
+    } else setLineStatus({ last: sentStatus(res.via === "push" ? "push" : "reply", text) });
   }
 
   async function handle(ev: ScreenEvent, token: string) {
@@ -212,7 +213,7 @@ export function LineBridge({ data }: { data: BookData }) {
     }
     if (!res.ok) {
       writeJournal({ who: "プログラム", text: `LINE の一言を振り分けられなかった：${res.message}` });
-      await reply(token, ev, `うまくいきませんでした。${res.message}。短くしてもう一度送ってください。`);
+      await reply(token, ev, LINE_TEXT.retry(res.message));
       return;
     }
     const answer = res;
