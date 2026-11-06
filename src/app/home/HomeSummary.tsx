@@ -10,12 +10,13 @@ import { resolveMenu } from "@/lib/combo";
 import { ActorTag, BigNumber, Checked, CustomerName, MiniBar, ProgramTag, SectionHead } from "@/components/parts";
 import { RememberFold } from "@/components/RememberFold";
 import type { BookData } from "@/lib/book/data";
-import { canNextDay, LAST_DEMO_DAY, nextDayStep } from "@/lib/book/state";
+import { advanceDay } from "@/lib/book/nextDay";
+import { canNextDay, LAST_DEMO_DAY } from "@/lib/book/state";
 import { useBook } from "@/lib/book/useBook";
-import { addDays, businessDayAt, calDay, realDayNote } from "@/lib/calendar";
+import { calDay, realDayNote } from "@/lib/calendar";
 import { latestBefore, nextLines } from "@/lib/karte/record";
 import { writeJournal } from "@/lib/journal";
-import { dayBeforeReminders, type Reminder } from "@/lib/reminder";
+import type { Reminder } from "@/lib/reminder";
 import { freeRanges } from "@/lib/reservations";
 import { useApprovals } from "@/lib/useApprovals";
 import type { BriefAiSettings, KarteHeading, ReminderSettings, TodoSettings } from "@/lib/settings";
@@ -57,24 +58,19 @@ export function HomeSummary({
 
   const canNext = canNextDay(book.state);
 
+  // 進めなかった時の1文（上限・ブラウザに書けなかった）
+  const [nextNote, setNextNote] = useState<string | null>(null);
+
   const nextDay = (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted) return;
-    // 上限（60営業日）に来たら進めない。進まなかった時は、日誌もお知らせも作らない
-    let moved = false as boolean;
-    book.update((s) => {
-      const out = nextDayStep(s);
-      moved = out.moved;
-      return out.state;
-    });
-    if (!moved) return;
-    const to = businessDayAt(data.shop, book.today, 1);
-    // その日（進めた先の今日）に確定の予約がある方へ、前日に届いたつもりのお知らせ（決まった形・AI なし・送らない）
-    const list = to ? dayBeforeReminders(book.all, to.date, reminder.template, data.shop.name) : [];
-    if (to) setRemind({ dayLabel: to.label, sentLabel: calDay(data.shop, addDays(to.date, -1)).label, list });
-    writeJournal(
-      { who: "オーナー", text: `デモ：翌日へ（${book.today.label} → ${to?.label ?? "次の営業日"}。定休日は飛ばす）` },
-      ...(to ? [{ who: "プログラム" as const, text: `デモ：前日のお知らせを${list.length}件見せた（${to.label}のご予約。決まった形・実際には送信していない）` }] : []),
-    );
+    // 書けて進んだ時だけ、前日のお知らせと日誌（book/nextDay.ts）。上限・書けなかった時は作らない
+    const out = advanceDay({ update: book.update, journal: writeJournal }, { shop: book.shop, now: new Date(), all: book.all, template: reminder.template });
+    if (!out.moved) {
+      setNextNote(out.why === "write" ? out.message : null);
+      return;
+    }
+    setNextNote(null);
+    setRemind({ dayLabel: out.to.label, sentLabel: out.sentLabel, list: out.reminders });
   };
 
   return (
@@ -104,6 +100,11 @@ export function HomeSummary({
         {book.dayOffset > 0 && (
           <p className="shifted">
             デモ：「翌日へ」で {book.dayOffset} 営業日進めています（{book.today.label} の開店前 {book.now.time} のつもり）。{realDayNote(book)}。
+          </p>
+        )}
+        {nextNote && (
+          <p className="form-problem" role="status">
+            {nextNote}
           </p>
         )}
         {!canNext && (

@@ -43,14 +43,29 @@ export function resetAllWrites(today: string, lineRaw: string | null = null, fre
 }
 
 /**
+ * 「最初に戻す」の結果。written = ブラウザに全部書けた（台帳を先に書くので、台帳が書けなければほかは書かない）。
+ * failed = 書けなかった置き場所（無ければ空）。画面は written の時だけ「最初に戻した」の日誌と知らせを出す。
+ */
+export type ResetOutcome = { lineToken: string | null; written: boolean; failed: string[] };
+
+/** 書けなかった時の1文 */
+export const RESET_FAILED_MESSAGE = "ブラウザに保存できませんでした。最初に戻せなかった物があります。もう一度押してください。";
+
+/**
  * 🔒 人が「最初に戻す」を押したときだけ呼ぶ。
  * 返す lineToken は、サーバーの LINE の預かり物を消すのに使う（つながっていなければ null）。
+ * 台帳（予約・仮押さえ・「翌日へ」・印 epoch）を先に書き、書けなければ何も戻さない（画面の中だけの物も消さない）。
  */
-export function resetAll(today: string): { lineToken: string | null } {
+export function resetAll(today: string): ResetOutcome {
   const line = parseLine(readBrowser(LINE_KEY));
-  for (const w of resetAllWrites(today, line ? JSON.stringify(line) : null, readBrowser(FREEE_KEY))) writeBrowser(w.key, w.value);
+  const writes = resetAllWrites(today, line ? JSON.stringify(line) : null, readBrowser(FREEE_KEY));
+  const failed: string[] = [];
+  for (const w of writes) {
+    if (!writeBrowser(w.key, w.value).ok) failed.push(w.key);
+    if (w.key === BOOK_KEY && failed.length) return { lineToken: null, written: false, failed };
+  }
   resetDesk();
   resetPostsDesk();
   void resetRecordings();
-  return { lineToken: line?.token ?? null };
+  return { lineToken: line?.token ?? null, written: failed.length === 0, failed };
 }

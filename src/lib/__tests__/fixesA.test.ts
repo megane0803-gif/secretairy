@@ -9,8 +9,10 @@ import type { HoldOffer, ReserveEvent } from "../ai/wire";
 import { createChatRuns } from "../ai/chatRuns";
 import { cutNotice, holdInto, readReserveStream } from "../ai/reserveStream";
 import { canNextDay, emptyBook, LAST_DEMO_DAY, nextDayStep, parseBook, sameEpoch } from "../book/state";
+import { advanceDay } from "../book/nextDay";
 import { currentEpoch, readBook, updateBook } from "../book/store";
-import { resetAllWrites } from "../reset";
+import { resetAll, resetAllWrites } from "../reset";
+import { getDesk, setDesk } from "../karte/deskStore";
 import { businessDayAt, calDay, dayDiff as calDiff, demoClock, demoInstant, MAX_DAY_OFFSET, realDayNote, shopToday } from "../calendar";
 import { EMPTY_ACCOUNTING } from "../accounting/state";
 import { buildTable } from "../ads/report";
@@ -374,14 +376,41 @@ describe("直しA 5：「翌日へ」の上限（60営業日）に来たら押�
     assert.equal(demoClock(shop, now, MAX_DAY_OFFSET).today.date, demoClock(shop, now, MAX_DAY_OFFSET + 1).today.date);
   });
 
-  test("ホームの「翌日へ」は、上限で押せなくし、進まなかった時は日誌・お知らせの前に戻る", () => {
+  const advance = (all: Parameters<typeof advanceDay>[1]["all"] = []) =>
+    advanceDay({ update: (f) => updateBook(f, today), journal: writeJournal }, { shop, now: new Date("2026-11-04T09:00:00+09:00"), all, template: "明日 {time} {menu}。{shop}" });
+
+  test("「翌日へ」1回（advanceDay）：書けて進んだ時だけ、前日のお知らせと日誌2行", () => {
+    const out = advance();
+    assert.equal(out.moved, true);
+    assert.ok(out.moved && out.to.date > out.from.date);
+    assert.equal(readBook(today).dayOffset, 1);
+    assert.equal(journal().filter((e) => e.text.startsWith("デモ：")).length, 2);
+  });
+
+  test("上限では進まず（cap）、日誌もお知らせも作らない", () => {
+    updateBook((s) => ({ ...s, dayOffset: MAX_DAY_OFFSET }), today);
+    const out = advance();
+    assert.deepEqual(out, { moved: false, why: "cap", message: LAST_DEMO_DAY });
+    assert.equal(readBook(today).dayOffset, MAX_DAY_OFFSET);
+    assert.equal(journal().length, 0);
+  });
+
+  for (const why of ["full", "denied"] as const)
+    test(`ブラウザに書けなかった時（${why === "full" ? "いっぱい" : "断られた"}）も進まず（write）、日誌もお知らせも作らない`, () => {
+      bookFails = why;
+      const out = advance();
+      assert.deepEqual(out, { moved: false, why: "write", message: SAVE_FAILED_MESSAGE });
+      bookFails = null;
+      assert.equal(readBook(today).dayOffset, 0);
+      assert.equal(journal().length, 0);
+    });
+
+  test("ホームの「翌日へ」は、上限で押せなくし、advanceDay を通す", () => {
     const src = readFileSync("src/app/home/HomeSummary.tsx", "utf8");
     assert.match(src, /disabled=\{!canNext\}/);
     assert.match(src, /LAST_DEMO_DAY/);
-    const handler = src.slice(src.indexOf("const nextDay = "), src.indexOf("return (", src.indexOf("const nextDay = ")));
-    const stop = handler.indexOf("if (!moved) return;");
-    assert.ok(stop > 0, "進まなかったらやめる");
-    assert.ok(stop < handler.indexOf("dayBeforeReminders(") && stop < handler.indexOf("writeJournal("), "お知らせと日誌はその後");
+    assert.match(src, /advanceDay\(\{ update: book\.update, journal: writeJournal \}/);
+    assert.doesNotMatch(src, /dayBeforeReminders\(|withNextDay|nextDayStep/, "自分で進めない・お知らせを作らない");
   });
 });
 
@@ -529,5 +558,36 @@ describe("直しA 8：広告の「7日に1つ」は「翌日へ」で進めた�
     assert.match(review, /demoInstant\(/);
     assert.doesNotMatch(readFileSync("src/app/home/AiJobs.tsx", "utf8"), /adsBlocked\(ads\.state, book\.nowIso/);
     assert.match(readFileSync("src/lib/jobs/run.ts", "utf8"), /const nowIso = demoInstant\(env\.data\.shop, env\.now\(\), env\.store\.book\(\)\.dayOffset\)/);
+  });
+});
+
+describe("直しA（共通）：「最初に戻す」は書けたかを返す。書けなかった時は「最初に戻した」と言わない", () => {
+  test("普通に書ける時：written = true・印が変わる・画面の中のカルテのメモも消える", () => {
+    setDesk(() => ({ memos: { "c01|x": "メモ" } }));
+    const before = currentEpoch();
+    const out = resetAll(today);
+    assert.deepEqual({ written: out.written, failed: out.failed }, { written: true, failed: [] });
+    assert.notEqual(currentEpoch(), before);
+    assert.deepEqual(getDesk().memos, {});
+  });
+  for (const why of ["full", "denied"] as const)
+    test(`台帳が書けない時（${why === "full" ? "いっぱい" : "断られた"}）：written = false で、何も戻さない（台帳・画面の中のメモもそのまま）`, () => {
+      updateBook((s) => ({ ...s, dayOffset: 4 }), today);
+      setDesk(() => ({ memos: { "c01|x": "メモ" } }));
+      const before = currentEpoch();
+      bookFails = why;
+      const out = resetAll(today);
+      bookFails = null;
+      assert.equal(out.written, false);
+      assert.deepEqual(out.failed, [BOOK_KEY]);
+      assert.equal(readBook(today).dayOffset, 4);
+      assert.equal(currentEpoch(), before);
+      assert.deepEqual(getDesk().memos, { "c01|x": "メモ" });
+    });
+  test("画面（ResetBook）は written の時だけ日誌を書く", () => {
+    const src = readFileSync("src/components/ResetBook.tsx", "utf8");
+    const stop = src.indexOf("if (!out || !out.written) return setFailed(true);");
+    assert.ok(stop > 0 && stop < src.indexOf("writeJournal({"), "書けなかったら日誌の前で戻る");
+    assert.match(src, /RESET_FAILED_MESSAGE/);
   });
 });
