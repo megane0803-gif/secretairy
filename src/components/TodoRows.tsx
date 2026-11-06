@@ -11,7 +11,7 @@ import { SOURCE_LABEL } from "@/lib/todo/keys";
 import type { ShopSettings } from "@/lib/settings";
 import { withoutOldMark } from "@/lib/guestName";
 
-/** ToDo の題。前の書き方（「○○様」）で残った題も、今の書き方（「○○様」）で出す（src/lib/guestName.ts） */
+/** ToDo の題。前の書き方（「○○（架空）様」）で残った題も、今の書き方（「○○様」）で出す（src/lib/guestName.ts） */
 export function TodoTitle({ title }: { title: string }) {
   return <span className="todo-title">{withoutOldMark(title)}</span>;
 }

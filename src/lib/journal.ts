@@ -36,7 +36,7 @@ export function parseJournal(raw: string | null): JournalEntry[] {
           ["AI", "オーナー", "プログラム", "LINE", "予約サイト"].includes(e.who),
       )
       .slice(0, JOURNAL_MAX)
-      // 前の書き方（「○○様」「予約サイト」）で残った行も、今の書き方で出す（src/lib/guestName.ts）
+      // 前の書き方（「○○（架空）様」「予約サイト（架空）」）で残った行も、今の書き方で出す（src/lib/guestName.ts）
       .map((e) => ({ ...e, text: withoutOldMark(e.text) }));
   } catch {
     return [];
