@@ -6,12 +6,18 @@
 //   同じ時間に受ける人数（席）は店の中の都合なので伝えない。
 // 伝えないときは、AI に理由の中身を渡さない。返事はプログラムが「その時間はお受けできません」＋確かめ済みの代わりの候補で決める（ai/agent.ts）。
 
+import { HOLIDAY_REASON } from "./judge";
 import type { Rule } from "./types";
 
 /** 伝えない理由で断るときの、お客様への1文（理由の中身は言わない） */
 export const INTERNAL_REFUSAL = "その時間はお受けできません。";
 /** 伝えない「いっしょに受けない組み合わせ」で断るときの1文（日時を変えればよいと読まれないように） */
 export const COMBO_REFUSAL = "この組み合わせではお受けできません。";
+
+/** 定休日で断るときの1文 */
+export const CLOSED_DAY_SAY = "その日はお休み（定休日）なので、お受けできません。";
+/** オーナーが決めた休みの日で断るときの1文（定休日ではないので「（定休日）」を付けない） */
+export const HOLIDAY_SAY = "その日はお休みなので、お受けできません。";
 
 /** 理由の最後のかっこ（「（24時間前まで）」など）を外す。1文の中でかっこが重ならないように */
 export function plainReason(reason: string): string {
@@ -21,7 +27,8 @@ export function plainReason(reason: string): string {
 /** 店の設定の確かめ（judge.ts の base の id）ごとの、お客様への決まった文。null = 伝えない */
 const BASE_SAY: Record<string, ((reason: string) => string) | null> = {
   future: () => "もう過ぎた時刻なので、お受けできません。",
-  "open-day": () => "その日はお休み（定休日）なので、お受けできません。",
+  // 定休日（設定の曜日・closedDates）は「（定休日）」を付ける。オーナーの休みの日は定休日ではないので付けない
+  "open-day": (reason) => (reason === HOLIDAY_REASON ? HOLIDAY_SAY : CLOSED_DAY_SAY),
   hours: (reason) => `営業時間に収まらないので、お受けできません（${plainReason(reason)}）。`,
   "menu-last": (reason) => `最終受付を過ぎるので、お受けできません（${reason}）。`,
   seats: null,

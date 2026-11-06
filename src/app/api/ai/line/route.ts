@@ -9,6 +9,7 @@ import { parseLineAskRequest, runLineAsk, type LineAskResponse } from "@/lib/lin
 import { scriptSortModel, type SortModel } from "@/lib/line/sort";
 import { claudeSortModel } from "@/lib/line/sortClaude";
 import { demoClock } from "@/lib/calendar";
+import { ownerShop } from "@/lib/ai/request";
 import { getAiSettings, getLineAiSettings, getLineSettings, getMenus, getShop } from "@/lib/settings";
 
 export const runtime = "nodejs";
@@ -35,7 +36,8 @@ export async function POST(request: Request): Promise<Response> {
   if (!parsed.ok) return reply({ ok: false, code: "bad-request", message: parsed.reason }, 400);
   const req = parsed.value;
   try {
-    const today = demoClock(shop, new Date(), req.dayOffset).today;
+    // 決まった返事の「明日」なども、画面と同じ今日（休みの日・人数を重ねてから）で読む
+    const today = demoClock(ownerShop(shop, req), new Date(), req.dayOffset).today;
     const model: SortModel = req.mode === "script" ? scriptSortModel({ menus, today }) : claudeSortModel(ai.model);
     return reply(await runLineAsk({ req, shop, menus, model, maxTokens: ai.maxReplyTokens }));
   } catch (e) {

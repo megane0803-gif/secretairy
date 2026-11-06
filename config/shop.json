@@ -14,5 +14,6 @@
     "sat": { "open": "10:00", "close": "20:00" },
     "sun": { "open": "10:00", "close": "20:00" }
   },
-  "closedDates": []
+  "closedDates": [],
+  "holidayLimits": { "max": 60, "aheadDays": 56 }
 }

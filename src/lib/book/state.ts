@@ -140,8 +140,9 @@ export function parseBook(raw: string | null): BookState | null {
       status: r.status as ChatReservation["status"],
       heldAt: r.heldAt as string,
       expiresAt: r.expiresAt as string,
-      // 予約サイト（架空）から入った予約（確定だけ。book/site.ts）
+      // 予約サイト（架空）から入った予約・オーナーが台帳から入れた予約（確定だけ。book/site.ts・book/owner.ts）
       ...(r.via === "site" && r.status === "confirmed" ? { via: "site" as const } : {}),
+      ...(r.via === "owner" && r.status === "confirmed" ? { via: "owner" as const } : {}),
     }));
   const states: ApprovalState[] = ["pending", "approved", "fixed", "skipped", "withdrawn", "taken"];
   const approvals: ReservationApproval[] = arr(d.approvals)

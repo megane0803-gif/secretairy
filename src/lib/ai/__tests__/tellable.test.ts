@@ -13,7 +13,9 @@ import seedRules from "../../../../config/rules.seed.json";
 import type { Verdict } from "../../rules/judge";
 import { LOCKED_RULES } from "../../rules/locked";
 import { parseOverlay } from "../../rules/overlay";
-import { COMBO_REFUSAL, INTERNAL_REFUSAL, tellsRule } from "../../rules/tellable";
+import { baseSay, CLOSED_DAY_SAY, COMBO_REFUSAL, HOLIDAY_SAY, INTERNAL_REFUSAL, tellsRule } from "../../rules/tellable";
+import { HOLIDAY_REASON } from "../../rules/judge";
+import { withHolidays } from "../../holidays";
 import type { Rule } from "../../rules/types";
 import { validateOwnerRule } from "../../rules/validate";
 import { runRuleWords, scriptRuleReader } from "../../rules/words";
@@ -286,6 +288,24 @@ describe("6. 店の設定の理由は今までどおり伝える（定休日・�
     assert.ok(r.candidates && r.candidates.length >= 1);
   });
 
+  test("オーナーの休みの日は定休日ではないので「（定休日）」を付けない（定休日は今のまま）", async () => {
+    const hol = ctxAt(now, { shop: withHolidays(ctxAt(now).shop, ["2026-11-06"]) });
+    const r = await chat(hol, [{ role: "user", text: "11/6の14:00からカットをお願いします" }]);
+    assert.match(r.text, /^その日はお休みなので、お受けできません。代わりに、/);
+    assert.doesNotMatch(r.text, /定休日/);
+    assert.ok(r.candidates && r.candidates.every((c) => c.date !== "2026-11-06"));
+    // 判定の理由と、お客様への1文（tellable.ts の baseSay）
+    const v = judgeSlot(hol, { menuId: "cut", date: "2026-11-06", start: "14:00" });
+    assert.equal(v.base.find((b) => b.id === "open-day")?.reason, HOLIDAY_REASON);
+    assert.equal(refusalOf(hol, v).text, HOLIDAY_SAY);
+    assert.equal(baseSay("open-day", HOLIDAY_REASON), "その日はお休みなので、お受けできません。");
+    assert.equal(baseSay("open-day", "お休みの日です"), "その日はお休み（定休日）なので、お受けできません。");
+    // 定休日（火曜）は、休みの日を足した店でも今のまま
+    const tue = await chat(hol, [{ role: "user", text: "11/10の14:00からカットをお願いします" }]);
+    assert.match(tue.text, /^その日はお休み（定休日）なので、お受けできません。/);
+    assert.equal(refusalOf(hol, judgeSlot(hol, { menuId: "cut", date: "2026-11-10", start: "14:00" })).text, CLOSED_DAY_SAY);
+  });
+
   test("過ぎた時刻（きのう）", async () => {
     const r = await chat(ctxAt(now), [{ role: "user", text: "11/3の15:00からカットをお願いします" }]);
     assert.match(r.text, /^もう過ぎた時刻なので、お受けできません。代わりに、/);
@@ -325,6 +345,7 @@ describe("7. 返事の門（後ろの守り）", () => {
       "カットとヘッドスパで90分ほどかかります。",
       "1つ目：11/7（土） 11:30–12:30 カット、2つ目：11/7（土） 14:00–15:00 カット が空いています。",
       "その日はお休み（定休日）なので、お受けできません。",
+      "その日はお休みなので、お受けできません。",
       "11/7（土） 15:00–16:00 カット を仮でお取りしました。お店から確定のご連絡をします。",
       "30分ほどお待ちいただくかもしれません。",
     ])

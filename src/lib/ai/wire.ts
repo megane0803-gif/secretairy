@@ -56,6 +56,8 @@ export type ReserveRequest = {
   holds: string[];
   /** 同じ時間に受ける人数（ルールのタブで変えた分）。無ければ店の設定の数。サーバーは幅（seatsRange）を確かめなおす */
   seats?: number;
+  /** オーナーが決めた休みの日（YYYY-MM-DD）。無ければ 0日。サーバーは形・本当にある日・数の上限を確かめなおす（holidays.ts） */
+  holidays?: string[];
 };
 
 /** 仮押さえ。サーバーがプログラムでもう一度判定してから出す。残すのは画面（ブラウザ）の側 */

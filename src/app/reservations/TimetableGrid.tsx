@@ -7,6 +7,7 @@
 import type { CSSProperties } from "react";
 import { ActorTag, CustomerName, MiniBar } from "@/components/parts";
 import { bandTitle, type Timetable, type TimetableBand } from "@/lib/book/timetable";
+import { OWNER_TAG } from "@/lib/book/owner";
 
 function bandClass(b: TimetableBand): string {
   return ["tt-band", b.status === "hold" ? "hold" : "confirmed", `menu-c-${b.menuColor}`, b.fresh ? "fresh" : "", b.minutes <= 30 ? "short" : ""]
@@ -26,13 +27,13 @@ function bandStyle(b: TimetableBand): CSSProperties {
 
 const round = (n: number) => Math.round(n * 100) / 100;
 
-export function TimetableGrid({ tt }: { tt: Timetable }) {
+export function TimetableGrid({ tt, onPick }: { tt: Timetable; onPick?: (date: string, start: string) => void }) {
   const hours = (tt.to - tt.from) / 60;
   return (
     <div className="tt" style={{ "--tt-hours": hours } as CSSProperties} role="group" aria-label="1週間の予約台帳（時間割）">
       <div className="tt-corner" aria-hidden />
       {tt.columns.map((c) => (
-        <div key={c.date} className={["tt-head", c.isToday ? "today" : "", c.open ? "" : "closed"].filter(Boolean).join(" ")}>
+        <div key={c.date} className={["tt-head", c.isToday ? "today" : "", c.open ? "" : "closed", c.outside ? "outside" : ""].filter(Boolean).join(" ")}>
           <span className="tt-date">
             {c.label}
             {c.isToday && <span className="tag">今日</span>}
@@ -60,13 +61,28 @@ export function TimetableGrid({ tt }: { tt: Timetable }) {
       {tt.columns.map((c) => (
         <div
           key={c.date}
-          className={["tt-col", c.isToday ? "today" : "", c.open ? "" : "closed"].filter(Boolean).join(" ")}
+          id={`tt-col-${c.date}`}
+          className={["tt-col", c.isToday ? "today" : "", c.open ? "" : "closed", c.outside ? "outside" : ""].filter(Boolean).join(" ")}
           aria-label={`${c.label}${c.isToday ? "（今日）" : ""}${c.open ? `：${c.count}件` : "：お休み"}`}
         >
           {c.off.map((s, i) => (
             <span key={i} className="tt-offhours" style={{ top: `${s.top}%`, height: `${s.height}%` }} aria-hidden />
           ))}
           {!c.open && <span className="tt-closed-label">お休み</span>}
+          {onPick &&
+            c.picks.map((p) => (
+              <button
+                key={p.start}
+                type="button"
+                className="tt-pick"
+                style={{ top: `${p.top}%`, height: `${p.height}%` }}
+                onClick={() => onPick(c.date, p.start)}
+                aria-label={`${c.label} ${p.start} に予約を入れる`}
+                title={`${c.label} ${p.start} に予約を入れる`}
+              >
+                <span aria-hidden>＋</span>
+              </button>
+            ))}
           {tt.now?.date === c.date && <span className="tt-now" style={{ top: `${tt.now.top}%` }} title="いま" aria-hidden />}
           <ul className="tt-bands">
             {c.bands.map((b) => (
@@ -84,6 +100,7 @@ export function TimetableGrid({ tt }: { tt: Timetable }) {
                   {b.status === "hold" && <span className="tag hold">仮押さえ</span>}
                   {b.fresh && <span className="tag ok">承認で確定</span>}
                   {b.site && <span className="tag from-site">予約サイトから</span>}
+                  {b.owner && <span className="tag owner">{OWNER_TAG}</span>}
                   {b.firstVisit && <span className="tag first">初めての方</span>}
                 </span>
               </li>

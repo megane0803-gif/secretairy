@@ -12,6 +12,8 @@ import { candidateLabel, judgeSlot, menuName, type SlotContext } from "../ai/slo
 import { parseHoldOffer } from "../ai/wire";
 import { pendingApprovals, withApproved, withHold, withReleased, withTodo, type BookState, type PendingRow } from "../book/state";
 import { savedOn } from "../karte/record";
+import { approveBlocker } from "../book/approve";
+import { shopNow } from "../calendar";
 import { lineKey } from "../todo/keys";
 import type { JournalWho } from "../journal";
 import type { Customer } from "../data/types";
@@ -29,6 +31,8 @@ export type ApplyContext = {
   nowIso: string;
   /** 「翌日へ」も入れた今日（YYYY-MM-DD） */
   today: string;
+  /** 店の時間帯での、いまの日付と時刻（「翌日へ」も入れた物）。無ければ nowIso から出す */
+  now?: { date: string; time: string };
   adSettings: Pick<AdSettings, "checkAfterDays" | "channel">;
 };
 
@@ -112,13 +116,22 @@ export function applyPress(ev: Extract<ScreenEvent, { kind: "press" }>, book: Bo
     const r = row.reservation;
     const surname = ctx.customers.find((c) => c.id === r.customerId)?.surname ?? "お客";
     const what = `${surname}様 ${candidateLabel(ctx, r)}`;
-    if (ev.how === "approve")
+    if (ev.how === "approve") {
+      // 休みの日の仮押さえと、開始の時刻をもう過ぎた仮押さえは確定しない（画面の承認の箱と同じ。book/approve.ts）
+      const blocked = approveBlocker(ctx.shop, ctx.now ?? shopNow(ctx.shop, new Date(ctx.nowIso)), r);
+      if (blocked)
+        return {
+          ...same,
+          journal: [{ who: "プログラム", text: `確定しなかった（LINE のボタン）：${what}（${blocked}）` }],
+          reply: `✗ 確定しませんでした：${what}。${blocked}`,
+        };
       return {
         book: withApproved(book, row.approval.id, ctx.nowIso),
         ads,
         journal: [{ who: "オーナー", text: `承認（LINE のボタン）：${what} を確定し、台帳に入れた` }],
         reply: `✓ 確定しました：${what}`,
       };
+    }
     return {
       book: withReleased(book, row.approval.id, "skipped", surname, ctx.nowIso, ctx.today),
       ads,

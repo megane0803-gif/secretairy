@@ -7,6 +7,7 @@
 import { businessDayAt, calDay, lastStartOf, toHHMM, toMinutes, weekFrom, type CalDay } from "./calendar";
 import { resolveMenu } from "./combo";
 import { getCustomers, getSeedReservations } from "./data/seed";
+import { baseShop } from "./holidays";
 import type { Customer, ReservationStatus, SeedReservation } from "./data/types";
 import type { Booked } from "./rules/judge";
 import type { Menu, ShopSettings } from "./settings";
@@ -21,8 +22,8 @@ export type Reservation = {
   status: ReservationStatus;
   menu: Menu;
   customer: Customer;
-  /** seed = 最初の状態（店が受けて確定した予約）/ chat = 予約チャットから入った物 / site = 予約サイト（架空）から入った物 */
-  source: "seed" | "chat" | "site";
+  /** seed = 最初の状態（店が受けて確定した予約）/ chat = 予約チャットから入った物 / site = 予約サイト（架空）から入った物 / owner = オーナーが台帳から入れた物 */
+  source: "seed" | "chat" | "site" | "owner";
 };
 
 /** 予約チャットから入った予約（本当の日付で持つ）。ブラウザの中だけに残す */
@@ -39,8 +40,11 @@ export type ChatReservation = {
   heldAt: string;
   /** 仮押さえの期限（ISO）。確定した物には使わない */
   expiresAt: string;
-  /** site = 予約サイト（架空）から入った予約（お客様が自分で決めたので、承認の箱は通さずに確定で入る。book/site.ts） */
-  via?: "site";
+  /**
+   * site = 予約サイト（架空）から入った予約（お客様が自分で決めたので、承認の箱は通さずに確定で入る。book/site.ts）
+   * owner = オーナーが台帳から入れた予約（電話・店頭で受けた物。人のボタンで確定。book/owner.ts）
+   */
+  via?: "site" | "owner";
 };
 
 export { lastStartOf };
@@ -63,7 +67,19 @@ export function sortReservations(list: Reservation[]): Reservation[] {
   return [...list].sort((a, b) => (a.date === b.date ? a.startMin - b.startMin : a.date < b.date ? -1 : 1));
 }
 
-/** 最初の状態の予約を、起点の日から数えた本当の日付に直す（負の数の日は、起点より前の営業日） */
+/**
+ * 最初の状態を数える起点（その日がお休みなら今日）。オーナーの休みの日は見ない（休みにしても起点・今ある予約の日付を動かさない）。
+ * 台帳を組み立てる所（useBook・予約サイト・AI の仕事）はみなここを通す。
+ */
+export function seedAnchor(shop: ShopSettings, anchorDate: string, today: CalDay): CalDay {
+  const a = calDay(baseShop(shop), anchorDate);
+  return a.open ? a : today;
+}
+
+/**
+ * 最初の状態の予約を、起点の日から数えた本当の日付に直す（負の数の日は、起点より前の営業日）。
+ * 数えるのは、オーナーの休みの日を外した店（holidays.ts の baseShop）。休みの日を足しても、今ある予約の日付は動かない。
+ */
 export function resolveReservations(
   shop: ShopSettings,
   menus: Menu[],
@@ -71,9 +87,10 @@ export function resolveReservations(
   seed: SeedReservation[] = getSeedReservations(),
   customers: Customer[] = getCustomers(),
 ): Reservation[] {
+  const base = baseShop(shop);
   const dayCache = new Map<number, CalDay | null>();
   const dayOf = (n: number) => {
-    if (!dayCache.has(n)) dayCache.set(n, businessDayAt(shop, anchor, n));
+    if (!dayCache.has(n)) dayCache.set(n, businessDayAt(base, anchor, n));
     return dayCache.get(n) ?? null;
   };
   const out: Reservation[] = [];
@@ -95,7 +112,7 @@ export function resolveChatReservations(menus: Menu[], customers: Customer[], li
     const menu = resolveMenu(menus, r.menuId);
     const customer = customers.find((c) => c.id === r.customerId);
     if (!menu || !customer) continue;
-    out.push(make(r.id, r.date, r.start, r.status, menu, customer, r.via === "site" ? "site" : "chat"));
+    out.push(make(r.id, r.date, r.start, r.status, menu, customer, r.via === "site" ? "site" : r.via === "owner" ? "owner" : "chat"));
   }
   return out;
 }
@@ -119,19 +136,28 @@ export type LedgerDay = CalDay & {
   capacityMinutes: number;
 };
 
-/** 今日から7日分の台帳 */
-export function weekLedger(shop: ShopSettings, today: CalDay, all: Reservation[]): LedgerDay[] {
-  return weekFrom(shop, today).map((d) => {
-    const reservations = all.filter((r) => r.date === d.date);
-    const capacityMinutes = d.hours ? shop.seats * (toMinutes(d.hours.close) - toMinutes(d.hours.open)) : 0;
-    return {
-      ...d,
-      isToday: d.date === today.date,
-      reservations,
-      usedMinutes: reservations.reduce((s, r) => s + r.menu.minutes, 0),
-      capacityMinutes,
-    };
-  });
+/**
+ * 1日分の台帳（件数・埋まり）。7日の台帳と月のカレンダーは、どれもここで数える（数がそろうように）。
+ * 埋まり = 予約の分の合計 ÷（同じ時間に受ける人数 × 営業時間の分）。お休みの日は受けられる分が 0。
+ */
+export function ledgerDay(shop: ShopSettings, d: CalDay, todayDate: string, all: Reservation[]): LedgerDay {
+  const reservations = all.filter((r) => r.date === d.date);
+  const capacityMinutes = d.hours ? shop.seats * (toMinutes(d.hours.close) - toMinutes(d.hours.open)) : 0;
+  return {
+    ...d,
+    isToday: d.date === todayDate,
+    reservations,
+    usedMinutes: reservations.reduce((s, r) => s + r.menu.minutes, 0),
+    capacityMinutes,
+  };
+}
+
+/**
+ * 7日分の台帳。start = 見せ始める日（台帳で動かした週。無ければ今日）、today = 今日の印を付ける日（仕事の「今日」）。
+ * 見せ始める日を動かしても、今日の印・数え方は変わらない。
+ */
+export function weekLedger(shop: ShopSettings, today: CalDay, all: Reservation[], start: CalDay = today): LedgerDay[] {
+  return weekFrom(shop, start).map((d) => ledgerDay(shop, d, today.date, all));
 }
 
 export type CheckResult = { ok: boolean; problems: string[] };
