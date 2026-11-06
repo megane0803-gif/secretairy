@@ -244,6 +244,11 @@ function json(x: unknown): string {
   return JSON.stringify(x);
 }
 
+/** 組み合わせで断ったときのオーナー向けの理由（「お客様に伝える」のチェックがあっても無くても同じ文） */
+export function comboOwnerReason(ruleLabel: string): string {
+  return `「${ruleLabel}」という決まりがあるので、この組み合わせではお受けできません。`;
+}
+
 /**
  * 組み合わせそのものを受けられないとき（「いっしょに受けない組み合わせ」）の答え。
  * 伝えるルール（オーナーが「お客様に伝える」にした）なら、ルールの名前を理由に返す（AI が伝える）。
@@ -257,7 +262,7 @@ function comboRefused(ctx: ToolContext, label: string, menuId: string, from: { d
     { kind: "reject", text: `ルールで外した：${why.rule.label}${why.tell ? "（お客様に伝える）" : ""}` },
   ];
   if (why.tell)
-    return { content: json({ ok: false, reason: why.text, combo: true, candidates: [] }), combo: true, ownerReason: why.rule.label, steps, candidates: [] };
+    return { content: json({ ok: false, reason: why.text, combo: true, candidates: [] }), combo: true, ownerReason: comboOwnerReason(why.rule.label), steps, candidates: [] };
   const alt: Candidate[] = [];
   for (const id of why.without) {
     const found = findSlots(ctx, id, from, 1, ctx.released).slots[0];
@@ -272,7 +277,7 @@ function comboRefused(ctx: ToolContext, label: string, menuId: string, from: { d
     combo: true,
     hidden: true,
     hiddenReason: why.text,
-    ownerReason: `「${why.rule.label}」という決まりがあるので、この組み合わせではお受けできません。`,
+    ownerReason: comboOwnerReason(why.rule.label),
     steps,
     candidates: alt,
   };

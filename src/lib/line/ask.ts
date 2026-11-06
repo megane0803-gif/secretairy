@@ -7,7 +7,7 @@
 
 import { contextFor, parseReserveRequest } from "../ai/request";
 import { candidateLabel } from "../ai/slots";
-import { runTool } from "../ai/tools";
+import { runTool, type ToolOutcome } from "../ai/tools";
 import type { BookedRow, HoldOffer, Step } from "../ai/wire";
 import type { Rule } from "../rules/types";
 import type { AiSettings, Menu, ShopSettings } from "../settings";
@@ -31,9 +31,31 @@ export type LineAskRequest = {
 export type LineAskResponse =
   | { ok: true; via: LineAskMode; kind: "todo" | "karte" | "unknown" }
   | { ok: true; via: LineAskMode; kind: "hold"; hold: HoldOffer; label: string; steps: Step[] }
-  | { ok: true; via: LineAskMode; kind: "hold-no"; reason: string; alternatives: string[]; label: string; steps: Step[] }
+  | {
+      ok: true;
+      via: LineAskMode;
+      kind: "hold-no";
+      reason: string;
+      alternatives: string[];
+      /**
+       * 代わりの枠を探したか（オーナーへの返事で「探していない」「探したが0件」を分けるための印）。
+       * false = 探していない（お客様に伝える組み合わせのルールで断った・入力がおかしい）
+       */
+      searched: boolean;
+      label: string;
+      steps: Step[];
+    }
   | { ok: true; via: LineAskMode; kind: "hold-missing"; missing: string[] }
   | { ok: false; code: "no-ai" | "bad-request"; message: string };
+
+/**
+ * 道具が代わりの枠を探したか。探さないのは、入力がおかしい時と、「お客様に伝える」組み合わせのルールで断った時
+ * （日を変えても受けられないので探さない。tools.ts の comboRefused）。お客様に出す理由と候補は変えない
+ */
+export function searchedAlternatives(o: Pick<ToolOutcome, "isError" | "combo" | "hidden">): boolean {
+  if (o.isError) return false;
+  return !(o.combo && !o.hidden);
+}
 
 export const LINE_HOLD_REASON = "オーナーが LINE で頼みました（空きとルールはプログラムで確かめ済み）";
 
@@ -129,6 +151,7 @@ export async function runLineAsk(opts: {
       // オーナーの LINE なので、店の中の決まりも理由に書く（お客様への文ではない）
       reason: checked.ownerReason ?? out.reason ?? out.error ?? "受けられません",
       alternatives: (out.candidates ?? []).map((x) => x.label),
+      searched: searchedAlternatives(checked),
       label,
       steps,
     };
@@ -138,7 +161,7 @@ export async function runLineAsk(opts: {
   steps.push(...held.steps);
   if (!held.hold) {
     const o = JSON.parse(held.content) as { reason?: string; error?: string; candidates?: { label: string }[] };
-    return { ok: true, via, kind: "hold-no", reason: held.ownerReason ?? o.reason ?? o.error ?? "受けられません", alternatives: (o.candidates ?? []).map((x) => x.label), label, steps };
+    return { ok: true, via, kind: "hold-no", reason: held.ownerReason ?? o.reason ?? o.error ?? "受けられません", alternatives: (o.candidates ?? []).map((x) => x.label), searched: searchedAlternatives(held), label, steps };
   }
   return { ok: true, via, kind: "hold", hold: { ...held.hold, reason: LINE_HOLD_REASON }, label, steps };
 }

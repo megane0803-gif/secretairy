@@ -17,6 +17,7 @@ import type { JournalWho } from "../journal";
 import type { Customer } from "../data/types";
 import type { AdSettings, Menu, ShopSettings } from "../settings";
 import type { LineAskResponse } from "./ask";
+import { LINE_TEXT, withPeriod } from "./messages";
 import type { ApprovalCard, ScreenEvent } from "./wire";
 
 type Journal = { who: JournalWho; text: string }[];
@@ -41,10 +42,27 @@ export type ApplyOutcome = {
   card?: ApprovalCard;
 };
 
-const who = (customers: Customer[], id: string) => `${customers.find((c) => c.id === id)?.surname ?? "お客"}（架空）様`;
+const who = (customers: Customer[], id: string) => `${customers.find((c) => c.id === id)?.surname ?? "お客"}様`;
+
+/**
+ * 断りの返事。「✗ {日時 メニュー}：{理由}。」の形で、断りの言葉は理由の中の1回だけ。
+ * 代わりは1行に1つ。searched = false（代わりを探していない）なら代わりの行は書かない。
+ */
+export function refusalReply(label: string, reason: string, alternatives: string[], searched: boolean): string {
+  const lines = [`✗ ${label}：${withPeriod(reason)}`];
+  if (alternatives.length) lines.push("代わり：", ...alternatives.map((a) => `・${a}`));
+  else if (searched) lines.push("代わりは見つかりませんでした。");
+  return lines.join("\n");
+}
 
 /** 承認待ちの予約の行を、LINE に届ける形（何を・いつ・理由）にする */
-export function reservationCard(row: PendingRow, ctx: Pick<ApplyContext, "shop" | "menus" | "customers">, check?: boolean): ApprovalCard {
+/** justHeld = LINE で仮押さえした直後に返事といっしょに届けるカード（作った直後なので「でも」を付けない） */
+export function reservationCard(
+  row: PendingRow,
+  ctx: Pick<ApplyContext, "shop" | "menus" | "customers">,
+  check?: boolean,
+  opts: { justHeld?: boolean } = {},
+): ApprovalCard {
   const r = row.reservation;
   const menu = menuName(ctx, r.menuId);
   return {
@@ -57,7 +75,9 @@ export function reservationCard(row: PendingRow, ctx: Pick<ApplyContext, "shop" 
       check === undefined
         ? "承認＝確定して台帳に入ります。見送り＝仮押さえを外します"
         : check
-          ? "✓ いまの台帳とルールでも受けられます"
+          ? opts.justHeld
+            ? "✓ いまの台帳とルールで受けられます"
+            : "✓ いまの台帳とルールでも受けられます"
           : "✗ いまの台帳・ルールでは受けられません。画面で確かめてください",
   };
 }
@@ -88,10 +108,10 @@ export function applyPress(ev: Extract<ScreenEvent, { kind: "press" }>, book: Bo
   const same = { book, ads, journal: [] as Journal };
   if (ev.target === "reservation") {
     const row = pendingApprovals(book, ctx.nowIso).find((x) => x.approval.id === ev.approvalId);
-    if (!row) return { ...same, reply: "この行はもう決まっています（画面で押したか、期限が切れました）。" };
+    if (!row) return { ...same, reply: LINE_TEXT.decidedHold };
     const r = row.reservation;
     const surname = ctx.customers.find((c) => c.id === r.customerId)?.surname ?? "お客";
-    const what = `${surname}（架空）様 ${candidateLabel(ctx, r)}`;
+    const what = `${surname}様 ${candidateLabel(ctx, r)}`;
     if (ev.how === "approve")
       return {
         book: withApproved(book, row.approval.id, ctx.nowIso),
@@ -105,14 +125,14 @@ export function applyPress(ev: Extract<ScreenEvent, { kind: "press" }>, book: Bo
       journal: [
         {
           who: "オーナー",
-          text: `見送り（LINE のボタン）：${what} の仮押さえを外し、ToDo に「${surname}（架空）様に別の日時を案内」を足した（お客様の了解なしに時間は変えない）`,
+          text: `見送り（LINE のボタン）：${what} の仮押さえを外し、ToDo に「${surname}様に別の日時を案内」を足した（お客様の了解なしに時間は変えない）`,
         },
       ],
-      reply: `見送りました：仮押さえを外し、ToDo に「${surname}（架空）様に別の日時を案内」を足しました`,
+      reply: `見送りました：仮押さえを外し、ToDo に「${surname}様に別の日時を案内」を足しました`,
     };
   }
   const p = pendingAd(ads);
-  if (!p || p.id !== ev.approvalId) return { ...same, reply: "この広告の案はもう決まっています（画面で押しました）。" };
+  if (!p || p.id !== ev.approvalId) return { ...same, reply: LINE_TEXT.decidedAd };
   if (ev.how === "approve") {
     const out = approveAd(ads, book, p.id, { nowIso: ctx.nowIso, today: ctx.today, shop: ctx.shop, settings: ctx.adSettings });
     return {
@@ -122,7 +142,7 @@ export function applyPress(ev: Extract<ScreenEvent, { kind: "press" }>, book: Bo
         ...out.journal.map((j) => ({ ...j, text: j.text.replace(/^承認：/, "承認（LINE のボタン）：") })),
         ...teamLine(p, "approved"),
       ],
-      reply: `✓ ${ctx.adSettings.channel}で ${proposalLabel(p).replace(/を(止める|外す)$/, "")}を${p.action === "stop" ? "止めました" : "外しました"}`,
+      reply: `✓ ${ctx.adSettings.channel}で${proposalLabel(p).replace(/を(止める|外す)$/, "")}を${p.action === "stop" ? "止めました" : "外しました"}`,
     };
   }
   return {
@@ -167,12 +187,12 @@ export function applyAsk(
       const k = ctx.karte;
       if (ctx.found.length !== 1)
         return { ...same, journal: [sortLine("カルテのメモ")], reply: "どのお客様のメモか、名字を1人だけ入れて送ってください。" };
-      if (!k) return { ...same, journal: [sortLine("カルテのメモ")], reply: `今日の予約（確定）に${ctx.found[0].surname}（架空）様がいないので、メモに入れませんでした。` };
-      if (k.saved) return { ...same, journal: [sortLine("カルテのメモ")], reply: `${k.surname}（架空）様の今日のカルテはもう保存してあります。` };
+      if (!k) return { ...same, journal: [sortLine("カルテのメモ")], reply: `今日の予約（確定）に${ctx.found[0].surname}様がいないので、メモに入れませんでした。` };
+      if (k.saved) return { ...same, journal: [sortLine("カルテのメモ")], reply: `${k.surname}様の今日のカルテはもう保存してあります。` };
       return {
         ...same,
-        journal: [sortLine("カルテのメモ"), { who: "LINE", text: `カルテのメモに入れた：${k.surname}（架空）様（今日）。カルテにする・保存は画面で` }],
-        reply: `カルテのメモに入れました：${k.surname}（架空）様（今日）。カルテにするのは画面のカルテのタブで（保存は人が押します）`,
+        journal: [sortLine("カルテのメモ"), { who: "LINE", text: `カルテのメモに入れた：${k.surname}様（今日）。カルテにする・保存は画面で` }],
+        reply: `カルテのメモに入れました：${k.surname}様（今日）。カルテにして保存するのは、画面のカルテのタブでどうぞ。`,
         memo: { customerId: k.customerId, date: k.date, text: ev.text.slice(0, ctx.memoMax) },
       };
     }
@@ -183,14 +203,13 @@ export function applyAsk(
         reply: `仮押さえしませんでした。${res.missing.join("・")}を入れて送ってください（例：明日15時に青木さんカットで仮押さえ）`,
       };
     case "hold-no": {
-      const alt = res.alternatives.length ? `代わり：${res.alternatives.join("・")}` : "代わりは見つかりませんでした";
       return {
         ...same,
         journal: [
           sortLine("予約の仮押さえ"),
           ...res.steps.map((s) => ({ who: s.kind === "tool" ? ("AI" as const) : ("プログラム" as const), text: `LINE の予約：${s.text}` })),
         ],
-        reply: `✗ ${res.label} は受けられません。${res.reason}${alt}`.slice(0, 300),
+        reply: refusalReply(res.label, res.reason, res.alternatives, res.searched).slice(0, 300),
       };
     }
     case "hold": {
@@ -199,7 +218,7 @@ export function applyAsk(
       if (!h || !c || h.customerId !== c.id) return { ...same, journal: [sortLine("予約の仮押さえ")], reply: "仮押さえできませんでした。もう一度送ってください。" };
       const next = withHold(book, h);
       const row = pendingApprovals(next, ctx.nowIso).find((x) => x.reservation.id === h.id);
-      const label = `${c.surname}（架空）様 ${candidateLabel(ctx, h)}`;
+      const label = `${c.surname}様 ${candidateLabel(ctx, h)}`;
       return {
         book: next,
         ads,
@@ -210,8 +229,9 @@ export function applyAsk(
             .map((s) => ({ who: s.kind === "tool" ? ("AI" as const) : ("プログラム" as const), text: `LINE の予約：${s.text}` })),
           { who: "AI", text: `仮押さえした（LINE から）：${label}（承認の箱へ）` },
         ],
-        reply: `仮押さえしました：${label}（確定はまだ。下のボタンか画面の承認の箱で）`,
-        ...(row ? { card: reservationCard(row, ctx, true) } : {}),
+        reply: `仮押さえしました：${label}。確定はまだです。下のボタンか、画面の承認の箱で決めてください。`,
+        // 作った直後なので「でも」は付けない（後から画面が届けるカードは「いまの台帳とルールでも」のまま）
+        ...(row ? { card: reservationCard(row, ctx, true, { justHeld: true }) } : {}),
       };
     }
     case "unknown":

@@ -1,6 +1,6 @@
 "use client";
 
-// ホームの「LINE とつなぐ」。短い合言葉を出し、オーナーが店の LINE に送ると、その LINE の人とこの画面がつながる（期限つき）。
+// ホームの「LINE とつなぐ」。6けたのつなぐ番号を出し、オーナーが店の LINE に送ると、その LINE の人とこの画面がつながる（期限つき）。
 // つながったら「朝の要点を LINE に送る」（プログラムが文にする。AI は使わない）。
 // 画面が開いている間だけ動く（受け取りに行くのは LineBridge.tsx）。印・LINE の人の番号は出さない。
 
@@ -55,7 +55,7 @@ export function LinePanel({ data, headings, needsPasscode = false }: { data: Boo
     setPasscode("");
     setLineStatus({ problem: null, last: null });
     updateLineState(() => newLineState(res.token, res.code, res.codeExpiresAt, state?.mode ?? "ai"));
-    writeJournal({ who: "オーナー", text: `LINE とつなぐ合言葉を出した（${settings.codeMinutes}分まで）` });
+    writeJournal({ who: "オーナー", text: `LINE とつなぐ番号を出した（${settings.codeMinutes}分まで）` });
   };
 
   const stop = async (e: React.MouseEvent) => {
@@ -114,8 +114,8 @@ export function LinePanel({ data, headings, needsPasscode = false }: { data: Boo
       {!state && (
         <>
           <p className="hint">
-            短い合言葉を出します。店の LINE 公式アカウント（架空の店）に、オーナーの LINE からその合言葉を送ると、この画面とつながります（
-            {settings.linkHours}時間）。画面を開いている間だけ動きます。
+            6けたのつなぐ番号を出します。店の LINE 公式アカウントに、オーナーの LINE からその番号を送ると、この画面とつながります（
+            {settings.linkHours}時間有効です）。画面を開いている間だけ動きます。
           </p>
           {needsPasscode && (
             <label className="line-passcode">
@@ -141,8 +141,8 @@ export function LinePanel({ data, headings, needsPasscode = false }: { data: Boo
 
       {state && !state.linked && state.code && (
         <>
-          <p className="hint">店の LINE に、この合言葉を送ってください。</p>
-          <p className="line-code num" aria-label={`合言葉 ${state.code.split("").join(" ")}`}>
+          <p className="hint">店の LINE に、このつなぐ番号を送ってください。</p>
+          <p className="line-code num" aria-label={`つなぐ番号 ${state.code.split("").join(" ")}`}>
             {state.code}
           </p>
           <p className="hint">期限 {hm(state.codeExpiresAt, tz)} まで（1回だけ使えます）。つながると、ここが変わります。</p>

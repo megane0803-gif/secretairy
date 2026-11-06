@@ -1,7 +1,7 @@
 // LINE のつなぎ（オーナー側）の、サーバーの側の流れ。窓口（src/app/api/line/）から呼ぶ。
 //
-//  画面「LINE とつなぐ」──▶ 合言葉（期限つき）と、その画面だけが持つ印（token）
-//  オーナーが LINE で合言葉を送る ──▶ その LINE の人とその画面がつながる（期限つき）
+//  画面「LINE とつなぐ」──▶ つなぐ番号（6けた・期限つき）と、その画面だけが持つ印（token）
+//  オーナーが LINE でつなぐ番号を送る ──▶ その LINE の人とその画面がつながる（期限つき）
 //  LINE の一言・ボタン ──▶ 署名を確かめる ──▶ つながった人で、画面が開いていれば預ける（短い間）──▶ 画面が受け取りに来る
 //  画面が答えを出す ──▶ 返事（数えない）で返す。返事の期限が過ぎていたら送る（1日の上限まで）
 //
@@ -110,7 +110,7 @@ export type StartLinkOptions = {
 };
 
 /**
- * 画面の「LINE とつなぐ」：合言葉と、その画面だけが持つ印を作る。前の印があれば、そのつなぎは切る。
+ * 画面の「LINE とつなぐ」：つなぐ番号と、その画面だけが持つ印を作る。前の印があれば、そのつなぎは切る。
  * オーナー用の合言葉（LINE_OWNER_PASSCODE）があるときは、それが合っている時だけ作る（10分に codeTries 回まで試せる）。
  */
 export async function startLink(d: BridgeDeps, oldToken?: string, opts: StartLinkOptions = {}): Promise<LinkStartResponse> {
@@ -133,7 +133,7 @@ export async function startLink(d: BridgeDeps, oldToken?: string, opts: StartLin
     const c = newCode(d);
     if (await d.store.set(KEY.code(c), linkId, { ex, nx: true })) code = c;
   }
-  if (!code) return { ok: false, code: "failed", message: "合言葉を作れませんでした。もう一度押してください" };
+  if (!code) return { ok: false, code: "failed", message: "つなぐ番号を作れませんでした。もう一度押してください" };
   await d.store.set(KEY.link(linkId), JSON.stringify({ th: sha(secret) } satisfies LinkRecord), { ex });
   return {
     ok: true,
@@ -323,10 +323,10 @@ export async function sendFromScreen(d: BridgeDeps, req: SendRequest): Promise<S
   const day = shopNow({ timezone: d.timezone }, d.now()).date;
   const n = await d.store.incr(KEY.push(day), ONCE_SECONDS);
   if (n > d.settings.dailyPushLimit)
-    return { ok: false, code: "limit", message: `今日の LINE の送る上限（${d.settings.dailyPushLimit}通）に来ました` };
+    return { ok: false, code: "limit", message: `今日の LINE の送信が上限（${d.settings.dailyPushLimit}通）に達しました` };
   const res = await d.line.push(r.link.u, messages);
   if (res.ok) return { ok: true, via: "push" };
-  if (res.status === 429) return { ok: false, code: "limit", message: "LINE の今月の送る上限に来ました" };
+  if (res.status === 429) return { ok: false, code: "limit", message: "LINE の今月の送信が上限に達しました" };
   return { ok: false, code: "failed", message: "LINE に送れませんでした" };
 }
 

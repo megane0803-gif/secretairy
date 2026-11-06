@@ -14,6 +14,11 @@ export type MorningItem = {
   next: string[] | null;
 };
 
+/** 「6つ」「12個」（「つ」は9まで） */
+function count(n: number): string {
+  return n < 10 ? `${n}つ` : `${n}個`;
+}
+
 export function morningText(o: {
   shopName: string;
   todayLabel: string;
@@ -25,16 +30,17 @@ export function morningText(o: {
   const lines: string[] = [`${o.shopName} 朝の要点（${o.todayLabel}）`, "", `■ 今日の予約 ${o.items.length}件`];
   if (o.items.length === 0) lines.push("・今日の予約はありません");
   for (const r of o.items) {
-    lines.push(`・${r.start}–${r.end} ${r.surname}（架空）様 ${r.menu}${r.hold ? "（仮押さえ）" : ""}`);
+    lines.push(`・${r.start}–${r.end} ${r.surname}様 ${r.menu}${r.hold ? "（仮押さえ）" : ""}`);
     if (r.next === null) lines.push("　前回の記録なし");
-    else if (r.next.length === 0) lines.push("　前回の次回提案：（空でした）");
+    else if (r.next.length === 0) lines.push("　前回の次回提案：なし");
     else lines.push(`　前回の次回提案：${r.next.join("／")}`);
   }
   lines.push("");
-  if (!o.open) lines.push("■ 今日の空き枠：今日はお休みです");
+  if (!o.open) lines.push("■ 今日の空き：今日はお休みです");
+  else if (o.free.seatSlots === 0) lines.push("■ 今日の空き（これから）：ありません");
   else {
-    lines.push(`■ 今日の空き枠（これから）${o.free.seatSlots}枠（${o.slotMinutes}分 × 席）`);
-    if (o.free.ranges.length === 0) lines.push("・これからの空きはありません");
+    // 数え方を1回で：「30分の枠が合わせて6つ」（同じ時間に2人受けられる30分は2つと数える）
+    lines.push(`■ 今日の空き（これから）：${o.slotMinutes}分の枠が合わせて${count(o.free.seatSlots)}`);
     for (const f of o.free.ranges) lines.push(`・${f.start}–${f.end} 空き${f.free}席`);
   }
   lines.push("", "✓ 台帳と席の数からプログラムが数えました");
