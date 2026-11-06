@@ -23,7 +23,7 @@ import { NO_AI_MESSAGE, parseHoldOffer, type Candidate, type HoldOffer, type Res
 import type { BookData } from "../book/data";
 import { siteBook, type SiteOutcome } from "../book/site";
 import { activeChat, withChatTodo, withHold, type BookState } from "../book/state";
-import { businessDayAt, calDay, demoClock } from "../calendar";
+import { businessDayAt, calDay, demoClock, demoInstant } from "../calendar";
 import { resolveMenu } from "../combo";
 import type { JournalWho } from "../journal";
 import { allKartes, resolveSeedKartes, toVisits, withSeedKarteEdits } from "../karte/record";
@@ -321,7 +321,8 @@ export function adsBlocked(state: AdsState, nowIso: string, settings: Pick<AdSet
 }
 
 async function adsJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
-  const nowIso = env.now().toISOString();
+  // 「7日に1つ」は広告タブと同じ時計（「翌日へ」で進めた日付。calendar.ts の demoInstant）で数える
+  const nowIso = demoInstant(env.data.shop, env.now(), env.store.book().dayOffset).toISOString();
   const blocked = adsBlocked(env.store.ads(), nowIso, env.adSettings);
   if (blocked) return { kind: "skip", note: blocked };
   if (!take(budget, AI_CALLS.ads)) return { kind: "limit" };

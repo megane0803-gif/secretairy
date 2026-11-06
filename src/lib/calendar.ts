@@ -136,6 +136,16 @@ export function dateFromMonthDay(today: string, month: number, day: number): str
 }
 
 /**
+ * 「翌日へ」で進めた日付の時計：本当の時刻を、進めた日数（本当の今日 → 進めた先の今日。定休日の分も入る）だけ先へずらした時刻。
+ * 待ち時間・期限を「翌日へ」とそろえて数える所で使う（いまは広告の案の「7日に1つ」：作った時刻・画面・送る前・保存する時の全部）。
+ * dayOffset が 0 なら本当の時刻のまま。
+ */
+export function demoInstant(shop: ShopSettings, now = new Date(), dayOffset = 0): Date {
+  const c = demoClock(shop, now, dayOffset);
+  return new Date(now.getTime() + dayDiff(c.realToday.date, c.today.date) * 86_400_000);
+}
+
+/**
  * 「本当の今日は ○○ です」の1文。定休日に開いた時は、本当の日付（opened）と次の営業日（realToday）を分けて書く
  * （realToday は定休日なら次の営業日。定休日に次の営業日を今日にする仕組みは変えない）。
  */

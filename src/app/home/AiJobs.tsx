@@ -66,7 +66,8 @@ function useAiJobsState(data: BookData, settings: JobsSettings) {
   const running = useRef(false);
 
   const seeds = getJobSeeds();
-  const adsNote = adsBlocked(ads.state, book.nowIso, ads.settings);
+  // 広告タブと同じ時計（「翌日へ」で進めた日付）で「7日に1つ」を数える
+  const adsNote = adsBlocked(ads.state, book.demoNowIso, ads.settings);
   const rows = JOB_IDS.filter((id) => seedOf(seeds, id));
   const open = openJobs(jobs, rows).filter((id) => !(id === "ads" && adsNote));
 

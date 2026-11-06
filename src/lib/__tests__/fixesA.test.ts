@@ -11,12 +11,21 @@ import { cutNotice, holdInto, readReserveStream } from "../ai/reserveStream";
 import { canNextDay, emptyBook, LAST_DEMO_DAY, nextDayStep, parseBook, sameEpoch } from "../book/state";
 import { currentEpoch, readBook, updateBook } from "../book/store";
 import { resetAllWrites } from "../reset";
-import { businessDayAt, calDay, demoClock, MAX_DAY_OFFSET, realDayNote } from "../calendar";
-import { getTodos } from "../data/seed";
+import { businessDayAt, calDay, dayDiff as calDiff, demoClock, demoInstant, MAX_DAY_OFFSET, realDayNote, shopToday } from "../calendar";
+import { EMPTY_ACCOUNTING } from "../accounting/state";
+import { buildTable } from "../ads/report";
+import { runReview } from "../ads/review";
+import { scriptAdsModel } from "../ads/script";
+import { canPropose, EMPTY_ADS, withProposal, type AdsState } from "../ads/state";
+import { getBookData } from "../book/data";
+import { getAds, getTodos } from "../data/seed";
+import { runJob, type JobEnv } from "../jobs/run";
+import { EMPTY_JOBS } from "../jobs/state";
+import { getRules } from "../rules/store";
 import { parseJournal, writeJournal } from "../journal";
 import type { SavedKarte } from "../karte/record";
 import { commitKarteSave } from "../karte/save";
-import { getAiSettings, getKarteHeadings, getMenus, getSavedMemoMaxChars, getShop } from "../settings";
+import { getAdSettings, getAiSettings, getKarteHeadings, getMenus, getSavedMemoMaxChars, getShop } from "../settings";
 import { readRequest } from "../ai/script";
 import { at, chat, ctxAt } from "../ai/__tests__/helpers";
 import { scriptSortModel } from "../line/sort";
@@ -425,5 +434,100 @@ describe("直しA 7：決まった返事（AI なし）は「19時30分」を 19
   test("LINE の一言の決まった返事も同じ読み方（19時30分 → 19:30）", async () => {
     const pick = await scriptSortModel({ menus, today: day }).pick({ system: "", text: "11/7の19時30分にカットで仮押さえ", maxTokens: 100 });
     assert.equal((pick?.input as { start?: string }).start, "19:30");
+  });
+});
+
+describe("直しA 8：広告の「7日に1つ」は「翌日へ」で進めた日付の時計で数える（画面・送る前・保存する時・AI の仕事）", () => {
+  const settings = getAdSettings();
+  const table = buildTable(getAds(), settings, []);
+  const now = new Date("2026-11-04T15:00:00+09:00");
+  const clockAt = (offset: number) => demoInstant(shop, now, offset).toISOString();
+  const add = async (s: AdsState, nowIso: string, id: string) => {
+    const r = await runReview({ table, rules: [], settings, model: scriptAdsModel(table), maxTokens: 600, maxTries: 2 });
+    assert.ok(r.ok);
+    if (!r.ok) return s;
+    return withProposal(s, r.proposal, table, { id, checks: r.checks, nowIso, mode: "script" }, settings);
+  };
+  /** 案を閉じる（見送り。見送りも1つと数える） */
+  const skipAll = (s: AdsState): AdsState => ({ ...s, proposals: s.proposals.map((p) => ({ ...p, state: "skipped" as const })) });
+
+  test("「翌日へ」で進めた日数だけ時計が進む（0 なら本当の時刻）", () => {
+    assert.equal(clockAt(0), now.toISOString());
+    const c = demoClock(shop, now, 3);
+    assert.equal(clockAt(3).slice(11), now.toISOString().slice(11), "時刻はそのまま");
+    assert.equal(Math.round((Date.parse(clockAt(3)) - now.getTime()) / 86_400_000), calDiff(c.realToday.date, c.today.date));
+  });
+
+  test("案を作ってから7日に満たない間は頼めず、保存もしない。7日を過ぎたら頼めて、実際に案が増える", async () => {
+    let s = skipAll(await add(EMPTY_ADS, clockAt(0), "ad-1"));
+    assert.equal(s.proposals.length, 1);
+    let opened = -1;
+    for (let k = 1; k <= 10; k++) {
+      const iso = clockAt(k);
+      const days = (Date.parse(iso) - now.getTime()) / 86_400_000;
+      const can = canPropose(s, iso, settings);
+      if (days < settings.oncePerDays) {
+        assert.equal(can.ok, false, `${k}営業日（${days}日）はまだ`);
+        // 画面が押せないのに保存の判定だけ通る、のような食い違いが無い（保存しても増えない）
+        assert.equal((await add(s, iso, `ad-x${k}`)).proposals.length, 1);
+        // 次に頼める日時も同じ時計
+        assert.ok(!can.ok && can.nextAt && Date.parse(can.nextAt) > Date.parse(iso));
+      } else {
+        assert.equal(can.ok, true, `${k}営業日（${days}日）は頼める`);
+        s = await add(s, iso, "ad-2");
+        assert.equal(s.proposals.length, 2, "実際に案が増える");
+        opened = k;
+        break;
+      }
+    }
+    assert.ok(opened > 0, "どこかで頼めるようになる");
+  });
+
+  test("AI の仕事から広告を見直す時も同じ時計（7日に満たない間は動かさず、過ぎたら承認の箱に入る）", async () => {
+    const data = getBookData();
+    const first = skipAll(await add(EMPTY_ADS, clockAt(0), "ad-1"));
+    const w = { book: { ...emptyBook(shopToday(shop, now).today.date), dayOffset: 2 }, ads: first, jobs: EMPTY_JOBS };
+    const env: JobEnv = {
+      data,
+      rules: getRules(),
+      mode: "script",
+      store: {
+        book: () => w.book,
+        setBook: (f) => void (w.book = f(w.book)),
+        ads: () => w.ads,
+        setAds: (f) => void (w.ads = f(w.ads)),
+        accounting: () => EMPTY_ACCOUNTING,
+        jobs: () => w.jobs,
+        setJobs: (f) => void (w.jobs = f(w.jobs)),
+      },
+      ask: {
+        reserve: async () => [],
+        todo: async () => ({ ok: false, code: "no-ai", message: "" }),
+        ads: async () => {
+          const r = await runReview({ table, rules: [], settings, model: scriptAdsModel(table), maxTokens: 600, maxTries: 2 });
+          return r.ok ? r : { ...r, code: "gate" };
+        },
+      },
+      journal: () => {},
+      now: () => now,
+      adSettings: settings,
+      newId: () => `ad-job-${w.ads.proposals.length + 1}`,
+    };
+    const early = await runJob("ads", env, { left: 10 });
+    assert.equal(early.kind, "skip");
+    assert.equal(w.ads.proposals.length, 1);
+    w.book = { ...w.book, dayOffset: 8 };
+    const later = await runJob("ads", env, { left: 10 });
+    assert.equal(later.kind, "done");
+    assert.equal(w.ads.proposals.length, 2);
+    assert.equal(w.ads.proposals[1].createdAt, demoInstant(shop, now, 8).toISOString(), "作った時刻も同じ時計");
+  });
+
+  test("広告タブ・AI の仕事は、本当の時計（new Date()）で「7日に1つ」を数えない", () => {
+    const review = readFileSync("src/app/ads/AdsReview.tsx", "utf8");
+    assert.doesNotMatch(review, /canPropose\(ads\.state, new Date\(\)/);
+    assert.match(review, /demoInstant\(/);
+    assert.doesNotMatch(readFileSync("src/app/home/AiJobs.tsx", "utf8"), /adsBlocked\(ads\.state, book\.nowIso/);
+    assert.match(readFileSync("src/lib/jobs/run.ts", "utf8"), /const nowIso = demoInstant\(env\.data\.shop, env\.now\(\), env\.store\.book\(\)\.dayOffset\)/);
   });
 });

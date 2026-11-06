@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import type { BookedRow } from "../ai/wire";
 import { BOOK_KEY, readBrowser, subscribeBrowser, writeBrowser, type BrowserWrite } from "../browser";
-import { calDay, demoClock, shopToday } from "../calendar";
+import { calDay, demoClock, demoInstant, shopToday } from "../calendar";
 import { allKartes, resolveSeedKartes, toVisits, withSeedKarteEdits } from "../karte/record";
 import {
   loadBook,
@@ -103,5 +103,7 @@ export function useBook(data: BookData) {
     dayOffset,
     now: nowShop,
     nowIso,
+    /** 「翌日へ」で進めた日付の時計（広告の「7日に1つ」を数える時。calendar.ts の demoInstant） */
+    demoNowIso: demoInstant(data.shop, now, state.dayOffset).toISOString(),
   };
 }
