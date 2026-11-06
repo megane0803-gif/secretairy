@@ -154,7 +154,7 @@ export function ownerBook(state: BookState, ctx: OwnerContext, input: OwnerInput
     placed,
     label,
     journal: [{ who: "オーナー", text }],
-    message: `✓ 台帳に入れました（確定）：${label}`,
+    message: `台帳に入れました（確定）：${label}`,
   };
 }
 

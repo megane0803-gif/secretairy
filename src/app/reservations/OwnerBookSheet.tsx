@@ -105,7 +105,7 @@ export function OwnerBookSheet({ data, target, onClose }: { data: BookData; targ
     setDone(o.message);
   };
 
-  const title = `予約を入れる（${OWNER_TAG}）`;
+  const title = "予約を入れる";
   return (
     <div className="sheet-scrim" onClick={onClose}>
       <div
@@ -118,7 +118,10 @@ export function OwnerBookSheet({ data, target, onClose }: { data: BookData; targ
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-head">
-          <strong>{title}</strong>
+          <span className="sheet-title">
+            <strong>{title}</strong>
+            <span className="tag owner">{OWNER_TAG}・確定</span>
+          </span>
           <button type="button" className="btn small" onClick={onClose} aria-label="閉じる">
             閉じる
           </button>
@@ -217,20 +220,24 @@ export function OwnerBookSheet({ data, target, onClose }: { data: BookData; targ
               )}
             </section>
 
-            {note && (
-              <p className={check?.blocked.length ? "problems small" : "sheet-note"} role="status">
-                {note}
-              </p>
-            )}
-            <button
-              type="button"
-              className="btn primary sheet-go"
-              onClick={press}
-              disabled={!check || check.blocked.length > 0}
-            >
-              {check && check.rules.length && asked ? "ルールに当たるが、入れる（確定）" : "入れる（確定）"}
-            </button>
             <p className="hint">入れた予約は確定で台帳に入ります（承認の箱は通りません）。札は「{OWNER_TAG}」。</p>
+            {/* 「入れる」は1枚の下に止めておく（上から選んでいる間も押せる所に） */}
+            <div className="sheet-foot">
+              {note && (
+                <p className={check?.blocked.length ? "problems small" : "sheet-note"} role="status">
+                  {note}
+                </p>
+              )}
+              {check && check.blocked.length > 0 && !note && <p className="problems small">✗ 入れられません：{check.blocked[0].reason}</p>}
+              <button
+                type="button"
+                className="btn primary sheet-go"
+                onClick={press}
+                disabled={!check || check.blocked.length > 0}
+              >
+                {check && check.rules.length && asked ? "ルールに当たるが、入れる（確定）" : "入れる（確定）"}
+              </button>
+            </div>
           </div>
         )}
       </div>

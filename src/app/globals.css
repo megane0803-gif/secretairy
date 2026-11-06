@@ -1745,7 +1745,9 @@ h3.section-title { font-size: 1rem; }
   .sheet { width: 480px; max-width: calc(100vw - 32px); border-radius: var(--radius); }
 }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; position: sticky; top: -12px; background: var(--surface); padding: 4px 0 8px; z-index: 1; }
-.sheet-head .btn.small { min-height: 40px; padding: 4px 14px; font-size: 0.95rem; }
+.sheet-head .btn.small { min-height: 44px; padding: 4px 14px; font-size: 0.95rem; white-space: nowrap; flex: none; }
+.sheet-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; font-size: 1.1rem; }
+.sheet-title .tag { font-size: 0.8rem; }
 .sheet-body { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .sheet-step { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .sheet-label { font-weight: 700; font-size: 0.95rem; }
@@ -1787,6 +1789,18 @@ h3.section-title { font-size: 1rem; }
 .sheet-rules { color: var(--warn); }
 .sheet-note { margin: 0; color: var(--warn); font-weight: 600; }
 .btn.sheet-go { min-height: 52px; font-size: 1.05rem; font-weight: 700; width: 100%; }
+.sheet-foot {
+  position: sticky;
+  bottom: calc(-16px - env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  margin: 0 -16px calc(-16px - env(safe-area-inset-bottom));
+  padding: 8px 16px calc(12px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sheet-foot p { margin: 0; }
 
 /* 日ごとのカードの空いている時間（押すと入れる画面） */
 .free-times { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
@@ -1815,7 +1829,8 @@ h3.section-title { font-size: 1rem; }
 
 /* ---- 休みの日の欄（HolidayPanel.tsx） ---- */
 .holidays { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.holiday-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+.holiday-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
+.holiday-day > .num { white-space: nowrap; font-size: 0.95rem; }
 .holiday-day {
   font: inherit;
   width: 100%;
