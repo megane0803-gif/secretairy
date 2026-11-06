@@ -97,14 +97,14 @@ describe("材料（名前は送らない）と印の置きかえ", () => {
     assert.ok(m.items.some((i) => i.kind === "todo"));
     for (const i of m.items) for (const c of customers) assert.ok(!i.text.includes(c.surname), `${i.mark} に ${c.surname}`);
     assert.ok(m.labels["【予約1】"].includes(firstToday.start));
-    assert.ok(m.labels["【予約1】"].includes(`${firstToday.customer.surname}（架空）様`));
-    assert.ok(m.labels["【承認1】"].includes("小林（架空）様"));
+    assert.ok(m.labels["【予約1】"].includes(`${firstToday.customer.surname}様`));
+    assert.ok(m.labels["【承認1】"].includes("小林様"));
     assert.ok(m.items.length <= limits.maxItems);
   });
 
   test("fillMarks：印を札に。知らない印のある行は使わない", () => {
-    const labels = { "【予約1】": "10:00 青木（架空）様 カット" };
-    assert.equal(fillMarks("【予約1】は前回の注意点を見る", labels), "10:00 青木（架空）様 カットは前回の注意点を見る");
+    const labels = { "【予約1】": "10:00 青木様 カット" };
+    assert.equal(fillMarks("【予約1】は前回の注意点を見る", labels), "10:00 青木様 カットは前回の注意点を見る");
     assert.equal(fillMarks("【予約9】を見る", labels), null);
   });
 

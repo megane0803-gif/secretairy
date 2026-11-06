@@ -165,12 +165,11 @@ export function PostsForm({ data, settings, memos, maxChars }: { data: BookData;
         )}
       </fieldset>
 
-      <Fold summary={`お店のメモ（架空・${memos.length}つ）`}>
+      <Fold summary={`お店のメモ（${memos.length}つ）`}>
         <ul className="posts-memos">
           {memos.map((m) => (
             <li key={m.id}>
               <strong>{m.title}</strong>
-              <span className="tag fictional">架空</span>
               <span>{m.text}</span>
             </li>
           ))}

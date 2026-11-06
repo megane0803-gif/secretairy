@@ -31,7 +31,7 @@ npm run build      # 本番ビルド（push の前に通す）
 
 - メニュー・営業時間・同じ時間に受ける人数（前は席数。`shop.seats`）・カルテの見出し・タブの表示・ルールは `config/` に置き、`src/lib/settings.ts`（ルールは `src/lib/rules/store.ts`）を通して読む。
 - 画面のコードで `config/*.json` を直接 import しない。
-- 架空のデータ（`seed/`）は `src/lib/data/seed.ts` を通して読む。日付は「何番目の営業日（0 = 今日）＋時刻」で持ち、定休日には置かない。お客様は名字だけで、画面では必ず「架空」の札を出す。
+- 架空のデータ（`seed/`）は `src/lib/data/seed.ts` を通して読む。日付は「何番目の営業日（0 = 今日）＋時刻」で持ち、定休日には置かない。お客様は名字だけで「○○様」と書き、画面・日誌・ToDo・お知らせ・AI への指示で名前ごとに「（架空）」「架空」の札は付けない（架空であることは入力欄の近くの注意の1行 `NO_REAL_NAMES_NOTE` と README で伝える。仕様書 §3.3）。名前の作り方・照らし方は `src/lib/guestName.ts` の1か所（前の書き方「○○（架空）様」で残った保存は `withoutOldMark` で読みかえ、消さない）。
 - 例のルールは `config/rules.seed.json` だけ。作り手の考えで店の決まりを足さない。
 - 鍵つきの2つだけは仕組みの約束なのでコードに書く。
 
@@ -67,7 +67,7 @@ src/components/    共通の部品
 src/app/api/ai/    AI を呼ぶ窓口（サーバーの側。受け取った物は残さない）
 src/lib/           設定の読み込み・ルール（言葉で書いて足す入口は rules/words.ts）
 src/lib/ai/        予約チャットの道具・流れ・料金の答え（prices.ts）・決まった返事（テスト用）
-src/lib/book/      台帳・承認の箱・保存したカルテ・「翌日へ」（ブラウザの中に残す形）・予約サイト（架空）から入る予約（site.ts。承認の箱は通さない・AI なし）・台帳の帯の色（menuColor.ts。メニューごと・config/menus.json の color・値は globals.css の --menu-*。だれは帯の頭の札だけ）
+src/lib/book/      台帳・承認の箱・保存したカルテ・「翌日へ」（ブラウザの中に残す形）・予約サイトから入る予約（site.ts。承認の箱は通さない・AI なし）・台帳の帯の色（menuColor.ts。メニューごと・config/menus.json の color・値は globals.css の --menu-*。だれは帯の頭の札だけ）
 src/lib/karte/     カルテ：見出しに分ける・整える（tidy.ts。重ねない・次回の希望は次回提案にも）・言葉の門・保存と ToDo・Claude（Haiku）と決まった返事・人が直す（edit.ts。案も保存したカルテも最初の状態のカルテも。人の行は門を通さない）・お客様一覧（customers.ts）
 src/lib/recording/ カルテの「録音からメモを作る」（PC だけ）：区切る・黙っている所を飛ばす・Whisper（Web Worker）・要点（Haiku）・フォルダ・画面の録音（IndexedDB に残す）
 src/lib/ads/       広告の数・門・道具・流れ・決まった返事・広告の承認の箱（ブラウザの中に残す形）

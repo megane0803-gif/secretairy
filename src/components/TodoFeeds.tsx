@@ -1,7 +1,7 @@
 "use client";
 
-// 予約サイト（架空）で枠が埋まった時の ToDo（プログラム。AI は使わない。docs/SPEC.md §1.11）。
-// 承認待ちの仮押さえの時間に確定の予約が「同じ時間に受ける人数」だけ入ったら「○○（架空）様に別の日時を案内」を今日中として足す。
+// 予約サイトで枠が埋まった時の ToDo（プログラム。AI は使わない。docs/SPEC.md §1.11）。
+// 承認待ちの仮押さえの時間に確定の予約が「同じ時間に受ける人数」だけ入ったら「○○様に別の日時を案内」を今日中として足す。
 // どのタブでも動く（何も描かない）。同じ鍵（予約:お客様＠日時）がもうあれば足さない。仮押さえそのものは変えない。
 
 import { useEffect } from "react";
@@ -28,7 +28,7 @@ export function TodoFeeds({ data }: { data: BookData }) {
         const next = withTodo(acc, t);
         if (next !== acc) {
           const r = pending.find((p) => `td-full-${p.reservation.id}` === t.id)?.reservation;
-          added.push(`予約サイト（架空）で${r ? ` ${candidateLabel(data, r)} の` : ""}枠が埋まったので、ToDo に「${t.title}」（今日中）を足した（仮押さえはそのまま。決めるのは人）`);
+          added.push(`予約サイトで${r ? ` ${candidateLabel(data, r)} の` : ""}枠が埋まったので、ToDo に「${t.title}」（今日中）を足した（仮押さえはそのまま。決めるのは人）`);
         }
         return next;
       }, s),

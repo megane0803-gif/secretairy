@@ -138,11 +138,11 @@ describe("1. 並べ方（プログラムが並べる）", () => {
 
   test("足した ToDo の出どころは id の頭からも出す（前からブラウザに残っていた物）", () => {
     const old: AddedTodo[] = [
-      { id: "td-h1", title: "江口（架空）様に別の日時を案内", createdAt: now, done: false },
+      { id: "td-h1", title: "江口様に別の日時を案内", createdAt: now, done: false },
       { id: "td-ad-p1", title: "3週間後に効いたか見る（3番）", createdAt: now, done: false, due: "2026-11-25" },
-      { id: "td-next-k1", title: "青木（架空）様：前髪", createdAt: now, done: false, kind: "next-talk" },
+      { id: "td-next-k1", title: "青木様：前髪", createdAt: now, done: false, kind: "next-talk" },
       { id: "td-line-e1", title: "シャンプー発注", createdAt: now, done: false },
-      { id: "td-chat-x", title: "江口（架空）様：傘", createdAt: now, done: false },
+      { id: "td-chat-x", title: "江口様：傘", createdAt: now, done: false },
     ];
     const items = todoItems([], { ...emptyBook(today), todos: old }, shop);
     assert.deepEqual(items.map((t) => t.source), ["reserve", "ad", "karte", "line", "chat"]);
@@ -165,7 +165,7 @@ describe("2. 同じ鍵がもうあれば足さない", () => {
     assert.equal(s.todos.length, 0);
   });
 
-  test("予約：「直す」と、予約サイト（架空）で枠が埋まった時は同じ鍵（予約:お客様＠日時）なので1つだけ", () => {
+  test("予約：「直す」と、予約サイトで枠が埋まった時は同じ鍵（予約:お客様＠日時）なので1つだけ", () => {
     const s0 = withHold(emptyBook(today), hold("h1"));
     const row = pendingApprovals(s0, now)[0];
     const full = fullSlotTodos(
@@ -177,7 +177,7 @@ describe("2. 同じ鍵がもうあれば足さない", () => {
       { seats: shop.seats, customers: getCustomers(), today, nowIso: now },
     );
     assert.equal(full.length, 1);
-    assert.equal(full[0].title, "江口（架空）様に別の日時を案内");
+    assert.equal(full[0].title, "江口様に別の日時を案内");
     assert.equal(full[0].due, today, "今日中");
     assert.equal(todoKey(full[0]), reserveKey("c04", "2026-11-06", "15:00"));
     const s1 = withTodo(s0, full[0]);
@@ -197,10 +197,10 @@ describe("2. 同じ鍵がもうあれば足さない", () => {
   });
 
   test("予約チャットの「お店に確かめてご連絡します」もお客様への連絡（今日中）。同じ鍵は足さない", () => {
-    const a = withChatTodo(emptyBook(today), { id: "td-chat-1", title: "江口（架空）様：傘を忘れました" }, "江口", now, today);
+    const a = withChatTodo(emptyBook(today), { id: "td-chat-1", title: "江口様：傘を忘れました" }, "江口", now, today);
     assert.equal(a.state.todos[0].source, "chat");
     assert.equal(a.state.todos[0].due, today);
-    const b = withChatTodo(a.state, { id: "td-chat-1", title: "江口（架空）様：傘を忘れました" }, "江口", now, today);
+    const b = withChatTodo(a.state, { id: "td-chat-1", title: "江口様：傘を忘れました" }, "江口", now, today);
     assert.equal(b.journal, null);
     assert.equal(b.state.todos.length, 1);
   });
@@ -287,8 +287,8 @@ describe("2-2. 最初の例の鍵は「例:」で始め、本物の鍵と重な�
   });
 
   test("カルテ・予約・メモも、最初の例と同じ中身でも本物の鍵なら足せる", () => {
-    let s = withTodo(emptyBook(today), { id: "td-next-k-p01", title: "江口（架空）様：根元", createdAt: now, done: false, kind: "next-talk", source: "karte", key: karteKey("k-p01") });
-    s = withTodo(s, { id: "td-r", title: "大橋（架空）様に別の日時を案内", createdAt: now, done: false, source: "reserve", key: reserveKey("c05", "2026-11-05", "15:00"), due: today });
+    let s = withTodo(emptyBook(today), { id: "td-next-k-p01", title: "江口様：根元", createdAt: now, done: false, kind: "next-talk", source: "karte", key: karteKey("k-p01") });
+    s = withTodo(s, { id: "td-r", title: "大橋様に別の日時を案内", createdAt: now, done: false, source: "reserve", key: reserveKey("c05", "2026-11-05", "15:00"), due: today });
     s = withMemoTodo(s, seedItems, { title: "床を拭く", memo: "床" }, now, shop).state;
     assert.equal(s.todos.length, 3);
     assert.deepEqual(s.todos.map((t) => todoKey(t)), [karteKey("k-p01"), reserveKey("c05", "2026-11-05", "15:00"), memoKey(1)]);
@@ -460,11 +460,11 @@ describe("6. メモを投げる（Claude は文だけ。門と上限はプログ
     assert.ok(existsSync(join(__dirname, "../../../app/api/ai/todo/route.ts")));
   });
 
-  test("お客様の名字は〔お客様〕に置きかえて送り、返ってきた文で「○○（架空）様」に戻す", () => {
+  test("お客様の名字は〔お客様〕に置きかえて送り、返ってきた文で「○○様」に戻す", () => {
     const memo = "青木さんに次の予約の電話";
     const { masked, found } = maskNames(memo, getCustomers());
     assert.equal(masked.includes("青木"), false);
-    assert.equal(restoreNames("〔お客様〕さんに電話する", memo, found), "青木（架空）様に電話する");
+    assert.equal(restoreNames("〔お客様〕さんに電話する", memo, found), "青木様に電話する");
     assert.equal(restoreNames("〔お客様〕に電話", "電話", []), "お客様に電話");
   });
 });
@@ -481,12 +481,14 @@ describe("7. 架空の例（最初の状態）", () => {
     assert.ok(groups.has("week") || groups.has("later"), "先の期限");
   });
 
-  test("鍵は1つずつ違い、id も違う。お客様は名字だけで「（架空）様」", () => {
+  test("鍵は1つずつ違い、id も違う。お客様は名字だけで「○○様」（「（架空）」の札は付けない）", () => {
     assert.equal(SEED_TODO_KEYS.size, seed.length);
     assert.equal(new Set(seed.map((t) => t.id)).size, seed.length);
     const surnames = new Set(getCustomers().map((c) => c.surname));
-    for (const t of seed)
-      for (const m of t.title.matchAll(/(\S+?)（架空）様/g)) assert.ok(surnames.has(m[1].replace(/^.*[：、]/, "")), t.title);
+    for (const t of seed) {
+      assert.doesNotMatch(t.title, /架空/, t.title);
+      for (const m of t.title.matchAll(/([^\s：、「」]+?)様(?=[：に])/g)) assert.ok(surnames.has(m[1]), t.title);
+    }
   });
 
   test("期限は営業日に置く（定休日には置かない）。投げたメモには元のメモがある", () => {
@@ -504,7 +506,7 @@ describe("7. 架空の例（最初の状態）", () => {
   });
 });
 
-describe("予約サイト（架空）で枠が埋まったか", () => {
+describe("予約サイトで枠が埋まったか", () => {
   const r = (id: string, startMin: number, endMin: number, status: "hold" | "confirmed" = "confirmed") => ({ id, date: "2026-11-06", startMin, endMin, status });
   test("確定の予約が席の数だけ重なれば埋まった。仮押さえは数えない", () => {
     const h = r("h", 900, 960, "hold");
@@ -528,7 +530,7 @@ describe("予約サイト（架空）で枠が埋まったか", () => {
       { id: "r2", date: "2026-11-06", startMin: 900, endMin: 960, status: "confirmed" },
     ] as Reservation[];
     const todos = fullSlotTodos(all, pending, { seats: 3, customers: getCustomers(), today, nowIso: now });
-    assert.deepEqual(todos.map((t) => t.title), ["加藤（架空）様に別の日時を案内"]);
+    assert.deepEqual(todos.map((t) => t.title), ["加藤様に別の日時を案内"]);
     assert.equal(pendingApprovals(withTodo(s, todos[0]), now).length, 1, "仮押さえは変えない");
   });
 });

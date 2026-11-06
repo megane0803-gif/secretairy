@@ -2,7 +2,7 @@
 // ここは形と変え方だけ（どこにも書かない）。書くのは useAccounting.ts と画面の部品。
 //
 // 承認の箱は使わない（ホームの「承認待ち」にも入れない）。AI の予想も使わない。
-// 🔒 確定は人：会計（架空）への登録（register）を呼ぶのは、人が画面の「会計（架空）に登録」を押したときだけ。
+// 🔒 確定は人：会計への登録（register）を呼ぶのは、人が画面の「会計に登録」を押したときだけ。
 // AI・サーバー・自動の処理からは呼ばない。
 
 import type { AccountingSeed, CardItem, CardUse, MerchantRule } from "../data/types";
@@ -12,7 +12,7 @@ import { checkChoices, manualItems, manualMerchants, ruleLabel, sortStatement, t
 /** 登録で足した自動のルール */
 export type AddedRule = MerchantRule & { addedAt: string };
 
-/** 会計（架空）に登録した記録 */
+/** 会計に登録した記録 */
 export type Registration = {
   at: string;
   total: number;
@@ -121,7 +121,7 @@ export type RegisterResult =
   | { ok: false; gate: CardGate };
 
 /**
- * 🔒 会計（架空）に登録する。人が画面の「会計（架空）に登録」を押したときだけ呼ぶ（押した事は画面の部品が確かめる）。
+ * 🔒 会計に登録する。人が画面の「会計に登録」を押したときだけ呼ぶ（押した事は画面の部品が確かめる）。
  * 門を通らない（選び終わっていない・「次から自動」なのに印が分かれた）ときは登録しない。
  * 「次から自動」に印のある購入先は、今回の印で自動のルールに足す。
  */
@@ -180,7 +180,7 @@ export function usesOf(seed: AccountingSeed, s: AccountingState): Record<string,
 
 /**
  * freee（テスト事業所）の登録が全部済んだ（登録した・もう処理済み）時：「次から自動」の購入先を自動のルールに足す。
- * 会計（架空）の記録（registered）は変えない（freee の記録とは分けて持つ）。
+ * 画面の中の会計の記録（registered）は変えない（freee の記録とは分けて持つ）。
  */
 export function withRulesFromFreee(seed: AccountingSeed, s: AccountingState, nowIso: string): { state: AccountingState; added: MerchantRule[] } {
   const added = rulesToAdd(seed, s);

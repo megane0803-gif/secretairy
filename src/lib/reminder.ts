@@ -1,4 +1,4 @@
-// 前日のお知らせ（デモ）。ホームの「翌日へ」を押すと、その日に予約（確定）のあるお客様（架空）に
+// 前日のお知らせ（デモ）。ホームの「翌日へ」を押すと、その日に予約（確定）のあるお客様に
 // 前日に届いたつもりのお知らせを、お客様のスマホの画面の形で見せる（docs/SPEC.md §1.6）。
 // 文は決まった形（config/reminder.json の template）で、AI は使わない。日時とメニューはプログラムが台帳から入れる。
 // 🔒 本当には送らない（LINE にも、どこにも送らない。画面に「デモ：実際には送信されません」と出す）。
@@ -8,7 +8,6 @@ import type { Reservation } from "./reservations";
 export type Reminder = {
   reservationId: string;
   surname: string;
-  fictional: boolean;
   /** 予約の日（YYYY-MM-DD） */
   date: string;
   start: string;
@@ -30,7 +29,6 @@ export function dayBeforeReminders(all: Reservation[], date: string, template: s
     .map((r) => ({
       reservationId: r.id,
       surname: r.customer.surname,
-      fictional: r.customer.fictional,
       date: r.date,
       start: r.start,
       menuName: r.menu.name,

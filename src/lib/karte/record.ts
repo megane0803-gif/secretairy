@@ -10,6 +10,7 @@ import type { KarteHeading } from "../settings";
 import type { Visit } from "../ai/wire";
 import { headingWithRole, type KarteSections } from "./format";
 import { karteKey } from "../todo/keys";
+import { guestTitleHead } from "../guestName";
 
 /** 人が「保存」を押したカルテ。ブラウザの中だけに残す（secretairy:book の kartes） */
 export type SavedKarte = {
@@ -113,7 +114,7 @@ export function nextTalkTitle(k: Pick<KarteRecord, "sections">, surname: string,
   const lines = nextLines(k, headings);
   if (lines.length === 0) return null;
   const rest = lines.length - 1;
-  return `${surname}（架空）様：${lines[0]}${rest > 0 ? `（ほか${rest}行はカルテに）` : ""}`;
+  return `${guestTitleHead(surname)}${lines[0]}${rest > 0 ? `（ほか${rest}行はカルテに）` : ""}`;
 }
 
 export type SaveOutcome =

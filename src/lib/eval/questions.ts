@@ -323,7 +323,7 @@ function nextClosedDay(data: BookData, today: CalDay): CalDay {
   return calDay(data.shop, addDays(today.date, 7));
 }
 
-const CUSTOMER = "c07"; // 木村（架空）様。2回目からの方
+const CUSTOMER = "c07"; // 木村様。2回目からの方
 
 export function buildQuestions(env: EvalEnv): EvalQuestion[] {
   const { data, now, mode } = env;

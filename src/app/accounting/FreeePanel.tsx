@@ -6,7 +6,7 @@
 //
 // 🔒 確定は人：登録は、人が画面のボタンを押したとき（isTrusted）だけ。1件ずつ順に送る。
 // 送り始めたら、明細と店用／私用の選びを固定する。送っている間は、登録のし直しと「最初に戻す」を止める。
-// つながりが切れても、途中の登録を黙って会計（架空）に切り替えない。
+// つながりが切れても、途中の登録を黙って画面の中の会計に切り替えない。
 
 import { useEffect, useState } from "react";
 import { BigNumber, Fold } from "@/components/parts";
@@ -105,7 +105,7 @@ export function FreeePanel({ freee }: { freee: Freee }) {
       if (r.run.registered > 0) writeJournal({ who: "オーナー", text: `人が登録：テスト事業所の帳簿に、通販の明細 ${r.run.registered}件を取引として登録した` });
       const skipped = [r.skipped.check ? `確かめが要る ${r.skipped.check}件` : "", r.skipped.missing ? `freee に明細が無い ${r.skipped.missing}件` : ""].filter(Boolean).join("・");
       setNote([skipped ? `${skipped}は送っていません` : "", r.stoppedBy ? `止めました：${r.stoppedBy}` : ""].filter(Boolean).join("。") || null);
-      // 全部済んだら（登録した・もう処理済み）、「次から自動」の購入先を自動のルールに足す（会計（架空）の記録は変えない）
+      // 全部済んだら（登録した・もう処理済み）、「次から自動」の購入先を自動のルールに足す（画面の中の会計の記録は変えない）
       const after = countsOf(readFreeeRecord(), nos);
       if (after.registered + after.already === nos.length) {
         let added: MerchantRule[] = [];
@@ -165,7 +165,7 @@ export function FreeePanel({ freee }: { freee: Freee }) {
         <div role="alert" className="problems">
           <p>
             {status === "expired" ? "freee の鍵が切れました。" : "freee とつながっていません。"}
-            途中の登録は会計（架空）には切り替えません。
+            途中の登録を、画面の中の{acct.settings.service}には切り替えません。
           </p>
           {status !== "off" && status !== "not-set" && status !== "loading" && <FreeeConnectForm label="もう一度 freee とつなぐ" />}
         </div>
@@ -271,7 +271,7 @@ export function FreeePanel({ freee }: { freee: Freee }) {
             })}
           </ul>
         </Fold>
-        <p className="hint">会計（架空）の記録とは分けて持ちます。ホームの「最初に戻す」は画面の選びを戻すだけで、freee の記録は残ります（戻した後は、freee から読み直して照らし合わせてから登録します）。</p>
+        <p className="hint">画面の中の{acct.settings.service}の記録とは分けて持ちます。ホームの「最初に戻す」は画面の選びを戻すだけで、freee の記録は残ります（戻した後は、freee から読み直して照らし合わせてから登録します）。</p>
       </section>
 
       {connected && (

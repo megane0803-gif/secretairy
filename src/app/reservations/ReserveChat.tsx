@@ -83,7 +83,7 @@ export function ReserveChat({ data }: { data: BookData }) {
     if (stopped) {
       setBusy(false);
       const was = data.customers.find((c) => c.id === stopped);
-      writeJournal({ who: "プログラム", text: `お客様を切り替えたので、流れていた返事を止めた（${was ? `${was.surname}（架空）様` : "前のお客様"}の相談）` });
+      writeJournal({ who: "プログラム", text: `お客様を切り替えたので、流れていた返事を止めた（${was ? `${was.surname}様` : "前のお客様"}の相談）` });
     }
     setNotice(null);
     setCustomerId(id);
@@ -116,7 +116,7 @@ export function ReserveChat({ data }: { data: BookData }) {
     setBusy(true);
     scroll();
     const cid = startConsultation(t, useMode);
-    const who = `${customer.surname}（架空）様`;
+    const who = `${customer.surname}様`;
 
     const body: ReserveRequest = {
       mode: useMode,
@@ -198,7 +198,7 @@ export function ReserveChat({ data }: { data: BookData }) {
           break;
         }
         case "todo": {
-          // 言うだけで終わらせない：ToDo に「○○（架空）様：用件の1行」を足し、日誌に1行
+          // 言うだけで終わらせない：ToDo に「○○様：用件の1行」を足し、日誌に1行
           let line: string | null = null;
           book.update((s) => {
             const out = withChatTodo(s, e.todo, customer.surname, new Date().toISOString(), book.today.date);
@@ -294,10 +294,9 @@ export function ReserveChat({ data }: { data: BookData }) {
   };
 
   return (
-    <div className="phone" aria-label="お客様のスマホの画面（架空）">
+    <div className="phone" aria-label="お客様のスマホの画面">
       <div className="phone-bar">
         <span className="phone-shop">{data.shop.name} の予約</span>
-        <span className="tag fictional">架空の店</span>
       </div>
       <div className="phone-who">
         <label>
@@ -309,7 +308,7 @@ export function ReserveChat({ data }: { data: BookData }) {
           >
             {data.customers.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.surname} 様（架空）{c.firstVisit ? "・初めて" : ""}
+                {c.surname} 様{c.firstVisit ? "・初めて" : ""}
               </option>
             ))}
           </select>
@@ -344,7 +343,7 @@ export function ReserveChat({ data }: { data: BookData }) {
         {msgs.map((m, i) => (
           <li key={i} className={`bubble ${m.from}`}>
             <span className="bubble-who">
-              {m.from === "guest" ? `${customer?.surname ?? ""} 様（架空）` : m.from === "ai" ? (mode === "script" ? "係（決まった返事）" : "係（AI）") : "お知らせ"}
+              {m.from === "guest" ? `${customer?.surname ?? ""} 様` : m.from === "ai" ? (mode === "script" ? "係（決まった返事）" : "係（AI）") : "お知らせ"}
             </span>
             {m.text}
           </li>
@@ -407,7 +406,7 @@ export function ReserveChat({ data }: { data: BookData }) {
         </p>
       )}
       <p className="chat-note">
-        お客様はみな架空の方です。AI は「仮押さえ」まで。確定はお店（承認の箱）で人が押します。
+        AI は「仮押さえ」まで。確定はお店（承認の箱）で人が押します。
       </p>
     </div>
   );

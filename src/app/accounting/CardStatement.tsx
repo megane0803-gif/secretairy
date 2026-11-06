@@ -122,7 +122,7 @@ export function CardStatement() {
   return (
     <section className="acct-card-sec" aria-labelledby="acct-card">
       <h2 id="acct-card">
-        通販の明細 <span className="tag fictional">架空</span>
+        通販の明細
       </h2>
       <p className="hint">
         {settings.service}が{settings.cardSource}から取り込んだ、未処理の明細（{md(seed.statement.from)}〜{md(seed.statement.to)}）。来るのは日付・購入先・金額だけで、品名はありません。

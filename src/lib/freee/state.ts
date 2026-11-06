@@ -1,5 +1,5 @@
 // freee（テスト事業所）の記録を、見ている人のブラウザの中だけに残す形（docs/SPEC.md §1.8.1）。
-// 会計（架空）の記録（accounting/state.ts の secretairy:accounting）とは分けて持つ（secretairy:freee）。
+// 画面の中の会計の記録（accounting/state.ts の secretairy:accounting）とは分けて持つ（secretairy:freee）。
 // ここは形と変え方だけ（どこにも書かない）。
 //
 // 明細ごとの状態：まだ・送っている・登録した・もう処理済み・失敗・結果が分からない。
@@ -108,7 +108,7 @@ export function stateOf(r: FreeeRecord, no: number): FreeeItemState {
   return r.items[String(no)]?.state ?? "pending";
 }
 
-/** 送り始めたか（選びを固定する・会計（架空）に黙って切り替えない） */
+/** 送り始めたか（選びを固定する・画面の中の会計に黙って切り替えない） */
 export function hasStarted(r: FreeeRecord): boolean {
   return r.uses !== null || Object.values(r.items).some((i) => i.state !== "pending");
 }

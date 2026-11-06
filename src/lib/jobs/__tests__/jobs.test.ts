@@ -126,7 +126,7 @@ describe("AI の仕事：1行ずつ動く", () => {
     assert.equal(rows[0].reservation.status, "hold", "仮押さえまで");
     assert.ok(w.book.chat.every((c) => c.status === "hold"), "確定の予約は作らない");
     assert.ok(w.jobs.done.reserve);
-    assert.ok(w.journal.some((j) => j.who === "AI" && j.text.startsWith("仮押さえした：大橋（架空）様")));
+    assert.ok(w.journal.some((j) => j.who === "AI" && j.text.startsWith("仮押さえした：大橋様")));
     assert.ok(w.journal.some((j) => j.text === "AI の仕事：予約の相談 → 済み（承認待ち1件）"));
   });
 

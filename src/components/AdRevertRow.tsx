@@ -33,7 +33,6 @@ export function AdRevertRow({ onDone }: { onDone?: (text: string) => void }) {
     <li className="approval ad-card">
       <div className="approval-what">
         <span className="tag hold">戻す案</span>
-        <span className="tag fictional">架空</span>
         <span className="tag who-program">プログラムの判定</span>
       </div>
       <div className="ad-change">
@@ -67,7 +66,7 @@ export function AdRevertRow({ onDone }: { onDone?: (text: string) => void }) {
           見送り
         </button>
       </div>
-      <p className="hint small">承認＝広告（架空）でこの言葉を元に戻します（戻したあとは、また見直しで選べます）。見送り＝{actionPast(j.action)}ままにします。</p>
+      <p className="hint small">承認＝広告でこの言葉を元に戻します（戻したあとは、また見直しで選べます）。見送り＝{actionPast(j.action)}ままにします。</p>
     </li>
   );
 }

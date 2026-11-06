@@ -173,7 +173,7 @@ describe("3. どの画面も同じ1つの数を使う", () => {
       assert.equal(open, seats === 1 ? "10:00〜13:00・14:00〜20:00" : "10:00〜20:00");
       const facts = postFacts(s, getPostsSettings(), today, { date: "2026-11-04", time: "19:45" }, all);
       assert.equal(facts.openings[0], `11/5（木）${open}`);
-      // 予約サイト（架空）で枠が埋まった時の ToDo
+      // 予約サイトで枠が埋まった時の ToDo
       assert.equal(slotFull(all, { id: "h", date: "2026-11-05", startMin: 13 * 60, endMin: 14 * 60 }, s.seats), seats === 1);
       // 台帳の確かめ（重なり）。最初の状態の予約が無い 18:00 に2件
       const twice = resolveChatReservations(menus, c, [r("y1", "2026-11-05", "18:00", "cut", 0), r("y2", "2026-11-05", "18:00", "cut", 1)]);

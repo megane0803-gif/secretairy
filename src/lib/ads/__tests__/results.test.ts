@@ -363,7 +363,7 @@ describe("戻す案は承認の箱に入る", () => {
 });
 
 describe("最初に戻すで戻る", () => {
-  test("広告（架空）を最初に戻す：判定・報告・戻す案も消え、広告から足した ToDo も消える", () => {
+  test("広告を最初に戻す：判定・報告・戻す案も消え、広告から足した ToDo も消える", () => {
     const a = approved(5);
     let out = judgeAll(a.ads, a.book);
     out = { ...out, ads: withReport(out.ads, buildWeeklyReport({ id: "rp", nowIso: NOW, today: TODAY, table, shop, settings, mode: "ai", failed: "x" }), settings) };

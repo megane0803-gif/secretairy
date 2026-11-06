@@ -37,7 +37,7 @@ export function KarteMemo({
 
   const fromRecording = desk.sources?.[key] === "recording" && typeof recordingMaxChars === "number";
   const maxChars = fromRecording ? Math.max(baseMaxChars, recordingMaxChars) : baseMaxChars;
-  const who = `${selected.customer.surname}（架空）様`;
+  const who = `${selected.customer.surname}様`;
   const length = [...memo].length;
   const over = length > maxChars;
   const example = examples.find((e) => e.customerId === selected.customer.id);
@@ -106,7 +106,7 @@ export function KarteMemo({
       }}
     >
       <p className="karte-memo-who">
-        <CustomerName surname={selected.customer.surname} fictional={selected.customer.fictional} />
+        <CustomerName surname={selected.customer.surname} />
         <span className="hint">
           {book.today.label} {selected.start} {selected.menu.name}
         </span>

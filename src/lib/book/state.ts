@@ -11,12 +11,13 @@ import type { HoldOffer, TodoOffer } from "../ai/wire";
 import { MAX_DAY_OFFSET } from "../calendar";
 import type { SavedKarte } from "../karte/record";
 import type { ChatReservation } from "../reservations";
+import { isGuestTitle, rescheduleTitle, withoutOldMark } from "../guestName";
 import { chatKey, reserveKey, SEED_TODO_KEYS, todoKey, TODO_SOURCES, type TodoSource } from "../todo/keys";
 import { readMemoKind, type MemoKind } from "../todo/kinds";
 
 /**
  * withdrawn = お客様が予約チャットで「ずらしたい」「やめたい」と言ったので、承認の前に外した
- * taken = 予約サイト（架空）から同じ枠に予約が入ったので、承認の前に外した（二重予約を防ぐ。book/site.ts）
+ * taken = 予約サイトから同じ枠に予約が入ったので、承認の前に外した（二重予約を防ぐ。book/site.ts）
  */
 export type ApprovalState = "pending" | "approved" | "fixed" | "skipped" | "withdrawn" | "taken";
 
@@ -123,7 +124,7 @@ export function parseBook(raw: string | null): BookState | null {
       status: r.status as ChatReservation["status"],
       heldAt: r.heldAt as string,
       expiresAt: r.expiresAt as string,
-      // 予約サイト（架空）から入った予約（確定だけ。book/site.ts）
+      // 予約サイトから入った予約（確定だけ。book/site.ts）
       ...(r.via === "site" && r.status === "confirmed" ? { via: "site" as const } : {}),
     }));
   const states: ApprovalState[] = ["pending", "approved", "fixed", "skipped", "withdrawn", "taken"];
@@ -133,7 +134,7 @@ export function parseBook(raw: string | null): BookState | null {
       id: a.id as string,
       reservationId: a.reservationId as string,
       createdAt: a.createdAt as string,
-      reason: a.reason as string,
+      reason: withoutOldMark(a.reason as string),
       state: a.state as ApprovalState,
       ...(isStr(a.decidedAt) ? { decidedAt: a.decidedAt } : {}),
     }));
@@ -141,7 +142,8 @@ export function parseBook(raw: string | null): BookState | null {
     .filter((t) => t && isStr(t.id) && isStr(t.title) && isStr(t.createdAt))
     .map((t) => ({
       id: t.id as string,
-      title: t.title as string,
+      // 前の書き方（「○○（架空）様」）で残った題も、今の書き方で読む（src/lib/guestName.ts）
+      title: withoutOldMark(t.title as string),
       createdAt: t.createdAt as string,
       done: t.done === true,
       ...(isStr(t.due) && DATE.test(t.due) ? { due: t.due } : {}),
@@ -202,7 +204,7 @@ export function parseBook(raw: string | null): BookState | null {
     }
   const todoTitles: Record<string, string> = {};
   if (d.todoTitles && typeof d.todoTitles === "object" && !Array.isArray(d.todoTitles))
-    for (const [id, t] of Object.entries(d.todoTitles as Record<string, unknown>).slice(0, 200)) if (isStr(t) && t.trim()) todoTitles[id.slice(0, 60)] = t.slice(0, 200);
+    for (const [id, t] of Object.entries(d.todoTitles as Record<string, unknown>).slice(0, 200)) if (isStr(t) && t.trim()) todoTitles[id.slice(0, 60)] = withoutOldMark(t).slice(0, 200);
   return {
     v: 1,
     anchor: d.anchor,
@@ -295,7 +297,7 @@ export function withApproved(s: BookState, approvalId: string, nowIso: string): 
 
 /**
  * 直す・見送り：お客様の了解なしに時間は変えないので、仮押さえを外し、
- * 「○○（架空）様に別の日時を案内」を ToDo に足す（AI は使わない）。
+ * 「○○様に別の日時を案内」を ToDo に足す（AI は使わない）。
  */
 export function withReleased(
   s: BookState,
@@ -311,7 +313,7 @@ export function withReleased(
   const r = s.chat.find((x) => x.id === a.reservationId);
   const todo: AddedTodo = {
     id: `td-${a.reservationId}`,
-    title: `${surname}（架空）様に別の日時を案内`,
+    title: rescheduleTitle(surname),
     createdAt: nowIso,
     done: false,
     source: "reserve",
@@ -343,7 +345,7 @@ export function withGuestReleased(s: BookState, reservationId: string, customerI
 
 /**
  * 予約チャットで「お店に確かめてご連絡します」と返したときの ToDo（プログラムが足す）と、日誌の1行。
- * 題は「○○（架空）様：用件の1行」の形の物だけ受け取る。同じ id は2回入れない。
+ * 題は「○○様：用件の1行」の形の物だけ受け取る。同じ id は2回入れない。
  */
 export function withChatTodo(
   s: BookState,
@@ -353,9 +355,9 @@ export function withChatTodo(
   /** 今日（YYYY-MM-DD）。あれば「お客様への連絡（今日中）」にする */
   today?: string,
 ): { state: BookState; journal: string | null } {
-  const title = typeof todo?.title === "string" ? todo.title.replace(/\s+/g, " ").trim().slice(0, 80) : "";
+  const title = typeof todo?.title === "string" ? withoutOldMark(todo.title).replace(/\s+/g, " ").trim().slice(0, 80) : "";
   const id = typeof todo?.id === "string" ? todo.id.slice(0, 60) : "";
-  if (!id || !title.startsWith(`${surname}（架空）様：`) || title.length <= `${surname}（架空）様：`.length) return { state: s, journal: null };
+  if (!id || !isGuestTitle(title, surname)) return { state: s, journal: null };
   if (s.todos.some((t) => t.id === id)) return { state: s, journal: null };
   const added: AddedTodo = {
     id,

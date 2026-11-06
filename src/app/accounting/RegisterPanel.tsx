@@ -1,6 +1,6 @@
 "use client";
 
-// 経理タブの右の列：プログラムの門（✓ 2つ）→「会計（架空）に登録」（人のボタン）→ 会計（架空）の欄。
+// 経理タブの右の列：プログラムの門（✓ 2つ）→「会計に登録」（人のボタン）→ 会計の欄。
 // 登録の後は「次の明細（試し）」で、足した自動のルールが次から効くことを見せる（試しなので登録はしない）。
 // 承認の箱は使わない（ホームの「承認待ち」にも入れない）。
 //
@@ -17,7 +17,7 @@ import { writeJournal, type JournalWho } from "@/lib/journal";
 import { DEMO_TAG_NOTE } from "@/lib/notices";
 import { FreeeConnectForm, useCallbackNote } from "./FreeePanel";
 
-/** freee（テスト事業所）とつながっていない画面（cookie が無い・審査員の画面も）。今のまま会計（架空）に登録する */
+/** freee（テスト事業所）とつながっていない画面（cookie が無い・審査員の画面も）。今のまま会計に登録する */
 export function RegisterPanel({ freee }: { freee: ReturnType<typeof useFreee> }) {
   const callbackNote = useCallbackNote();
   // 「freee とつなぐ」は、本番のサイトで freee の環境変数がそろっている時だけ出す（cookie が無い・鍵が切れた・事業所の番号がまだ空）
@@ -82,7 +82,7 @@ export function RegisterPanel({ freee }: { freee: ReturnType<typeof useFreee> })
 
       <section className="acct-service" aria-labelledby="acct-service">
         <h3 id="acct-service" className="acct-h3">
-          {settings.service}の欄 <span className="tag fictional">架空</span>
+          {settings.service}の欄
           {reg && <span className="tag ok">登録済み</span>}
         </h3>
         {reg ? (

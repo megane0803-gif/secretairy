@@ -1,4 +1,4 @@
-// 広告の見直し：AI の案 → プログラムの門 → 承認の箱 → 承認で広告（架空）・ToDo・日誌が変わる。
+// 広告の見直し：AI の案 → プログラムの門 → 承認の箱 → 承認で広告・ToDo・日誌が変わる。
 // Claude は呼ばず、決まった返事（script.ts）か、決まった案を返す物に置きかえる。
 
 import assert from "node:assert/strict";
@@ -194,13 +194,13 @@ describe("承認の箱（広告）", () => {
     assert.equal(p.checks.length, 3);
   });
 
-  test("承認：広告（架空）でその言葉が止まり（外れ）、ToDo に期限つきで1件、日誌に1行", async () => {
+  test("承認：広告でその言葉が止まり（外れ）、ToDo に期限つきで1件、日誌に1行", async () => {
     const s = await withOne();
     const p = pendingAd(s)!;
     const book0 = emptyBook(today);
     const out = approveAd(s, book0, p.id, { nowIso: now, today, shop, settings });
 
-    // 広告（架空）
+    // 広告
     assert.deepEqual(offNos(out.ads), [p.no]);
     assert.equal(buildTable(report, settings, offNos(out.ads)).searchTerms.concat(table.keywords).find((r) => r.no === p.no)?.off, true, "一覧の行が薄くなる（off）");
     assert.equal(pendingAd(out.ads), null);

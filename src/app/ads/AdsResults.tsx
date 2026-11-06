@@ -34,7 +34,6 @@ function JudgementCard({ j, shop }: { j: AdJudgement; shop: ShopSettings }) {
     <article className={`verdict ad-verdict ${cls}`} aria-label={`${j.no}番の判定`}>
       <div className="approval-what">
         <span className="tag who-program">プログラムの判定</span>
-        <span className="tag fictional">架空</span>
         {j.demo && <span className="tag text">デモ：判定日まで進めた</span>}
       </div>
       <p className="verdict-head">
@@ -69,7 +68,7 @@ function JudgementCard({ j, shop }: { j: AdJudgement; shop: ShopSettings }) {
             判定日 {dueLabel(shop, j.due)}（承認の{j.weeks}週間後。ToDo「効いたか見る」の期限）
           </li>
           <li>
-            前＝{actionPast(j.action)}前の{j.weeks}週、後＝{actionPast(j.action)}後の{j.weeks}週（どちらも広告を出す言葉みんなの数。後の数は架空）
+            前＝{actionPast(j.action)}前の{j.weeks}週、後＝{actionPast(j.action)}後の{j.weeks}週（どちらも広告を出す言葉みんなの数。後の数は前もって用意した数）
           </li>
           <li>
             {j.no}番そのものの前の{j.weeks}週：押された {j.word.clicks}回・{yen(j.word.cost)}・予約 {j.word.bookings}件
@@ -85,7 +84,6 @@ function ReportCard({ r, lines, latest }: { r: AdWeeklyReport; lines: ReturnType
     <article className={`ad-report${latest ? " latest" : ""}`} aria-label="見直しの報告">
       <div className="approval-what">
         <strong>見直しの報告</strong>
-        <span className="tag fictional">架空</span>
         <span className={r.mode === "script" ? "tag text" : "tag who-ai"}>{r.mode === "script" ? "決まった返事" : "AI"}</span>
         {r.fromJobs && <span className="tag text">AI の仕事から</span>}
       </div>

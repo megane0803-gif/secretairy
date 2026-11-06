@@ -443,7 +443,6 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .slot-time small { font-weight: 400; color: var(--muted); font-size: 0.8em; white-space: nowrap; }
 
 .customer { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.tag.fictional { background: transparent; color: var(--muted); border: 1px dashed var(--muted); }
 
 .checks { margin: 16px 0 0; }
 .problems { color: var(--warn); margin: 4px 0; }
@@ -719,7 +718,7 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .reset-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
 
 .book-pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; container-type: inline-size; }
-/* スマホ：日ごとのカードの下に予約サイト（架空）。PC：カードは出さず、予約サイト（架空）が真ん中の列の幅いっぱい */
+/* スマホ：日ごとのカードの下に予約サイト。PC：カードは出さず、予約サイトが真ん中の列の幅いっぱい */
 
 .site { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; min-width: 0; align-self: start; }
 .site-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
@@ -1185,7 +1184,7 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .legend-item.actor-ai::before,
 .legend-item.actor-human::before,
 .legend-item.actor-outside::before { display: none; }
-/* 予約サイト（架空）から入った予約の札（外の相手 = 藍。文字つき） */
+/* 予約サイトから入った予約の札（外の相手 = 藍。文字つき） */
 .tag.from-site { background: transparent; color: var(--who-outside-shown); border: 1px solid var(--who-outside-shown); }
 /* 初めての方の札 */
 .tag.first { background: transparent; color: var(--text); border: 1px solid var(--muted); font-weight: 700; }
@@ -1294,8 +1293,6 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 /* 長い札（予約サイトから など）は細い帯の中で折り返す（切らない） */
 .tt-band-menu .tag { white-space: normal; overflow-wrap: anywhere; line-height: 1.15; }
 .tt-band .customer { gap: 1px; }
-/* 細い列（1280 の真ん中の列で1列 約80px）でも「○○ 様」と「架空」が1行に入る大きさ */
-.tt-band .tag.fictional { font-size: 0.6rem; padding: 0 1px; }
 .tt-band-top { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .tt-band-time { font-weight: 700; white-space: nowrap; }
 .tt-band-time small { font-weight: 400; font-size: 0.85em; }

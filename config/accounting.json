@@ -1,6 +1,6 @@
 {
-  "service": "会計（架空）",
-  "cardSource": "カード会社（架空）",
+  "service": "会計",
+  "cardSource": "カード会社",
   "freee": {
     "label": "freee（テスト事業所）",
     "unconnectedNote": "オーナーのブラウザでは、freee（テスト事業所）につながります",

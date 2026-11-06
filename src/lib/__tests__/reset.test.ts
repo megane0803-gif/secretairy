@@ -55,7 +55,7 @@ describe("最初に戻す", () => {
     // 経理：登録して自動のルールを足した
     let acct = manualItems(sortCurrent(seed)).reduce((s, i) => withChoice(seed, s, i.no, "shop"), EMPTY_ACCOUNTING);
     acct = withAutoNext(seed, acct, "m-f", true);
-    const r = register(seed, acct, { nowIso: "2026-11-11T00:00:00.000Z", service: "会計（架空）" });
+    const r = register(seed, acct, { nowIso: "2026-11-11T00:00:00.000Z", service: "会計" });
     assert.ok(r.ok);
     if (!r.ok) return;
     writeBrowser(ACCOUNTING_KEY, JSON.stringify(r.state));
@@ -156,7 +156,7 @@ describe("最初に戻す", () => {
     const book: BookState = {
       ...emptyBook("2026-10-01"),
       seedKarteEdits: { "k-p01": { sections: { next: ["次はパーマ"] }, edited: ["next"], editedAt: { next: "2026-11-04T01:00:00.000Z" } } },
-      todoTitles: { "ts-08": "江口（架空）様：次はパーマ" },
+      todoTitles: { "ts-08": "江口様：次はパーマ" },
     };
     writeBrowser(BOOK_KEY, JSON.stringify(book));
     assert.ok(parseBook(readBrowser(BOOK_KEY))!.seedKarteEdits!["k-p01"]);

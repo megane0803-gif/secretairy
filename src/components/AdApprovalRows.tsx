@@ -69,7 +69,7 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
     const nowIso = new Date().toISOString();
     // 「翌日へ」で進めた日もホームと同じ「今日」から数える
     const today = demoClock(shop, new Date(), bookState.state.dayOffset).today.date;
-    // 広告（架空）・ToDo・日誌を同じ1回で変える（書く直前に読みなおした物で）
+    // 広告・ToDo・日誌を同じ1回で変える（書く直前に読みなおした物で）
     let journal: { who: JournalWho; text: string }[] = [];
     ads.update((a) => {
       let next = a;
@@ -140,7 +140,6 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
     <li className="approval ad-card">
       <div className="approval-what">
         <span className="tag hold">広告の案</span>
-        <span className="tag fictional">架空</span>
         <span className="tag who-ai">{p.mode === "script" ? "決まった返事" : "AI"}</span>
         {p.fixed && <span className="tag">直した</span>}
       </div>

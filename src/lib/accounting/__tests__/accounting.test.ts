@@ -163,7 +163,7 @@ describe("プログラムの門と登録", () => {
     assert.equal(gateOf(seed, s).ok, true);
   });
 
-  test("登録：会計（架空）に登録済み・件数・足したルールの文、日誌に「人が登録」とルールの1行", () => {
+  test("登録：会計に登録済み・件数・足したルールの文、日誌に「人が登録」とルールの1行", () => {
     let s = chooseAll(EMPTY_ACCOUNTING, (m) => (m === TOWEL ? "shop" : "private"));
     s = withAutoNext(seed, s, TOWEL, true);
     const r = register(seed, s, { nowIso, service });
@@ -175,7 +175,7 @@ describe("プログラムの門と登録", () => {
     assert.equal(r.state.registered!.shopAmount + r.state.registered!.privateAmount, seed.statement.items.reduce((a, i) => a + i.amount, 0));
     assert.equal(r.message, `自動 ${AUTO}件・人が選んだ ${MANUAL}件。自動のルールに「タオルの通販F＝店用」を足しました`);
     assert.equal(r.journal.length, 2);
-    assert.ok(r.journal[0].text.startsWith(`人が登録：会計（架空）に通販の明細 ${ITEMS.length}件（自動 ${AUTO}件・人が選んだ ${MANUAL}件）`));
+    assert.ok(r.journal[0].text.startsWith(`人が登録：会計に通販の明細 ${ITEMS.length}件（自動 ${AUTO}件・人が選んだ ${MANUAL}件）`));
     assert.equal(r.journal[0].who, "オーナー");
     assert.match(r.journal[1].text, /自動のルールに足した：タオルの通販F＝店用/);
     assert.deepEqual(effectiveRules(seed.rules, r.state).length, 5);

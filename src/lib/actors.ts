@@ -20,7 +20,7 @@ export const ACTOR_MEANING: Record<Actor, string> = {
 /**
  * 台帳の予約は、だれが入れた物か。
  * 仮押さえ = AI（予約チャット・LINE の一言で AI が押さえた）／
- * 予約サイト（架空）から入った確定 = 外（お客様が予約サイトで自分で決めた予約）／
+ * 予約サイトから入った確定 = 外（お客様が予約サイトで自分で決めた予約）／
  * それ以外の確定（承認で確定・最初の状態の架空の予約＝店が受けて確定した予約）= 人。
  */
 export function reservationActor(r: Pick<Reservation, "status" | "source">): Actor {

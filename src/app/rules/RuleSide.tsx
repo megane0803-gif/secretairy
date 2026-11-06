@@ -89,7 +89,7 @@ function CapacityField() {
   return (
     <>
       <p>
-        同じ時間に何人のお客様を受けるか。予約チャット・台帳・予約サイト（架空）・空き枠・AI の仕事が、みなこの数で数えます。
+        同じ時間に何人のお客様を受けるか。予約チャット・台帳・予約サイト・空き枠・AI の仕事が、みなこの数で数えます。
       </p>
       <div className="scope-row" role="radiogroup" aria-label="同じ時間に受ける人数">
         {choices.map((n) => (
@@ -216,7 +216,7 @@ function TryPanel({ seed, menus, shop, days, data }: Omit<Props, "wordsOn" | "wo
             {asked.booking.newCustomer ? "（初めての方）" : ""}
             <br />
             <small>
-              判定した時刻：{dayLabel(asked.now.date)} {asked.now.time}（店の時間帯）。入っている予約（架空・このブラウザの仮押さえも）も数えます。
+              判定した時刻：{dayLabel(asked.now.date)} {asked.now.time}（店の時間帯）。入っている予約（このブラウザの仮押さえも）も数えます。
             </small>
           </p>
           <ul className="verdict-list">

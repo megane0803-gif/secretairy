@@ -55,7 +55,7 @@ export function reserveSystem(ctx: SlotContext, shown: Candidate[], holds: ConvH
   };
   lines.push(`- 暦（週は月曜から）：今週 ${week(0)}・来週 ${week(1)}・再来週 ${week(2)}`);
   lines.push(
-    `- 話しているお客様：${ctx.customer.surname}（架空）様${ctx.customer.firstVisit ? "・初めての方" : ""}`,
+    `- 話しているお客様：${ctx.customer.surname}様${ctx.customer.firstVisit ? "・初めての方" : ""}`,
   );
   const open = Object.entries(ctx.shop.hours)
     .map(([k, h]) => `${DAY_JA[k]} ${h ? `${h.open}–${h.close}` : "定休日"}`)

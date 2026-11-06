@@ -22,7 +22,7 @@ const report = read("src/app/ads/AdsReport.tsx");
 const frame = read("src/components/TabFrame.tsx");
 const css = read("src/app/globals.css");
 
-describe("1. 並び：4週分 → 承認待ち → 効いたかの判定 → 毎週の見直しの報告 → 広告（架空）の画面 → 2つの一覧 → くわしく", () => {
+describe("1. 並び：4週分 → 承認待ち → 効いたかの判定 → 毎週の見直しの報告 → 広告の管理画面 → 2つの一覧 → くわしく", () => {
   test("広告のページの真ん中の欄の順", () => {
     const at = (s: string) => {
       const i = page.indexOf(s);
@@ -136,8 +136,8 @@ describe("2. 押せない時の理由と「最初に戻す」", () => {
     assert.match(css, /\.ad-review-why \{[^}]*font-size: 1rem;/);
   });
 
-  test("「広告（架空）を最初に戻す」は部品1つで、押せない時は理由の下・押せる時は欄の一番下（同時に出さない）", () => {
-    assert.equal(review.match(/>\s*広告（架空）を最初に戻す\s*</g)?.length, 1, "ボタンの文字は1か所");
+  test("「広告を最初に戻す」は部品1つで、押せない時は理由の下・押せる時は欄の一番下（同時に出さない）", () => {
+    assert.equal(review.match(/>\s*広告を最初に戻す\s*</g)?.length, 1, "ボタンの文字は1か所");
     assert.equal(review.match(/\{resetButton\}/g)?.length, 2);
     const off = review.indexOf("{!can.ok && (");
     const on = review.indexOf("{can.ok && (");
@@ -173,7 +173,7 @@ describe("4. デモの札（広告タブ）", () => {
     assert.equal(DEMO_TAG_NOTE, "本物の店では出ません。試すための物です");
   });
   const tag = /<span className="tag text" title=\{DEMO_TAG_NOTE\}>\s*デモ<span className="sr-only">（\{DEMO_TAG_NOTE\}）<\/span>\s*<\/span>/;
-  test("「広告（架空）を最初に戻す」に今の tag text の札（新しい部品は作らない）", () => {
+  test("「広告を最初に戻す」に今の tag text の札（新しい部品は作らない）", () => {
     assert.match(review, new RegExp(`const demoTag = \\(\\s*${tag.source}`));
     // 押せる時の場所にも札
     assert.match(review, /<div className="reset-row">\s*\{resetButton\}\s*\{demoTag\}/);
@@ -181,9 +181,10 @@ describe("4. デモの札（広告タブ）", () => {
   test("「判定日まで進める（デモ）」の隣に札", () => {
     assert.match(results, new RegExp(`${tag.source}\\s*<button type="button" className="btn" onClick=\\{demo\\}>\\s*判定日まで進める（デモ）`));
   });
-  test("広告の数そのものは「架空」の札のまま（デモの札は付けない）", () => {
+  test("広告の数そのものには札を付けない（「架空」の札もデモの札も付けない）", () => {
     const weeks = report.slice(report.indexOf("export function AdsWeeks"), report.indexOf("export function AdsReport"));
-    assert.match(weeks, /<span className="tag fictional">架空<\/span>/);
+    assert.match(weeks, /\{settings\.channel\}の4週分\s*<\/h2>/);
+    assert.doesNotMatch(report, /tag fictional|（架空）/);
     assert.doesNotMatch(report, /DEMO_TAG_NOTE/);
   });
 });

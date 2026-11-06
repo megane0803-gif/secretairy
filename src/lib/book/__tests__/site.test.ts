@@ -1,7 +1,7 @@
-// 予約サイト（架空）→ 台帳の向き（docs/SPEC.md §1.4）。Claude は呼ばない（AI を使わない流れ）。
+// 予約サイト→ 台帳の向き（docs/SPEC.md §1.4）。Claude は呼ばない（AI を使わない流れ）。
 // - 「ここで予約が入る（デモ）」：架空のお客様の予約が、空いている枠に1件、確定で台帳に入る（承認の箱は通さない）
 // - 入った枠は空きから外れる（予約チャット・朝の要点の空き枠・発信の空き枠・予約サイトの ○△×）
-// - 仮押さえと同じ枠に入ったら、仮押さえを外し、ToDo に「○○（架空）様に別の日時を案内」を今日中として足す
+// - 仮押さえと同じ枠に入ったら、仮押さえを外し、ToDo に「○○様に別の日時を案内」を今日中として足す
 // - 同じ時間に受ける人数を守る
 // - 「最初に戻す」で戻る
 
@@ -99,7 +99,7 @@ describe("1. ここで予約が入る（デモ）：空いている枠に1件", 
     // 日誌に1行（だれ = 予約サイト。札は「外 予約サイト」）
     assert.equal(o.journal.length, 1);
     assert.equal(o.journal[0].who, SITE_WHO);
-    assert.match(o.journal[0].text, /^予約サイト（架空）から1件入った：.+（架空）様 /);
+    assert.match(o.journal[0].text, /^予約サイトから1件入った：.+様 /);
     assert.equal(parseJournal(JSON.stringify(withEntries([], o.journal)))[0].who, "予約サイト", "日誌に残せる形");
   });
 
@@ -154,7 +154,7 @@ describe("1. ここで予約が入る（デモ）：空いている枠に1件", 
 });
 
 describe("2. 二重予約を防ぐ：仮押さえと同じ枠に入れる（デモ）", () => {
-  test("仮押さえを外し、ToDo に「○○（架空）様に別の日時を案内」を今日中として足す（AI は使わない）", () => {
+  test("仮押さえを外し、ToDo に「○○様に別の日時を案内」を今日中として足す（AI は使わない）", () => {
     const s0 = withHold(emptyBook(TODAY), hold());
     assert.equal(pendingApprovals(s0, NOW_ISO).length, 1);
     const o = press(s0, "onHold");
@@ -165,13 +165,13 @@ describe("2. 二重予約を防ぐ：仮押さえと同じ枠に入れる（デ�
     assert.equal(o.state.chat.some((r) => r.id === "h1"), false, "仮押さえは外れる");
     assert.equal(pendingApprovals(o.state, NOW_ISO).length, 0, "承認の箱から消える");
     assert.equal(o.state.approvals.find((a) => a.reservationId === "h1")?.state, "taken");
-    const t = o.state.todos.find((x) => x.title === "江口（架空）様に別の日時を案内");
+    const t = o.state.todos.find((x) => x.title === "江口様に別の日時を案内");
     assert.ok(t, "ToDo に足す");
     assert.equal(t!.due, TODAY, "今日中");
     assert.equal(t!.source, "reserve");
     assert.equal(t!.key, reserveKey("c04", "2026-11-06", "15:00"), "直す・見送り・枠が埋まった時と同じ鍵");
     assert.equal(o.released.length, 1);
-    assert.ok(o.journal.some((j) => j.who === "プログラム" && /江口（架空）様の仮押さえ.*を外し、ToDo に「江口（架空）様に別の日時を案内」（今日中）を足した/.test(j.text)));
+    assert.ok(o.journal.some((j) => j.who === "プログラム" && /江口様の仮押さえ.*を外し、ToDo に「江口様に別の日時を案内」（今日中）を足した/.test(j.text)));
     assert.ok(view(base, o.state).book.checks.seats.ok, "二重予約にならない");
     // 予約サイトで枠が埋まった時の ToDo（TodoFeeds）は、もう仮押さえが無いので2回は足さない
     assert.deepEqual(fullSlotTodos(view(base, o.state).all, pendingApprovals(o.state, NOW_ISO), { seats: 1, customers: base.customers, today: TODAY, nowIso: NOW_ISO }), []);

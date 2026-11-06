@@ -1,6 +1,6 @@
 "use client";
 
-// カルテのタブの真ん中：今日の予約のお客様（架空）・カルテの案（大きいカード1枚）・前回までのカルテ。
+// カルテのタブの真ん中：今日の予約のお客様・カルテの案（大きいカード1枚）・前回までのカルテ。
 // カルテのお客様の名前・日付・メニューは、選んだ予約からプログラムが入れる（Claude には書かせない）。
 // 🔒 保存は人の「保存」ボタンだけ（ブラウザの本物の操作か isTrusted で確かめる）。AI・自動の処理からは保存しない。
 // 保存の前に、人が見出しごとに案を直せる（KarteDraftEditor。人が書いた行は言葉の門を通さない）。
@@ -57,7 +57,7 @@ export function KarteBoard({ data, headings, editLimits }: { data: BookData; hea
       return out.state;
     });
     const result = out as SaveOutcome | null;
-    const who = `${c.surname}（架空）様`;
+    const who = `${c.surname}様`;
     if (!result || !result.ok) {
       setDone(result?.reason ?? "保存できませんでした。もう一度押してください。");
       return;
@@ -89,7 +89,7 @@ export function KarteBoard({ data, headings, editLimits }: { data: BookData; hea
       delete drafts[key];
       return { drafts };
     });
-    writeJournal({ who: "オーナー", text: `カルテの案をやめた：${selected.customer.surname}（架空）様（保存していない）` });
+    writeJournal({ who: "オーナー", text: `カルテの案をやめた：${selected.customer.surname}様（保存していない）` });
     setDone("案をやめました。メモはそのまま残っています。");
   };
 
@@ -97,7 +97,7 @@ export function KarteBoard({ data, headings, editLimits }: { data: BookData; hea
 
   return (
     <>
-      <h2>今日の予約のお客様（{book.today.label}・みな架空）</h2>
+      <h2>今日の予約のお客様（{book.today.label}）</h2>
       {book.dayOffset > 0 && <p className="shifted">デモ：「翌日へ」で {book.today.label} を「今日」にしています。</p>}
       {todays.length === 0 ? (
         <p className="empty">今日の予約（確定）はありません。</p>
@@ -119,7 +119,7 @@ export function KarteBoard({ data, headings, editLimits }: { data: BookData; hea
                   }}
                 >
                   <span className="num karte-pick-time">{r.start}</span>
-                  <CustomerName surname={r.customer.surname} fictional={r.customer.fictional} />
+                  <CustomerName surname={r.customer.surname} />
                   <span className="karte-pick-menu">{r.menu.name}</span>
                   {isSaved && <span className="tag ok">保存済み</span>}
                 </button>
@@ -135,7 +135,7 @@ export function KarteBoard({ data, headings, editLimits }: { data: BookData; hea
             <article className="karte-card saved">
               <header className="karte-card-head">
                 <span className="tag ok">保存済み</span>
-                <CustomerName surname={selected.customer.surname} fictional={selected.customer.fictional} />
+                <CustomerName surname={selected.customer.surname} />
                 <span className="num">{book.today.label}</span>
                 <strong>{menuName(saved.menuId)}</strong>
               </header>
@@ -157,7 +157,7 @@ export function KarteBoard({ data, headings, editLimits }: { data: BookData; hea
               <header className="karte-card-head">
                 <span className="tag who-ai">{draft.mode === "ai" ? "AI の案" : "決まった返事の案"}</span>
                 {/* 名前・日付・メニューはプログラムが入れる（AI は書かない） */}
-                <CustomerName surname={selected.customer.surname} fictional={selected.customer.fictional} />
+                <CustomerName surname={selected.customer.surname} />
                 <span className="num">{book.today.label}</span>
                 <strong>{selected.menu.name}</strong>
               </header>
@@ -172,7 +172,7 @@ export function KarteBoard({ data, headings, editLimits }: { data: BookData; hea
                 deskKey={key!}
                 headings={headings}
                 limits={editLimits}
-                who={`${selected.customer.surname}（架空）様`}
+                who={`${selected.customer.surname}様`}
                 editing={editing}
                 setEditing={setEditing}
               />
@@ -230,7 +230,7 @@ export function KarteBoard({ data, headings, editLimits }: { data: BookData; hea
       {selected && (
         <section className="karte-past" aria-labelledby="karte-past-h">
           <h2 id="karte-past-h">
-            前回までのカルテ（<CustomerName surname={selected.customer.surname} fictional={selected.customer.fictional} />）
+            前回までのカルテ（<CustomerName surname={selected.customer.surname} />）
           </h2>
           {past.length === 0 ? (
             <p className="empty">前回の記録なし</p>

@@ -1,5 +1,5 @@
 // 投げたメモのお客様の名字。AI に送る前に〔お客様〕に置きかえ（LINE の一言と同じ maskNames）、
-// 返ってきた文の〔お客様〕を、メモに出てきた順に「○○（架空）様」へ戻す（だれかは画面のプログラムが名字で決める）。
+// 返ってきた文の〔お客様〕を、メモに出てきた順に「○○様」へ戻す（だれかは画面のプログラムが名字で決める）。
 
 import { CUSTOMER_MARK, maskNames } from "../line/sort";
 
@@ -14,6 +14,6 @@ export function restoreNames(title: string, memo: string, found: { surname: stri
   return title.replace(MARK, () => {
     const c = order[Math.min(i, order.length - 1)];
     i += 1;
-    return c ? `${c.surname}（架空）様` : "お客様";
+    return c ? `${c.surname}様` : "お客様";
   });
 }

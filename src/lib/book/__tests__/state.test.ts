@@ -38,7 +38,7 @@ describe("承認の箱", () => {
       const s = withReleased(s0, pendingApprovals(s0, now)[0].approval.id, how, "江口", now);
       assert.equal(s.chat.length, 0, "時間は変えずに外す");
       assert.equal(s.approvals[0].state, how);
-      assert.deepEqual(s.todos.map((t) => t.title), ["江口（架空）様に別の日時を案内"]);
+      assert.deepEqual(s.todos.map((t) => t.title), ["江口様に別の日時を案内"]);
     });
 
   test("期限が過ぎた仮押さえは、台帳にも承認の箱にも出ない", () => {

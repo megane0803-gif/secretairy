@@ -30,7 +30,7 @@ describe("1. だれがした事か（src/lib/actors.ts）", () => {
     assert.deepEqual(ACTOR_LABEL, { ai: "AI", human: "人", outside: "外" });
   });
 
-  test("台帳：仮押さえ = AI・承認で確定 = 人・最初からの確定（店が受けて確定した予約）= 人・予約サイト（架空）から = 外", () => {
+  test("台帳：仮押さえ = AI・承認で確定 = 人・最初からの確定（店が受けて確定した予約）= 人・予約サイトから = 外", () => {
     assert.equal(reservationActor({ status: "hold", source: "chat" }), "ai");
     assert.equal(reservationActor({ status: "hold", source: "seed" }), "ai");
     assert.equal(reservationActor({ status: "confirmed", source: "chat" }), "human");

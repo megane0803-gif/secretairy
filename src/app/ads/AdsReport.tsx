@@ -1,8 +1,8 @@
 "use client";
 
 // 広告タブの真ん中：架空の広告の4週分。
-// AdsWeeks は一番上の「検索広告（架空）の4週分」（大きい数字3つと週ごとの小さい縦棒）。
-// AdsReport はその下の「広告（架空）の画面」と2つの一覧。
+// AdsWeeks は一番上の「検索広告の4週分」（大きい数字3つと週ごとの小さい縦棒）。
+// AdsReport はその下の「広告の管理画面」と2つの一覧。
 // 数はどれもプログラムが表から出す（AI は数を作らない）。止めた・外した行は薄くする。
 
 import { BigNumber, MiniColumns } from "@/components/parts";
@@ -59,7 +59,7 @@ function Rows({ rows, towns, offWord }: { rows: AdTableRow[]; towns: string[]; o
   );
 }
 
-/** 一番上の「検索広告（架空）の4週分」：大きい数字3つと週ごとの小さい縦棒（広告を出す言葉の4週の合計） */
+/** 一番上の「検索広告の4週分」：大きい数字3つと週ごとの小さい縦棒（広告を出す言葉の4週の合計） */
 export function AdsWeeks() {
   const { table, settings } = useAds();
   const weeks = weeklyTotals(table.keywords);
@@ -78,7 +78,7 @@ export function AdsWeeks() {
   return (
     <section className="ad-weeks" aria-labelledby="ad-weeks">
       <h2 id="ad-weeks">
-        {settings.channel}の4週分 <span className="tag fictional">架空</span>
+        {settings.channel}の4週分
       </h2>
       <div className="bignums">
         <div>
@@ -99,7 +99,7 @@ export function AdsWeeks() {
   );
 }
 
-/** 「広告（架空）の画面」と、広告を出す言葉・お客さんが調べた言葉の2つの一覧 */
+/** 「広告の管理画面」と、広告を出す言葉・お客さんが調べた言葉の2つの一覧 */
 export function AdsReport() {
   const { table, settings } = useAds();
   const stopped = table.keywords.filter((r) => r.off);
@@ -109,7 +109,7 @@ export function AdsReport() {
     <>
       <section className="ad-site" aria-labelledby="ad-site">
         <h2 id="ad-site">
-          広告（架空）の画面 <span className="tag fictional">架空</span>
+          広告の管理画面
         </h2>
         <p className="hint">承認すると、ここで言葉が止まります（外れます）。本物の広告にはつながっていません。</p>
         <strong>広告を出す言葉</strong>

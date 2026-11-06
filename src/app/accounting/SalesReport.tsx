@@ -18,7 +18,7 @@ export function SalesReport() {
   return (
     <section className="acct-sales" aria-labelledby="acct-sales">
       <h2 id="acct-sales">
-        {s.month}月の売上 <span className="tag fictional">架空</span>
+        {s.month}月の売上
       </h2>
       <p className="hint">見るだけです（どこにも送りません）。数はどれもプログラムが日ごとの数から出しています。</p>
       <div className="bignums">

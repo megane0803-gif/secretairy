@@ -50,8 +50,7 @@ describe("1. 「翌日へ」の前日のお知らせ（デモ）", () => {
       const res = want.find((x) => x.id === m.reservationId)!;
       assert.ok(m.text.startsWith(`明日 ${res.start} ${res.menu.name}のご予約をお待ちしています`), m.text);
       assert.ok(m.text.includes(shop.name));
-      assert.equal(m.fictional, true);
-      assert.ok(!m.text.includes(res.customer.surname), "文に名前は入れない（画面は架空の札つきで出す）");
+      assert.ok(!m.text.includes(res.customer.surname), "文に名前は入れない（画面は名前を札の外に出す）");
     }
   });
 

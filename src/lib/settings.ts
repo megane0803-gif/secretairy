@@ -210,11 +210,11 @@ export function getAdsAiSettings(): AdsAiSettings {
   return { model: getAiSettings().model, ...a };
 }
 
-/** 経理のタブの設定（config/accounting.json）。札は「会計（架空）」。実在の会計サービスの名前（freee）は、freee（テスト事業所）のつなぎの札（freee.label・freee.unconnectedNote）にだけ書く（docs/SPEC.md §1.8） */
+/** 経理のタブの設定（config/accounting.json）。札は「会計」。実在の会計サービスの名前（freee）は、freee（テスト事業所）のつなぎの札（freee.label・freee.unconnectedNote）にだけ書く（docs/SPEC.md §1.8） */
 export type AccountingSettings = {
-  /** 明細を取り込み、登録する先（画面の札。例「会計（架空）」）。オーナーのブラウザで freee（テスト事業所）につながっている時は freee の札（freee.label） */
+  /** 明細を取り込み、登録する先（画面の札。例「会計」）。オーナーのブラウザで freee（テスト事業所）につながっている時は freee の札（freee.label） */
   service: string;
-  /** 明細の出どころ（例「カード会社（架空）」） */
+  /** 明細の出どころ（例「カード会社」） */
   cardSource: string;
   /** freee（テスト事業所）とのつなぎ（オーナーのブラウザだけ。鍵・秘密は環境変数。docs/SPEC.md §1.8.1） */
   freee: FreeeSettings;

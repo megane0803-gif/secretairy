@@ -78,7 +78,7 @@ export function TimetableGrid({ tt }: { tt: Timetable }) {
                     <small>–{b.end}</small>
                   </span>
                 </span>
-                <CustomerName surname={b.surname} fictional={b.fictional} />
+                <CustomerName surname={b.surname} />
                 <span className="tt-band-menu">
                   {b.menuName}
                   {b.status === "hold" && <span className="tag hold">仮押さえ</span>}

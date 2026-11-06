@@ -21,7 +21,7 @@ export function JobStatement() {
   return (
     <section className="inline-box" aria-labelledby="job-statement">
       <h2 id="job-statement">
-        新しい明細（AI の仕事から） <span className="tag fictional">架空</span>
+        新しい明細（AI の仕事から）
       </h2>
       <p className="ad-change">
         <span>

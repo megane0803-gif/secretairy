@@ -98,7 +98,7 @@ function RecordingBody(p: Props & { folderOk: boolean; recordOk: boolean }) {
     setDesk((d) => ({ memos: { ...d.memos, [key]: memo }, sources: { ...(d.sources ?? {}), [key]: "recording" } }));
     writeJournal({
       who: "オーナー",
-      text: `録音の要点を施術のメモに入れた（${selected.customer.surname}（架空）様・${lines.length}行${dropped ? `・入りきらない${dropped}行は入れていない` : ""}。カルテにする・保存は人が押す）`,
+      text: `録音の要点を施術のメモに入れた（${selected.customer.surname}様・${lines.length}行${dropped ? `・入りきらない${dropped}行は入れていない` : ""}。カルテにする・保存は人が押す）`,
     });
   };
 
@@ -233,7 +233,7 @@ function RecordingBody(p: Props & { folderOk: boolean; recordOk: boolean }) {
               running={v.running === j.id}
               waiting={v.queue.includes(j.id)}
               memoMaxChars={p.memoMaxChars}
-              target={selected && !saved ? <CustomerName surname={selected.customer.surname} fictional={selected.customer.fictional} /> : null}
+              target={selected && !saved ? <CustomerName surname={selected.customer.surname} /> : null}
               onMemo={() => putIntoMemo(j)}
             />
           ))}
