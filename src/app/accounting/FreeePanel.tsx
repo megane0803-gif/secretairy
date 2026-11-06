@@ -155,7 +155,7 @@ export function FreeePanel({ freee }: { freee: Freee }) {
         </p>
       )}
       <p className="hint">
-        経理タブと同じ架空のカード明細 {nos.length}件（日付・購入先・金額）を、口座「{settings.cardName}」に入れます。同じ印の明細がもうあれば入れません。
+        経理タブと同じカード明細 {nos.length}件（日付・購入先・金額）を、口座「{settings.cardName}」に入れます。同じ印の明細がもうあれば入れません。
       </p>
       {callbackNote && (
         <p className="checked" role="status">

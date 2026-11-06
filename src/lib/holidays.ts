@@ -77,7 +77,7 @@ export function baseShop<T extends ShopSettings>(shop: T): T {
   return rest;
 }
 
-/** 休みの日の欄に並べる日（今日から aheadDays 日。定休日の曜日も入れる） */
+/** 休みにできる日（今日から aheadDays 日。定休日の曜日も入れる。範囲の数え方は book/holidayFlow.ts の holidayWindow と同じ） */
 export function holidayChoices(shop: ShopSettings, today: CalDay): (CalDay & { weekly: boolean })[] {
   const n = holidayLimitsOf(shop).aheadDays;
   const base = baseShop(shop);

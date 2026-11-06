@@ -2,7 +2,7 @@
 // 見ている週は、仕事の「今日」（book.today）・いまの時刻（book.now）とは別の物。動かしても今日・数え方・承認の箱は変わらない。
 //
 // 範囲：
-//   先 … 休みの日の欄と同じ数え方で、book.now.date を含めて holidayLimits.aheadDays 日（56日 = 55日後まで）。
+//   先 … 休みにできる範囲（holidayFlow.ts の holidayWindow）と同じ数え方で、book.now.date を含めて holidayLimits.aheadDays 日（56日 = 55日後まで）。
 //        その先に、これから先の有効な予約（確定と、期限の切れていない仮押さえ）があれば、その日まで（隠さない）。
 //   前 … 今日（book.today）から4週前まで（過ぎた日は見るだけ）。
 // 週は7日ずつ動かす。端の週も7列のまま（範囲の外の列は薄く、新しく入れられない）。範囲の最初と最後の日は飛ばさない。
@@ -109,7 +109,7 @@ export type MonthCell = {
   inView: boolean;
   /** お休み（定休日・設定の休みの日・オーナーの休みの日）。埋まりは「—」 */
   closed: boolean;
-  /** オーナーが決めた休みの日（休みの日の欄と同じ印） */
+  /** オーナーが決めた休みの日（休みの日の一覧と同じ印） */
   holiday: boolean;
   /** 件数（確定と、期限の切れていない仮押さえ）。お休みの日に残った予約も数える */
   count: number;
@@ -209,13 +209,15 @@ export type ViewState = {
   sheet: SheetTarget | null;
   /** 押して開いた予約の1枚（予約の id）。「台帳から入れる」の1枚とは同時に開かない */
   detail?: string | null;
+  /** 月のカレンダーの「休みを決める」（入れている間は、日を押すとその日を休みにする・戻す）。最初は切。開き直し・「翌日へ」・「最初に戻す」で切に戻る */
+  holidayMode?: boolean;
 };
 
 export const viewKey = (epoch: string | undefined, dayOffset: number): string => `${epoch ?? ""}|${dayOffset}`;
 
-export const freshView = (key: string): ViewState => ({ key, start: null, month: null, sheet: null, detail: null });
+export const freshView = (key: string): ViewState => ({ key, start: null, month: null, sheet: null, detail: null, holidayMode: false });
 
-/** 「翌日へ」「最初に戻す」（同じ日に押した時も、印 epoch が変わる）の後は、今日の週・今日の月に戻し、開いている1枚も閉じる */
+/** 「翌日へ」「最初に戻す」（同じ日に押した時も、印 epoch が変わる）の後は、今日の週・今日の月に戻し、開いている1枚も閉じる（「休みを決める」も切に戻す） */
 export function syncView(s: ViewState, key: string): ViewState {
   return s.key === key ? s : freshView(key);
 }
@@ -227,7 +229,8 @@ export type ViewAction =
   | { kind: "month"; dir: -1 | 1 }
   | { kind: "open"; target: SheetTarget }
   | { kind: "detail"; id: string }
-  | { kind: "close" };
+  | { kind: "close" }
+  | { kind: "holidayMode"; on: boolean };
 
 /** 押した時の変え方。週を動かしたら、カレンダーもその週の始まりの日の月に戻す */
 export function viewReduce(s: ViewState, a: ViewAction, ctx: { todayDate: string; range: ViewRange }): ViewState {
@@ -251,5 +254,8 @@ export function viewReduce(s: ViewState, a: ViewAction, ctx: { todayDate: string
       return { ...s, detail: a.id, sheet: null };
     case "close":
       return { ...s, sheet: null, detail: null };
+    case "holidayMode":
+      // 切りかえるだけ（週・月は動かさない）
+      return { ...s, holidayMode: a.on };
   }
 }

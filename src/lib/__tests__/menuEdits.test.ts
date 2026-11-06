@@ -617,6 +617,10 @@ describe("9. 直したメニューを読む入口は1つ（useBook の data.menu
       "src/app/home/BriefNotes.tsx",
       "src/app/karte/CustomerList.tsx",
       "src/app/karte/KarteBoard.tsx",
+      // 直しG（カレンダーで休みを決める）で増えた画面
+      "src/app/reservations/HolidayFlow.tsx",
+      "src/app/reservations/HolidayList.tsx",
+      "src/app/reservations/MonthCalendar.tsx",
     ];
     for (const f of files) assert.ok(!/(?<![.\w])data\.menus/.test(read(f)), `${f} が data.menus を直に読んでいる`);
     assert.ok(!/data\.menus\.map/.test(read("src/app/reservations/page.tsx")), "予約のページの表も直した値で（MenuTable）");
@@ -626,5 +630,48 @@ describe("9. 直したメニューを読む入口は1つ（useBook の data.menu
     const r = read("src/app/rules/RuleSide.tsx");
     assert.match(r, /const menus = book\.data\.menus;/);
     assert.match(r, /<MenuPanel data=\{props\.data\} \/>/);
+  });
+});
+
+describe("10. 直しG（カレンダーで休みを決める）と通しで：直したメニュー → 休みを決める → 一覧と ToDo → 戻す → 最初に戻す", () => {
+  test("パーマを 150分にして 11/6 を休みにする：一覧の終わる時刻は 150分で、ToDo の文は今までどおり。戻すとメニューを直す前の一覧にまた出る", async () => {
+    const { holidayPress, applyHoliday } = await import("../book/holidayFlow");
+    const { withHolidays } = await import("../holidays");
+    const perm150 = edit({ perm: { minutes: 150 } });
+    let book = emptyBook("2026-11-04");
+    const all = () => ledgerView(dataWith(perm150), book, NOW).all;
+    // 1. 直したメニュー：11/6 10:30 の大橋様のパーマは 13:00 に終わる
+    assert.equal(all().find((r) => r.id === "r05")?.end, "13:00");
+    // 2. カレンダーで 11/6 を押す：予約がある日なので、まず一覧（終わる時刻も直したメニューで）
+    const p = holidayPress({ shop, nowDate: "2026-11-04", dates: [], all: all(), date: "2026-11-06", epoch: book.epoch }, "calendar");
+    assert.equal(p.kind, "ask");
+    if (p.kind !== "ask") return;
+    assert.deepEqual(p.ask.list.map((r) => `${r.start}–${r.end} ${r.menu.name}`), ["10:30–13:00 パーマ", "16:00–17:00 カット"]);
+    // 3. 「それでも休みにする」：ToDo の文は日時とメニューの名前（名前は直せないので同じ文）
+    let dates: string[] = [];
+    const lines: string[] = [];
+    const out = applyHoliday(
+      {
+        setHoliday: (d, on) => ((dates = on ? [...dates, d] : dates.filter((x) => x !== d)), { ok: true }),
+        update: (f) => ((book = f(book)), { ok: true }),
+        journal: (e) => void lines.push(e.text),
+      },
+      { shop, state: book, dates, date: "2026-11-06", on: true, list: p.ask.list, ask: p.ask, nowIso: NOW.toISOString(), todayDate: "2026-11-04" },
+    );
+    assert.ok(out.close);
+    assert.deepEqual(book.todos.map((t) => t.title), ["大橋様に別の日時を案内（11/6（金） 10:30 パーマの代わり）", "加藤様に別の日時を案内（11/6（金） 16:00 カットの代わり）"]);
+    // 休みの日の予約は、メニューを直す時の一覧には出さない（休みの日の ToDo で扱う）
+    const longer = edit({ perm: { minutes: 150, lastStart: "10:00" } });
+    const holShop = withHolidays(shop, dates);
+    assert.ok(!menuConflicts({ shop: holShop, menus: longer, all: ledgerView({ ...dataWith(perm150), shop: holShop }, book, NOW).all, now: NOW_SHOP }).some((c) => c.id === "r05"));
+    // 4. 休みを戻す：また営業日なので、パーマの最終受付を 10:00 にすると 11/6 10:30 の大橋様が一覧に出る
+    const back = holidayPress({ shop: holShop, nowDate: "2026-11-04", dates, all: all(), date: "2026-11-06" }, "list");
+    assert.deepEqual(back, { kind: "apply", on: false });
+    dates = [];
+    assert.match(menuConflicts({ shop, menus: longer, all: all(), now: NOW_SHOP }).find((c) => c.id === "r05")?.reasons.join() ?? "", /パーマの最終受付（10:00）を過ぎています/);
+    // 5. 「最初に戻す」：直したメニューも休みの日も消える
+    const w = resetAllWrites("2026-11-04");
+    assert.equal(w.find((x) => x.key === MENUS_KEY)?.value, null);
+    assert.equal(w.find((x) => x.key === "holidays")?.value, null);
   });
 });
