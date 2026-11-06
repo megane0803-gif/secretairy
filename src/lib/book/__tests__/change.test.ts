@@ -11,7 +11,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, beforeEach, describe, test } from "node:test";
-import { BOOK_KEY, BROWSER_PREFIX, readBrowser, writeBrowser } from "../../browser";
+import { BOOK_KEY, BROWSER_PREFIX, DAILY_KEY, readBrowser, writeBrowser } from "../../browser";
+import { HOLIDAYS_KEY } from "../../holidays";
+import { SITE_STOPS_KEY } from "../siteStops";
 import { calDay } from "../../calendar";
 import { allKartes, resolveSeedKartes } from "../../karte/record";
 import { getReminderSettings } from "../../settings";
@@ -448,11 +450,17 @@ describe("6. ブラウザに書く（保存できなかった時・最初に戻�
     assert.match(sheet, /if \(o\.ok && !w\.ok\) \{\s*setNote\(SAVE_FAILED_MESSAGE\);/);
   });
 
-  test("「最初に戻す」で、最初の予約を直した分も予約サイトの番号も消える", () => {
-    const s: BookState = { ...base, seedResEdits: { r04: { cancelled: true, at: "x" } }, siteSeq: 5 };
+  test("「最初に戻す」1回で、最初の予約を直した分・予約サイトの番号・日報・休みの日・予約サイトの止めた時間が全部消え、印 epoch が変わる", () => {
+    const s: BookState = { ...base, seedResEdits: { r04: { cancelled: true, at: "x" } }, siteSeq: 5, epoch: "r-old" };
     writeBrowser(BOOK_KEY, JSON.stringify(s));
+    writeBrowser(DAILY_KEY, "{}");
+    writeBrowser(HOLIDAYS_KEY, JSON.stringify(["2026-11-05"]));
+    writeBrowser(SITE_STOPS_KEY, JSON.stringify(["2026-11-05 13:00"]));
     const out = resetAll("2026-11-04");
     assert.ok(out.written);
+    assert.deepEqual(out.failed, []);
+    for (const k of [DAILY_KEY, HOLIDAYS_KEY, SITE_STOPS_KEY]) assert.equal(readBrowser(k), null, k);
+    assert.notEqual(parseBook(readBrowser(BOOK_KEY))!.epoch ?? "", "r-old");
     const back = parseBook(readBrowser(BOOK_KEY))!;
     assert.equal(back.seedResEdits, undefined);
     assert.equal(back.siteSeq, undefined);
