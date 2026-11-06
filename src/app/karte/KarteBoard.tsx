@@ -21,7 +21,7 @@ import { useState } from "react";
 import { CustomerList } from "./CustomerList";
 import { KarteDraftEditor } from "./KarteDraftEditor";
 import { KarteRecordBody, KarteSectionsView } from "./KarteRecordBody";
-import { useKarteToday } from "./useKarteToday";
+import { KARTE_DRAFT_ID, useKarteToday } from "./useKarteToday";
 
 export { KarteSectionsView };
 
@@ -142,7 +142,7 @@ export function KarteBoard({ data, headings, editLimits }: { data: BookData; hea
               </Fold>
             </article>
           ) : draft ? (
-            <article className="karte-card ai" aria-label="AI のカルテの案">
+            <article className="karte-card ai" id={KARTE_DRAFT_ID} aria-label="AI のカルテの案">
               <header className="karte-card-head">
                 <span className="tag who-ai">{draft.mode === "ai" ? "AI の案" : "決まった返事の案"}</span>
                 {/* 名前・日付・メニューはプログラムが入れる（AI は書かない） */}

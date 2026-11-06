@@ -1,7 +1,7 @@
 "use client";
 
 // ホームの真ん中（「AI に頼める仕事」と一番下の「くわしく」より上）。このブラウザの台帳・カルテから、プログラムが数えて並べる。
-// 上から：朝の要点（数字3枚＋まずやる3つ。日付の横に「翌日へ」）・思いついたことを一言メモ・今日のお客様（前回の次回提案）・
+// 上から：朝の要点（数字4枚（押すと中身へ）＋まずやる3つ。日付の横に「翌日へ」）・思いついたことを一言メモ・今日のお客様（前回の次回提案）・
 // 今日の注意（AI。BriefNotes。気をつける点を数個まで・文だけ）・今日これから空いている時間。下の3つは畳める（RememberFold）。
 // デモ用の「翌日へ」で今日を1営業日先へ（定休日は飛ばす）。押すと前日のお知らせ（デモ・送らない）を数字の下に見せる。
 // 「最初に戻す」（ページの一番下）で本当の今日に戻る。
@@ -21,7 +21,10 @@ import { freeRanges } from "@/lib/reservations";
 import { useApprovals } from "@/lib/useApprovals";
 import type { BriefAiSettings, KarteHeading, ReminderSettings, TodoSettings } from "@/lib/settings";
 import { useTodos } from "@/lib/todo/useTodos";
+import { JumpLink } from "@/components/JumpLink";
 import { MemoThrow } from "@/components/MemoThrow";
+import { TABS } from "@/lib/tabs";
+import Link from "next/link";
 import { TodoTop } from "@/components/TodoTop";
 import { useState } from "react";
 import { BriefNotes } from "./BriefNotes";
@@ -46,8 +49,9 @@ export function HomeSummary({
   const book = useBook(data);
   // 承認待ちは承認の箱の行と同じ数（approvals.ts）
   const approvals = useApprovals();
-  // 今日の ToDo：ToDo のタブと同じ一覧から（期限の先の物＝広告の「効いたか見る」などは、その日まで今日の数に入れない）
-  const todos = useTodos(data).todayCount;
+  // ToDo の期限の数：ToDo のタブと同じ一覧・同じ数え方から（items.ts の todoDueCounts）。期限の無い物（メモ・次回など）は数えない。
+  // 今日まで＝期限が今日、期限切れ＝期限が今日より前（お客様への連絡で過ぎた物も入る）。先の日の物は入れない
+  const due = useTodos(data).dueCounts;
   const todays = book.all.filter((r) => r.date === book.today.date);
   const menuName = (id: string) => resolveMenu(data.menus, id)?.name ?? id;
   // 今日のこれからの空き（いまの時刻より前の枠は数えない）
@@ -94,7 +98,7 @@ export function HomeSummary({
               <span className="tag text">デモ</span>
             </>
           }
-          desc="今日の予約・承認待ち・ToDo の数を、プログラムが数えました"
+          desc="今日の予約・承認待ち・期限のある ToDo（今日まで＝期限が今日、期限切れ＝今日より前）を、プログラムが数えました。押すと中身へ"
         />
         {book.shifted && <p className="shifted">{book.opened.label}はお休みなので、次の営業日を「今日」にしています。</p>}
         {book.dayOffset > 0 && (
@@ -114,10 +118,20 @@ export function HomeSummary({
         )}
         <div className="morning-wrap">
           <div className="morning-row">
+            {/* 数字のカードは押せる：今日の予約 → 今日のお客様（閉じていれば開く）・承認待ち → 承認の箱・ToDo → ToDo のタブ */}
             <div className="bignums home-bignums">
-              <BigNumber label="今日の予約" value={book.book.todayCount} unit="件" />
-              <BigNumber label="承認待ち" value={approvals.count} unit="件" />
-              <BigNumber label="今日の ToDo" value={todos} unit="件" />
+              <JumpLink to="customers" className="bignum-link" title="今日のお客様を見る">
+                <BigNumber label="今日の予約" value={book.book.todayCount} unit="件" go="↓" />
+              </JumpLink>
+              <JumpLink to="approvals" className="bignum-link" title="承認の箱を見る">
+                <BigNumber label="承認待ち" value={approvals.count} unit="件" go="↓" />
+              </JumpLink>
+              <Link href={TABS.todo.path} className="bignum-link" title="ToDo のタブで見る（期限が今日の物）">
+                <BigNumber label="ToDo 今日まで" value={due.dueToday} unit="件" go="→" />
+              </Link>
+              <Link href={TABS.todo.path} className="bignum-link" title="ToDo のタブで見る（期限が今日より前の物）">
+                <BigNumber label="ToDo 期限切れ" value={due.overdue} unit="件" go="→" />
+              </Link>
             </div>
             <section className="morning-top" aria-labelledby="brief-todo">
               <SectionHead
@@ -155,6 +169,7 @@ export function HomeSummary({
 
       <RememberFold
         id="customers"
+        anchor="customers"
         className="brief"
         title="今日のお客様"
         tag={<ProgramTag />}

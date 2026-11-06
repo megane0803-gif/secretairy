@@ -35,7 +35,7 @@ import { memoDue } from "../todo/due";
 import { resolveSeedTodos, withMemoTodo } from "../todo/items";
 import { maskNames, restoreNames } from "../todo/names";
 import type { TodoRequest, TodoResponse } from "../todo/wire";
-import { JOB_IDS, isJobDone, withJobDone, type JobId, type JobsState } from "./state";
+import { JOB_APPROVAL_RESULT, JOB_IDS, isJobDone, withJobDone, type JobId, type JobsState } from "./state";
 
 /** ai = Claude / script = 決まった返事（AI なし。テストと同じ物） */
 export type JobMode = "ai" | "script";
@@ -289,7 +289,7 @@ async function reserveJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
     if (last.busy) return { kind: "busy" };
     if (last.bad) return { kind: "failed", note: last.bad };
   }
-  if (first.hold || last.hold) return { kind: "done", result: "承認待ち1件", tab: "reservations" };
+  if (first.hold || last.hold) return { kind: "done", result: JOB_APPROVAL_RESULT, tab: "reservations" };
   if (first.todo || last.todo) return { kind: "done", result: "ToDo に1件（お店に確かめる）", tab: "todo" };
   return { kind: "done", result: "仮押さえはしませんでした", tab: "reservations" };
 }
@@ -373,7 +373,7 @@ async function adsJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
   });
   if (!added) return { kind: "skip", note: ALREADY_THIS_WEEK };
   env.journal(...res.steps, { who: "プログラム", text: `承認の箱に入れた：広告の案「${proposalLabel(again.proposal)}」` });
-  return { kind: "done", result: "承認待ち1件", tab: "ads" };
+  return { kind: "done", result: JOB_APPROVAL_RESULT, tab: "ads" };
 }
 
 // ── メモ ─────────────────────────────────────────────────

@@ -12,7 +12,8 @@ import { MAX_DAY_OFFSET } from "../calendar";
 import type { SavedKarte } from "../karte/record";
 import type { ChatReservation } from "../reservations";
 import { getSavedMemoMaxChars } from "../settings";
-import { chatKey, reserveKey, SEED_TODO_KEYS, todoKey, TODO_SOURCES, type TodoSource } from "../todo/keys";
+import { rescheduleTodo } from "../todo/reschedule";
+import { chatKey, SEED_TODO_KEYS, todoKey, TODO_SOURCES, type TodoSource } from "../todo/keys";
 import { readMemoKind, type MemoKind } from "../todo/kinds";
 
 /**
@@ -337,7 +338,7 @@ export function withApproved(s: BookState, approvalId: string, nowIso: string): 
 
 /**
  * 直す・見送り：お客様の了解なしに時間は変えないので、仮押さえを外し、
- * 「○○（架空）様に別の日時を案内」を ToDo に足す（AI は使わない）。
+ * 「○○（架空）様に別の日時を案内（11/8（日） 15:00 カットの代わり）」を ToDo に足す（AI は使わない。todo/reschedule.ts）。
  */
 export function withReleased(
   s: BookState,
@@ -351,15 +352,8 @@ export function withReleased(
   const a = s.approvals.find((x) => x.id === approvalId && x.state === "pending");
   if (!a) return s;
   const r = s.chat.find((x) => x.id === a.reservationId);
-  const todo: AddedTodo = {
-    id: `td-${a.reservationId}`,
-    title: `${surname}（架空）様に別の日時を案内`,
-    createdAt: nowIso,
-    done: false,
-    source: "reserve",
-    ...(r ? { key: reserveKey(r.customerId, r.date, r.start) } : {}),
-    ...(today && DATE.test(today) ? { due: today } : {}),
-  };
+  // 文・鍵・期限は todo/reschedule.ts の1か所で（元の頼みの日時とメニューを添える。LINE のボタンもここを通る）
+  const todo = rescheduleTodo({ idPrefix: "td", reservationId: a.reservationId, surname, from: r, nowIso, due: today });
   return {
     ...withTodo(s, todo),
     chat: s.chat.filter((r) => r.id !== a.reservationId),

@@ -6,6 +6,7 @@
 // 押せない時（7日に1つまで・承認待ちがある）は、ボタンのすぐ下にふつうの字で理由と次に頼める日時を出し、
 // その下に「デモ」の札と「広告（架空）を最初に戻す」を出す。押せる時は「最初に戻す」を欄の一番下に出す（いつも1か所だけ）。
 
+import { scrollToId } from "@/lib/scroll";
 import { useState } from "react";
 import { GateChecks } from "@/components/AdApprovalRows";
 import { askAdsReview } from "@/lib/ads/client";
@@ -30,6 +31,9 @@ type Shown =
   | { kind: "ok"; text: string; checks: GateCheck[]; tries: number }
   | { kind: "gate"; problems: string[]; checks: GateCheck[] }
   | { kind: "note"; text: string };
+
+/** 広告のタブの「承認待ち」の見出しの id（うまくいった直後のリンクの先） */
+export const ADS_APPROVALS_ID = "ads-approvals";
 
 export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone: string }) {
   const ads = useAds();
@@ -168,9 +172,32 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
       <button type="button" className="btn primary big" onClick={() => void ask(mode)} disabled={busy || !can.ok}>
         {busy ? "見直しています…" : "AI に見直してもらう"}
       </button>
+      {/* うまくいった直後は、入れた事と決める所へのリンクを先に（押せない理由はその下に、ふつうの字で） */}
+      {shown?.kind === "ok" && (
+        <div role="status">
+          <p className="checked">
+            <span aria-hidden>✓</span> 承認の箱に入れました：{shown.text}
+            {shown.tries > 1 && "（1回弾いて、作り直した案です）"}。
+            <a
+              href={`#${ADS_APPROVALS_ID}`}
+              className="ad-review-go"
+              onClick={(e) => {
+                if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                e.preventDefault();
+                scrollToId(ADS_APPROVALS_ID, { hash: true });
+              }}
+            >
+              <span className="sp-inline">すぐ下で決める ↓</span>
+              <span className="pc-inline">左の承認待ちで決める ←</span>
+            </a>
+          </p>
+          <strong>プログラムの確認</strong>
+          <GateChecks checks={shown.checks} />
+        </div>
+      )}
       {!can.ok && (
         <>
-          <p className="ad-review-why" role="status">
+          <p className="ad-review-why" role={shown?.kind === "ok" ? undefined : "status"}>
             {can.reason}
             {nextLabel && `次は ${nextLabel} から頼めます。`}
           </p>
@@ -202,16 +229,6 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
         </div>
       )}
 
-      {shown?.kind === "ok" && (
-        <div role="status">
-          <p className="checked">
-            <span aria-hidden>✓</span> 承認の箱に入れました：{shown.text}
-            {shown.tries > 1 && "（1回弾いて、作り直した案です）"}
-          </p>
-          <strong>プログラムの確認</strong>
-          <GateChecks checks={shown.checks} />
-        </div>
-      )}
       {shown?.kind === "gate" && (
         <div role="status">
           <p className="problems">プログラムの確認を通らなかったので、案は出しませんでした（日誌に書きました）。</p>
