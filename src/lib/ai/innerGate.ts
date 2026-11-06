@@ -4,6 +4,7 @@
 //   1. 伝えないルールの文（オーナーが書いた言葉。言葉で足したルールも同じ）がそのまま入っている
 //   2. 「15分あける」「15分の間をあけて」「間を15分」のような、何分あけるかの形（「お客様に伝える」にしたルールの文の中の物は数えない）
 // 「カットは60分です」「90分ほどかかります」のような、ふつうの時間の言い方は止めない。
+// もう1つ、英字の文（AI の作業の文。「Tool confirms. Place hold…」）も止める（workTextHit）。短い英字（AI・LINE）や時刻・数字は止めない。
 
 import { LOCKED_RULES } from "../rules/locked";
 import { tellsRule } from "../rules/tellable";
@@ -37,4 +38,22 @@ export function innerWordsHit(text: string, rules: Rule[]): string | null {
   }
   const m = t.match(GAP);
   return m ? m[0] : null;
+}
+
+/** 英字の単語がこの数だけ続いたら、作業の文とみる（「Tool confirms. Place hold」） */
+const WORK_WORDS = 3;
+/** 英字が合わせてこの字数あれば、作業の文とみる（短い単語がばらばらに入っていても） */
+const WORK_LETTERS = 20;
+
+/**
+ * お客様への返事に、AI の作業の文（英語など）が入っていたら当てる（当たった所を返す。当たらなければ null）。
+ * 英字の単語が3つ以上続く、または英字が合わせて20字以上。時刻・日付・数字・「AI」「LINE」のような短い英字だけなら当たらない。
+ */
+export function workTextHit(text: string): string | null {
+  const t = text.normalize("NFKC");
+  const run = t.match(new RegExp(`[A-Za-z]+(?:[\\s,.;:'’!?()/-]+[A-Za-z]+){${WORK_WORDS - 1},}`));
+  if (run) return run[0];
+  const letters = t.match(/[A-Za-z]/g) ?? [];
+  if (letters.length >= WORK_LETTERS) return (t.match(/[A-Za-z][A-Za-z\s.,'’-]*/g) ?? []).join(" ").trim().slice(0, 40);
+  return null;
 }
