@@ -41,7 +41,12 @@ export type JudgeInput = {
   existing: Booked[];
   /** どのタブの判定か。予約の判定なので、ふつうは "reservations" */
   tab?: TabId;
+  /** その日がオーナーの決めた休みの日か（定休日とは分ける。お客様への文で「（定休日）」を付けないため。calendar.ts の CalDay.holiday） */
+  holiday?: boolean;
 };
+
+/** オーナーの休みの日で断った時の理由（定休日の「お休みの日です」と分ける。tellable.ts の baseSay が見る） */
+export const HOLIDAY_REASON = "休みの日です";
 
 /** 店の設定（営業時間・席・メニューの最終受付）で確かめた結果 */
 export type BaseResult = { id: string; label: string; ok: boolean; reason: string };
@@ -99,7 +104,7 @@ export function judge(input: JudgeInput): Verdict {
     reason: lead > 0 ? "これから先の時刻です" : "もう過ぎた時刻です",
   });
   if (!hours) {
-    base.push({ id: "open-day", label: "営業日", ok: false, reason: "お休みの日です" });
+    base.push({ id: "open-day", label: "営業日", ok: false, reason: input.holiday ? HOLIDAY_REASON : "お休みの日です" });
     return { ok: false, base, results: [], texts, situation };
   }
   const open = toMinutes(hours.open);

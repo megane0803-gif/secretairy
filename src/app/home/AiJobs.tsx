@@ -27,6 +27,7 @@ import { adsBlocked, JOB_NAME, reserveText, runJobs, seedOf, type JobEnv, type J
 import { JOB_IDS, jobDoneLink, openJobs, type JobDone, type JobId } from "@/lib/jobs/state";
 import { useJobs, useJobsSwitch } from "@/lib/jobs/useJobs";
 import { useRules } from "@/lib/rules/useRules";
+import { useSiteStops } from "@/lib/book/useSiteStops";
 import type { JobsSettings } from "@/lib/settings";
 import { TABS } from "@/lib/tabs";
 
@@ -59,6 +60,7 @@ function useAiJobsState(data: BookData, settings: JobsSettings) {
   const ads = useAds();
   const jobs = useJobs();
   const { rules } = useRules(data.seedRules);
+  const { stops: siteStops } = useSiteStops();
   const sw = useJobsSwitch(settings.visible);
   const [mode, setMode] = useState<JobMode>("ai");
   const [phase, setPhase] = useState<Partial<Record<JobId, Phase>>>({});
@@ -95,6 +97,8 @@ function useAiJobsState(data: BookData, settings: JobsSettings) {
       now: () => new Date(),
       adSettings: ads.settings,
       seeds,
+      // 予約サイトで止めた時間（予約サイトから入る行だけに効く）
+      siteStops,
     };
     let down = false;
     try {

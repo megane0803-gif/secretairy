@@ -17,9 +17,9 @@ export function openTodayLine(shop: ShopSettings, now: { date: string; time: str
     for (let i = 1; i <= 14; i++) {
       const [y, m, d] = now.date.split("-").map(Number);
       const next = calDay(shop, new Date(Date.UTC(y, m - 1, d + i)).toISOString().slice(0, 10));
-      if (next.hours) return `今日（${day.label}）はお休み（定休日）です。次は ${next.label} ${next.hours.open}〜${next.hours.close} に営業します。`;
+      if (next.hours) return `今日（${day.label}）はお休み${day.holiday ? "" : "（定休日）"}です。次は ${next.label} ${next.hours.open}〜${next.hours.close} に営業します。`;
     }
-    return `今日（${day.label}）はお休み（定休日）です。`;
+    return `今日（${day.label}）はお休み${day.holiday ? "" : "（定休日）"}です。`;
   }
   const t = toMinutes(now.time);
   if (t >= toMinutes(day.hours.close)) return `今日（${day.label}）の営業は ${day.hours.close} までで、もう終わりました。`;

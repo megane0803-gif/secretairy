@@ -6,7 +6,7 @@
 
 import { useMemo, useState } from "react";
 import { Fold, Panel } from "@/components/parts";
-import { shopNow, toHHMM, toMinutes, type CalDay } from "@/lib/calendar";
+import { calDay, shopNow, toHHMM, toMinutes, type CalDay } from "@/lib/calendar";
 import { scopeTag } from "@/lib/rules/describe";
 import { judge, type Booked, type Booking, type JudgeMenu } from "@/lib/rules/judge";
 import { instructionsFor } from "@/lib/rules/prompt";
@@ -115,9 +115,11 @@ function CapacityField() {
   );
 }
 
-function TryPanel({ seed, menus, shop, days, data }: Omit<Props, "wordsOn" | "wordsMaxChars">) {
+function TryPanel({ seed, menus, shop, days: configDays, data }: Omit<Props, "wordsOn" | "wordsMaxChars">) {
   const { rules } = useRules(seed);
   const book = useBook(data);
+  // 休みの日（予約のページで決めた分）も重ねた暦で（予約チャット・台帳と同じ判定）
+  const days = useMemo(() => configDays.map((d) => calDay(book.shop, d.date)), [configDays, book.shop]);
   const booked: Booked[] = useMemo(
     () => book.booked.map((b) => ({ date: b.date, start: b.start, menuIds: [b.menuId], newCustomer: b.newCustomer })),
     [book.booked],

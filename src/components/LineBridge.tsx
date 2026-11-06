@@ -152,6 +152,7 @@ export function LineBridge({ data }: { data: BookData }) {
       customers: data.customers,
       nowIso: new Date().toISOString(),
       today: L.book.today.date,
+      now: L.book.now,
       adSettings: getAdSettings(),
     };
   }
@@ -202,6 +203,8 @@ export function LineBridge({ data }: { data: BookData }) {
       rules: L.rules.filter((r) => !r.locked),
       dayOffset: L.book.dayOffset,
       seats: L.book.shop.seats,
+      // 休みの日（予約のページで決めた分）。サーバーは形と数を確かめてから判定に使う
+      holidays: L.book.shop.ownerHolidays ?? [],
     };
     let res: LineAskResponse = await lineApi.ask({ ...body, mode });
     let note = "";

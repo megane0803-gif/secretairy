@@ -20,6 +20,8 @@ export type TimetableBand = Span & {
   fresh: boolean;
   /** 予約サイトから入った予約（お客様が自分で決めた確定。承認の箱は通らない） */
   site?: boolean;
+  /** オーナーが台帳から入れた予約（人のボタンで確定。承認の箱は通らない。book/owner.ts） */
+  owner?: boolean;
   /** だれが入れた物か（仮押さえ = AI・承認で確定と店が受けた確定 = 人・予約サイトから = 外。src/lib/actors.ts）。帯の頭の札だけに使う */
   actor: Actor;
   /** 帯の色（メニューごと。src/lib/book/menuColor.ts。設定に色の無いメニューは none = 灰色） */
@@ -48,6 +50,10 @@ export type TimetableColumn = {
   /** 営業時間の外（その日だけ時間が短いとき）。灰色にする */
   off: Span[];
   bands: TimetableBand[];
+  /** 見られる範囲の外の日（薄くし、新しく入れない。weekView.ts） */
+  outside: boolean;
+  /** 押すと「入れる」画面が出る空いたマス（これからの時刻で、同じ時間に受ける人数に届いていない所）。picks を渡した時だけ */
+  picks: (Span & { start: string })[];
 };
 
 export type Timetable = {
@@ -95,7 +101,12 @@ function lanesOf(list: Reservation[]): Map<string, { lane: number; lanes: number
  * 縦の幅は、7日の中でいちばん早い開店からいちばん遅い閉店まで（1時間の区切りにそろえる）。
  * 営業日が1日も無ければ 10:00〜20:00。
  */
-export function timetable(week: LedgerDay[], now?: { date: string; time: string }): Timetable {
+export function timetable(
+  week: (LedgerDay & { outside?: boolean })[],
+  now?: { date: string; time: string },
+  /** 空いたマスを押せるようにする時（seats = 同じ時間に受ける人数・step = 1マスの分） */
+  picks?: { seats: number; step: number },
+): Timetable {
   const openDays = week.filter((d) => d.hours);
   const opens = openDays.map((d) => toMinutes(d.hours!.open));
   const closes = openDays.map((d) => toMinutes(d.hours!.close));
@@ -127,12 +138,15 @@ export function timetable(week: LedgerDay[], now?: { date: string; time: string 
       usedMinutes: d.usedMinutes,
       capacityMinutes: d.capacityMinutes,
       off,
+      outside: !!d.outside,
+      picks: picks && d.hours && !d.outside ? freeCells(d, picks.seats, Math.max(5, picks.step), now).map((c) => ({ ...span(c.from, c.from + c.len), start: toHHMM(c.from) })) : [],
       bands: d.reservations.map((r) => ({
         ...span(r.startMin, r.endMin),
         id: r.id,
         status: r.status,
         fresh: r.status === "confirmed" && r.source === "chat",
         ...(r.source === "site" ? { site: true } : {}),
+        ...(r.source === "owner" ? { owner: true } : {}),
         actor: reservationActor(r),
         menuColor: menuColorOf(r.menu),
         start: r.start,
@@ -155,10 +169,28 @@ export function timetable(week: LedgerDay[], now?: { date: string; time: string 
   return { from, to, ticks, columns, now: line };
 }
 
+/**
+ * その日の空いたマス（押すと台帳から入れる画面が出る）。営業時間の中で、まだ過ぎていなくて、同じ時間に受ける人数に届いていない所。
+ * 受けられるか（ルール・最終受付など）は、押した後の画面でプログラムが確かめる（book/owner.ts）。
+ */
+export function freeCells(day: LedgerDay, seats: number, step: number, now?: { date: string; time: string }): { from: number; len: number }[] {
+  if (!day.hours) return [];
+  if (now && day.date < now.date) return [];
+  const out: { from: number; len: number }[] = [];
+  const close = toMinutes(day.hours.close);
+  for (let t = toMinutes(day.hours.open); t + step <= close; t += step) {
+    if (now && day.date === now.date && t <= toMinutes(now.time)) continue;
+    const used = day.reservations.filter((r) => r.startMin < t + step && t < r.endMin).length;
+    if (used < seats) out.push({ from: t, len: step });
+  }
+  return out;
+}
+
 /** 帯の読み上げ・ホバーの文（「10:00–11:00 カット 久保様 仮押さえ（承認待ち）［AI：AI がした事］」） */
 export function bandTitle(b: TimetableBand): string {
   const who = guestName(b.surname);
-  const state = b.status === "hold" ? "仮押さえ（承認待ち）" : b.fresh ? "確定（承認で確定）" : b.site ? "確定（予約サイトから）" : "確定";
+  const state =
+    b.status === "hold" ? "仮押さえ（承認待ち）" : b.fresh ? "確定（承認で確定）" : b.site ? "確定（予約サイトから）" : b.owner ? "確定（台帳から（オーナー））" : "確定";
   const by = `［${ACTOR_LABEL[b.actor]}：${ACTOR_MEANING[b.actor]}］`;
   return `${b.start}–${b.end} ${b.menuName} ${who} ${state}${b.firstVisit ? " 初めての方" : ""} ${by}`;
 }

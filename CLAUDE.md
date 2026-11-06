@@ -68,7 +68,7 @@ src/components/    共通の部品
 src/app/api/ai/    AI を呼ぶ窓口（サーバーの側。受け取った物は残さない）
 src/lib/           設定の読み込み・ルール（言葉で書いて足す入口は rules/words.ts）
 src/lib/ai/        予約チャットの道具・流れ・料金の答え（prices.ts）・決まった返事（テスト用）
-src/lib/book/      台帳・承認の箱・保存したカルテ・「翌日へ」（ブラウザの中に残す形）・予約サイトから入る予約（site.ts。承認の箱は通さない・AI なし）・台帳の帯の色（menuColor.ts。メニューごと・config/menus.json の color・値は globals.css の --menu-*。だれは帯の頭の札だけ）
+src/lib/book/      台帳・承認の箱・保存したカルテ・「翌日へ」（ブラウザの中に残す形）・予約サイトから入る予約（site.ts。承認の箱は通さない・AI なし）・台帳の帯の色（menuColor.ts。メニューごと・config/menus.json の color・値は globals.css の --menu-*。だれは帯の頭の札だけ）・台帳から入れる予約（owner.ts。オーナーの「入れる」ボタンだけ・確定・承認の箱は通さない・judgeSlot で入れる前と保存の直前・オーナーのルールだけはもう一度押せば入れる）・予約サイトで止めた時間（siteStops.ts。予約サイトだけに効く）・承認の時の確かめ（approve.ts。休みの日と過ぎた時刻は確定しない）・休みにする日の予約の ToDo（holiday.ts）
 src/lib/karte/     カルテ：見出しに分ける・整える（tidy.ts。重ねない・次回の希望は次回提案にも）・言葉の門・保存と ToDo・Claude（Haiku）と決まった返事・人が直す（edit.ts。案も保存したカルテも最初の状態のカルテも。人の行は門を通さない）・お客様一覧（customers.ts）
 src/lib/recording/ カルテの「録音からメモを作る」（PC だけ）：区切る・黙っている所を飛ばす・Whisper（Web Worker）・要点（Haiku）・フォルダ・画面の録音（IndexedDB に残す）
 src/lib/ads/       広告の数・門・道具・流れ・決まった返事・広告の承認の箱（ブラウザの中に残す形）
@@ -87,6 +87,7 @@ src/lib/jobs/      ホームの「AI に頼める仕事」：これから来る�
 src/lib/brief/     朝の要点の「AI の一言」：材料と印（items.ts。名前は送らない・印を日時とお名前に置きかえる）・門・指示文・流れ・決まった返事（scriptBriefWriter）
 src/lib/eval/      試験10問（/eval。左のタブには出さない）：問い（config と seed から作る。ふつうの予約3問）・判定（checks.ts。文と結果。AI は使わない）・流し方（同時に1回・1問ごとに eval.minIntervalSeconds 秒・eval.maxCallsPerRun 回まで・流せなかった物は数えない）・合言葉（EVAL_PASSCODE。窓口は src/app/api/eval/。AI は呼ばない）・サーバーの見張り（guard.ts。KV の印は SET NX＋期限・回数は INCR。/api/ai/ の窓口が試験の札の見出しを見て数える）・仮押さえの問いは「選んだ枠にちょうど1件・確定0件」の時だけ合格・「確定しました」と言わない、は確定したと伝える文だけ落とす（かぎかっこの中・「〜とお伝えできません」の打ち消しは数えない）・README に写す形は文の条件で落ちた所の前後も出す。今の /api/ai/ の窓口を使い、結果は画面の表だけ
 .claude/agents/   サブエージェント「意地悪なお客さん役」（mean-customer.md）：試験の問いの案を出す。材料は seed と config だけ
+src/lib/holidays.ts 休みの日（オーナーが予約のページで決める。ブラウザの中・seats と同じ扱い）：判定（calDay）にだけ効かせ、最初の状態の日付は baseShop・seedAnchor で数える（今ある予約の日付を動かさない）。サーバーは readHolidays で確かめる
 src/lib/reminder.ts 「翌日へ」の前日のお知らせ（決まった形・AI なし・送らない）
 src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理・LINE の預かりをまとめて戻す。書けたかを返す）
 src/lib/book/store.ts 台帳をブラウザに書く所（updateBook。書けたかを返す）・今の「最初に戻す」の印（currentEpoch）

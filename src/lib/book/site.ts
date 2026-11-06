@@ -8,13 +8,16 @@
 // 枠の決め方（プログラム）：
 //   free   … 空いている枠に1件（台帳の確定・仮押さえ・同じ時間に受ける人数・店の設定・ルールを judge.ts で確かめて、通った最初の枠）
 //   onHold … デモの見せ場：いちばん古い承認待ちの仮押さえと同じ枠に入れる（予約サイトには仮押さえは見えないので、確定の予約だけで確かめる）
+// どちらも、オーナーが「ネットでは受けない」にした時間（siteStops.ts）にかかる枠には入れない（その時刻に始まる物も、重なる物も）。
 // 二重予約を防ぐ：入った予約で同じ時間に受ける人数をこえる仮押さえは外し、ToDo に「○○様に別の日時を案内」を今日中として足す。
 
 import { candidateLabel, findSlots, judgeSlot, type SlotContext } from "../ai/slots";
 import type { BookedRow, Candidate } from "../ai/wire";
-import { calDay, demoClock } from "../calendar";
+import { demoClock, toMinutes } from "../calendar";
+import { resolveMenu } from "../combo";
+import { siteStep, stopHit } from "./siteStops";
 import type { JournalWho } from "../journal";
-import { loadBook, resolveChatReservations, sortReservations, type ChatReservation, type Reservation } from "../reservations";
+import { loadBook, resolveChatReservations, seedAnchor, sortReservations, type ChatReservation, type Reservation } from "../reservations";
 import type { Rule } from "../rules/types";
 import { guestName } from "../guestName";
 import { rescheduleTodo } from "../todo/reschedule";
@@ -38,6 +41,8 @@ export type SiteContext = {
   /** そのブラウザのルール（鍵つき＋オーナーのルール） */
   rules: Rule[];
   now: Date;
+  /** オーナーが予約サイトで「ネットでは受けない」にした時間（siteStops.ts の印）。予約サイトだけに効く */
+  stops?: string[];
 };
 
 export type SiteReleased = { approvalId: string; reservation: ChatReservation; surname: string; todo: string };
@@ -63,18 +68,17 @@ export function siteCount(s: BookState): number {
   return s.chat.filter(isSiteReservation).length;
 }
 
-/** 台帳を画面と同じ組み立て方で（useBook と同じ部品）。確定・仮押さえ（期限の切れていない物）・予約サイトの物 */
-function viewOf(data: BookData, state: BookState, now: Date) {
+/** 台帳を画面と同じ組み立て方で（useBook と同じ部品）。確定・仮押さえ（期限の切れていない物）・予約サイトの物。台帳から入れる予約（owner.ts）も使う */
+export function ledgerView(data: BookData, state: BookState, now: Date) {
   const clock = demoClock(data.shop, now, state.dayOffset);
   const nowIso = now.toISOString();
-  const anchorDay = calDay(data.shop, state.anchor);
-  const anchor = anchorDay.open ? anchorDay : clock.today;
+  const anchor = seedAnchor(data.shop, state.anchor, clock.today);
   const chat = resolveChatReservations(data.menus, data.customers, activeChat(state, nowIso));
   const all = sortReservations(loadBook(data.shop, data.menus, clock.today, anchor, chat).all);
   return { clock, nowIso, all };
 }
 
-const toRow = (r: Reservation): BookedRow => ({
+export const toRow = (r: Reservation): BookedRow => ({
   id: r.id,
   customerId: r.customer.id,
   menuId: r.menu.id,
@@ -106,7 +110,16 @@ function overflows(target: Span, others: Span[], seats: number): boolean {
  */
 export function siteBook(state: BookState, ctx: SiteContext, mode: SiteMode): SiteOutcome {
   const { data, rules, now } = ctx;
-  const { clock, nowIso, all } = viewOf(data, state, now);
+  const stops = ctx.stops ?? [];
+  const step = siteStep(data.shop);
+  const { clock, nowIso, all } = ledgerView(data, state, now);
+  // 止めた時間にかかるか（施術の時間のどこかが止めたマスに重なれば入れない）
+  const stoppedAt = (c: Candidate): string | null => {
+    const m = resolveMenu(data.menus, c.menuId);
+    if (!m) return null;
+    const s = toMinutes(c.start);
+    return stopHit(stops, step, c.date, s, s + m.minutes);
+  };
   const n = siteCount(state);
   const slotCtx = (c: BookData["customers"][number], booked: BookedRow[]): SlotContext => ({
     shop: data.shop,
@@ -128,6 +141,8 @@ export function siteBook(state: BookState, ctx: SiteContext, mode: SiteMode): Si
     const hold = row.reservation;
     target = hold.id;
     const candidate: Candidate = { menuId: hold.menuId, date: hold.date, start: hold.start };
+    const hit = stoppedAt(candidate);
+    if (hit) return { ok: false, state, note: `仮押さえと同じ枠（${candidateLabel(data, candidate)}）は、${hit} からの時間をネットでは受けないにしているので、予約サイトからは入りません` };
     // 予約サイトには仮押さえは見えない（送らない）ので、確定の予約だけで確かめる
     const confirmed = all.filter((r) => r.status === "confirmed").map(toRow);
     for (const c of rotate(data.customers, n)) {
@@ -144,7 +159,8 @@ export function siteBook(state: BookState, ctx: SiteContext, mode: SiteMode): Si
     const from = { date: clock.today.date, ...(clock.now.date === clock.today.date ? { time: clock.now.time } : {}) };
     outer: for (const menu of menus) {
       for (const c of rotate(data.customers, n)) {
-        const found = findSlots(slotCtx(c, booked), menu.id, from, 3).slots.find((s) => !busyOn(c.id, s.date));
+        // 止めた時間にかかる枠は飛ばす（多めに探してから外す）
+        const found = findSlots(slotCtx(c, booked), menu.id, from, stops.length ? 40 : 3).slots.find((s) => !busyOn(c.id, s.date) && !stoppedAt(s));
         if (found) {
           pick = { customerId: c.id, candidate: found };
           break outer;

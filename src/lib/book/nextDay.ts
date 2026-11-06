@@ -1,5 +1,6 @@
 // デモの「翌日へ」1回の全部：台帳を1営業日進めて書く → 書けて進んだ時だけ、前日のお知らせ（決まった形・送らない）と日誌。
 // 「翌日へ」を置く画面はみなここを通す（いまはホームの朝の要点。docs/SPEC.md §1.6）。テストも同じここを使う。
+// 進む先の今日は、画面の台帳の店（休みの日も重ねた useBook の shop）で決める（休みの日も飛ばす。holidays.ts）。
 // 進まない時：上限（MAX_DAY_OFFSET 営業日）に来た（cap）・ブラウザに書けなかった（write）。どちらも日誌・お知らせは作らない。
 
 import { SAVE_FAILED_MESSAGE, type BrowserWrite } from "../browser";
@@ -50,7 +51,7 @@ export function advanceDay(deps: NextDayDeps, input: NextDayInput): NextDayOutco
   const reminders = dayBeforeReminders(input.all, to.date, input.template, input.shop.name);
   const sentLabel = calDay(input.shop, addDays(to.date, -1)).label;
   deps.journal(
-    { who: "オーナー", text: `デモ：翌日へ（${from.label} → ${to.label}。定休日は飛ばす）` },
+    { who: "オーナー", text: `デモ：翌日へ（${from.label} → ${to.label}。定休日${input.shop.ownerHolidays?.length ? "と休みの日" : ""}は飛ばす）` },
     { who: "プログラム", text: `デモ：前日のお知らせを${reminders.length}件見せた（${to.label}のご予約。決まった形・実際には送信していない）` },
   );
   return { moved: true, from, to, dayOffset: after, reminders, sentLabel };

@@ -8,6 +8,7 @@ import { LOCKED_RULES } from "../rules/locked";
 import type { Rule } from "../rules/types";
 import { validateOwnerRule } from "../rules/validate";
 import { clampSeats, seatsRangeOf, withSeats } from "../capacity";
+import { readHolidays, withHolidays } from "../holidays";
 import { getShop, type AiSettings, type Menu, type ShopSettings } from "../settings";
 import { MAX_SHOWN } from "./replies";
 import type { ToolContext } from "./tools";
@@ -96,7 +97,26 @@ export function parseReserveRequest(body: unknown, menus: Menu[], ai: Pick<AiSet
   // 同じ時間に受ける人数：設定の幅の中の整数だけ受け取る（ちがえば送られなかった扱い＝設定の数）
   const seats = clampSeats(body.seats, seatsRangeOf(getShop()));
 
-  return { ok: true, value: { mode, messages, candidates, customer, booked, rules, visits, dayOffset, holds, ...(seats !== null ? { seats } : {}) } };
+  // 休みの日：形（YYYY-MM-DD）・本当にある日・数の上限（config/shop.json の holidayLimits.max）を確かめる。1つでもおかしければ断る
+  const hol = readHolidays(body.holidays, getShop());
+  if (!hol.ok) return { ok: false, reason: hol.reason };
+
+  return {
+    ok: true,
+    value: {
+      mode,
+      messages,
+      candidates,
+      customer,
+      booked,
+      rules,
+      visits,
+      dayOffset,
+      holds,
+      ...(seats !== null ? { seats } : {}),
+      ...(hol.value.length ? { holidays: hol.value } : {}),
+    },
+  };
 }
 
 /**
@@ -120,6 +140,11 @@ export function readDayOffset(x: unknown): number {
   return typeof x === "number" && Number.isInteger(x) && x > 0 ? Math.min(x, MAX_DAY_OFFSET) : 0;
 }
 
+/** 店の設定に、画面から来た「同じ時間に受ける人数」と「休みの日」を重ねる（確かめ済みの物だけ） */
+export function ownerShop(shop: ShopSettings, req: Pick<ReserveRequest, "seats" | "holidays">): ShopSettings {
+  return withHolidays(withSeats(shop, req.seats), req.holidays);
+}
+
 /** 道具が使う形にする。いまの時刻はサーバーの時計（店の時間帯）で決める（「翌日へ」の分だけ先へずらす） */
 export function contextFor(
   req: ReserveRequest,
@@ -128,11 +153,12 @@ export function contextFor(
   now: Date = new Date(),
   newId: () => string = () => `h-${now.getTime().toString(36)}${Math.random().toString(36).slice(2, 7)}`,
 ): ToolContext {
-  // デモの「翌日へ」で進めた分は、画面と同じ決め方（calendar.ts の demoClock）で今日をずらす
-  const clock = demoClock(shop, now, req.dayOffset);
+  // 同じ時間に受ける人数と休みの日は、画面が送った物（オーナーがルールのタブ・予約のページで変えた分）を重ねる
+  const own = ownerShop(shop, req);
+  // デモの「翌日へ」で進めた分は、画面と同じ決め方（calendar.ts の demoClock。休みの日も重ねてから）で今日をずらす
+  const clock = demoClock(own, now, req.dayOffset);
   return {
-    // 同じ時間に受ける人数は、画面が送った数（オーナーがルールのタブで変えた分）を重ねる
-    shop: withSeats(shop, req.seats),
+    shop: own,
     menus,
     rules: req.rules,
     booked: req.booked,

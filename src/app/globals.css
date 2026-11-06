@@ -1747,3 +1747,216 @@ h3.section-title { font-size: 1rem; }
 .look-btn-name { display: flex; align-items: center; gap: 4px; font-weight: 700; }
 .look-btn-mark { display: inline-block; width: 1em; color: var(--accent); }
 .look-btn-desc { font-size: 0.75rem; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
+
+/* ---- 台帳から予約を入れる（スマホは下から出る1枚・PC は小さな窓。OwnerBookSheet.tsx） ---- */
+:root { --scrim: rgba(0, 0, 0, 0.4); }
+.sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--scrim);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sheet {
+  background: var(--surface);
+  color: var(--text);
+  width: 100%;
+  max-height: 88vh;
+  max-height: 88dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--radius) var(--radius) 0 0;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+  outline: none;
+}
+@media (min-width: 1024px) {
+  .sheet-scrim { align-items: center; }
+  .sheet { width: 480px; max-width: calc(100vw - 32px); border-radius: var(--radius); }
+}
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; position: sticky; top: -12px; background: var(--surface); padding: 4px 0 8px; z-index: 1; }
+.sheet-head .btn.small { min-height: 44px; padding: 4px 14px; font-size: 0.95rem; white-space: nowrap; flex: none; }
+.sheet-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; font-size: 1.1rem; }
+.sheet-title .tag { font-size: 0.8rem; }
+.sheet-body { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.sheet-step { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sheet-label { font-weight: 700; font-size: 0.95rem; }
+.sheet-when { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 1.1rem; }
+.sheet-when select, .sheet-search {
+  font: inherit;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  max-width: 100%;
+}
+.sheet-search { width: 100%; }
+.sheet-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
+.sheet-choice {
+  font: inherit;
+  min-height: 48px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+.sheet-choice small { color: var(--muted); }
+.sheet-choice.on { border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+.sheet-end { margin: 0; }
+.sheet-checks { display: flex; flex-direction: column; gap: 4px; }
+.sheet-checks ul { list-style: none; padding: 0; margin: 0; }
+.sheet-rules { color: var(--warn); }
+.sheet-note { margin: 0; color: var(--warn); font-weight: 600; }
+.btn.sheet-go { min-height: 52px; font-size: 1.05rem; font-weight: 700; width: 100%; }
+.sheet-foot {
+  position: sticky;
+  bottom: calc(-16px - env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  margin: 0 -16px calc(-16px - env(safe-area-inset-bottom));
+  padding: 8px 16px calc(12px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sheet-foot p { margin: 0; }
+
+/* 日ごとのカードの空いている時間（押すと入れる画面） */
+.free-times { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.free-times-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.btn.free-time { min-height: 40px; padding: 4px 12px; font-size: 0.95rem; }
+
+/* 時間割の空いたマス（押すと入れる小さな窓）。帯の下にしく */
+.tt-pick {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+}
+.tt-pick:hover, .tt-pick:focus-visible { background: var(--accent-soft); color: var(--accent); outline: 1px dashed var(--accent); outline-offset: -1px; }
+
+/* 台帳から入れた予約の札（人がした事 = 琥珀。文字つき） */
+.tag.owner { background: transparent; color: var(--who-human-shown); border: 1px solid var(--who-human-shown); }
+
+/* ---- 休みの日の欄（HolidayPanel.tsx） ---- */
+.holidays { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.holiday-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
+.holiday-day > .num { white-space: nowrap; font-size: 0.95rem; }
+.holiday-day {
+  font: inherit;
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.3;
+}
+.holiday-day small { font-size: 0.75rem; color: var(--muted); }
+.holiday-day.on { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, var(--surface)); font-weight: 700; }
+.holiday-day.on small { color: var(--warn); }
+.holiday-day.weekly { cursor: default; color: var(--muted); background: var(--bg); }
+.holiday-ask { border: 1px solid var(--warn); border-radius: var(--radius-sm); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.holiday-ask .problems { margin: 0; }
+.holiday-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.holiday-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+
+/* 予約サイトの空き表のマス（オーナーが押すと「止」＝ネットでは受けない・戻す） */
+.site-grid td:has(> .site-cell) { padding: 0; }
+.site-cell {
+  font: inherit;
+  color: inherit;
+  font-weight: inherit;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  min-width: 2.2em;
+  min-height: 32px;
+  padding: 2px 6px;
+  cursor: pointer;
+  text-decoration: inherit;
+}
+.site-cell:hover, .site-cell:focus-visible { outline: 1px dashed var(--accent); outline-offset: -2px; }
+.site-grid td.stopped { color: var(--text); font-weight: 700; background: repeating-linear-gradient(-45deg, var(--bg) 0 4px, var(--surface) 4px 8px); }
+
+/* ---- 台帳の週を動かす・月のカレンダー（LedgerView.tsx・MonthCalendar.tsx） ---- */
+.week-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0; }
+.btn.week-nav-btn { min-height: 44px; padding: 6px 14px; }
+.week-nav-label { font-size: 1.05rem; margin-left: 4px; }
+.tt-head.outside, .tt-col.outside, .day.outside { opacity: 0.45; }
+.month-cal { min-width: 0; }
+.month-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.btn.month-btn { min-height: 40px; }
+.month-title { font-size: 1.05rem; }
+.month-grid { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 3px; }
+.month-grid th { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+.month-cell { padding: 0; vertical-align: top; }
+.month-day {
+  font: inherit;
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 3px 1px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.2;
+  overflow: hidden;
+}
+.month-day:disabled { cursor: default; }
+.month-num { font-weight: 700; font-size: 0.95rem; }
+.month-day small { font-size: 0.68rem; white-space: nowrap; }
+.month-count { color: var(--text); }
+.month-count.warn { color: var(--warn); font-weight: 700; }
+.month-fill { color: var(--muted); }
+.month-hold { margin-left: 2px; padding: 0 2px; border: 1px dashed var(--muted); border-radius: var(--radius-3xs); font-size: 0.62rem; }
+.holiday-mark { color: var(--warn); font-weight: 700; }
+.month-cell.closed .month-day { background: var(--bg); }
+.month-cell.holiday .month-day { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, var(--surface)); }
+.month-cell.today .month-day { box-shadow: inset 0 3px 0 var(--accent); }
+.month-cell.in-view .month-day { border: 2px solid var(--accent); }
+.month-cell.outside .month-day { opacity: 0.35; }
+.month-day:hover:not(:disabled), .month-day:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.month-legend { margin-top: 4px; }
+.week-sums { list-style: none; margin: 6px 0 0; padding: 0; font-size: 0.85rem; display: grid; gap: 2px; }
+
+/* スマホで押す所は高さ 44px 以上（日ごとのカードの空いている時間・休みの日の「もっと先を見る」・予約サイトの空き表のマス） */
+@media (max-width: 1023.98px) {
+  .btn.free-time { min-height: 44px; }
+  .btn.holiday-more { min-height: 44px; padding: 6px 14px; }
+  .site-cell { min-height: 44px; }
+}

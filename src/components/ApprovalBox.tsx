@@ -16,6 +16,7 @@ import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
 import { resolveMenu } from "@/lib/combo";
 import { approvalRowsView, approvalsFor, type ApprovalView } from "@/lib/approvals";
+import { approveBlocker } from "@/lib/book/approve";
 import { useMinute } from "@/lib/book/useBook";
 import { useApprovals } from "@/lib/useApprovals";
 import { AdApprovalRows } from "./AdApprovalRows";
@@ -60,6 +61,13 @@ export function ApprovalBox({
       </>
     );
 
+  // 確定しない時（休みの日・開始の時刻を過ぎた。book/approve.ts）：台帳は書かず、理由を出して日誌に1行
+  const refuse = (what: string, blocked: string) => {
+    writeJournal({ who: "プログラム", text: `確定しなかった：${what}（${blocked}）` });
+    setFailed(null);
+    setDone(`✗ 確定しませんでした：${blocked}`);
+  };
+
   const press = (e: React.MouseEvent, row: PendingRow, how: "approve" | "fixed" | "skipped") => {
     // 人がボタンを押したときだけ（スクリプトから押したことにはできない）
     if (!e.nativeEvent.isTrusted) return;
@@ -68,6 +76,9 @@ export function ApprovalBox({
     const surname = customer?.surname ?? "お客";
     const what = `${surname}様 ${candidateLabel(data, r)}`;
     if (how === "approve") {
+      // 休みの日の仮押さえと、開始の時刻をもう過ぎた仮押さえは確定しない（LINE の承認のボタンも同じ。book/approve.ts）
+      const blocked = approveBlocker(book.shop, book.now, r);
+      if (blocked) return refuse(what, blocked);
       const w = book.update((s) => withApproved(s, row.approval.id, new Date().toISOString()));
       if (!w.ok) return void setFailed(SAVE_FAILED_MESSAGE);
       setFailed(null);
@@ -108,6 +119,7 @@ export function ApprovalBox({
             },
             r,
           );
+          const blocked = approveBlocker(book.shop, book.now, r);
           return (
             <li key={row.approval.id} className={soon ? "approval soon" : "approval"}>
               <div className="approval-what">
@@ -118,7 +130,9 @@ export function ApprovalBox({
               <div className="approval-when num">{candidateLabel(data, r).replace(` ${menu?.name ?? r.menuId}`, "")}</div>
               <p className="approval-why">{row.approval.reason}</p>
               <ApprovalRowNotes notes={notes} />
-              {v.ok ? (
+              {blocked ? (
+                <p className="problems small">✗ {blocked}</p>
+              ) : v.ok ? (
                 <p className="checked small">
                   <span aria-hidden>✓</span> いまの台帳とルールでも受けられます
                 </p>
@@ -126,7 +140,13 @@ export function ApprovalBox({
                 <p className="problems small">✗ いまの台帳・ルールでは受けられません。確かめてから押してください</p>
               )}
               <div className="approval-buttons" role="group" aria-label="この仮押さえをどうするか">
-                <button type="button" className="btn primary" onClick={(e) => press(e, row, "approve")}>
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={(e) => press(e, row, "approve")}
+                  disabled={!!blocked}
+                  title={blocked ?? undefined}
+                >
                   承認
                 </button>
                 <button type="button" className="btn" onClick={(e) => press(e, row, "fixed")}>

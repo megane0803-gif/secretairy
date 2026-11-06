@@ -11,6 +11,9 @@ import { ResetBook } from "@/components/ResetBook";
 import type { BookData } from "@/lib/book/data";
 import { menuColorClass, menuLegend } from "@/lib/book/menuColor";
 import { useBook } from "@/lib/book/useBook";
+import { OWNER_TAG } from "@/lib/book/owner";
+import { freeRanges, type LedgerDay, type Reservation } from "@/lib/reservations";
+import { useLedgerView, WeekNav } from "./LedgerView";
 
 type Book = ReturnType<typeof useBook>;
 
@@ -20,21 +23,38 @@ type Book = ReturnType<typeof useBook>;
  */
 export function Ledger({ data, className }: { data: BookData; className?: string }) {
   const book = useBook(data);
+  // 見ている週はページの共通の親（LedgerView.tsx）が持つ。空いている時間を押すと、下から1枚の「入れる」画面（1枚も親が持つ）
+  const view = useLedgerView();
+  const onPick = (date: string, start: string) => view.act({ kind: "open", target: { date, start } });
 
   return (
     <section className={["ledger", className].filter(Boolean).join(" ")}>
       <h2>1週間の予約台帳</h2>
       <LedgerNotes book={book} />
+      <WeekNav />
       <div className="week-wrap">
         <ol className="week">
-          {book.book.week.map((d) => (
-            <li key={d.date} className={["day", d.open ? "" : "closed", d.isToday ? "today" : ""].join(" ").trim()}>
+          {view.days.map((d) => (
+            <li
+              key={d.date}
+              id={`ledger-day-${d.date}`}
+              className={["day", d.open ? "" : "closed", d.isToday ? "today" : "", d.outside ? "outside" : ""].join(" ").trim()}
+            >
               <div className="day-head">
                 <span className="day-date">{d.label}</span>
                 {d.isToday && <span className="tag">今日</span>}
               </div>
               {!d.hours ? (
-                <span className="day-hours">お休み</span>
+                <>
+                  <span className="day-hours">{d.holiday ? "休みの日" : "お休み"}</span>
+                  {/* 休みにした日に残った予約も隠さない（消さずに残し、ToDo で別の日時を案内する） */}
+                  {d.reservations.length > 0 && (
+                    <>
+                      <p className="problems small">✗ お休みの日に残っている予約 {d.reservations.length}件（お客様に別の日時を案内してください）</p>
+                      <SlotList list={d.reservations} />
+                    </>
+                  )}
+                </>
               ) : (
                 <>
                   <span className="day-count">
@@ -44,28 +64,8 @@ export function Ledger({ data, className }: { data: BookData; className?: string
                   <span className="day-hours">
                     {d.hours.open}–{d.hours.close}
                   </span>
-                  <ul className="slots">
-                    {d.reservations.map((r) => (
-                      <li
-                        key={r.id}
-                        className={`${r.status === "hold" ? "slot hold" : r.source === "chat" ? "slot confirmed fresh" : r.source === "site" ? "slot confirmed from-site" : "slot confirmed"} ${menuColorClass(r.menu)}`}
-                      >
-                        <ActorTag actor={reservationActor(r)} />
-                        <span className="slot-time num">
-                          {r.start}
-                          <small>–{r.end}</small>
-                        </span>
-                        <span className="slot-menu">
-                          {r.menu.name}
-                          {r.status === "hold" && <span className="tag hold">仮押さえ</span>}
-                          {r.status === "confirmed" && r.source === "chat" && <span className="tag ok">承認で確定</span>}
-                          {r.source === "site" && <span className="tag from-site">予約サイトから</span>}
-                        </span>
-                        <CustomerName surname={r.customer.surname} />
-                        {r.customer.firstVisit && <span className="tag first">初めての方</span>}
-                      </li>
-                    ))}
-                  </ul>
+                  <SlotList list={d.reservations} />
+                  {!d.outside && <FreeTimes book={book} day={d} onPick={onPick} />}
                 </>
               )}
             </li>
@@ -76,6 +76,55 @@ export function Ledger({ data, className }: { data: BookData; className?: string
       <LedgerChecks book={book} />
       <LedgerReset book={book} data={data} />
     </section>
+  );
+}
+
+/** 1日の予約の行（日ごとのカード） */
+function SlotList({ list }: { list: Reservation[] }) {
+  return (
+    <ul className="slots">
+      {list.map((r) => (
+        <li
+          key={r.id}
+          className={`${r.status === "hold" ? "slot hold" : r.source === "chat" ? "slot confirmed fresh" : r.source === "site" ? "slot confirmed from-site" : "slot confirmed"} ${menuColorClass(r.menu)}`}
+        >
+          <ActorTag actor={reservationActor(r)} />
+          <span className="slot-time num">
+            {r.start}
+            <small>–{r.end}</small>
+          </span>
+          <span className="slot-menu">
+            {r.menu.name}
+            {r.status === "hold" && <span className="tag hold">仮押さえ</span>}
+            {r.status === "confirmed" && r.source === "chat" && <span className="tag ok">承認で確定</span>}
+            {r.source === "site" && <span className="tag from-site">予約サイトから</span>}
+            {r.source === "owner" && <span className="tag owner">{OWNER_TAG}</span>}
+          </span>
+          <CustomerName surname={r.customer.surname} />
+          {r.customer.firstVisit && <span className="tag first">初めての方</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** 日ごとのカードの「空いている時間」（押すと下から入れる画面が出る。book/owner.ts の freeStarts） */
+function FreeTimes({ book, day, onPick }: { book: Book; day: LedgerDay; onPick: (date: string, start: string) => void }) {
+  const ranges = freeRanges(book.shop, day, book.all, book.now.date === day.date ? book.now.time : undefined).ranges.filter(
+    (r) => day.date >= book.now.date,
+  );
+  if (ranges.length === 0) return null;
+  return (
+    <div className="free-times">
+      <span className="hint">空いている時間（押すと入れられます）</span>
+      <div className="free-times-row">
+        {ranges.map((r) => (
+          <button key={r.start} type="button" className="btn small free-time" onClick={() => onPick(day.date, r.start)} aria-label={`${day.label} ${r.start}から空いています。予約を入れる`}>
+            <span className="num">{r.start}</span>–<span className="num">{r.end}</span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
