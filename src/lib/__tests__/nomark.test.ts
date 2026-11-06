@@ -58,6 +58,11 @@ describe("1. 画面に出す文に「（架空）」が残っていない", () =
       for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) assert.ok(!readFileSync(join(dir, f), "utf8").includes(OLD), `${dir}/${f}`);
   });
 
+  test("画面（src/app・src/components）の説明の文にも「架空」が無い（試験のページ /eval の説明と、注意の1行 NO_REAL_NAMES_NOTE だけは残す）", () => {
+    const screens = [...walk(join("src", "app")), ...walk("src/components")].filter((f) => !f.startsWith(join("src", "app", "eval")));
+    for (const f of screens) assert.ok(!withoutComments(readFileSync(f, "utf8")).includes("架空"), `${f} に「架空」`);
+  });
+
   test("入力欄の近くの注意の1行は残す", () => {
     assert.equal(NO_REAL_NAMES_NOTE, "架空の店のデモです。本名や連絡先は入れないでください");
   });

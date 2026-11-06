@@ -55,7 +55,7 @@ export function JobStatement() {
         })}
       </ul>
       <p className="hint">
-        {md(seed.trial.from)}〜{md(seed.trial.to)}の架空の明細です。試しなので登録はしません。
+        {md(seed.trial.from)}〜{md(seed.trial.to)}の試しの明細です。登録はしません。
       </p>
     </section>
   );
