@@ -6,6 +6,7 @@
 // 押せない時（7日に1つまで・承認待ちがある）は、ボタンのすぐ下にふつうの字で理由と次に頼める日時を出し、
 // その下に「デモ」の札と「広告（架空）を最初に戻す」を出す。押せる時は「最初に戻す」を欄の一番下に出す（いつも1か所だけ）。
 
+import { scrollToId } from "@/lib/scroll";
 import { useState } from "react";
 import { GateChecks } from "@/components/AdApprovalRows";
 import { askAdsReview } from "@/lib/ads/client";
@@ -14,10 +15,11 @@ import { canPropose, resetAds, withProposal } from "@/lib/ads/state";
 import { buildWeeklyReport, withReport } from "@/lib/ads/weekly";
 import type { GatedProposal } from "@/lib/ads/gate";
 import type { RejectedDraft } from "@/lib/ads/review";
-import { demoClock } from "@/lib/calendar";
+import { demoClock, demoInstant } from "@/lib/calendar";
 import { getShop } from "@/lib/settings";
 import { useAds } from "@/lib/ads/useAds";
 import type { AdsMode } from "@/lib/ads/wire";
+import { AI_BUSY_MESSAGE, failText } from "@/lib/ai/busy";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import { useBookState } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
@@ -30,6 +32,9 @@ type Shown =
   | { kind: "gate"; problems: string[]; checks: GateCheck[] }
   | { kind: "note"; text: string };
 
+/** 広告のタブの「承認待ち」の見出しの id（うまくいった直後のリンクの先） */
+export const ADS_APPROVALS_ID = "ads-approvals";
+
 export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone: string }) {
   const ads = useAds();
   const book = useBookState();
@@ -39,7 +44,9 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
   const [noAi, setNoAi] = useState(false);
   const [shown, setShown] = useState<Shown | null>(null);
 
-  const can = canPropose(ads.state, new Date().toISOString(), ads.settings);
+  // 「7日に1つ」は「翌日へ」で進めた日付の時計で数える（作った時刻・画面・送る前・保存する時の全部で同じ。calendar.ts の demoInstant）
+  const clockIso = () => demoInstant(getShop(), new Date(), book.state.dayOffset).toISOString();
+  const can = canPropose(ads.state, clockIso(), ads.settings);
   const nextLabel =
     !can.ok && can.nextAt
       ? new Date(can.nextAt).toLocaleString("ja-JP", { timeZone: timezone, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
@@ -47,7 +54,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
 
   async function ask(useMode: AdsMode) {
     if (busy) return;
-    const c = canPropose(ads.state, new Date().toISOString(), ads.settings);
+    const c = canPropose(ads.state, clockIso(), ads.settings);
     if (!c.ok) return;
     setBusy(true);
     setShown(null);
@@ -60,7 +67,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
       const shop = getShop();
       return buildWeeklyReport({
         id: `rp-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-        nowIso: new Date().toISOString(),
+        nowIso: clockIso(),
         today: demoClock(shop, new Date(), book.state.dayOffset).today.date,
         table,
         shop,
@@ -75,9 +82,15 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
         setNoAi(true);
         return;
       }
+      if (res.code === "busy") {
+        // 混んでいる（1分10回まで）：案は作らず、待ってから押しなおせる（「今は AI につながりません」とは分ける）
+        writeJournal({ who: "プログラム", text: "AI の窓口が混んでいたので、広告の案は出していません" });
+        setShown({ kind: "note", text: AI_BUSY_MESSAGE });
+        return;
+      }
       if (useMode === "ai") setNoAi(false);
       if (res.code === "bad-request") {
-        setShown({ kind: "note", text: `うまくいきませんでした。${res.message}。画面を開きなおしてから押してください。` });
+        setShown({ kind: "note", text: failText(res.message, "画面を開きなおしてから押してください。") });
         return;
       }
       writeJournal(...res.steps);
@@ -100,7 +113,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
       setShown({ kind: "gate", problems: again.problems, checks: again.checks });
       return;
     }
-    const nowIso = new Date().toISOString();
+    const nowIso = clockIso();
     const id = `ad-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const weekly = report({ proposal: { ...again.proposal, id }, rejected: res.rejected });
     ads.update((s) => {
@@ -159,9 +172,32 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
       <button type="button" className="btn primary big" onClick={() => void ask(mode)} disabled={busy || !can.ok}>
         {busy ? "見直しています…" : "AI に見直してもらう"}
       </button>
+      {/* うまくいった直後は、入れた事と決める所へのリンクを先に（押せない理由はその下に、ふつうの字で） */}
+      {shown?.kind === "ok" && (
+        <div role="status">
+          <p className="checked">
+            <span aria-hidden>✓</span> 承認の箱に入れました：{shown.text}
+            {shown.tries > 1 && "（1回弾いて、作り直した案です）"}。
+            <a
+              href={`#${ADS_APPROVALS_ID}`}
+              className="ad-review-go"
+              onClick={(e) => {
+                if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                e.preventDefault();
+                scrollToId(ADS_APPROVALS_ID, { hash: true });
+              }}
+            >
+              <span className="sp-inline">すぐ下で決める ↓</span>
+              <span className="pc-inline">左の承認待ちで決める ←</span>
+            </a>
+          </p>
+          <strong>プログラムの確認</strong>
+          <GateChecks checks={shown.checks} />
+        </div>
+      )}
       {!can.ok && (
         <>
-          <p className="ad-review-why" role="status">
+          <p className="ad-review-why" role={shown?.kind === "ok" ? undefined : "status"}>
             {can.reason}
             {nextLabel && `次は ${nextLabel} から頼めます。`}
           </p>
@@ -193,16 +229,6 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
         </div>
       )}
 
-      {shown?.kind === "ok" && (
-        <div role="status">
-          <p className="checked">
-            <span aria-hidden>✓</span> 承認の箱に入れました：{shown.text}
-            {shown.tries > 1 && "（1回弾いて、作り直した案です）"}
-          </p>
-          <strong>プログラムの確認</strong>
-          <GateChecks checks={shown.checks} />
-        </div>
-      )}
       {shown?.kind === "gate" && (
         <div role="status">
           <p className="problems">プログラムの確認を通らなかったので、案は出しませんでした（日誌に書きました）。</p>

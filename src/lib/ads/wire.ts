@@ -24,6 +24,8 @@ export type AdsResponse =
   | { ok: true; proposal: GatedProposal; checks: GateCheck[]; tries: number; steps: ReviewStep[]; rejected?: RejectedDraft[] }
   | { ok: false; code: "gate"; checks: GateCheck[]; problems: string[]; tries: number; steps: ReviewStep[]; rejected?: RejectedDraft[] }
   | { ok: false; code: "no-ai"; message: string }
+  /** 画面の側だけ：窓口が混んでいる（429）。サーバーは返さない */
+  | { ok: false; code: "busy"; message: string }
   | { ok: false; code: "bad-request"; message: string };
 
 const MAX_ROWS = 40;

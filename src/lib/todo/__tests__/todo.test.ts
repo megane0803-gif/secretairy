@@ -26,7 +26,7 @@ import {
   nextMemoNo,
   resolveSeedTodos,
   sortTodos,
-  todayTodoCount,
+  todoDueCounts,
   todoGroup,
   todoItems,
   todoTabs,
@@ -177,7 +177,7 @@ describe("2. 同じ鍵がもうあれば足さない", () => {
       { seats: shop.seats, customers: getCustomers(), today, nowIso: now },
     );
     assert.equal(full.length, 1);
-    assert.equal(full[0].title, "江口（架空）様に別の日時を案内");
+    assert.equal(full[0].title, "江口（架空）様に別の日時を案内（11/6（金） 15:00 カットの代わり）");
     assert.equal(full[0].due, today, "今日中");
     assert.equal(todoKey(full[0]), reserveKey("c04", "2026-11-06", "15:00"));
     const s1 = withTodo(s0, full[0]);
@@ -270,8 +270,8 @@ describe("2-2. 最初の例の鍵は「例:」で始め、本物の鍵と重な�
     assert.equal(seedTodoKey({ id: "x", key: "例:語句:6" }), "例:語句:6");
   });
 
-  test("最初の例に「語句:6」の判定日があっても、本物の6番の承認で ToDo が入る", () => {
-    assert.ok(SEED_TODO_KEYS.has("例:語句:6"), "最初の例に6番がある");
+  test("最初の例に広告の「効いたか見る」は無い。本物の6番の承認で ToDo が1件入る", () => {
+    assert.ok(![...SEED_TODO_KEYS].some((k) => k.startsWith("例:語句:")), "広告の例の ToDo は外した");
     const ads = withProposal(
       EMPTY_ADS,
       { action: "stop", no: 6, text: "パーマ 大人", reason: "予約が少ないので止めます" },
@@ -283,7 +283,7 @@ describe("2-2. 最初の例の鍵は「例:」で始め、本物の鍵と重な�
     assert.equal(out.book.todos.length, 1);
     assert.equal(todoKey(out.book.todos[0]), adKey(6));
     const items = todoItems(seedItems, out.book, shop);
-    assert.equal(items.filter((t) => t.title === "3週間後に効いたか見る（6番）").length, 2, "例と本物の両方が一覧に出る");
+    assert.equal(items.filter((t) => t.title === "3週間後に効いたか見る（6番）").length, 1, "本物の1件だけが一覧に出る");
   });
 
   test("カルテ・予約・メモも、最初の例と同じ中身でも本物の鍵なら足せる", () => {
@@ -353,9 +353,38 @@ describe("4. 済みと戻す", () => {
     assert.equal(getTodoLimits().undoSeconds, 8);
   });
 
-  test("済んだ物は今日の ToDo の数に入れない。期限の先の物も、その日まで入れない", () => {
-    const l = [item("a", {}), item("b", { done: true }), item("c", { source: "ad", due: "2026-11-25" }), item("d", { source: "ad", due: today })];
-    assert.equal(todayTodoCount(l, today), 2);
+  test("期限の数：期限の無い物・済んだ物は数えない。今日まで（期限が今日）と期限切れ（今日より前）は重ならない", () => {
+    const l = [
+      item("memo", { source: "memo" }),
+      item("none", {}),
+      item("next", { source: "karte", due: "2026-11-01" }),
+      item("done", { done: true, due: today }),
+      item("later", { source: "ad", due: "2026-11-25" }),
+      item("today", { source: "ad", due: today }),
+      item("past", { source: "line", due: "2026-11-02" }),
+    ];
+    assert.deepEqual(todoDueCounts(l, today), { dueToday: 1, overdue: 1, dated: 3 });
+  });
+
+  test("期限切れのお客様への連絡も「期限切れ」に入る（「お客様への連絡（今日中）」の組でも漏らさない）", () => {
+    const l = [item("r-past", { source: "reserve", due: "2026-11-03" }), item("r-today", { source: "reserve", due: today }), item("c-past", { source: "chat", due: "2026-10-30" })];
+    assert.ok(l.every((t) => todoGroup(t, today) === "contact"));
+    assert.deepEqual(todoDueCounts(l, today), { dueToday: 1, overdue: 2, dated: 3 });
+  });
+
+  test("「期限あり」の数は ToDo のタブの「期限あり」と同じ数え方から出る", () => {
+    const items = todoItems(seedItems, emptyBook(today), shop);
+    const c = todoDueCounts(items, today);
+    assert.equal(c.dated, todoTabs(items, today).due.length);
+    assert.ok(c.dueToday + c.overdue <= c.dated);
+  });
+
+  test("最初の例（広告の例4件を外した後）：今日まで2件（大橋様・久保様）・期限切れ1件（木村様への連絡）", () => {
+    const items = todoItems(seedItems, emptyBook(today), shop);
+    assert.deepEqual(todoDueCounts(items, today), { dueToday: 2, overdue: 1, dated: 3 });
+    // 前の数え方（期限が無いか今日まで）だと、メモ・次回・期限なしまで入って数が大きくなっていた
+    const old = items.filter((t) => !t.done && (!t.due || t.due <= today)).length;
+    assert.ok(old > 3, `前の数え方 ${old}件`);
   });
 });
 
@@ -401,7 +430,7 @@ describe("5. 最初に戻す", () => {
   test("ToDo は台帳と同じ置き場所（secretairy:book）なので、最初に戻すの1回で戻る", () => {
     const w = resetAllWrites(today);
     const book = w.find((x) => x.key === BOOK_KEY)!;
-    assert.deepEqual(parseBook(book.value), emptyBook(today));
+    assert.deepEqual(parseBook(book.value), emptyBook(today, parseBook(book.value)?.epoch));
     assert.deepEqual(emptyBook(today).todoMarks, {});
   });
 });
@@ -475,10 +504,11 @@ describe("7. 架空の例（最初の状態）", () => {
   test("20件前後。いろいろな入口・期限が混ざる", () => {
     assert.ok(seed.length >= 18 && seed.length <= 24, `${seed.length}件`);
     const sources = new Set(seed.map((t) => t.source));
-    for (const s of ["memo", "karte", "ad", "reserve", "line", "chat"]) assert.ok(sources.has(s as never), s);
+    for (const s of ["memo", "karte", "reserve", "line", "chat"]) assert.ok(sources.has(s as never), s);
+    // 広告の「効いたか見る」は例に入れない（広告のタブの判定は承認・適用した履歴から作るので、例からは行き先が作れない）
+    assert.ok(!sources.has("ad"), "広告の例の ToDo は無い");
     const groups = new Set(todoItems(seedItems, emptyBook(today), shop).map((t) => todoGroup(t, today)));
-    for (const g of ["contact", "overdue", "today", "next", "memo", "none", "done"]) assert.ok(groups.has(g as never), g);
-    assert.ok(groups.has("week") || groups.has("later"), "先の期限");
+    for (const g of ["contact", "next", "memo", "none", "done"]) assert.ok(groups.has(g as never), g);
   });
 
   test("鍵は1つずつ違い、id も違う。お客様は名字だけで「（架空）様」", () => {
@@ -528,7 +558,7 @@ describe("予約サイト（架空）で枠が埋まったか", () => {
       { id: "r2", date: "2026-11-06", startMin: 900, endMin: 960, status: "confirmed" },
     ] as Reservation[];
     const todos = fullSlotTodos(all, pending, { seats: 3, customers: getCustomers(), today, nowIso: now });
-    assert.deepEqual(todos.map((t) => t.title), ["加藤（架空）様に別の日時を案内"]);
+    assert.deepEqual(todos.map((t) => t.title), ["加藤（架空）様に別の日時を案内（11/6（金） 15:00 カットの代わり）"]);
     assert.equal(pendingApprovals(withTodo(s, todos[0]), now).length, 1, "仮押さえは変えない");
   });
 });

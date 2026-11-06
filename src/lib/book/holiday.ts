@@ -1,31 +1,28 @@
 // 休みの日にする時、その日に入っていた予約（確定・仮押さえ）の扱い。形と変え方だけ（どこにも書かない）。書くのは休みの日の欄（HolidayPanel.tsx）。
-// 予約は消さない。お客様ごとに ToDo「○○（架空）様に別の日時を案内（11/12（木） 15:00 カットの分）」を足す（AI は使わない）。
+// 予約は消さない。その予約のお客様に ToDo「○○（架空）様に別の日時を案内（11/12（木） 15:00 カットの代わり）」を足す（AI は使わない）。
 // 休みの日そのものは台帳とは別の置き場所（holidays.ts の HOLIDAYS_KEY）。
 
-import { calDay } from "../calendar";
 import type { Reservation } from "../reservations";
-import type { ShopSettings } from "../settings";
-import { reserveKey } from "../todo/keys";
+import { rescheduleTodo } from "../todo/reschedule";
 import { withTodo, type AddedTodo, type BookState } from "./state";
 
-/** 休みにする日の予約から、お客様ごとの ToDo を作る（同じ方が2件あれば1つにまとめる） */
-export function holidayTodos(shop: ShopSettings, list: Reservation[], nowIso: string, today?: string): AddedTodo[] {
-  const byCustomer = new Map<string, Reservation[]>();
-  for (const r of [...list].sort((a, b) => a.startMin - b.startMin)) byCustomer.set(r.customer.id, [...(byCustomer.get(r.customer.id) ?? []), r]);
-  return [...byCustomer.values()].map((rs) => {
-    const first = rs[0];
-    const label = calDay(shop, first.date).label;
-    const what = rs.map((r) => `${r.start} ${r.menu.name}`).join("・");
-    return {
-      id: `td-hol-${first.date}-${first.customer.id}`,
-      title: `${first.customer.surname}（架空）様に別の日時を案内（${label} ${what}の分）`,
-      createdAt: nowIso,
-      done: false,
-      source: "reserve",
-      key: reserveKey(first.customer.id, first.date, first.start),
-      ...(today ? { due: today } : {}),
-    };
-  });
+/**
+ * 休みにする日の予約から、ToDo「○○（架空）様に別の日時を案内（11/12（木） 15:00 カットの代わり）」を作る。
+ * 文・鍵・期限は「別の日時を案内」の1か所（todo/reschedule.ts）を通す（予約ごとに1件。どの予約の分か見分けられる）
+ */
+export function holidayTodos(list: Reservation[], nowIso: string, today?: string): AddedTodo[] {
+  return [...list]
+    .sort((a, b) => a.startMin - b.startMin)
+    .map((r) =>
+      rescheduleTodo({
+        idPrefix: "td-hol",
+        reservationId: r.id,
+        surname: r.customer.surname,
+        from: { id: r.id, customerId: r.customer.id, menuId: r.menu.id, date: r.date, start: r.start },
+        nowIso,
+        due: today,
+      }),
+    );
 }
 
 /** ToDo を足す（同じ鍵の物がもうあれば足さない）。足した題を返す */

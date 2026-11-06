@@ -238,7 +238,8 @@ describe("5. 画面の判定の全部で同じに効く", () => {
 
   test("ルールの試し・ホームの「翌日へ」と前日のお知らせ・予約サイトの空き表は、休みの日を重ねた店で", () => {
     assert.match(read("src/app/rules/RuleSide.tsx"), /calDay\(book\.shop, d\.date\)/);
-    assert.match(read("src/app/home/HomeSummary.tsx"), /businessDayAt\(book\.shop, book\.today, 1\)/);
+    // 「翌日へ」は advanceDay（直しA）に、休みの日を重ねた店（book.shop）を渡す
+    assert.match(read("src/app/home/HomeSummary.tsx"), /advanceDay\(\{ update: book\.update, journal: writeJournal \}, \{ shop: book\.shop/);
     assert.match(read("src/app/reservations/BookingSite.tsx"), /weekFrom\(book\.shop, book\.today\)/);
     assert.match(read("src/lib/book/useBook.ts"), /demoClock\(shop, now, state\.dayOffset\)/);
   });
@@ -258,12 +259,13 @@ describe("6. 予約がある日を休みにする時：一覧と ToDo（予約�
     assert.deepEqual(list.map((r) => r.id), ["r05", "r06"]);
   });
 
-  test("お客様ごとに ToDo「○○（架空）様に別の日時を案内（11/6（金） 10:30 パーマの分）」。2回押しても重ねない", () => {
-    const todos = holidayTodos(shop, reservationsOn(all, HOL), NOW.toISOString(), "2026-11-04");
+  test("その予約のお客様に ToDo「○○（架空）様に別の日時を案内（11/6（金） 10:30 パーマの代わり）」（todo/reschedule.ts の1か所）。2回押しても重ねない", () => {
+    const todos = holidayTodos(reservationsOn(all, HOL), NOW.toISOString(), "2026-11-04");
     assert.deepEqual(
       todos.map((t) => t.title),
-      ["大橋（架空）様に別の日時を案内（11/6（金） 10:30 パーマの分）", "加藤（架空）様に別の日時を案内（11/6（金） 16:00 カットの分）"],
+      ["大橋（架空）様に別の日時を案内（11/6（金） 10:30 パーマの代わり）", "加藤（架空）様に別の日時を案内（11/6（金） 16:00 カットの代わり）"],
     );
+    assert.deepEqual(todos.map((t) => t.id), ["td-hol-r05", "td-hol-r06"]);
     assert.ok(todos.every((t) => t.due === "2026-11-04" && t.source === "reserve"));
     const once = withHolidayTodos(emptyBook("2026-11-04"), todos);
     assert.equal(once.added.length, 2);
@@ -329,7 +331,7 @@ describe("7. 承認の時：休みの日と過ぎた時刻の仮押さえは確�
 
   test("画面の承認の箱：同じ確かめ。確定しない時は押せず、理由を出す", () => {
     const box = read("src/components/ApprovalBox.tsx");
-    assert.match(box, /const blocked = approveBlocker\(book\.shop, book\.now, r\);\s*if \(blocked\)/);
+    assert.match(box, /const blocked = approveBlocker\(book\.shop, book\.now, r\);\s*if \(blocked\) return refuse\(what, blocked\);/);
     assert.match(box, /disabled=\{!!blocked\}/);
     assert.match(box, /✗ 確定しませんでした/);
   });

@@ -1,12 +1,12 @@
 // 予約サイト（架空）で枠が埋まった時の ToDo（プログラム。AI は使わない。docs/SPEC.md §1.11）。
 // 承認待ちの仮押さえの時間に、確定の予約（予約サイトが受け取る物）が席の数だけ入って「×」になったら、
-// その仮押さえはそのままでは確定できないので「○○（架空）様に別の日時を案内」を今日中として足す。
+// その仮押さえはそのままでは確定できないので「○○（架空）様に別の日時を案内（元の日時とメニューの代わり）」を今日中として足す（reschedule.ts）。
 // 🔒 仮押さえそのものは変えない（外す・確定するのは人のボタン）。足すのは ToDo だけ。
 
 import type { AddedTodo, PendingRow } from "../book/state";
 import type { Customer } from "../data/types";
 import type { Reservation } from "../reservations";
-import { reserveKey } from "./keys";
+import { rescheduleTodo } from "./reschedule";
 
 /** 仮押さえの時間（start〜end の分）に、確定の予約が席の数だけ重なる時があるか */
 export function slotFull(all: Pick<Reservation, "id" | "date" | "startMin" | "endMin" | "status">[], hold: { id: string; date: string; startMin: number; endMin: number }, seats: number): boolean {
@@ -27,15 +27,7 @@ export function fullSlotTodos(
     const resolved = all.find((x) => x.id === r.id);
     if (!resolved || !slotFull(all, resolved, ctx.seats)) continue;
     const surname = ctx.customers.find((c) => c.id === r.customerId)?.surname ?? "お客";
-    out.push({
-      id: `td-full-${r.id}`,
-      title: `${surname}（架空）様に別の日時を案内`,
-      createdAt: ctx.nowIso,
-      done: false,
-      source: "reserve",
-      key: reserveKey(r.customerId, r.date, r.start),
-      due: ctx.today,
-    });
+    out.push(rescheduleTodo({ idPrefix: "td-full", reservationId: r.id, surname, from: r, nowIso: ctx.nowIso, due: ctx.today }));
   }
   return out;
 }

@@ -11,7 +11,9 @@ import type { HoldOffer, TodoOffer } from "../ai/wire";
 import { MAX_DAY_OFFSET } from "../calendar";
 import type { SavedKarte } from "../karte/record";
 import type { ChatReservation } from "../reservations";
-import { chatKey, reserveKey, SEED_TODO_KEYS, todoKey, TODO_SOURCES, type TodoSource } from "../todo/keys";
+import { getSavedMemoMaxChars } from "../settings";
+import { rescheduleTodo } from "../todo/reschedule";
+import { chatKey, SEED_TODO_KEYS, todoKey, TODO_SOURCES, type TodoSource } from "../todo/keys";
 import { readMemoKind, type MemoKind } from "../todo/kinds";
 
 /**
@@ -78,10 +80,25 @@ export type BookState = {
   seedKarteEdits?: Record<string, SeedKarteEdit>;
   /** 最初の状態の ToDo の文を書きかえた分（最初の状態のカルテの次回提案を直した時。id ごと。「最初に戻す」で消える） */
   todoTitles?: Record<string, string>;
+  /**
+   * 「最初に戻す」のたびに変わる印（reset.ts が作る）。戻す前に始まった予約チャットの返事が、戻した後の台帳に入らないように、
+   * 返事を始めた時の印と今の印が同じ時だけ仮押さえを入れる（sameEpoch）。無い = まだ一度も戻していない
+   */
+  epoch?: string;
 };
 
-export function emptyBook(anchor: string): BookState {
-  return { v: 1, anchor, chat: [], approvals: [], todos: [], kartes: [], dayOffset: 0, todoMarks: {} };
+export function emptyBook(anchor: string, epoch?: string): BookState {
+  return { v: 1, anchor, chat: [], approvals: [], todos: [], kartes: [], dayOffset: 0, todoMarks: {}, ...(epoch ? { epoch } : {}) };
+}
+
+/** 「最初に戻す」の印を作る */
+export function newEpoch(nowMs: number = Date.now()): string {
+  return `r-${nowMs.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** 台帳が、その印の時のままか（あいだに「最初に戻す」が無かったか） */
+export function sameEpoch(s: Pick<BookState, "epoch">, epoch: string | undefined): boolean {
+  return (s.epoch ?? "") === (epoch ?? "");
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -179,7 +196,8 @@ export function parseBook(raw: string | null): BookState | null {
       date: k.date as string,
       menuId: k.menuId as string,
       ...(isStr(k.reservationId) ? { reservationId: k.reservationId } : {}),
-      memo: (k.memo as string).slice(0, 4000),
+      // 入力できる上限（録音の要点は config/ai.json の karte.maxRecordingMemoChars）にそろえる。字は1文字ずつ数える（入力欄と同じ）
+      memo: [...(k.memo as string)].slice(0, getSavedMemoMaxChars()).join(""),
       sections: looseSections(k.sections),
       savedAt: k.savedAt as string,
       ...(Array.isArray(k.edited) ? { edited: k.edited.filter(isStr).slice(0, 20) } : {}),
@@ -215,6 +233,7 @@ export function parseBook(raw: string | null): BookState | null {
     todoMarks,
     // 直した分があるときだけ持つ（無ければ今までと同じ形）
     ...(Object.keys(seedKarteEdits).length ? { seedKarteEdits } : {}),
+    ...(isStr(d.epoch) && d.epoch.length <= 40 ? { epoch: d.epoch } : {}),
     ...(Object.keys(todoTitles).length ? { todoTitles } : {}),
   };
 }
@@ -230,6 +249,20 @@ function looseSections(x: unknown): Record<string, string[]> {
 /** デモの「翌日へ」：今日を1営業日先へ（定休日は飛ばす）。「最初に戻す」で戻る */
 export function withNextDay(s: BookState): BookState {
   return { ...s, dayOffset: Math.min(MAX_DAY_OFFSET, s.dayOffset + 1) };
+}
+
+/** 「翌日へ」の上限（MAX_DAY_OFFSET 営業日）に来た時の1文 */
+export const LAST_DEMO_DAY = "デモで進められるのはここまでです";
+
+/** まだ「翌日へ」で進められるか（上限に来たらボタンを押せなくする） */
+export function canNextDay(s: Pick<BookState, "dayOffset">): boolean {
+  return s.dayOffset < MAX_DAY_OFFSET;
+}
+
+/** 「翌日へ」を1回：進んだかもいっしょに返す（進まなかった時は、日誌・前日のお知らせを作らない） */
+export function nextDayStep(s: BookState): { state: BookState; moved: boolean } {
+  if (!canNextDay(s)) return { state: s, moved: false };
+  return { state: withNextDay(s), moved: true };
 }
 
 /** 期限が過ぎた仮押さえか（承認を待っている間に holdExpiresHours を過ぎた） */
@@ -253,6 +286,16 @@ export function pendingApprovals(s: BookState, nowIso: string): PendingRow[] {
     if (r && r.status === "hold" && !isExpired(r, nowIso)) out.push({ approval: a, reservation: r });
   }
   return out;
+}
+
+/**
+ * 同じお客様・同じメニュー・同じ日時の、まだ承認待ちの仮押さえ。期限の切れた物は数えない。
+ * 予約チャットで返事が途中で切れて送り直した時に、2つにしないために使う（ai/reserveStream.ts の holdInto）
+ */
+export function sameHold(s: BookState, h: Pick<HoldOffer, "customerId" | "menuId" | "date" | "start" | "heldAt">): ChatReservation | undefined {
+  return s.chat.find(
+    (r) => r.status === "hold" && r.customerId === h.customerId && r.menuId === h.menuId && r.date === h.date && r.start === h.start && !isExpired(r, h.heldAt),
+  );
 }
 
 /** 仮押さえを足して、承認の箱に1行入れる（同じ仮押さえは2回入れない） */
@@ -296,7 +339,7 @@ export function withApproved(s: BookState, approvalId: string, nowIso: string): 
 
 /**
  * 直す・見送り：お客様の了解なしに時間は変えないので、仮押さえを外し、
- * 「○○（架空）様に別の日時を案内」を ToDo に足す（AI は使わない）。
+ * 「○○（架空）様に別の日時を案内（11/8（日） 15:00 カットの代わり）」を ToDo に足す（AI は使わない。todo/reschedule.ts）。
  */
 export function withReleased(
   s: BookState,
@@ -310,15 +353,8 @@ export function withReleased(
   const a = s.approvals.find((x) => x.id === approvalId && x.state === "pending");
   if (!a) return s;
   const r = s.chat.find((x) => x.id === a.reservationId);
-  const todo: AddedTodo = {
-    id: `td-${a.reservationId}`,
-    title: `${surname}（架空）様に別の日時を案内`,
-    createdAt: nowIso,
-    done: false,
-    source: "reserve",
-    ...(r ? { key: reserveKey(r.customerId, r.date, r.start) } : {}),
-    ...(today && DATE.test(today) ? { due: today } : {}),
-  };
+  // 文・鍵・期限は todo/reschedule.ts の1か所で（元の頼みの日時とメニューを添える。LINE のボタンもここを通る）
+  const todo = rescheduleTodo({ idPrefix: "td", reservationId: a.reservationId, surname, from: r, nowIso, due: today });
   return {
     ...withTodo(s, todo),
     chat: s.chat.filter((r) => r.id !== a.reservationId),

@@ -17,12 +17,13 @@ import { buildTable } from "../ads/report";
 import { canPropose, offNos, withProposal, type AdsState } from "../ads/state";
 import { buildWeeklyReport, withReport } from "../ads/weekly";
 import type { AdsRequest, AdsResponse } from "../ads/wire";
+import { AI_FAILED_MESSAGE, reasonOf } from "../ai/busy";
 import { candidateLabel } from "../ai/slots";
 import { NO_AI_MESSAGE, parseHoldOffer, type Candidate, type HoldOffer, type ReserveEvent, type ReserveRequest } from "../ai/wire";
 import type { BookData } from "../book/data";
 import { siteBook, type SiteOutcome } from "../book/site";
 import { activeChat, withChatTodo, withHold, type BookState } from "../book/state";
-import { businessDayAt, calDay, demoClock } from "../calendar";
+import { businessDayAt, calDay, demoClock, demoInstant } from "../calendar";
 import { resolveMenu } from "../combo";
 import type { JournalWho } from "../journal";
 import { allKartes, resolveSeedKartes, toVisits, withSeedKarteEdits } from "../karte/record";
@@ -34,7 +35,7 @@ import { memoDue } from "../todo/due";
 import { resolveSeedTodos, withMemoTodo } from "../todo/items";
 import { maskNames, restoreNames } from "../todo/names";
 import type { TodoRequest, TodoResponse } from "../todo/wire";
-import { JOB_IDS, isJobDone, withJobDone, type JobId, type JobsState } from "./state";
+import { JOB_APPROVAL_RESULT, JOB_IDS, isJobDone, withJobDone, type JobId, type JobsState } from "./state";
 
 /** ai = Claude / script = 決まった返事（AI なし。テストと同じ物） */
 export type JobMode = "ai" | "script";
@@ -78,12 +79,13 @@ export type JobEnv = {
 /**
  * 1行の結果。done = 済み（結果を短く）/ skip = 動かさなかった（今週の案はもうあります・もう済み）
  * no-ai = AI につながらない（済みにしない。決まった返事で動かせる）/ limit = 1回押した時の AI の上限で動かさなかった
- * failed = うまくいかなかった（済みにしない）
+ * failed = うまくいかなかった（済みにしない）/ busy = AI の窓口が混んでいた（429。済みにしない。待ってから押しなおせる）
  */
 export type JobOutcome =
   | { kind: "done"; result: string; tab: TabId }
   | { kind: "skip"; note: string }
   | { kind: "no-ai" }
+  | { kind: "busy" }
   | { kind: "limit" }
   | { kind: "failed"; note: string };
 
@@ -163,6 +165,7 @@ export async function runJob(id: JobId, env: JobEnv, budget: JobBudget): Promise
   } else if (out.kind === "skip") env.journal({ who: "プログラム", text: `AI の仕事：${JOB_NAME[id]}は動かさなかった（${out.note}）` });
   else if (out.kind === "limit") env.journal({ who: "プログラム", text: `AI の仕事：${JOB_NAME[id]}は動かさなかった（1回に AI を呼ぶ回数の上限）` });
   else if (out.kind === "no-ai") env.journal({ who: "プログラム", text: `AI の仕事：${JOB_NAME[id]}は${NO_AI_MESSAGE}でした（済みにしていません）` });
+  else if (out.kind === "busy") env.journal({ who: "プログラム", text: `AI の仕事：${JOB_NAME[id]}は、AI の窓口が混んでいたので動かさなかった（済みにしていません）` });
   else env.journal({ who: "プログラム", text: `AI の仕事：${JOB_NAME[id]}はうまくいきませんでした（${out.note}）` });
   return out;
 }
@@ -179,18 +182,19 @@ export async function runJobs(
 ): Promise<Partial<Record<JobId, JobOutcome>>> {
   const order = JOB_IDS.filter((id) => ids.includes(id));
   const out: Partial<Record<JobId, JobOutcome>> = {};
-  let aiDown = false;
+  // つながらない・混んでいる（429）となったら、その後の AI の行は呼ばない（混んでいる時に続けて呼ぶと、また断られる）
+  let aiDown: "no-ai" | "busy" | null = null;
   for (const id of order) {
     if (isJobDone(env.store.jobs(), id)) continue;
     if (aiDown && AI_CALLS[id] > 0) {
-      out[id] = { kind: "no-ai" };
+      out[id] = { kind: aiDown };
       onStep(id, out[id]!);
       continue;
     }
     onStep(id, "running");
     const r = await runJob(id, env, budget);
     out[id] = r;
-    if (r.kind === "no-ai") aiDown = true;
+    if (r.kind === "no-ai" || r.kind === "busy") aiDown = r.kind;
     onStep(id, r);
   }
   return out;
@@ -204,7 +208,7 @@ function take(budget: JobBudget, n: number): boolean {
 
 // ── 予約の相談 ─────────────────────────────────────────────
 
-type ReserveRound = { reply: string; candidates: Candidate[]; hold: HoldOffer | null; todo: boolean; noAi: boolean; bad: string | null };
+type ReserveRound = { reply: string; candidates: Candidate[]; hold: HoldOffer | null; todo: boolean; noAi: boolean; busy: boolean; bad: string | null };
 
 async function reserveJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
   const seed = seedOf(seedsOf(env), "reserve")!;
@@ -234,7 +238,7 @@ async function reserveJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
       holidays: env.data.shop.ownerHolidays ?? [],
     };
     const events = await env.ask.reserve(body);
-    const r: ReserveRound = { reply: "", candidates: [], hold: null, todo: false, noAi: false, bad: null };
+    const r: ReserveRound = { reply: "", candidates: [], hold: null, todo: false, noAi: false, busy: false, bad: null };
     for (const e of events) {
       if (e.t === "text") r.reply += e.d;
       else if (e.t === "candidates") r.candidates = e.list;
@@ -263,7 +267,8 @@ async function reserveJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
         }
       } else if (e.t === "error") {
         if (e.code === "no-ai") r.noAi = true;
-        else r.bad = e.message;
+        else if (e.code === "busy") r.busy = true;
+        else r.bad = reasonOf(e) ?? AI_FAILED_MESSAGE;
       }
     }
     return r;
@@ -271,6 +276,7 @@ async function reserveJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
 
   const first = await round([{ role: "user", text }], []);
   if (first.noAi) return { kind: "no-ai" };
+  if (first.busy) return { kind: "busy" };
   if (first.bad) return { kind: "failed", note: first.bad };
   let last = first;
   // 候補が出たら、お客様が「1つ目で」と選んだつもりで、もう1回（仮押さえまで）
@@ -284,9 +290,10 @@ async function reserveJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
       first.candidates,
     );
     if (last.noAi) return { kind: "no-ai" };
+    if (last.busy) return { kind: "busy" };
     if (last.bad) return { kind: "failed", note: last.bad };
   }
-  if (first.hold || last.hold) return { kind: "done", result: "承認待ち1件", tab: "reservations" };
+  if (first.hold || last.hold) return { kind: "done", result: JOB_APPROVAL_RESULT, tab: "reservations" };
   if (first.todo || last.todo) return { kind: "done", result: "ToDo に1件（お店に確かめる）", tab: "todo" };
   return { kind: "done", result: "仮押さえはしませんでした", tab: "reservations" };
 }
@@ -318,7 +325,8 @@ export function adsBlocked(state: AdsState, nowIso: string, settings: Pick<AdSet
 }
 
 async function adsJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
-  const nowIso = env.now().toISOString();
+  // 「7日に1つ」は広告タブと同じ時計（「翌日へ」で進めた日付。calendar.ts の demoInstant）で数える
+  const nowIso = demoInstant(env.data.shop, env.now(), env.store.book().dayOffset).toISOString();
   const blocked = adsBlocked(env.store.ads(), nowIso, env.adSettings);
   if (blocked) return { kind: "skip", note: blocked };
   if (!take(budget, AI_CALLS.ads)) return { kind: "limit" };
@@ -341,7 +349,8 @@ async function adsJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
     });
   if (!res.ok) {
     if (res.code === "no-ai") return { kind: "no-ai" };
-    if (res.code === "bad-request") return { kind: "failed", note: res.message };
+    if (res.code === "busy") return { kind: "busy" };
+    if (res.code === "bad-request") return { kind: "failed", note: reasonOf(res) ?? AI_FAILED_MESSAGE };
     env.journal(...res.steps);
     env.store.setAds((s) => withReport(s, weekly({ failed: `案はプログラムの確認を通らなかったので、出しませんでした（${res.problems.join("。")}）` }), env.adSettings));
     return { kind: "done", result: "案は出ませんでした（門を通らず）", tab: "ads" };
@@ -368,7 +377,7 @@ async function adsJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
   });
   if (!added) return { kind: "skip", note: ALREADY_THIS_WEEK };
   env.journal(...res.steps, { who: "プログラム", text: `承認の箱に入れた：広告の案「${proposalLabel(again.proposal)}」` });
-  return { kind: "done", result: "承認待ち1件", tab: "ads" };
+  return { kind: "done", result: JOB_APPROVAL_RESULT, tab: "ads" };
 }
 
 // ── メモ ─────────────────────────────────────────────────
@@ -384,7 +393,8 @@ async function memoJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
   const res = await env.ask.todo({ mode: env.mode, memo: masked, rules: env.rules.filter((r) => !r.locked) });
   if (!res.ok) {
     if (res.code === "no-ai") return { kind: "no-ai" };
-    return { kind: "failed", note: res.message };
+    if (res.code === "busy") return { kind: "busy" };
+    return { kind: "failed", note: reasonOf(res) ?? AI_FAILED_MESSAGE };
   }
   const title = restoreNames(res.title, memo, found);
   const book = env.store.book();

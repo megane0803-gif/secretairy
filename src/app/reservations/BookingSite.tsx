@@ -14,6 +14,7 @@ import { siteBook, siteCount, type SiteMode, type SiteOutcome } from "@/lib/book
 import { useBook } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
+import { SAVE_FAILED_MESSAGE } from "@/lib/browser";
 import { isStopped, siteStep, siteStopJournal } from "@/lib/book/siteStops";
 import { useSiteStops } from "@/lib/book/useSiteStops";
 
@@ -29,12 +30,14 @@ export function BookingSite({ data }: { data: BookData }) {
   const press = (mode: SiteMode) => (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted) return;
     let out: SiteOutcome | null = null;
-    book.update((s) => {
+    const w = book.update((s) => {
       out = siteBook(s, { data: book.data, rules, now: new Date(), stops }, mode);
       return out.state;
     });
     const o = out as SiteOutcome | null;
     if (!o) return;
+    // 書けなかった時は「入りました」と言わない（日誌も書かない。直しA の形）
+    if (o.ok && !w.ok) return setNote(SAVE_FAILED_MESSAGE);
     if (o.ok) writeJournal(...o.journal);
     setNote(o.ok ? o.message : o.note);
   };
@@ -57,7 +60,9 @@ export function BookingSite({ data }: { data: BookData }) {
     if (!e.nativeEvent.isTrusted) return;
     const start = toHHMM(t);
     const on = !isStopped(stops, date, start);
-    if (!toggle(date, start, on)) return;
+    const w = toggle(date, start, on);
+    if (!w) return;
+    if (!w.ok) return setNote(SAVE_FAILED_MESSAGE);
     writeJournal({ who: "オーナー", text: siteStopJournal(label, start, toHHMM(t + step), on) });
     setNote(on ? `${label} ${start}–${toHHMM(t + step)} をネットでは受けないにしました（もう一度押すと戻ります）` : `${label} ${start}–${toHHMM(t + step)} のネットの受付を戻しました`);
   };

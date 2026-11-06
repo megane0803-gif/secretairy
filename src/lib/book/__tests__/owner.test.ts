@@ -112,7 +112,9 @@ describe("3. 保存する直前に、その時の台帳でもう一度確かめ�
 
   test("画面は book.update の中（書く直前に読みなおした台帳）で ownerBook を呼ぶ。人が押した時だけ", () => {
     const sheet = read("src/app/reservations/OwnerBookSheet.tsx");
-    assert.match(sheet, /book\.update\(\(s\) => \{\s*out = ownerBook\(s, ctx/);
+    assert.match(sheet, /const w = book\.update\(\(s\) => \{\s*out = ownerBook\(s, \{ \.\.\.ctx, startedEpoch/);
+    // 書けなかった時は「入れました」と言わない（直しA の形）
+    assert.match(sheet, /if \(o\.ok && !w\.ok\) return setNote\(SAVE_FAILED_MESSAGE\);/);
     assert.match(sheet, /if \(!e\.nativeEvent\.isTrusted/);
     // 入れられない時は押せない
     assert.match(sheet, /disabled=\{!check \|\| check\.blocked\.length > 0\}/);
@@ -166,5 +168,18 @@ describe("4. 入れた後：確定・札・承認の箱は通らない・ほか�
     // 江口様の 13:00–15:00 は押せない
     assert.ok(!cells.includes(13 * 60) && !cells.includes(14 * 60 + 30));
     assert.ok(cells.includes(10 * 60) && cells.includes(15 * 60));
+  });
+});
+
+describe("5. 「最初に戻す」より前に開いた入力は使わない（直しA の形）", () => {
+  test("開いた時の印と書く時の台帳の印が違えば入れない。同じなら入る", () => {
+    const before: BookState = { ...start, epoch: "e1" };
+    const after: BookState = { ...start, epoch: "e2" };
+    const input = { customerId: "c01", menuId: "cut", date: "2026-11-05", start: "10:00" };
+    const stale = ownerBook(after, { ...ctx, startedEpoch: { epoch: "e1" } }, input);
+    assert.equal(stale.ok, false);
+    if (!stale.ok) assert.match(stale.note, /最初に戻したので/);
+    assert.equal(stale.state, after);
+    assert.ok(ownerBook(before, { ...ctx, startedEpoch: { epoch: "e1" } }, input).ok);
   });
 });

@@ -130,7 +130,8 @@ describe("1. TabFrame の rightAfterOnPhone（渡した時だけ使う口）", (
 describe("2. 押せない時の理由と「最初に戻す」", () => {
   test("理由と次に頼める日時は、ボタンのすぐ下にふつうの字（hint ではない）", () => {
     const btn = review.indexOf('{busy ? "見直しています…" : "AI に見直してもらう"}');
-    const why = review.indexOf('<p className="ad-review-why" role="status">');
+    // うまくいった直後は「✓ 承認の箱に入れました」が先なので、理由の行の読み上げ（status）はその時だけ外す（直しB の12）
+    const why = review.indexOf('<p className="ad-review-why" role={shown?.kind === "ok" ? undefined : "status"}>');
     assert.ok(btn >= 0 && why > btn);
     assert.match(review.slice(why, why + 200), /\{can\.reason\}\s*\{nextLabel && `次は \$\{nextLabel\} から頼めます。`\}/);
     assert.match(css, /\.ad-review-why \{[^}]*font-size: 1rem;/);
@@ -151,7 +152,9 @@ describe("2. 押せない時の理由と「最初に戻す」", () => {
 
   test("押せるかの決まりとボタンの文字は今のまま（7日に1つまで）", () => {
     assert.match(review, /disabled=\{busy \|\| !can\.ok\}/);
-    assert.match(review, /const can = canPropose\(ads\.state, new Date\(\)\.toISOString\(\), ads\.settings\);/);
+    // 7日に1つ（直しA 8：時計は「翌日へ」で進めた日付。calendar.ts の demoInstant）
+    assert.match(review, /const can = canPropose\(ads\.state, clockIso\(\), ads\.settings\);/);
+    assert.match(review, /const clockIso = \(\) => demoInstant\(getShop\(\), new Date\(\), book\.state\.dayOffset\)\.toISOString\(\);/);
     for (const label of ["AI（Claude）", "決まった返事（AI なし）", "決まった返事で試す（AI なし）"]) assert.ok(review.includes(label), label);
   });
 });

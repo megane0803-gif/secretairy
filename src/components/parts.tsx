@@ -4,12 +4,18 @@
 import type { ReactNode } from "react";
 import { ACTOR_LABEL, ACTOR_MEANING, type Actor } from "@/lib/actors";
 
-export function BigNumber({ label, value, unit }: { label: string; value: number; unit?: string }) {
+/** 大きな数字。go を渡すと、押せるカードの印（「↓ 見る」など）を右に添える（リンクで包むのは使う側） */
+export function BigNumber({ label, value, unit, go }: { label: string; value: number; unit?: string; go?: string }) {
   return (
     <div className="bignum">
       <span className="bignum-label">{label}</span>
       <span className="bignum-value num">{value.toLocaleString("ja-JP")}</span>
       {unit && <span className="bignum-unit">{unit}</span>}
+      {go && (
+        <span className="bignum-go" aria-hidden>
+          {go}
+        </span>
+      )}
     </div>
   );
 }

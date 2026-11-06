@@ -19,9 +19,9 @@ import { siteStep, stopHit } from "./siteStops";
 import type { JournalWho } from "../journal";
 import { loadBook, resolveChatReservations, seedAnchor, sortReservations, type ChatReservation, type Reservation } from "../reservations";
 import type { Rule } from "../rules/types";
-import { reserveKey } from "../todo/keys";
+import { rescheduleTodo } from "../todo/reschedule";
 import type { BookData } from "./data";
-import { activeChat, pendingApprovals, withTodo, type AddedTodo, type BookState } from "./state";
+import { activeChat, pendingApprovals, withTodo, type BookState } from "./state";
 
 /** free = 空いている枠に1件 / onHold = 仮押さえと同じ枠に（デモの見せ場） */
 export type SiteMode = "free" | "onHold";
@@ -199,15 +199,7 @@ export function siteBook(state: BookState, ctx: SiteContext, mode: SiteMode): Si
     left = left.filter((s) => s.id !== p.span.id);
     const r = p.row.reservation;
     const surname = data.customers.find((c) => c.id === r.customerId)?.surname ?? "お客";
-    const todo: AddedTodo = {
-      id: `td-site-${r.id}`,
-      title: `${surname}（架空）様に別の日時を案内`,
-      createdAt: nowIso,
-      done: false,
-      source: "reserve",
-      key: reserveKey(r.customerId, r.date, r.start),
-      due: clock.today.date,
-    };
+    const todo = rescheduleTodo({ idPrefix: "td-site", reservationId: r.id, surname, from: r, nowIso, due: clock.today.date });
     next = {
       ...withTodo(next, todo),
       chat: next.chat.filter((x) => x.id !== r.id),

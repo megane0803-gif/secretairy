@@ -20,7 +20,7 @@ import type { Verdict } from "../rules/judge";
 import type { Rule } from "../rules/types";
 import type { BookData } from "./data";
 import { ledgerView, toRow } from "./site";
-import type { BookState } from "./state";
+import { sameEpoch, type BookState } from "./state";
 
 /** 台帳から入れた予約の id の頭 */
 export const OWNER_ID_PREFIX = "own-";
@@ -95,6 +95,11 @@ export type OwnerContext = {
   rules: Rule[];
   now: Date;
   newId?: () => string;
+  /**
+   * 入れる画面を開いた時の「最初に戻す」の印（state.ts の epoch）。持たせた時は、書く時の台帳の印と同じ時だけ入れる
+   * （開いた後に「最初に戻す」が押されたら、その入力は使わない。直しA の形）
+   */
+  startedEpoch?: { epoch: string | undefined };
 };
 
 /** その時の台帳（state）から、判定に使う形を作る */
@@ -123,6 +128,8 @@ export type OwnerOutcome =
  * 今のルールの当たりが、その中に全部ある時だけ入れる（押した後で別のルールに当たるようになったら、もう一度見せる）。
  */
 export function ownerBook(state: BookState, ctx: OwnerContext, input: OwnerInput, acknowledged: string[] = []): OwnerOutcome {
+  if (ctx.startedEpoch && !sameEpoch(state, ctx.startedEpoch.epoch))
+    return { ok: false, state, check: null, note: "最初に戻したので、この入力は使いません。閉じて、もう一度押してください" };
   const slot = ownerSlotContext(state, ctx, input.customerId);
   if (!slot) return { ok: false, state, check: null, note: "お客様を選んでください" };
   if (!resolveMenu(ctx.data.menus, input.menuId)) return { ok: false, state, check: null, note: "メニューを選んでください" };

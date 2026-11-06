@@ -4,11 +4,16 @@
 // 送るたびに、このブラウザの台帳とルールをいっしょに /api/ai/reserve へ送り、返事を少しずつ受け取る。
 // サーバーは何も残さない。仮押さえ・日誌・AI の手順を残すのは、この画面（ブラウザ）の側。
 // AI は仮押さえまで。確定はオーナーが承認の箱で押す。
+// 「最初に戻す」を押したら、戻す前に始まった返事は止め、戻した後に届いた知らせ（仮押さえなど）は捨てる（台帳の印 epoch）。
+// 返事が途中で切れたら「返事が途中で切れました。もう一度送ってください。」と出す（受け取った仮押さえがあればそれも。ai/reserveStream.ts）。
+// AI の窓口が混んでいる時（429）は、混んでいる時の1文を出す（ai/busy.ts）。
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NO_REAL_NAMES_NOTE } from "@/lib/notices";
 import { carryOver } from "@/lib/ai/carry";
+import { AI_BUSY_MESSAGE, failText, isBusyStatus, reasonOf } from "@/lib/ai/busy";
 import { BUSY_NOTICE as BUSY_TEXT, createChatRuns, sendBlocked } from "@/lib/ai/chatRuns";
+import { cutNotice, holdInto, readReserveStream } from "@/lib/ai/reserveStream";
 import { buildExamples, type Example } from "@/lib/ai/examples";
 import { candidateLabel, previousVisit, type SlotContext } from "@/lib/ai/slots";
 import { addStep, markFailed, startConsultation } from "@/lib/ai/stepsStore";
@@ -22,7 +27,8 @@ import {
   type ReserveRequest,
 } from "@/lib/ai/wire";
 import type { BookData } from "@/lib/book/data";
-import { withChatTodo, withGuestReleased, withHold } from "@/lib/book/state";
+import { sameEpoch, withChatTodo, withGuestReleased } from "@/lib/book/state";
+import { currentEpoch } from "@/lib/book/store";
 import { useBook } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
@@ -75,6 +81,23 @@ export function ReserveChat({ data }: { data: BookData }) {
   // 例文は、いまの台帳・ルール・時刻でプログラムが選んだ日時で作る（どの曜日に開いても同じ働きになるように）
   const examples = useMemo(() => (ctx ? buildExamples(ctx) : []), [ctx]);
 
+  // 「最初に戻す」（台帳の印が変わった）：流れている返事を止め、会話も最初に戻す（戻す前の仮押さえ・候補を引きつがない）
+  const epochRef = useRef(book.state.epoch);
+  useEffect(() => {
+    if ((epochRef.current ?? "") === (book.state.epoch ?? "")) return;
+    epochRef.current = book.state.epoch;
+    const stopped = runs.stopIfReset(book.state.epoch);
+    if (stopped) {
+      setBusy(false);
+      const was = data.customers.find((c) => c.id === stopped);
+      writeJournal({ who: "プログラム", text: `最初に戻したので、流れていた返事を止めた（${was ? `${was.surname}（架空）様` : "前のお客様"}の相談。後から届いた分は入れない）` });
+    }
+    setNotice(null);
+    setMsgs([{ from: "ai", text: `${data.shop.name} の予約の係です。ご希望のメニューと日にちを教えてください。` }]);
+    setCandidates([]);
+    setConvHolds([]);
+  }, [book.state.epoch, runs, data]);
+
   const scroll = () => requestAnimationFrame(() => logRef.current?.lastElementChild?.scrollIntoView({ block: "nearest" }));
 
   const reset = (id: string) => {
@@ -103,8 +126,10 @@ export function ReserveChat({ data }: { data: BookData }) {
       return;
     }
     setNotice(null);
-    const run = runs.start(customer.id);
-    const live = () => runs.isCurrent(run.id);
+    // 始めた時の台帳の印。あいだに「最初に戻す」があれば、この返事の知らせは使わない
+    const epoch = currentEpoch();
+    const run = runs.start(customer.id, epoch);
+    const live = () => runs.isCurrent(run.id) && sameEpoch({ epoch: currentEpoch() }, epoch);
     const useMode = over?.mode ?? mode;
     const before = over?.msgs ?? msgs;
     const history: ChatTurn[] = [
@@ -139,6 +164,8 @@ export function ReserveChat({ data }: { data: BookData }) {
     let aiText = "";
     let gotAny = false;
     let aiFailed = false;
+    // この返事で入れた仮押さえ（途中で切れた時に書く）
+    const held: string[] = [];
     const showAi = (d: string) => {
       if (!live()) return;
       aiText += d;
@@ -183,9 +210,11 @@ export function ReserveChat({ data }: { data: BookData }) {
         case "hold": {
           const h = parseHoldOffer(e.hold);
           if (!h || h.customerId !== customer.id) break;
-          book.update((s) => withHold(s, h));
+          // 戻した後の台帳・同じ仮押さえがもうある時は入れない（日誌も書かない）
+          if (!holdInto(book.update, h, epoch)) break;
           mine.add(h.id);
           setConvHolds((l) => (l.includes(h.id) ? l : [...l, h.id]));
+          held.push(candidateLabel(data, h));
           writeJournal({ who: "AI", text: `仮押さえした：${who} ${candidateLabel(data, h)}（承認の箱へ）` });
           break;
         }
@@ -193,7 +222,7 @@ export function ReserveChat({ data }: { data: BookData }) {
           // この会話で作った、まだ承認待ちの仮押さえだけ外す（withGuestReleased でもう一度確かめる）
           if (typeof e.holdId !== "string" || !mine.has(e.holdId)) break;
           const r = book.state.chat.find((x) => x.id === e.holdId);
-          book.update((s) => withGuestReleased(s, e.holdId, customer.id, new Date().toISOString()));
+          book.update((s) => (sameEpoch(s, epoch) ? withGuestReleased(s, e.holdId, customer.id, new Date().toISOString()) : s));
           mine.delete(e.holdId);
           setConvHolds((l) => l.filter((x) => x !== e.holdId));
           writeJournal({ who: "AI", text: `仮押さえを外した（${who}の頼み）：${r ? candidateLabel(data, r) : e.holdId}（承認の箱から外した）` });
@@ -203,6 +232,7 @@ export function ReserveChat({ data }: { data: BookData }) {
           // 言うだけで終わらせない：ToDo に「○○（架空）様：用件の1行」を足し、日誌に1行
           let line: string | null = null;
           book.update((s) => {
+            if (!sameEpoch(s, epoch)) return s;
             const out = withChatTodo(s, e.todo, customer.surname, new Date().toISOString(), book.today.date);
             line = out.journal;
             return out.state;
@@ -212,7 +242,8 @@ export function ReserveChat({ data }: { data: BookData }) {
         }
         case "error":
           if (e.code === "no-ai") failed();
-          else setMsgs((m) => [...m, { from: "note", text: `うまくいきませんでした。${e.message}。もう一度送ってください。` }]);
+          else if (e.code === "busy") setMsgs((m) => [...m, { from: "note", text: AI_BUSY_MESSAGE }]);
+          else setMsgs((m) => [...m, { from: "note", text: failText(e.message, "もう一度送ってください。", "うまくいきませんでした。もう一度送ってください。") }]);
           break;
         case "done":
           break;
@@ -226,33 +257,26 @@ export function ReserveChat({ data }: { data: BookData }) {
         body: JSON.stringify(body),
         signal: run.signal,
       });
-      if (!res.ok || !res.body) {
-        let msg = "";
-        try {
-          msg = ((await res.json()) as { message?: string }).message ?? "";
-        } catch {}
-        if (res.status >= 500 || !msg) failed();
-        else if (live()) setMsgs((m) => [...m, { from: "note", text: `うまくいきませんでした。${msg}。文を短くして送ってください。` }]);
+      if (isBusyStatus(res.status)) {
+        // 混んでいる（1分10回まで）。文は送った物のまま、少し待ってから送りなおせる
+        if (live()) setMsgs((m) => [...m, { from: "note", text: AI_BUSY_MESSAGE }]);
         return;
       }
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      let buf = "";
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done || !live()) break;
-        buf += dec.decode(value, { stream: true });
-        let i: number;
-        while ((i = buf.indexOf("\n")) >= 0) {
-          const lineText = buf.slice(0, i).trim();
-          buf = buf.slice(i + 1);
-          if (!lineText) continue;
-          try {
-            onEvent(JSON.parse(lineText) as ReserveEvent);
-          } catch {
-            // 形の崩れた行は読み飛ばす
-          }
-        }
+      if (!res.ok || !res.body) {
+        let msg: string | null = null;
+        try {
+          msg = reasonOf(await res.json());
+        } catch {}
+        if (res.status >= 500) failed();
+        else if (live()) setMsgs((m) => [...m, { from: "note", text: failText(msg, "文を短くして送ってください。", "うまくいきませんでした。もう一度送ってください。") }]);
+        return;
+      }
+      const end = await readReserveStream(res.body, onEvent, live);
+      if (end === "cut" && live()) {
+        // 終わりの印が来ないまま切れた：黙らずに知らせる（受け取った仮押さえは入っている。送り直しても2つにしない）
+        setMsgs((m) => [...m, { from: "note", text: cutNotice(held) }]);
+        writeJournal({ who: "プログラム", text: `予約チャットの返事が途中で切れた（${who}の相談${held.length ? `。仮押さえ ${held.join("・")} は承認の箱に入れた` : ""}）` });
+        scroll();
       }
       if (useMode === "ai" && !aiFailed && live()) setNoAi(false);
     } catch {

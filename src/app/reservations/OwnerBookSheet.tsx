@@ -13,6 +13,7 @@ import type { BookData } from "@/lib/book/data";
 import { ownerBook, ownerCheck, ownerSlotContext, OWNER_TAG, type OwnerCheck, type OwnerOutcome } from "@/lib/book/owner";
 import { useBook } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
+import { SAVE_FAILED_MESSAGE } from "@/lib/browser";
 import { useRules } from "@/lib/rules/useRules";
 
 export type SheetTarget = { date: string; start: string };
@@ -32,6 +33,8 @@ export function OwnerBookSheet({ data, target, onClose }: { data: BookData; targ
   const [note, setNote] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  // 開いた時の「最初に戻す」の印
+  const [openedEpoch] = useState(() => book.state.epoch);
 
   // 開いたら窓の中へ。Esc で閉じる
   useEffect(() => {
@@ -89,13 +92,16 @@ export function OwnerBookSheet({ data, target, onClose }: { data: BookData; targ
       return;
     }
     let out: OwnerOutcome | null = null;
-    // 保存する直前に、その時の台帳でもう一度確かめる（別の窓で入った予約とぶつからないように）
-    book.update((s) => {
-      out = ownerBook(s, ctx, { customerId, menuId, date: target.date, start }, asked ?? []);
+    // 保存する直前に、その時の台帳でもう一度確かめる（別の窓で入った予約とぶつからないように）。
+    // 開いた後に「最初に戻す」が押されていたら入れない（startedEpoch）
+    const w = book.update((s) => {
+      out = ownerBook(s, { ...ctx, startedEpoch: { epoch: openedEpoch } }, { customerId, menuId, date: target.date, start }, asked ?? []);
       return out.state;
     });
     const o = out as OwnerOutcome | null;
     if (!o) return;
+    // 書けなかった時は「入れました」と言わない（日誌も書かない。入力は残すので、もう一度押せる。直しA の形）
+    if (o.ok && !w.ok) return setNote(SAVE_FAILED_MESSAGE);
     if (!o.ok) {
       setAsked(null);
       setNote(o.note);

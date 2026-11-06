@@ -6,6 +6,7 @@
 // 承認の箱は使わない（ホームの「承認待ち」にも入れない）。登録は右の列の人のボタンだけ。
 
 import { Checked, Fold } from "@/components/parts";
+import { ACCT_CHOOSE_ID, ChooseLink } from "./ChooseLink";
 import { md, yen } from "@/lib/accounting/sales";
 import { merchantName, ruleLabel, USE_LABEL } from "@/lib/accounting/sort";
 import { withAutoNext, withChoice } from "@/lib/accounting/state";
@@ -130,14 +131,21 @@ export function CardStatement() {
 
       <div className="karte-card acct-bigcard">
         <p className="ad-change">
+          {/* 押せない「→」は外した（押せそうに見えるため）。人が選ぶ所へはリンクで飛ぶ */}
           <span>
-            未処理 <strong className="num">{total}</strong>件
-          </span>
-          <span className="arrow" aria-hidden>
-            →
+            未処理 <strong className="num">{total}</strong>件：
           </span>
           <span>
-            自動 <strong className="num">{sorted.auto.length}</strong>件・人が選ぶ <strong className="num">{manual}</strong>件
+            自動 <strong className="num">{sorted.auto.length}</strong>件・
+            {manual > 0 ? (
+              <ChooseLink>
+                人が選ぶ <strong className="num">{manual}</strong>件 ↓
+              </ChooseLink>
+            ) : (
+              <>
+                人が選ぶ <strong className="num">{manual}</strong>件
+              </>
+            )}
           </span>
           {state.registered && <span className="tag ok">登録済み</span>}
         </p>
@@ -145,7 +153,9 @@ export function CardStatement() {
         <Checked>AI の予想は使っていません（購入先のルールだけで分けています）</Checked>
       </div>
 
-      <h3 className="acct-h3">人が選ぶ {manual}件</h3>
+      <h3 className="acct-h3" id={ACCT_CHOOSE_ID}>
+        人が選ぶ {manual}件
+      </h3>
       <p className="hint">1行ずつ「店用」か「私用」を押します。「次から自動」に印を付けた購入先は、登録のときに自動のルールに足します（今回の印で）。</p>
       <h4 className="acct-h4">初めての購入先（{sorted.fresh.length}件）</h4>
       <Group acct={acct} items={sorted.fresh} kind="fresh" />

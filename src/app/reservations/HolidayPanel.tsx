@@ -13,6 +13,8 @@ import { holidayTodos, withHolidayTodos } from "@/lib/book/holiday";
 import { useBook } from "@/lib/book/useBook";
 import { holidayChoices, holidayJournal, holidayLimitsOf, reservationsOn } from "@/lib/holidays";
 import { writeJournal } from "@/lib/journal";
+import { SAVE_FAILED_MESSAGE } from "@/lib/browser";
+import { sameEpoch } from "@/lib/book/state";
 import type { Reservation } from "@/lib/reservations";
 import { useHolidays } from "@/lib/useHolidays";
 
@@ -22,7 +24,8 @@ const FIRST = 14;
 export function HolidayPanel({ data }: { data: BookData }) {
   const book = useBook(data);
   const { dates, setHoliday } = useHolidays();
-  const [ask, setAsk] = useState<{ date: string; list: Reservation[] } | null>(null);
+  // epoch = 一覧を出した時の「最初に戻す」の印（その後に戻されたら使わない）
+  const [ask, setAsk] = useState<{ date: string; list: Reservation[]; epoch?: string } | null>(null);
   const [more, setMore] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const limits = holidayLimitsOf(data.shop);
@@ -34,24 +37,38 @@ export function HolidayPanel({ data }: { data: BookData }) {
 
   const apply = (date: string, on: boolean, list: Reservation[]) => {
     const label = calDay(data.shop, date).label;
-    if (!setHoliday(date, on)) {
+    // 一覧を見せた後に「最初に戻す」が押されていたら、その一覧は使わない（直しA の形）
+    if (ask && !sameEpoch(book.state, ask.epoch)) {
+      setAsk(null);
+      setNote("最初に戻したので、さっきの一覧は使いません。もう一度日を押してください");
+      return;
+    }
+    const w = setHoliday(date, on);
+    if (!w) {
       setNote(on && dates.length >= limits.max ? `休みの日は ${limits.max}日までです` : null);
       return;
     }
+    // 書けなかった時は「休みにした」と言わない（日誌・ToDo も作らない）
+    if (!w.ok) return setNote(SAVE_FAILED_MESSAGE);
     let added: string[] = [];
+    let todoNote = "";
     if (on && list.length) {
-      const todos = holidayTodos(book.shop, list, new Date().toISOString(), book.today.date);
-      book.update((s) => {
+      const todos = holidayTodos(list, new Date().toISOString(), book.today.date);
+      const tw = book.update((s) => {
         const o = withHolidayTodos(s, todos);
         added = o.added;
         return o.state;
       });
+      if (!tw.ok) {
+        added = [];
+        todoNote = `（ToDo は${SAVE_FAILED_MESSAGE.replace(/。.*$/, "")}。手で足してください）`;
+      }
     }
     writeJournal({ who: "オーナー", text: holidayJournal(label, on, on ? list.length : 0) });
     setAsk(null);
     setNote(
       on
-        ? `${label}を休みの日にしました${list.length ? `。予約 ${list.length}件は残し、ToDo を${added.length}件足しました` : ""}`
+        ? `${label}を休みの日にしました${list.length ? `。予約 ${list.length}件は残し、ToDo を${added.length}件足しました${todoNote}` : ""}`
         : `${label}を戻しました（また予約を受けられます）`,
     );
   };
@@ -61,7 +78,7 @@ export function HolidayPanel({ data }: { data: BookData }) {
     const on = !dates.includes(date);
     const list = on ? reservationsOn(book.all, date) : [];
     // 予約がある日は、まず一覧を出す（もう一度押した時だけ休みにする）
-    if (on && list.length) return setAsk({ date, list });
+    if (on && list.length) return setAsk({ date, list, epoch: book.state.epoch });
     apply(date, on, []);
   };
 
