@@ -12,10 +12,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { TodoTitle } from "../../components/TodoRows";
 import { parseAds } from "../ads/state";
 import { emptyBook, parseBook, withChatTodo, withReleased } from "../book/state";
-import { guestTitleHead, isGuestTitle, rescheduleTitle, withoutOldMark } from "../guestName";
+import { guestTitleHead, isGuestTitle, withoutOldMark } from "../guestName";
 import { parseJobs } from "../jobs/state";
 import { parseJournal } from "../journal";
 import { NO_REAL_NAMES_NOTE } from "../notices";
+import { rescheduleTitle } from "../todo/reschedule";
 
 const OLD = "（架空）";
 
@@ -138,7 +139,7 @@ describe("3. ブラウザに残った前の書き方でも同じように動く�
 
   test("前の書き方の題のまま残っていても、承認の箱の「直す」は今の書き方の ToDo を足す", () => {
     const next = withReleased(s, "a1", "fixed", "江口", "2026-11-04T02:00:00.000Z");
-    assert.ok(next.todos.some((t) => t.title === "江口様に別の日時を案内"));
+    assert.ok(next.todos.some((t) => t.title.startsWith("江口様に別の日時を案内（")), next.todos.map((t) => t.title).join("／"));
     assert.equal(next.todos.length, s.todos.length + 1);
   });
 

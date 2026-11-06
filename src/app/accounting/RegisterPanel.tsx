@@ -6,6 +6,7 @@
 //
 // 🔒 確定は人：登録は、人が画面のボタンを押したとき（isTrusted）だけ。AI・自動の処理からは呼ばない。
 
+import { ChooseLink } from "./ChooseLink";
 import { useState } from "react";
 import { BigNumber, Fold } from "@/components/parts";
 import { md, yen } from "@/lib/accounting/sales";
@@ -49,9 +50,9 @@ export function RegisterPanel({ freee }: { freee: ReturnType<typeof useFreee> })
         <>
           <p className="acct-left" role="status">
             {gate.remaining > 0 ? (
-              <>
-                あと <strong className="num">{gate.remaining}</strong>件 選ぶ
-              </>
+              <ChooseLink>
+                あと <strong className="num">{gate.remaining}</strong>件 選ぶ ↓
+              </ChooseLink>
             ) : (
               "全部選びました"
             )}

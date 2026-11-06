@@ -616,7 +616,7 @@ export type RuleWordsRequest = {
 };
 export type RuleWordsResponse =
   | ({ ok: true } & RuleWordsOutcome)
-  | { ok: false; code: "no-ai" | "bad-request" | "refused"; message: string };
+  | { ok: false; code: "no-ai" | "bad-request" | "refused" | "busy"; message: string };
 
 /** 窓口が受け取った形。reading は送られてきたまま（runRuleWords の parseReading で確かめる） */
 export type ParsedWordsRequest = { mode: RuleWordsMode; text: string; reading?: unknown; answers: WordsAnswers };

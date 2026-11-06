@@ -89,7 +89,7 @@ export type ReserveSummary = {
   holds: { menuId: string; date: string; start: string }[];
   todos: string[];
   steps: string[];
-  error: { code: "no-ai" | "bad-request"; message: string } | null;
+  error: { code: "no-ai" | "bad-request" | "busy"; message: string } | null;
 };
 
 export function readReserve(events: ReserveEvent[]): ReserveSummary {

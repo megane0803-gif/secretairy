@@ -3,19 +3,23 @@
 // カルテのタブの右の列：施術のメモ。スマホのキーボードの音声入力で話して入れる前提。
 // PC では、下の「録音からメモを作る」で作った要点もここに入る（その時だけメモの上限を広げる：recordingMaxChars）。
 // 「カルテにする」で /api/ai/karte に、メモとこのブラウザのルールを送る（お客様の名前は送らない）。
-// 返ってきた案は真ん中に大きいカードで出る。保存は真ん中の「保存」（人のボタン）だけ。
+// 返ってきた案は真ん中に大きいカードで出る（スマホでは上に出るので、案まで画面を動かし、ボタンの下に案へ飛ぶリンクも出す）。
+// 保存は真ん中の「保存」（人のボタン）だけ。
 
 import { CustomerName } from "@/components/parts";
+import { AI_BUSY_MESSAGE, failText } from "@/lib/ai/busy";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import type { BookData } from "@/lib/book/data";
 import type { KarteExample } from "@/lib/data/types";
 import { getDesk, setDesk } from "@/lib/karte/deskStore";
 import { removedSentence } from "@/lib/karte/gate";
-import type { KarteMode, KarteRequest, KarteResponse } from "@/lib/karte/wire";
+import { askKarte } from "@/lib/karte/client";
+import type { KarteMode, KarteRequest } from "@/lib/karte/wire";
 import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
-import { useKarteToday } from "./useKarteToday";
 import { DEMO_TAG_NOTE } from "@/lib/notices";
+import { isOneColumn, scrollToId } from "@/lib/scroll";
+import { KARTE_DRAFT_ID, useKarteToday } from "./useKarteToday";
 
 export function KarteMemo({
   data,
@@ -43,6 +47,7 @@ export function KarteMemo({
   const example = examples.find((e) => e.customerId === selected.customer.id);
   const locked = !!saved;
   const canMake = !locked && !desk.busy && memo.trim() !== "" && !over;
+  const hasDraft = !locked && !desk.busy && !!desk.drafts[key];
 
   // 手で入れた・例文を入れた時は、録音の印を外す（空にした時も）。録音のメモを手で直した時は印を残す
   const setMemo = (text: string, keepSource = true) =>
@@ -58,27 +63,20 @@ export function KarteMemo({
     setDesk(() => ({ busy: true, problem: null, mode }));
     const body: KarteRequest = { mode, memo: text, rules: rules.filter((r) => !r.locked), ...(fromRecording ? { source: "recording" as const } : {}) };
     try {
-      const res = await fetch("/api/ai/karte", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      let out: KarteResponse | null = null;
-      try {
-        out = (await res.json()) as KarteResponse;
-      } catch {
-        out = null;
-      }
-      if (!out || (!out.ok && out.code === "no-ai")) {
+      const out = await askKarte(body);
+      if (!out.ok && out.code === "no-ai") {
         setDesk(() => ({ noAi: true }));
         return;
       }
+      // 混んでいる（429）・理由の文が無い：メモと今の案はそのまま、1文だけ出す（「undefined」を出さない）
       if (!out.ok) {
-        setDesk(() => ({ problem: `うまくいきませんでした。${out.message}。` }));
+        setDesk(() => ({ problem: out.code === "busy" ? AI_BUSY_MESSAGE : failText(out.message) }));
         return;
       }
       const draft = out;
       setDesk((s) => ({ drafts: { ...s.drafts, [key!]: { ...draft, memo: text } }, noAi: mode === "ai" ? false : s.noAi }));
+      // スマホ（1列）では案はこのメモより上に出るので、案の所まで画面を動かす（PC は真ん中の列に見えている）
+      if (isOneColumn()) scrollToId(KARTE_DRAFT_ID);
       const lines = Object.values(draft.sections).reduce((n, l) => n + l.length, 0);
       writeJournal(
         {
@@ -192,6 +190,20 @@ export function KarteMemo({
           {desk.busy ? "作っています…" : "カルテにする"}
         </button>
       </div>
+      {/* スマホでは案がこのボタンより上に出るので、案へ飛ぶリンクをボタンのすぐ下に（PC は真ん中に見えているので出さない） */}
+      {hasDraft && (
+        <p className="karte-made sp-only" role="status">
+          <a
+            href={`#${KARTE_DRAFT_ID}`}
+            onClick={(e) => {
+              e.preventDefault();
+              scrollToId(KARTE_DRAFT_ID);
+            }}
+          >
+            ✓ 案ができました。上で見て保存 ↑
+          </a>
+        </p>
+      )}
       <p className="hint">
         お客様の名前は AI に送りません（カルテにはプログラムが入れます）。AI の案は、言葉の門（プログラム）を通してから真ん中に出ます。保存は人が押すまでしません。
       </p>

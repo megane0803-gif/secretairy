@@ -9,6 +9,7 @@
 
 import { useState } from "react";
 import { Fold } from "@/components/parts";
+import { AI_BUSY_MESSAGE, failText } from "@/lib/ai/busy";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import type { BookData } from "@/lib/book/data";
 import { useBook } from "@/lib/book/useBook";
@@ -54,8 +55,14 @@ export function PostsForm({ data, settings, memos, maxChars }: { data: BookData;
         setPostsDesk(() => ({ busy: false, noAi: true }));
         return;
       }
+      if (res.code === "busy") {
+        // 混んでいる（1分10回まで）：材料と今の下書きはそのまま。待ってから押しなおせる
+        writeJournal({ who: "プログラム", text: `AI の窓口が混んでいたので、${draftName(kind.label)}は作っていません` });
+        setPostsDesk(() => ({ busy: false, problem: AI_BUSY_MESSAGE }));
+        return;
+      }
       if (res.code === "bad-request") {
-        setPostsDesk((s) => ({ busy: false, noAi: useMode === "ai" ? false : s.noAi, problem: `うまくいきませんでした。${res.message}。` }));
+        setPostsDesk((s) => ({ busy: false, noAi: useMode === "ai" ? false : s.noAi, problem: failText(res.message) }));
         return;
       }
       writeJournal(...res.steps);

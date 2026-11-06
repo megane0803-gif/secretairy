@@ -12,7 +12,7 @@ export function withoutOldMark(text: string): string {
   return text.replace(OLD_MARK, (_m, head: string | undefined) => head ?? "");
 }
 
-/** お客様の呼び方（「青木様」）。ToDo・日誌・お知らせ・AI への指示の名前はみなこれ */
+/** お客様の呼び方（「青木様」）。ToDo・日誌・お知らせ・AI への指示の名前はみなこれ（「○○様に別の日時を案内」は todo/reschedule.ts がこれを使う） */
 export function guestName(surname: string): string {
   return `${surname}様`;
 }
@@ -27,9 +27,4 @@ export function isGuestTitle(title: string, surname: string): boolean {
   const t = withoutOldMark(title);
   const head = guestTitleHead(surname);
   return t.startsWith(head) && t.length > head.length;
-}
-
-/** 「○○様に別の日時を案内」（直す・見送り・予約サイトで枠が埋まった時の ToDo） */
-export function rescheduleTitle(surname: string): string {
-  return `${guestName(surname)}に別の日時を案内`;
 }

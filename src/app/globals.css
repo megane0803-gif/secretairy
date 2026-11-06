@@ -317,6 +317,13 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .bignum-label { color: var(--muted); font-size: 0.9rem; }
 .bignum-value { font-size: 2.6rem; font-weight: 700; line-height: 1.1; }
 .bignum-unit { color: var(--muted); font-size: 0.85rem; }
+/* 押せる数字のカード（ホームの朝の要点）。カードの見た目はそのまま、枠の色と右の印で押せると分かるように */
+.bignum-link { display: flex; color: inherit; text-decoration: none; border-radius: var(--radius); min-width: 0; }
+.bignum-link > .bignum { flex: 1 1 auto; min-width: 0; }
+.bignum-link:hover > .bignum { border-color: var(--accent); }
+.bignum-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bignum-go { color: var(--accent); font-size: 0.85rem; font-weight: 700; }
+[id] { scroll-margin-top: 12px; }
 
 .minibar {
   height: 6px;
@@ -701,6 +708,10 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .approval-what { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .approval-when { font-size: 1.15rem; font-weight: 700; }
 .approval-why { margin: 0; font-size: 0.85rem; color: var(--muted); }
+/* 仮押さえが外れるまでの残り。1時間を切った行は太字（色で急がせない）。同じ日のほかの予約の1行 */
+.approval-left { margin: 2px 0; font-size: 0.85rem; color: var(--muted); }
+.approval-left.soon { font-weight: 700; color: var(--text); }
+.approval-same { margin: 2px 0; font-size: 0.85rem; color: var(--text); overflow-wrap: anywhere; }
 .approval-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .approval-buttons .btn { min-width: 72px; }
 .checked.small, .problems.small { font-size: 0.8rem; margin: 0; }
@@ -816,12 +827,20 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 /* ToDo のタブ：PC は右の列に「メモを投げる」と今やる3件、スマホはページの上にメモの欄だけ */
 .pc-only { display: none; }
 .sp-only { display: block; }
+.pc-inline { display: none; }
+.sp-inline { display: inline; }
 @media (min-width: 1024px) {
   .pc-only { display: block; }
   .sp-only { display: none; }
+  .pc-inline { display: inline; }
+  .sp-inline { display: none; }
 }
 
 /* ---- カルテ ---- */
+
+/* スマホで「カルテにする」の後：案へ飛ぶリンク（ボタンのすぐ下） */
+.karte-made { margin: 8px 0 0; font-weight: 700; }
+.karte-made a { color: var(--ok); }
 
 .karte-today { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .karte-pick {
@@ -922,11 +941,16 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .ad-review { display: flex; flex-direction: column; gap: 8px; }
 .ad-review .btn.big { font-size: 1.05rem; padding: 10px 14px; }
 /* 押せない時の理由と次に頼める日時は、ボタンのすぐ下にふつうの字の大きさで（小さい hint にしない） */
-.ad-review-why { margin: 0; font-size: 1rem; color: var(--text); overflow-wrap: anywhere; }
+.ad-review-why { margin: 0; font-size: 1rem; font-weight: 400; color: var(--text); overflow-wrap: anywhere; }
+.ad-review-go { margin-left: 4px; font-weight: 700; white-space: nowrap; }
 .ad-review-reset { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .ad-review-reset p { margin: 0; font-size: 0.9rem; color: var(--muted); }
 /* 広告タブの一番上の「4週分」と、その下の承認待ちの箱の間をあける */
 .ad-weeks { margin-bottom: 16px; }
+/* 4週分の数字（かかったお金 28,080 円など）がカードからはみ出さないように：箱の幅に合わせて字を小さくし、折り返さない（経理の売上と同じ形） */
+.ad-weeks .bignums > div { min-width: 0; }
+.ad-weeks .bignum { min-width: 0; container-type: inline-size; }
+.ad-weeks .bignum-value { white-space: nowrap; font-size: min(2.6rem, 20cqi); }
 
 /* ---- 経理タブ ---- */
 
@@ -1051,6 +1075,11 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .posts-at { flex: none; font-weight: 700; font-size: 0.9rem; }
 .posts-first { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .posts-full { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 2px; font-size: 0.95rem; line-height: 1.7; }
+/* 発信の「コピー」：ボタンと「✓ コピーしました」を1行に（狭い時は折り返す） */
+.posts-copy { margin: 6px 0 0; }
+.copy-wrap { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.copy-note { font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
+.copy-note.ok { color: var(--ok); font-weight: 700; }
 
 /* ---- ホームの「AI の仕事」 ---- */
 
@@ -1547,6 +1576,10 @@ h3.section-title { font-size: 1rem; }
 .morning-row { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .home-bignums { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
 .home-bignums .bignum { flex: none; padding: 8px 12px; }
+/* 狭い時は数字4枚を2×2に。押せる印（↓ →）はカードの右上に */
+.home-bignums:has(.bignum-link) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.home-bignums .bignum-link > .bignum { flex: 1 1 auto; position: relative; padding-right: 28px; }
+.home-bignums .bignum-go { position: absolute; top: 8px; right: 10px; }
 .morning-top { min-width: 0; }
 .morning-top .todos { margin-bottom: 4px; }
 .morning-top .hint { margin: 0; }
@@ -1555,6 +1588,9 @@ h3.section-title { font-size: 1rem; }
   .home-bignums { display: grid; grid-template-columns: max-content; flex: none; }
   .home-bignums .bignum { flex-direction: row; align-items: baseline; gap: 6px; padding: 6px 12px; }
   .home-bignums .bignum-label { margin-right: auto; padding-right: 8px; }
+  .home-bignums:has(.bignum-link) { grid-template-columns: max-content; }
+  .home-bignums .bignum-link > .bignum { position: static; padding-right: 12px; }
+  .home-bignums .bignum-go { position: static; margin-left: 2px; }
   .morning-top { flex: 1 1 auto; }
 }
 

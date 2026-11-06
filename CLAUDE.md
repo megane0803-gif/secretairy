@@ -26,12 +26,13 @@ npm run build      # 本番ビルド（push の前に通す）
 - 経理の freee（テスト事業所）の鍵は、サーバーには置かず、つないだブラウザの暗号化した cookie にだけ持たせる（仕様書 §1.8.1）。
 - AI を呼ぶ API はブラウザから要るデータとルールを毎回受け取り、答えを返すだけ。受け取った物を残さない。
 - AI を呼ぶ窓口は全部 `src/app/api/ai/` の下（Vercel の Firewall で `/api/ai/` を1分10回まで）。上限の数（字数・返事の長さ・道具の回数・送る通数・受け取る大きさ）は `config/` に置き、コードに直に書かない。
+- 画面から AI の窓口を呼ぶ時は `src/lib/ai/busy.ts` を通す（`postAi`・`answerOf`）。429 は「いま AI の窓口が混んでいます。1分ほど待ってから、もう一度押してください。」（`AI_BUSY_MESSAGE`。「今は AI につながりません」とは分ける）、理由の文が無い時は `failText` で決まった1文（「undefined」を出さない）。入力と案は消さない。
 
 ## 店ごとに変わる物はコードに書かない
 
 - メニュー・営業時間・同じ時間に受ける人数（前は席数。`shop.seats`）・カルテの見出し・タブの表示・ルールは `config/` に置き、`src/lib/settings.ts`（ルールは `src/lib/rules/store.ts`）を通して読む。
 - 画面のコードで `config/*.json` を直接 import しない。
-- 架空のデータ（`seed/`）は `src/lib/data/seed.ts` を通して読む。日付は「何番目の営業日（0 = 今日）＋時刻」で持ち、定休日には置かない。お客様は名字だけで「○○様」と書き、画面・日誌・ToDo・お知らせ・AI への指示で名前ごとに「（架空）」「架空」の札は付けない（架空であることは入力欄の近くの注意の1行 `NO_REAL_NAMES_NOTE` と README で伝える。仕様書 §3.3）。名前の作り方・照らし方は `src/lib/guestName.ts` の1か所（前の書き方「○○（架空）様」で残った保存は `withoutOldMark` で読みかえ、消さない）。
+- 架空のデータ（`seed/`）は `src/lib/data/seed.ts` を通して読む。日付は「何番目の営業日（0 = 今日）＋時刻」で持ち、定休日には置かない。お客様は名字だけで「○○様」と書き、画面・日誌・ToDo・お知らせ・AI への指示で名前ごとに「（架空）」「架空」の札は付けない（架空であることは入力欄の近くの注意の1行 `NO_REAL_NAMES_NOTE` と README で伝える。仕様書 §3.3）。名前の作り方・照らし方は `src/lib/guestName.ts` の1か所（前の書き方「○○様」で残った保存は `withoutOldMark` で読みかえ、消さない）。
 - 例のルールは `config/rules.seed.json` だけ。作り手の考えで店の決まりを足さない。
 - 鍵つきの2つだけは仕組みの約束なのでコードに書く。
 
@@ -87,13 +88,21 @@ src/lib/brief/     朝の要点の「AI の一言」：材料と印（items.ts�
 src/lib/eval/      試験10問（/eval。左のタブには出さない）：問い（config と seed から作る。ふつうの予約3問）・判定（checks.ts。文と結果。AI は使わない）・流し方（同時に1回・1問ごとに eval.minIntervalSeconds 秒・eval.maxCallsPerRun 回まで・流せなかった物は数えない）・合言葉（EVAL_PASSCODE。窓口は src/app/api/eval/。AI は呼ばない）・サーバーの見張り（guard.ts。KV の印は SET NX＋期限・回数は INCR。/api/ai/ の窓口が試験の札の見出しを見て数える）・仮押さえの問いは「選んだ枠にちょうど1件・確定0件」の時だけ合格・「確定しました」と言わない、は確定したと伝える文だけ落とす（かぎかっこの中・「〜とお伝えできません」の打ち消しは数えない）・README に写す形は文の条件で落ちた所の前後も出す。今の /api/ai/ の窓口を使い、結果は画面の表だけ
 .claude/agents/   サブエージェント「意地悪なお客さん役」（mean-customer.md）：試験の問いの案を出す。材料は seed と config だけ
 src/lib/reminder.ts 「翌日へ」の前日のお知らせ（決まった形・AI なし・送らない）
-src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理・LINE の預かりをまとめて戻す）
+src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理・LINE の預かりをまとめて戻す。書けたかを返す）
+src/lib/book/store.ts 台帳をブラウザに書く所（updateBook。書けたかを返す）・今の「最初に戻す」の印（currentEpoch）
+src/lib/book/nextDay.ts 「翌日へ」1回の全部（advanceDay）
+src/lib/ai/busy.ts AI の窓口が混んでいる時（429）・理由の文が無い時の文と、画面から窓口を呼ぶ形（postAi・answerOf）
+src/lib/brief/cache.ts 朝の要点の AI の一言の答えを材料ごとにブラウザに残す（同じ材料なら開き直しても AI を呼ばない）
 ```
 
+- **ブラウザに書いた結果・「最初に戻す」・「翌日へ」は、決まった形を通す**（仕様書 §5.1・§1.6。後から足す所もこの形を使い、自分で作らない）：
+  - ブラウザに書く所は `writeBrowser` の答え（`BrowserWrite`：`{ ok: true }` か `{ ok: false, why: "full" | "denied" }`）を返す。例外は投げない。台帳は `useBook` の `update`（中身は `book/store.ts` の `updateBook`）が同じ物を返す。成功の文と日誌は `ok` の時だけ出し、失敗の時は入力と案を残して `SAVE_FAILED_MESSAGE`（「ブラウザに保存できませんでした。入力はそのまま残しています。」）。もう一度押せば保存でき、成功の日誌は1回だけ（カルテの保存は `karte/save.ts`、メモを投げるは `todo/throw.ts`）。
+  - 「最初に戻す」は `resetAll`（`{ written, failed, lineToken }` を返す。台帳を先に書き、書けなければ何も戻さない）。画面は `written` の時だけ日誌を書く。戻すたびに台帳の印 `epoch` が変わる。戻す前に始まった処理（AI の返事を待っている・あとで書く物）は、始めた時の印（`currentEpoch()`）を持ち、書く直前に `sameEpoch` で同じ時だけ書く（予約チャットは `ai/reserveStream.ts` の `holdInto`）。画面は `book.state.epoch` が変わったのを見て、流れている物を止める。
+  - 「翌日へ」は `book/nextDay.ts` の `advanceDay` を通す（上限 `MAX_DAY_OFFSET`・書けなかった時は進めず、日誌と前日のお知らせも作らない。ボタンは `canNextDay` が false なら押せなくして `LAST_DEMO_DAY`）。「翌日へ」とそろえて待ち時間・期限を数える所は、本当の時計ではなく `calendar.ts` の `demoInstant`（いまは広告の「7日に1つ」）。「本当の今日」の文は `realDayNote`。
 - AI の道具は `src/lib/ai/tools.ts` の5つだけ（空きを調べる・ルールを確かめる・前回を見る・仮押さえ・仮押さえを外す）。確定の道具は足さない。「仮押さえを外す」は、この会話で作った、まだ承認されていない仮押さえだけ（プログラムで確かめる）。テストでは Claude を呼ばず `src/lib/ai/script.ts` に置きかえる。
 - 予約チャットで店の中の決まりをお客様に言わない（仕様書 §1.2.1）：伝えるかはルールごとにオーナーが決める（`Rule` の任意の欄 `tellCustomer`。欄が無い・前からのルール・`config/rules.seed.json` は伝えない。チェックは足すフォームと言葉で足す時の承認の所・最初は外れている）。伝えるときはルールの名前をそのまま理由に。伝えない理由で断ったら AI に文を作らせず中身も渡さず、プログラムが「その時間はお受けできません」（組み合わせは「この組み合わせではお受けできません」とその組み合わせにならない代わり）＋確かめ済みの候補で返す（`agent.ts`・`src/lib/rules/tellable.ts`）。定休日・営業時間・過ぎた時刻・メニューの最終受付は店の設定なので伝える（同じ時間に受ける人数は伝えない）。返事の門（`src/lib/ai/innerGate.ts`）は後ろの守りで、伝えないルールの文と「○分あける」の形だけ止める（ふつうの時間の言い方は止めない）。オーナーに見せる所（AI の手順・LINE のオーナー側）には理由を書く。テストは `src/lib/ai/__tests__/tellable.test.ts`。
 - 予約チャットでプログラムが決めること：週と日付の食い違いの聞き返し（`dates.ts`）・候補のボタン（返事の文に出た候補だけ）・「お店に確かめてご連絡します」の ToDo（`replies.ts`）。AI に任せない。
-- ToDo の並べ方は `src/lib/todo/items.ts` の1か所（ToDo のタブ・ホームの「今やる3件」・「今日の ToDo」の数）。入口から足すときは鍵（`src/lib/todo/keys.ts`）を付け、同じ鍵がもうあれば足さない。最初の例（`seed/todo.json`）の鍵は「例:」で始め、本物の鍵と重ねない。メモを投げる AI は文だけ（テストでは `scriptTodoWriter`）。
+- ToDo の並べ方は `src/lib/todo/items.ts` の1か所（ToDo のタブ・ホームの「まずやる3つ」・朝の要点の「今日まで」「期限切れ」の数（`todoDueCounts`））。入口から足すときは鍵（`src/lib/todo/keys.ts`）を付け、同じ鍵がもうあれば足さない。最初の例（`seed/todo.json`）の鍵は「例:」で始め、本物の鍵と重ねない。メモを投げる AI は文だけ（テストでは `scriptTodoWriter`）。
 - 同じ時間に受ける人数は1つの数だけ（`src/lib/capacity.ts`）。オーナーがルールのタブで変えた分はブラウザの中（`secretairy:capacity`）。数を使う所は画面の台帳（`useBook` の `shop`）を通し、`data.shop.seats` を直に読まない。サーバーの窓口には画面が `seats` を送る。
 - 承認待ちの数は、承認の箱の行（`src/lib/approvals.ts` の `approvalQueue`。画面は `useApprovals`）から出す。ほかの所で数えない。
 - 1回の来店で複数のメニューは `src/lib/combo.ts`（設定に無い組み合わせは id を「+」でつなぐ）を通す。

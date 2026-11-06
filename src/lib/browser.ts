@@ -12,14 +12,31 @@ export function readBrowser(key: string): string | null {
   }
 }
 
-export function writeBrowser(key: string, value: string | null): void {
+/**
+ * 書けたか。full = 置き場所がいっぱい（QuotaExceededError）/ denied = 書き込みを断られた（内緒モード・止めてある など）。
+ * 例外は外へ投げず、失敗として返す。失敗した時は前の中身のまま（読み直しても前の中身が出る）。
+ */
+export type BrowserWrite = { ok: true } | { ok: false; why: "full" | "denied" };
+
+/** 書けなかった時に画面に出す1文（カルテの保存・メモを投げる） */
+export const SAVE_FAILED_MESSAGE = "ブラウザに保存できませんでした。入力はそのまま残しています。";
+
+function isQuota(e: unknown): boolean {
+  if (!e || typeof e !== "object") return false;
+  const x = e as { name?: unknown; code?: unknown };
+  return x.name === "QuotaExceededError" || x.name === "NS_ERROR_DOM_QUOTA_REACHED" || x.code === 22 || x.code === 1014;
+}
+
+export function writeBrowser(key: string, value: string | null): BrowserWrite {
+  let out: BrowserWrite = { ok: true };
   try {
     if (value === null) window.localStorage.removeItem(PREFIX + key);
     else window.localStorage.setItem(PREFIX + key, value);
-  } catch {
-    // 書けないときは、この画面を開いている間だけ効く
+  } catch (e) {
+    out = { ok: false, why: isQuota(e) ? "full" : "denied" };
   }
   listeners.forEach((f) => f());
+  return out;
 }
 
 /** useSyncExternalStore 用 */
@@ -63,6 +80,8 @@ export const JOBS_SWITCH_KEY = "jobsSwitch";
 export const HOME_FOLDS_KEY = "homeFolds";
 /** 見た目（look.ts。スマート・夜・和紙・ポップ。「最初に戻す」では消さない。画面を開いた瞬間に効かせるため layout.tsx の小さな script からも読む） */
 export const LOOK_KEY = "look";
+/** ホームの「今日の注意」（朝の要点の AI の一言）の答え。材料ごとに残し、開き直しても材料が同じなら AI を呼ばない（brief/cache.ts。「最初に戻す」では消さない） */
+export const BRIEF_KEY = "briefAnswers";
 /** 日誌（journal.ts） */
 export const JOURNAL_KEY = "journal";
 export const BROWSER_PREFIX = PREFIX;

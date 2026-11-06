@@ -11,7 +11,9 @@
 import { useId, useState } from "react";
 import { writeJournal } from "@/lib/journal";
 import { lockedConflict } from "@/lib/rules/validate";
-import type { RuleDraft, RuleReading, RuleWordsRequest, RuleWordsResponse, WordsAnswers, WordsResult } from "@/lib/rules/words";
+import { AI_BUSY_MESSAGE, failText } from "@/lib/ai/busy";
+import { askRuleWords } from "@/lib/rules/client";
+import type { RuleDraft, RuleReading, RuleWordsRequest, WordsAnswers, WordsResult } from "@/lib/rules/words";
 
 export function RuleWords({
   maxChars,
@@ -45,19 +47,14 @@ export function RuleWords({
     setBusy(true);
     setNote(null);
     try {
-      const res = await fetch("/api/ai/rules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      let out: RuleWordsResponse | null = null;
-      try {
-        out = (await res.json()) as RuleWordsResponse;
-      } catch {
-        out = null;
-      }
-      if (!out || (!out.ok && out.code === "no-ai")) {
+      const out = await askRuleWords(body);
+      if (!out.ok && out.code === "no-ai") {
         onNoAi();
         return;
       }
+      // 混んでいる（429）は欄を隠さず、待ってから押しなおせる。理由の文が無い時は決まった1文（文と前の読みはそのまま）
       if (!out.ok) {
-        setNote(`うまくいきませんでした。${out.message}。`);
+        setNote(out.code === "busy" ? AI_BUSY_MESSAGE : failText(out.message));
         return;
       }
       const r = out.result;

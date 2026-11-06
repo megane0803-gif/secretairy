@@ -201,7 +201,10 @@ describe("6. 種類はオーナーが選ぶ物だけ（AI には送らない・�
   test("メモの欄（MemoThrow）は種類を AI に送る中身に入れず、足す時だけ渡す", () => {
     const text = readFileSync(join(root, "src/components/MemoThrow.tsx"), "utf8");
     assert.match(text, /const body: TodoRequest = \{ mode: how, memo: masked, rules: rules\.filter\(\(r\) => !r\.locked\) \};/);
-    assert.match(text, /withMemoTodo\(s, todos\.seedItems, \{ title, memo, due: memoDue\(memo, todos\.today\), category: kind \}/);
+    // 足す時（todo/throw.ts の commitMemoTodo → withMemoTodo）だけ種類を渡す
+    assert.match(text, /commitMemoTodo\([\s\S]*\{ title, memo, due: memoDue\(memo, todos\.today\), category: kind,/);
+    const commit = readFileSync(join(root, "src/lib/todo/throw.ts"), "utf8");
+    assert.match(commit, /withMemoTodo\(s, input\.seedItems, \{ title: input\.title, memo: input\.memo, due: input\.due, category: input\.category \}/);
     assert.match(text, /aria-pressed=\{kind === k\}/, "選んでいるかを読み上げでも");
     assert.match(text, /✓/, "選んでいるかを色だけでなく");
   });
@@ -225,11 +228,11 @@ describe("7. 最初の例（seed/todo.json）と最初に戻す", () => {
     assert.equal(customer.items[0].source, "karte");
   });
 
-  test("「期限あり」はお客様と広告などの箱に分かれる", () => {
+  test("「期限あり」の最初の例はお客様の箱。広告の「効いたか見る」は例に入れない（承認した履歴から足す）", () => {
     const due = todoTabs(todoItems(seedItems, emptyBook(today), shop), today).due;
     const kinds = kindBoxes(due).map((b) => b.kind);
     assert.ok(kinds.includes("customer"));
-    assert.ok(kinds.includes("ad"));
+    assert.ok(!kinds.includes("ad"), "広告の例の ToDo は外した（行き先の判定が作れないため）");
   });
 
   describe("最初に戻すと、種類も最初の例に戻る", () => {

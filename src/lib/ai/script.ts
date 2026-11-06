@@ -45,10 +45,11 @@ export function readRequest(ctx: Pick<SlotContext, "menus" | "today">, text: str
   const span = dates.length ? null : monthAndWeekday(ctx.today.date, t);
 
   let start: string | null = null;
-  const hm = t.match(/(\d{1,2}):(\d{2})/) ?? t.match(/(\d{1,2})時(半)?/);
+  // 「19:30」「19時半」「19時30分」「19時15分」「19時」（「時」の後の「分」も読む）
+  const hm = t.match(/(\d{1,2}):(\d{2})/) ?? t.match(/(\d{1,2})時(?:(半)|(\d{1,2})分)?/);
   if (hm) {
     const h = Number(hm[1]);
-    const m = hm[2] === "半" ? 30 : hm[2] && /^\d+$/.test(hm[2]) ? Number(hm[2]) : 0;
+    const m = hm[2] === "半" ? 30 : hm[2] && /^\d+$/.test(hm[2]) ? Number(hm[2]) : hm[3] ? Number(hm[3]) : 0;
     if (h >= 0 && h < 24 && m < 60) start = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
   }
   return { menuId: menuIds[0] ?? null, menuIds, date, dates, span, start };

@@ -87,7 +87,7 @@ export type ReserveEvent =
   | { t: "hold"; hold: HoldOffer }
   | { t: "release"; holdId: string }
   | { t: "todo"; todo: TodoOffer }
-  | { t: "error"; code: "no-ai" | "bad-request"; message: string }
+  | { t: "error"; code: "no-ai" | "bad-request" | "busy"; message: string }
   | { t: "done" };
 
 export const NO_AI_MESSAGE = "今は AI につながりません";

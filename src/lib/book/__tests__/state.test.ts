@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { HoldOffer } from "../../ai/wire";
+import { rescheduleTitle as releasedTodoTitle } from "../../todo/reschedule";
 import { activeChat, emptyBook, parseBook, pendingApprovals, withApproved, withHold, withReleased } from "../state";
 
 const hold: HoldOffer = {
@@ -38,8 +39,26 @@ describe("承認の箱", () => {
       const s = withReleased(s0, pendingApprovals(s0, now)[0].approval.id, how, "江口", now);
       assert.equal(s.chat.length, 0, "時間は変えずに外す");
       assert.equal(s.approvals[0].state, how);
-      assert.deepEqual(s.todos.map((t) => t.title), ["江口様に別の日時を案内"]);
+      // 元の頼みの日時とメニューを添える（何の代わりを案内するのか分かるように）
+      assert.deepEqual(s.todos.map((t) => t.title), ["江口様に別の日時を案内（11/5（木） 15:00 カットの代わり）"]);
     });
+
+  test("「別の日時を案内」の文：元の頼みが分からない時は今までの文だけ。組み合わせのメニューも名前で", () => {
+    assert.equal(releasedTodoTitle("大橋"), "大橋様に別の日時を案内");
+    assert.equal(releasedTodoTitle("大橋", null), "大橋様に別の日時を案内");
+    assert.equal(
+      releasedTodoTitle("大橋", { date: "2026-11-08", start: "15:00", menuId: "cut" }),
+      "大橋様に別の日時を案内（11/8（日） 15:00 カットの代わり）",
+    );
+    assert.match(releasedTodoTitle("大橋", { date: "2026-11-08", start: "15:00", menuId: "cut+color" }), /（11\/8（日） 15:00 カット＋カラーの代わり）$/);
+  });
+
+  test("LINE のボタンの見送りも同じ withReleased を通るので、同じ文になる", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const apply = readFileSync(join(__dirname, "../../line/apply.ts"), "utf8");
+    assert.match(apply, /withReleased\(book, row\.approval\.id, "skipped", surname, ctx\.nowIso, ctx\.today\)/);
+  });
 
   test("期限が過ぎた仮押さえは、台帳にも承認の箱にも出ない", () => {
     const s = withHold(emptyBook("2026-11-04"), hold);
