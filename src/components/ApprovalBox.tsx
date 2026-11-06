@@ -7,16 +7,18 @@
 
 import { useState } from "react";
 import { candidateLabel, judgeSlot } from "@/lib/ai/slots";
-import { releasedTodoTitle, withApproved, withReleased, type PendingRow } from "@/lib/book/state";
+import { withApproved, withReleased, type PendingRow } from "@/lib/book/state";
+import { rescheduleTitle } from "@/lib/todo/reschedule";
 import type { BookData } from "@/lib/book/data";
 import { useBook } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
 import { resolveMenu } from "@/lib/combo";
-import { approvalsFor, holdLeft, sameDayOthers, soonFirst, type ApprovalView } from "@/lib/approvals";
+import { approvalRowsView, approvalsFor, type ApprovalView } from "@/lib/approvals";
 import { useMinute } from "@/lib/book/useBook";
 import { useApprovals } from "@/lib/useApprovals";
 import { AdApprovalRows } from "./AdApprovalRows";
+import { ApprovalRowNotes } from "./ApprovalRowNotes";
 import { Checked, CustomerName } from "./parts";
 
 export function ApprovalBox({
@@ -62,7 +64,7 @@ export function ApprovalBox({
       setDone(`✓ 確定しました：${what}`);
     } else {
       book.update((s) => withReleased(s, row.approval.id, how, surname, new Date().toISOString(), book.today.date));
-      const title = releasedTodoTitle(surname, r);
+      const title = rescheduleTitle(surname, r);
       writeJournal({
         who: "オーナー",
         text: `${how === "fixed" ? "直す" : "見送り"}：${what} の仮押さえを外し、ToDo に「${title}」を足した（お客様の了解なしに時間は変えない）`,
@@ -73,7 +75,8 @@ export function ApprovalBox({
 
   return (
     <ul className={compact ? "approvals compact" : "approvals"}>
-      {soonFirst(queue.reservations, nowMs).map((row) => {
+      {/* 行の順と行に足す物（残り・同じ日の予約）は approvals.ts の1か所（approvalRowsView） */}
+      {approvalRowsView(queue.reservations, { nowMs, booked: book.booked }).map(({ row, notes, soon }) => {
         const r = row.reservation;
         const customer = data.customers.find((c) => c.id === r.customerId);
         const menu = resolveMenu(data.menus, r.menuId);
@@ -90,10 +93,8 @@ export function ApprovalBox({
           },
           r,
         );
-        const left = holdLeft(r.expiresAt, nowMs);
-        const others = sameDayOthers({ id: r.id, customerId: r.customerId, date: r.date }, book.booked);
         return (
-          <li key={row.approval.id} className={left.soon ? "approval soon" : "approval"}>
+          <li key={row.approval.id} className={soon ? "approval soon" : "approval"}>
             <div className="approval-what">
               <span className="tag hold">仮押さえ</span>
               {customer && <CustomerName surname={customer.surname} fictional={customer.fictional} />}
@@ -101,9 +102,7 @@ export function ApprovalBox({
             </div>
             <div className="approval-when num">{candidateLabel(data, r).replace(` ${menu?.name ?? r.menuId}`, "")}</div>
             <p className="approval-why">{row.approval.reason}</p>
-            {/* 仮押さえが自動で外れるまで（1時間を切ったら太字。赤で急がせない） */}
-            <p className={left.soon ? "approval-left soon" : "approval-left"}>{left.text}</p>
-            {others.length > 0 && <p className="approval-same">! 同じ日の{others.join("・")}にも予約があります</p>}
+            <ApprovalRowNotes notes={notes} />
             {v.ok ? (
               <p className="checked small">
                 <span aria-hidden>✓</span> いまの台帳とルールでも受けられます

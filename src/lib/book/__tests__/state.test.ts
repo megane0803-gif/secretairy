@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { HoldOffer } from "../../ai/wire";
-import { activeChat, emptyBook, parseBook, pendingApprovals, releasedTodoTitle, withApproved, withHold, withReleased } from "../state";
+import { rescheduleTitle as releasedTodoTitle } from "../../todo/reschedule";
+import { activeChat, emptyBook, parseBook, pendingApprovals, withApproved, withHold, withReleased } from "../state";
 
 const hold: HoldOffer = {
   id: "h1",

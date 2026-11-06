@@ -77,3 +77,39 @@ export function sameDayOthers(
     .map((b) => b.start)
     .sort();
 }
+
+/**
+ * 承認の箱の予約の行に足す1行ずつ（理由の下・✓ とボタンの上。この1か所で決める）。
+ * 今は「外れるまでの残り」と「同じ日のほかの予約」。行に足す物を増やす時（直しC など）は、ここに種類を足し、
+ * 画面（components/ApprovalRowNotes.tsx）は種類ごとの見た目だけ持つ。数（approvalQueue の count）と行の中身・ボタンは変えない。
+ */
+export type ApprovalRowNote = {
+  kind: "left" | "sameDay";
+  text: string;
+  /** 太字にするか（残りが1時間を切った時。赤で急がせない） */
+  strong: boolean;
+};
+
+/** 行に足す物を作るのに要る物：今（1分ごとの描き直しの本当の時計）と、台帳の今ある予約（book.booked） */
+export type ApprovalRowCtx = {
+  nowMs: number;
+  booked: Pick<BookedRow, "id" | "customerId" | "date" | "start">[];
+};
+
+export function approvalRowNotes(row: PendingRow, ctx: ApprovalRowCtx): ApprovalRowNote[] {
+  const r = row.reservation;
+  const left = holdLeft(r.expiresAt, ctx.nowMs);
+  const others = sameDayOthers({ id: r.id, customerId: r.customerId, date: r.date }, ctx.booked);
+  return [
+    { kind: "left", text: left.text, strong: left.soon },
+    ...(others.length ? [{ kind: "sameDay" as const, text: `! 同じ日の${others.join("・")}にも予約があります`, strong: false }] : []),
+  ];
+}
+
+/** 承認の箱に出す予約の行の順と、行ごとの足す物（画面はこれを1回呼ぶだけ）。並べ方は soonFirst */
+export function approvalRowsView(rows: PendingRow[], ctx: ApprovalRowCtx): { row: PendingRow; notes: ApprovalRowNote[]; soon: boolean }[] {
+  return soonFirst(rows, ctx.nowMs).map((row) => {
+    const notes = approvalRowNotes(row, ctx);
+    return { row, notes, soon: notes.some((n) => n.kind === "left" && n.strong) };
+  });
+}

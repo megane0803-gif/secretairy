@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import type { HoldOffer } from "../ai/wire";
 import { EMPTY_ADS, type AdsState } from "../ads/state";
-import { approvalQueue, holdLeft, sameDayOthers, soonFirst } from "../approvals";
+import { approvalQueue, approvalRowsView, holdLeft, sameDayOthers, soonFirst } from "../approvals";
 import { activeChat, emptyBook, withApproved, withGuestReleased, withHold, withReleased, type BookState } from "../book/state";
 
 const emptyAds = (): AdsState => EMPTY_ADS;
@@ -129,12 +129,14 @@ describe("承認の箱：仮押さえが外れるまでの残り", () => {
     assert.equal(soonFirst(rows, nowMs).length, approvalQueue(s, emptyAds(), now).count, "並べ替えても数は同じ");
   });
 
-  test("画面は1分ごとの描き直し（useMinute）の今を使い、1時間を切った行は太字の印", () => {
+  test("画面は1分ごとの描き直し（useMinute）の今を使い、行の順と足す物は approvalRowsView の1か所", () => {
     const box = readFileSync(new URL("../../components/ApprovalBox.tsx", import.meta.url), "utf8");
     assert.match(box, /const nowMs = useMinute\(\) \* 60_000;/);
-    assert.match(box, /soonFirst\(queue\.reservations, nowMs\)/);
-    assert.match(box, /holdLeft\(r\.expiresAt, nowMs\)/);
-    assert.doesNotMatch(box, /holdLeft\([^)]*today/, "「翌日へ」の日付では数えない");
+    assert.match(box, /approvalRowsView\(queue\.reservations, \{ nowMs, booked: book\.booked \}\)/);
+    assert.match(box, /<ApprovalRowNotes notes=\{notes\} \/>/);
+    assert.doesNotMatch(box, /holdLeft|sameDayOthers|soonFirst/, "画面では直に呼ばない（足す物は approvals.ts に）");
+    const lib = readFileSync(new URL("../approvals.ts", import.meta.url), "utf8");
+    assert.match(lib, /holdLeft\(r\.expiresAt, ctx\.nowMs\)/, "残りは期限と本当の時計だけ（「翌日へ」の日付では数えない）");
   });
 });
 
@@ -168,8 +170,45 @@ describe("承認の箱：同じ日のほかの予約", () => {
 
   test("画面は「! 同じ日の13:00にも予約があります」の1行（止めはしない：ボタンはそのまま）", () => {
     const box = readFileSync(new URL("../../components/ApprovalBox.tsx", import.meta.url), "utf8");
-    assert.match(box, /sameDayOthers\(\{ id: r\.id, customerId: r\.customerId, date: r\.date \}, book\.booked\)/);
-    assert.match(box, /! 同じ日の\{others\.join\("・"\)\}にも予約があります/);
-    assert.doesNotMatch(box, /disabled=\{[^}]*others/);
+    assert.doesNotMatch(box, /disabled=\{[^}]*(notes|soon)/);
+  });
+});
+
+// 行に足す物は1か所（approvals.ts の approvalRowNotes / approvalRowsView。直しC などはここに足す）
+describe("承認の箱：行に足す物の1か所", () => {
+  const nowMs = Date.parse(now);
+  const at = (min: number) => new Date(nowMs + min * 60_000).toISOString();
+  const rowsOfState = (s: BookState) => approvalQueue(s, emptyAds(), now).reservations;
+
+  test("残りの1行はいつも、同じ日のほかの予約は有る時だけ。順は残り → 同じ日", () => {
+    let s = withHold(emptyBook("2026-11-04"), hold("h1", at(130)));
+    s = withHold(s, { ...hold("h2", at(300)), customerId: "c05" });
+    const booked = [
+      { id: "h1", customerId: "c04", date: "2026-11-06", start: "15:00" },
+      { id: "s1", customerId: "c04", date: "2026-11-06", start: "13:00" },
+      { id: "h2", customerId: "c05", date: "2026-11-06", start: "15:00" },
+    ];
+    const view = approvalRowsView(rowsOfState(s), { nowMs, booked });
+    assert.deepEqual(view[0].notes, [
+      { kind: "left", text: "あと2時間10分で外れます", strong: false },
+      { kind: "sameDay", text: "! 同じ日の13:00にも予約があります", strong: false },
+    ]);
+    assert.deepEqual(view[1].notes, [{ kind: "left", text: "あと5時間で外れます", strong: false }]);
+  });
+
+  test("残りが1時間を切った行は上・soon・残りが太字。数は変えない", () => {
+    let s = withHold(emptyBook("2026-11-04"), hold("late", at(300)));
+    s = withHold(s, hold("soon", at(20)));
+    const view = approvalRowsView(rowsOfState(s), { nowMs, booked: [] });
+    assert.deepEqual(view.map((v) => [v.row.reservation.id, v.soon]), [["soon", true], ["late", false]]);
+    assert.equal(view[0].notes[0].strong, true);
+    assert.equal(view.length, approvalQueue(s, emptyAds(), now).count);
+  });
+
+  test("見た目は ApprovalRowNotes が種類ごとに持つだけ（中身は作らない）", () => {
+    const notes = readFileSync(new URL("../../components/ApprovalRowNotes.tsx", import.meta.url), "utf8");
+    assert.match(notes, /left: "approval-left"/);
+    assert.match(notes, /sameDay: "approval-same"/);
+    assert.doesNotMatch(notes, /holdLeft|sameDayOthers|にも予約があります|で外れます/);
   });
 });

@@ -177,7 +177,7 @@ describe("2. 同じ鍵がもうあれば足さない", () => {
       { seats: shop.seats, customers: getCustomers(), today, nowIso: now },
     );
     assert.equal(full.length, 1);
-    assert.equal(full[0].title, "江口（架空）様に別の日時を案内");
+    assert.equal(full[0].title, "江口（架空）様に別の日時を案内（11/6（金） 15:00 カットの代わり）");
     assert.equal(full[0].due, today, "今日中");
     assert.equal(todoKey(full[0]), reserveKey("c04", "2026-11-06", "15:00"));
     const s1 = withTodo(s0, full[0]);
@@ -558,7 +558,7 @@ describe("予約サイト（架空）で枠が埋まったか", () => {
       { id: "r2", date: "2026-11-06", startMin: 900, endMin: 960, status: "confirmed" },
     ] as Reservation[];
     const todos = fullSlotTodos(all, pending, { seats: 3, customers: getCustomers(), today, nowIso: now });
-    assert.deepEqual(todos.map((t) => t.title), ["加藤（架空）様に別の日時を案内"]);
+    assert.deepEqual(todos.map((t) => t.title), ["加藤（架空）様に別の日時を案内（11/6（金） 15:00 カットの代わり）"]);
     assert.equal(pendingApprovals(withTodo(s, todos[0]), now).length, 1, "仮押さえは変えない");
   });
 });
