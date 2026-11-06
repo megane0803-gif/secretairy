@@ -233,7 +233,7 @@ describe("3. 最初に戻す・決まり", () => {
     const back = parseBook(w.value)!;
     assert.equal(siteCount(back), 0);
     assert.equal(back.todos.length, 0);
-    assert.deepEqual(back, emptyBook(TODAY));
+    assert.deepEqual(back, emptyBook(TODAY, back.epoch));
     // 戻した後も、また入れられる（番号も1から）
     const again = press(back, "free");
     assert.ok(again.ok);

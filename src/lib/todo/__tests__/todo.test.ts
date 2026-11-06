@@ -430,7 +430,7 @@ describe("5. 最初に戻す", () => {
   test("ToDo は台帳と同じ置き場所（secretairy:book）なので、最初に戻すの1回で戻る", () => {
     const w = resetAllWrites(today);
     const book = w.find((x) => x.key === BOOK_KEY)!;
-    assert.deepEqual(parseBook(book.value), emptyBook(today));
+    assert.deepEqual(parseBook(book.value), emptyBook(today, parseBook(book.value)?.epoch));
     assert.deepEqual(emptyBook(today).todoMarks, {});
   });
 });

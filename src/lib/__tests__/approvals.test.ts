@@ -212,3 +212,20 @@ describe("承認の箱：行に足す物の1か所", () => {
     assert.doesNotMatch(notes, /holdLeft|sameDayOthers|にも予約があります|で外れます/);
   });
 });
+
+// 直しA の形（書けたかの { ok }）：承認の箱のボタンも、書けた時だけ成功の1行と日誌を出す
+describe("承認の箱：ブラウザに書けなかった時", () => {
+  test("承認・直す・見送りとも update の ok を見てから日誌と成功の1行。書けなければ SAVE_FAILED_MESSAGE", () => {
+    const box = readFileSync(new URL("../../components/ApprovalBox.tsx", import.meta.url), "utf8");
+    const press = box.slice(box.indexOf("const press = "), box.indexOf("return (\n    <>"));
+    const blocks = press.split("} else {");
+    assert.equal(blocks.length, 2);
+    for (const b of blocks) {
+      const write = b.indexOf("const w = book.update(");
+      const check = b.indexOf("if (!w.ok) return void setFailed(SAVE_FAILED_MESSAGE);");
+      const journal = b.indexOf("writeJournal(");
+      const done = b.indexOf("setDone(");
+      assert.ok(write >= 0 && check > write && journal > check && done > check, b.slice(0, 80));
+    }
+  });
+});

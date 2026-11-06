@@ -14,6 +14,7 @@ import { JumpLink } from "@/components/JumpLink";
 import { ActorTag, CustomerName } from "@/components/parts";
 import { RememberFold } from "@/components/RememberFold";
 import { useAds } from "@/lib/ads/useAds";
+import { AI_BUSY_MESSAGE, AI_FAILED_MESSAGE } from "@/lib/ai/busy";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import type { BookData } from "@/lib/book/data";
 import { useBook } from "@/lib/book/useBook";
@@ -48,7 +49,8 @@ function noteOf(o: JobOutcome): string | null {
   if (o.kind === "skip") return o.note;
   if (o.kind === "limit") return "1回に AI を呼べる数を超えるので、動かしませんでした。もう一度押してください";
   if (o.kind === "no-ai") return NO_AI_MESSAGE;
-  if (o.kind === "failed") return `うまくいきませんでした（${o.note}）。もう一度押してください`;
+  if (o.kind === "busy") return AI_BUSY_MESSAGE;
+  if (o.kind === "failed") return o.note.trim() ? `うまくいきませんでした（${o.note}）。もう一度押してください` : AI_FAILED_MESSAGE;
   return null;
 }
 
@@ -65,7 +67,8 @@ function useAiJobsState(data: BookData, settings: JobsSettings) {
   const running = useRef(false);
 
   const seeds = getJobSeeds();
-  const adsNote = adsBlocked(ads.state, book.nowIso, ads.settings);
+  // 広告タブと同じ時計（「翌日へ」で進めた日付）で「7日に1つ」を数える
+  const adsNote = adsBlocked(ads.state, book.demoNowIso, ads.settings);
   const rows = JOB_IDS.filter((id) => seedOf(seeds, id));
   const open = openJobs(jobs, rows).filter((id) => !(id === "ads" && adsNote));
 

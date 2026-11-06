@@ -201,7 +201,10 @@ describe("6. 種類はオーナーが選ぶ物だけ（AI には送らない・�
   test("メモの欄（MemoThrow）は種類を AI に送る中身に入れず、足す時だけ渡す", () => {
     const text = readFileSync(join(root, "src/components/MemoThrow.tsx"), "utf8");
     assert.match(text, /const body: TodoRequest = \{ mode: how, memo: masked, rules: rules\.filter\(\(r\) => !r\.locked\) \};/);
-    assert.match(text, /withMemoTodo\(s, todos\.seedItems, \{ title, memo, due: memoDue\(memo, todos\.today\), category: kind \}/);
+    // 足す時（todo/throw.ts の commitMemoTodo → withMemoTodo）だけ種類を渡す
+    assert.match(text, /commitMemoTodo\([\s\S]*\{ title, memo, due: memoDue\(memo, todos\.today\), category: kind,/);
+    const commit = readFileSync(join(root, "src/lib/todo/throw.ts"), "utf8");
+    assert.match(commit, /withMemoTodo\(s, input\.seedItems, \{ title: input\.title, memo: input\.memo, due: input\.due, category: input\.category \}/);
     assert.match(text, /aria-pressed=\{kind === k\}/, "選んでいるかを読み上げでも");
     assert.match(text, /✓/, "選んでいるかを色だけでなく");
   });

@@ -7,18 +7,19 @@
 // 保存は真ん中の「保存」（人のボタン）だけ。
 
 import { CustomerName } from "@/components/parts";
+import { AI_BUSY_MESSAGE, failText } from "@/lib/ai/busy";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import type { BookData } from "@/lib/book/data";
 import type { KarteExample } from "@/lib/data/types";
 import { getDesk, setDesk } from "@/lib/karte/deskStore";
 import { removedSentence } from "@/lib/karte/gate";
-import type { KarteMode, KarteRequest, KarteResponse } from "@/lib/karte/wire";
+import { askKarte } from "@/lib/karte/client";
+import type { KarteMode, KarteRequest } from "@/lib/karte/wire";
 import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
-import { useKarteToday } from "./useKarteToday";
 import { DEMO_TAG_NOTE } from "@/lib/notices";
 import { isOneColumn, scrollToId } from "@/lib/scroll";
-import { KARTE_DRAFT_ID } from "./useKarteToday";
+import { KARTE_DRAFT_ID, useKarteToday } from "./useKarteToday";
 
 export function KarteMemo({
   data,
@@ -62,23 +63,14 @@ export function KarteMemo({
     setDesk(() => ({ busy: true, problem: null, mode }));
     const body: KarteRequest = { mode, memo: text, rules: rules.filter((r) => !r.locked), ...(fromRecording ? { source: "recording" as const } : {}) };
     try {
-      const res = await fetch("/api/ai/karte", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      let out: KarteResponse | null = null;
-      try {
-        out = (await res.json()) as KarteResponse;
-      } catch {
-        out = null;
-      }
-      if (!out || (!out.ok && out.code === "no-ai")) {
+      const out = await askKarte(body);
+      if (!out.ok && out.code === "no-ai") {
         setDesk(() => ({ noAi: true }));
         return;
       }
+      // 混んでいる（429）・理由の文が無い：メモと今の案はそのまま、1文だけ出す（「undefined」を出さない）
       if (!out.ok) {
-        setDesk(() => ({ problem: `うまくいきませんでした。${out.message}。` }));
+        setDesk(() => ({ problem: out.code === "busy" ? AI_BUSY_MESSAGE : failText(out.message) }));
         return;
       }
       const draft = out;

@@ -152,7 +152,9 @@ describe("2. 押せない時の理由と「最初に戻す」", () => {
 
   test("押せるかの決まりとボタンの文字は今のまま（7日に1つまで）", () => {
     assert.match(review, /disabled=\{busy \|\| !can\.ok\}/);
-    assert.match(review, /const can = canPropose\(ads\.state, new Date\(\)\.toISOString\(\), ads\.settings\);/);
+    // 7日に1つ（直しA 8：時計は「翌日へ」で進めた日付。calendar.ts の demoInstant）
+    assert.match(review, /const can = canPropose\(ads\.state, clockIso\(\), ads\.settings\);/);
+    assert.match(review, /const clockIso = \(\) => demoInstant\(getShop\(\), new Date\(\), book\.state\.dayOffset\)\.toISOString\(\);/);
     for (const label of ["AI（Claude）", "決まった返事（AI なし）", "決まった返事で試す（AI なし）"]) assert.ok(review.includes(label), label);
   });
 });

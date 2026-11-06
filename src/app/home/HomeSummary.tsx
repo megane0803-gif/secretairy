@@ -10,12 +10,13 @@ import { resolveMenu } from "@/lib/combo";
 import { ActorTag, BigNumber, Checked, CustomerName, MiniBar, ProgramTag, SectionHead } from "@/components/parts";
 import { RememberFold } from "@/components/RememberFold";
 import type { BookData } from "@/lib/book/data";
-import { withNextDay } from "@/lib/book/state";
+import { advanceDay } from "@/lib/book/nextDay";
+import { canNextDay, LAST_DEMO_DAY } from "@/lib/book/state";
 import { useBook } from "@/lib/book/useBook";
-import { addDays, businessDayAt, calDay } from "@/lib/calendar";
+import { calDay, realDayNote } from "@/lib/calendar";
 import { latestBefore, nextLines } from "@/lib/karte/record";
 import { writeJournal } from "@/lib/journal";
-import { dayBeforeReminders, type Reminder } from "@/lib/reminder";
+import type { Reminder } from "@/lib/reminder";
 import { freeRanges } from "@/lib/reservations";
 import { useApprovals } from "@/lib/useApprovals";
 import type { BriefAiSettings, KarteHeading, ReminderSettings, TodoSettings } from "@/lib/settings";
@@ -59,17 +60,21 @@ export function HomeSummary({
   // 「翌日へ」で見せる前日のお知らせ（画面を開いている間だけ。本当には送らない）
   const [remind, setRemind] = useState<{ dayLabel: string; sentLabel: string; list: Reminder[] } | null>(null);
 
+  const canNext = canNextDay(book.state);
+
+  // 進めなかった時の1文（上限・ブラウザに書けなかった）
+  const [nextNote, setNextNote] = useState<string | null>(null);
+
   const nextDay = (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted) return;
-    const to = businessDayAt(data.shop, book.today, 1);
-    book.update(withNextDay);
-    // その日（進めた先の今日）に確定の予約がある方へ、前日に届いたつもりのお知らせ（決まった形・AI なし・送らない）
-    const list = to ? dayBeforeReminders(book.all, to.date, reminder.template, data.shop.name) : [];
-    if (to) setRemind({ dayLabel: to.label, sentLabel: calDay(data.shop, addDays(to.date, -1)).label, list });
-    writeJournal(
-      { who: "オーナー", text: `デモ：翌日へ（${book.today.label} → ${to?.label ?? "次の営業日"}。定休日は飛ばす）` },
-      ...(to ? [{ who: "プログラム" as const, text: `デモ：前日のお知らせを${list.length}件見せた（${to.label}のご予約。決まった形・実際には送信していない）` }] : []),
-    );
+    // 書けて進んだ時だけ、前日のお知らせと日誌（book/nextDay.ts）。上限・書けなかった時は作らない
+    const out = advanceDay({ update: book.update, journal: writeJournal }, { shop: book.shop, now: new Date(), all: book.all, template: reminder.template });
+    if (!out.moved) {
+      setNextNote(out.why === "write" ? out.message : null);
+      return;
+    }
+    setNextNote(null);
+    setRemind({ dayLabel: out.to.label, sentLabel: out.sentLabel, list: out.reminders });
   };
 
   return (
@@ -81,7 +86,13 @@ export function HomeSummary({
           tag={<ProgramTag />}
           aside={
             <>
-              <button type="button" className="btn small" onClick={nextDay} title="デモ用：今日を1営業日先へ進めます（定休日は飛ばす）">
+              <button
+                type="button"
+                className="btn small"
+                onClick={nextDay}
+                disabled={!canNext}
+                title={canNext ? "デモ用：今日を1営業日先へ進めます（定休日は飛ばす）" : LAST_DEMO_DAY}
+              >
                 翌日へ
               </button>
               <span className="tag text">デモ</span>
@@ -92,7 +103,17 @@ export function HomeSummary({
         {book.shifted && <p className="shifted">{book.opened.label}はお休みなので、次の営業日を「今日」にしています。</p>}
         {book.dayOffset > 0 && (
           <p className="shifted">
-            デモ：「翌日へ」で {book.dayOffset} 営業日進めています（{book.today.label} の開店前 {book.now.time} のつもり）。本当の今日は {book.realToday.label} です。
+            デモ：「翌日へ」で {book.dayOffset} 営業日進めています（{book.today.label} の開店前 {book.now.time} のつもり）。{realDayNote(book)}。
+          </p>
+        )}
+        {nextNote && (
+          <p className="form-problem" role="status">
+            {nextNote}
+          </p>
+        )}
+        {!canNext && (
+          <p className="shifted" role="status">
+            {LAST_DEMO_DAY}（{book.dayOffset} 営業日）。「最初に戻す」で本当の今日に戻せます。
           </p>
         )}
         <div className="morning-wrap">

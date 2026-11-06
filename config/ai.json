@@ -80,7 +80,8 @@
     "maxNoteChars": 60,
     "maxItems": 30,
     "maxItemChars": 200,
-    "maxRequestChars": 30000
+    "maxRequestChars": 30000,
+    "maxCachedAnswers": 20
   },
   "eval": {
     "minIntervalSeconds": 7,
