@@ -10,7 +10,7 @@ import { register, parseAccounting, EMPTY_ACCOUNTING, withChoice, withAutoNext, 
 import { manualItems } from "../accounting/sort";
 import { EMPTY_ADS, parseAds, type AdsState } from "../ads/state";
 import { emptyBook, parseBook, withHold, type BookState } from "../book/state";
-import { FREEE_KEY, ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, BROWSER_PREFIX, JOBS_KEY, JOURNAL_KEY, LINE_KEY, POSTS_KEY, RULES_KEY, readBrowser, writeBrowser } from "../browser";
+import { FREEE_KEY, ACCOUNTING_KEY, DAILY_KEY, ADS_KEY, BOOK_KEY, BROWSER_PREFIX, JOBS_KEY, JOURNAL_KEY, LINE_KEY, POSTS_KEY, RULES_KEY, readBrowser, writeBrowser } from "../browser";
 import { getAccounting, getCustomers } from "../data/seed";
 import { deskKey, getDesk, setDesk } from "../karte/deskStore";
 import { clearInbox, handleWebhook, pollScreen, startLink, type BridgeDeps } from "../line/bridge";
@@ -85,7 +85,7 @@ describe("最初に戻す", () => {
     // 経理の freee（テスト事業所）の画面の記録（FREEE_KEY）も戻す。freee の中の記録は残る（§1.8.1）
     assert.deepEqual(
       w.map((x) => x.key).sort(),
-      [ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, JOBS_KEY, POSTS_KEY, CAPACITY_KEY, FREEE_KEY, HOLIDAYS_KEY, SITE_STOPS_KEY].sort(),
+      [ACCOUNTING_KEY, DAILY_KEY, ADS_KEY, BOOK_KEY, JOBS_KEY, POSTS_KEY, CAPACITY_KEY, FREEE_KEY, HOLIDAYS_KEY, SITE_STOPS_KEY].sort(),
     );
     assert.equal(w.find((x) => x.key === HOLIDAYS_KEY)!.value, null, "休みの日は最初の状態（無し）に戻る");
     assert.equal(w.find((x) => x.key === SITE_STOPS_KEY)!.value, null, "予約サイトで止めた時間は最初の状態（無し）に戻る");

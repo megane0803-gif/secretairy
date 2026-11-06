@@ -1748,6 +1748,89 @@ h3.section-title { font-size: 1rem; }
 .look-btn-mark { display: inline-block; width: 1em; color: var(--accent); }
 .look-btn-desc { font-size: 0.75rem; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
 
+/* ---- 経理の日報（売上の欄の「日報を入れる」と1枚。§1.8） ---- */
+.acct-daily-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; }
+.acct-daily-open { min-height: 48px; padding: 10px 20px; font-size: 1.05rem; font-weight: 700; }
+.acct-months { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.acct-months .btn { min-height: 44px; }
+.acct-month-now { font-weight: 700; padding: 0 4px; white-space: nowrap; }
+.acct-daily-tag { margin-left: 6px; font-size: 0.75rem; }
+.daybars-marks { display: flex; gap: 2px; height: 6px; margin-top: 2px; }
+.daybars-marks span { flex: 1 1 0; min-width: 0; display: flex; justify-content: center; }
+.daybars-marks i { display: block; width: 5px; height: 5px; border-radius: var(--radius-pill); background: var(--accent); }
+.daybar.daily { box-shadow: inset 0 2px 0 var(--accent); }
+.acct-table tr.missing td { color: var(--warn); }
+.acct-missing { min-height: 36px; color: var(--warn); border-color: var(--warn); }
+
+.daily-sheet {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0;
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.daily-sheet::backdrop { background: color-mix(in srgb, var(--bg) 75%, transparent); }
+.daily-form { display: flex; flex-direction: column; gap: 12px; padding: 16px; min-width: 0; }
+.daily-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.daily-head h2 { margin: 0; font-size: 1.2rem; }
+.daily-close { min-height: 44px; }
+.daily-rule { margin: 0; }
+.daily-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.daily-label { font-weight: 700; }
+.daily-input { display: flex; align-items: center; gap: 8px; }
+.daily-sheet input { font: inherit; font-size: 1.15rem; min-height: 48px; padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); min-width: 0; width: 100%; box-sizing: border-box; }
+.daily-sheet input[inputmode="numeric"] { text-align: right; font-variant-numeric: tabular-nums; }
+.daily-sheet input[aria-invalid="true"] { border: 2px solid var(--warn); }
+.daily-unit { flex: none; color: var(--muted); min-width: 1.5em; }
+.daily-err { color: var(--warn); }
+.daily-closed { color: var(--warn); font-weight: 700; }
+.daily-pay { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.daily-pay legend { font-weight: 700; padding: 0; margin-bottom: 4px; }
+.daily-pay .daily-label { font-weight: 600; }
+.daily-total { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; flex-wrap: wrap; }
+.daily-total strong { font-size: 1.5rem; white-space: nowrap; }
+.daily-submit { min-height: 52px; font-size: 1.1rem; font-weight: 700; }
+.daily-remove { min-height: 44px; }
+.daily-remove.on { background: var(--warn); color: var(--surface); }
+/* 合計と「入れる」の塊：PC では今まで通りに並ぶ（箱を作らない） */
+.daily-foot { display: contents; }
+@media (max-width: 1023px) {
+  /* スマホ：下から出る1枚。数字のキーボードが出ている間は、その高さ（--daily-kb）だけ上げ、高さを見えている所（--daily-vvh）に合わせる（DailySheet.tsx） */
+  .daily-sheet {
+    width: 100%;
+    max-width: 100%;
+    margin: auto 0 0;
+    bottom: var(--daily-kb, 0px);
+    max-height: min(92dvh, calc(var(--daily-vvh, 100dvh) - 8px));
+    overscroll-behavior: contain;
+    border-radius: var(--radius) var(--radius) 0 0;
+    border-bottom: 0;
+  }
+  .daily-form { padding: 16px 16px 0; }
+  /* 合計と「入れる」は1枚の下に止める（台帳の「予約を入れる」1枚の .sheet-foot と同じ形）。消すボタンはその上 */
+  .daily-foot {
+    order: 10;
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 -16px;
+    padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+  }
+  .daily-foot .daily-total { border-top: 0; padding-top: 0; }
+  .daily-foot .problems { margin: 0; }
+  /* 売上の表の「まだ（押して入れる）」も指で押しやすく */
+  .acct-missing { min-height: 44px; }
+}
+
 /* ---- 台帳から予約を入れる（スマホは下から出る1枚・PC は小さな窓。OwnerBookSheet.tsx） ---- */
 :root { --scrim: rgba(0, 0, 0, 0.4); }
 .sheet-scrim {
