@@ -13,6 +13,17 @@ export type JobDone = { at: string; result: string; tab: TabId };
 
 export type JobsState = { v: 1; done: Partial<Record<JobId, JobDone>> };
 
+/** 承認の箱に1行入った時の結果の言葉（予約の相談・広告の見直し） */
+export const JOB_APPROVAL_RESULT = "承認待ち1件";
+
+/**
+ * 済んだ行の結果のリンクの先。承認の箱に入った物は、同じページ（ホーム）の承認の箱へ（予約・広告のタブへは行かない）。
+ * ほかは結果が届いたタブへ。
+ */
+export function jobDoneLink(done: Pick<JobDone, "result" | "tab">): { kind: "approvals" } | { kind: "tab"; tab: TabId } {
+  return done.result === JOB_APPROVAL_RESULT ? { kind: "approvals" } : { kind: "tab", tab: done.tab };
+}
+
 export const EMPTY_JOBS: JobsState = { v: 1, done: {} };
 
 const TAB_OF: Record<JobId, readonly TabId[]> = {

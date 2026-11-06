@@ -1,7 +1,7 @@
 "use client";
 
 // 画面で使う ToDo の一覧。最初の状態（seed/todo.json。起点の日から数える）に、このブラウザで足した分と
-// 済み・戻すの印を重ねる。並べ方は items.ts の1か所（ToDo のタブ・ホームの「今やる3件」・朝の要点の数が同じ物を使う）。
+// 済み・戻すの印を重ねる。並べ方は items.ts の1か所（ToDo のタブ・ホームの「まずやる3つ」・朝の要点の数が同じ物を使う）。
 
 import { useCallback, useMemo } from "react";
 import type { BookData } from "../book/data";
@@ -9,7 +9,7 @@ import { useBook } from "../book/useBook";
 import { calDay } from "../calendar";
 import { getTodos } from "../data/seed";
 import { writeJournal } from "../journal";
-import { resolveSeedTodos, todayTodoCount, todoItems, todoTabs, topTodos, withTodoMarked, type TodoItem } from "./items";
+import { resolveSeedTodos, todoDueCounts, todoItems, todoTabs, topTodos, withTodoMarked, type TodoItem } from "./items";
 
 export function useTodos(data: BookData) {
   const book = useBook(data);
@@ -38,7 +38,8 @@ export function useTodos(data: BookData) {
     items,
     tabs,
     top: (n: number) => topTodos(items, today, n),
-    todayCount: todayTodoCount(items, today),
+    /** 期限の数（朝の要点の「今日まで」「期限切れ」。items.ts の todoDueCounts） */
+    dueCounts: todoDueCounts(items, today),
     mark,
   };
 }

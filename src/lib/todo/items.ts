@@ -170,9 +170,25 @@ export function topTodos(items: TodoItem[], today: string, n: number): TodoItem[
   return sortTodos(items, today).slice(0, Math.max(0, n));
 }
 
-/** 朝の要点の「今日の ToDo」：まだ済んでいない物のうち、期限が無いか今日まで（期限の先の物はその日まで数えない） */
-export function todayTodoCount(items: TodoItem[], today: string): number {
-  return items.filter((t) => !t.done && (!t.due || t.due <= today)).length;
+/**
+ * 期限の数（共通の数え方）。数えるのは ToDo のタブの「期限あり」に入る物（まだ済んでいない・期限がある・カルテの次回話すことでない）だけ。
+ * 期限の無い物（投げたメモ・次回話すこと・期限なし）は数えない。そこから別々に出す：
+ *   dueToday … 期限が今日（朝の要点の「今日まで」）
+ *   overdue  … 期限が今日より前（朝の要点の「期限切れ」。お客様への連絡で過ぎた物も入る）
+ *   dated    … 「期限あり」の全部（先の日の物も入る。ToDo のタブの「期限あり」の数と同じ）
+ * dueToday と overdue は重ならない（足すと「今日までにやる物」）。
+ */
+export type TodoDueCounts = { dueToday: number; overdue: number; dated: number };
+
+export function todoDueCounts(items: TodoItem[], today: string): TodoDueCounts {
+  const out: TodoDueCounts = { dueToday: 0, overdue: 0, dated: 0 };
+  for (const t of items) {
+    if (!t.due || tabOfGroup(todoGroup(t, today)) !== "due") continue;
+    out.dated += 1;
+    if (t.due < today) out.overdue += 1;
+    else if (t.due === today) out.dueToday += 1;
+  }
+  return out;
 }
 
 export type DueTone = "contact" | "overdue" | "today" | "week" | "later";

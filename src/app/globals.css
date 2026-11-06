@@ -317,6 +317,13 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .bignum-label { color: var(--muted); font-size: 0.9rem; }
 .bignum-value { font-size: 2.6rem; font-weight: 700; line-height: 1.1; }
 .bignum-unit { color: var(--muted); font-size: 0.85rem; }
+/* 押せる数字のカード（ホームの朝の要点）。カードの見た目はそのまま、枠の色と右の印で押せると分かるように */
+.bignum-link { display: flex; color: inherit; text-decoration: none; border-radius: var(--radius); min-width: 0; }
+.bignum-link > .bignum { flex: 1 1 auto; min-width: 0; }
+.bignum-link:hover > .bignum { border-color: var(--accent); }
+.bignum-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bignum-go { color: var(--accent); font-size: 0.85rem; font-weight: 700; }
+[id] { scroll-margin-top: 12px; }
 
 .minibar {
   height: 6px;
@@ -1550,6 +1557,8 @@ h3.section-title { font-size: 1rem; }
 .morning-row { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .home-bignums { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
 .home-bignums .bignum { flex: none; padding: 8px 12px; }
+.home-bignums .bignum-link { flex: none; }
+.home-bignums .bignum-go { margin-left: 4px; }
 .morning-top { min-width: 0; }
 .morning-top .todos { margin-bottom: 4px; }
 .morning-top .hint { margin: 0; }

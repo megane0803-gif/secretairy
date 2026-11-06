@@ -10,6 +10,7 @@
 
 import Link from "next/link";
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
+import { JumpLink } from "@/components/JumpLink";
 import { ActorTag, CustomerName } from "@/components/parts";
 import { RememberFold } from "@/components/RememberFold";
 import { useAds } from "@/lib/ads/useAds";
@@ -22,7 +23,7 @@ import { writeJournal } from "@/lib/journal";
 import { browserJobAsk } from "@/lib/jobs/ask";
 import { browserJobStore } from "@/lib/jobs/browserStore";
 import { adsBlocked, JOB_NAME, reserveText, runJobs, seedOf, type JobEnv, type JobMode, type JobOutcome } from "@/lib/jobs/run";
-import { JOB_IDS, openJobs, type JobId } from "@/lib/jobs/state";
+import { JOB_IDS, jobDoneLink, openJobs, type JobDone, type JobId } from "@/lib/jobs/state";
 import { useJobs, useJobsSwitch } from "@/lib/jobs/useJobs";
 import { useRules } from "@/lib/rules/useRules";
 import type { JobsSettings } from "@/lib/settings";
@@ -265,8 +266,7 @@ export function AiJobsSection() {
                 <p className="ai-job-state" role="status">
                   {done ? (
                     <>
-                      <span className="tag ok">済み</span> {done.result}{" "}
-                      <Link href={TABS[done.tab].path}>{TABS[done.tab].label}のタブへ →</Link>
+                      <span className="tag ok">済み</span> {done.result} <DoneLink done={done} />
                     </>
                   ) : p === "running" ? (
                     <span className="tag hold">動いている…</span>
@@ -283,4 +283,16 @@ export function AiJobsSection() {
       )}
     </RememberFold>
   );
+}
+
+/** 済んだ行の結果のリンク。承認の箱に入った物は同じページの承認の箱へ、ほかは結果が届いたタブへ（jobs/state.ts の jobDoneLink） */
+function DoneLink({ done }: { done: JobDone }) {
+  const to = jobDoneLink(done);
+  if (to.kind === "approvals")
+    return (
+      <JumpLink to="approvals" title="このページの承認の箱へ">
+        承認の箱で決める ↓
+      </JumpLink>
+    );
+  return <Link href={TABS[to.tab].path}>{TABS[to.tab].label}のタブへ →</Link>;
 }
