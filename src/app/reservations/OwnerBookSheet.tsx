@@ -16,7 +16,8 @@ import { writeJournal } from "@/lib/journal";
 import { SAVE_FAILED_MESSAGE } from "@/lib/browser";
 import { useRules } from "@/lib/rules/useRules";
 
-export type SheetTarget = { date: string; start: string };
+import type { SheetTarget } from "@/lib/book/weekView";
+export type { SheetTarget };
 
 /** 一覧に出すお客様の数（名字で探すと絞れる） */
 const SHOWN = 8;

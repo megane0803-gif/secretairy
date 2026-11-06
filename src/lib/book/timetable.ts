@@ -50,6 +50,8 @@ export type TimetableColumn = {
   /** 営業時間の外（その日だけ時間が短いとき）。灰色にする */
   off: Span[];
   bands: TimetableBand[];
+  /** 見られる範囲の外の日（薄くし、新しく入れない。weekView.ts） */
+  outside: boolean;
   /** 押すと「入れる」画面が出る空いたマス（これからの時刻で、同じ時間に受ける人数に届いていない所）。picks を渡した時だけ */
   picks: (Span & { start: string })[];
 };
@@ -100,7 +102,7 @@ function lanesOf(list: Reservation[]): Map<string, { lane: number; lanes: number
  * 営業日が1日も無ければ 10:00〜20:00。
  */
 export function timetable(
-  week: LedgerDay[],
+  week: (LedgerDay & { outside?: boolean })[],
   now?: { date: string; time: string },
   /** 空いたマスを押せるようにする時（seats = 同じ時間に受ける人数・step = 1マスの分） */
   picks?: { seats: number; step: number },
@@ -136,7 +138,8 @@ export function timetable(
       usedMinutes: d.usedMinutes,
       capacityMinutes: d.capacityMinutes,
       off,
-      picks: picks && d.hours ? freeCells(d, picks.seats, Math.max(5, picks.step), now).map((c) => ({ ...span(c.from, c.from + c.len), start: toHHMM(c.from) })) : [],
+      outside: !!d.outside,
+      picks: picks && d.hours && !d.outside ? freeCells(d, picks.seats, Math.max(5, picks.step), now).map((c) => ({ ...span(c.from, c.from + c.len), start: toHHMM(c.from) })) : [],
       bands: d.reservations.map((r) => ({
         ...span(r.startMin, r.endMin),
         id: r.id,

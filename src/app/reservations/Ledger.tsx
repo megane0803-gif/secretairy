@@ -13,8 +13,7 @@ import { menuColorClass, menuLegend } from "@/lib/book/menuColor";
 import { useBook } from "@/lib/book/useBook";
 import { OWNER_TAG } from "@/lib/book/owner";
 import { freeRanges, type LedgerDay, type Reservation } from "@/lib/reservations";
-import { useState } from "react";
-import { OwnerBookSheet, type SheetTarget } from "./OwnerBookSheet";
+import { useLedgerView, WeekNav } from "./LedgerView";
 
 type Book = ReturnType<typeof useBook>;
 
@@ -24,18 +23,23 @@ type Book = ReturnType<typeof useBook>;
  */
 export function Ledger({ data, className }: { data: BookData; className?: string }) {
   const book = useBook(data);
-  // 空いている時間を押すと、下から1枚の「入れる」画面（台帳から入れる＝オーナーの確定）
-  const [sheet, setSheet] = useState<SheetTarget | null>(null);
-  const onPick = (date: string, start: string) => setSheet({ date, start });
+  // 見ている週はページの共通の親（LedgerView.tsx）が持つ。空いている時間を押すと、下から1枚の「入れる」画面（1枚も親が持つ）
+  const view = useLedgerView();
+  const onPick = (date: string, start: string) => view.act({ kind: "open", target: { date, start } });
 
   return (
     <section className={["ledger", className].filter(Boolean).join(" ")}>
       <h2>1週間の予約台帳</h2>
       <LedgerNotes book={book} />
+      <WeekNav />
       <div className="week-wrap">
         <ol className="week">
-          {book.book.week.map((d) => (
-            <li key={d.date} className={["day", d.open ? "" : "closed", d.isToday ? "today" : ""].join(" ").trim()}>
+          {view.days.map((d) => (
+            <li
+              key={d.date}
+              id={`ledger-day-${d.date}`}
+              className={["day", d.open ? "" : "closed", d.isToday ? "today" : "", d.outside ? "outside" : ""].join(" ").trim()}
+            >
               <div className="day-head">
                 <span className="day-date">{d.label}</span>
                 {d.isToday && <span className="tag">今日</span>}
@@ -61,7 +65,7 @@ export function Ledger({ data, className }: { data: BookData; className?: string
                     {d.hours.open}–{d.hours.close}
                   </span>
                   <SlotList list={d.reservations} />
-                  <FreeTimes book={book} day={d} onPick={onPick} />
+                  {!d.outside && <FreeTimes book={book} day={d} onPick={onPick} />}
                 </>
               )}
             </li>
@@ -71,7 +75,6 @@ export function Ledger({ data, className }: { data: BookData; className?: string
 
       <LedgerChecks book={book} />
       <LedgerReset book={book} data={data} />
-      {sheet && <OwnerBookSheet data={data} target={sheet} onClose={() => setSheet(null)} />}
     </section>
   );
 }

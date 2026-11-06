@@ -136,19 +136,28 @@ export type LedgerDay = CalDay & {
   capacityMinutes: number;
 };
 
-/** 今日から7日分の台帳 */
-export function weekLedger(shop: ShopSettings, today: CalDay, all: Reservation[]): LedgerDay[] {
-  return weekFrom(shop, today).map((d) => {
-    const reservations = all.filter((r) => r.date === d.date);
-    const capacityMinutes = d.hours ? shop.seats * (toMinutes(d.hours.close) - toMinutes(d.hours.open)) : 0;
-    return {
-      ...d,
-      isToday: d.date === today.date,
-      reservations,
-      usedMinutes: reservations.reduce((s, r) => s + r.menu.minutes, 0),
-      capacityMinutes,
-    };
-  });
+/**
+ * 1日分の台帳（件数・埋まり）。7日の台帳と月のカレンダーは、どれもここで数える（数がそろうように）。
+ * 埋まり = 予約の分の合計 ÷（同じ時間に受ける人数 × 営業時間の分）。お休みの日は受けられる分が 0。
+ */
+export function ledgerDay(shop: ShopSettings, d: CalDay, todayDate: string, all: Reservation[]): LedgerDay {
+  const reservations = all.filter((r) => r.date === d.date);
+  const capacityMinutes = d.hours ? shop.seats * (toMinutes(d.hours.close) - toMinutes(d.hours.open)) : 0;
+  return {
+    ...d,
+    isToday: d.date === todayDate,
+    reservations,
+    usedMinutes: reservations.reduce((s, r) => s + r.menu.minutes, 0),
+    capacityMinutes,
+  };
+}
+
+/**
+ * 7日分の台帳。start = 見せ始める日（台帳で動かした週。無ければ今日）、today = 今日の印を付ける日（仕事の「今日」）。
+ * 見せ始める日を動かしても、今日の印・数え方は変わらない。
+ */
+export function weekLedger(shop: ShopSettings, today: CalDay, all: Reservation[], start: CalDay = today): LedgerDay[] {
+  return weekFrom(shop, start).map((d) => ledgerDay(shop, d, today.date, all));
 }
 
 export type CheckResult = { ok: boolean; problems: string[] };

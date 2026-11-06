@@ -33,7 +33,7 @@ export function TimetableGrid({ tt, onPick }: { tt: Timetable; onPick?: (date: s
     <div className="tt" style={{ "--tt-hours": hours } as CSSProperties} role="group" aria-label="1週間の予約台帳（時間割）">
       <div className="tt-corner" aria-hidden />
       {tt.columns.map((c) => (
-        <div key={c.date} className={["tt-head", c.isToday ? "today" : "", c.open ? "" : "closed"].filter(Boolean).join(" ")}>
+        <div key={c.date} className={["tt-head", c.isToday ? "today" : "", c.open ? "" : "closed", c.outside ? "outside" : ""].filter(Boolean).join(" ")}>
           <span className="tt-date">
             {c.label}
             {c.isToday && <span className="tag">今日</span>}
@@ -61,7 +61,8 @@ export function TimetableGrid({ tt, onPick }: { tt: Timetable; onPick?: (date: s
       {tt.columns.map((c) => (
         <div
           key={c.date}
-          className={["tt-col", c.isToday ? "today" : "", c.open ? "" : "closed"].filter(Boolean).join(" ")}
+          id={`tt-col-${c.date}`}
+          className={["tt-col", c.isToday ? "today" : "", c.open ? "" : "closed", c.outside ? "outside" : ""].filter(Boolean).join(" ")}
           aria-label={`${c.label}${c.isToday ? "（今日）" : ""}${c.open ? `：${c.count}件` : "：お休み"}`}
         >
           {c.off.map((s, i) => (
