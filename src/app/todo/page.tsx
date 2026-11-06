@@ -45,7 +45,7 @@ export default function TodoPage() {
             並べ方はプログラムが決めます：期限あり（先頭はお客様への連絡（今日中）、そのあと 過ぎている → 今日 → 今週（日曜まで）→ 来週から）→ 次回話すこと → 投げたメモ → 期限なし。過ぎた物は灰色の札です。
           </li>
           <li>チェックすると「済み」へ移ります。{limits.undoSeconds} 秒の間は「戻す」で戻せます。右の列とホームの「まずやる{limits.topCount}つ」も同じ並べ方の上から{limits.topCount}つです。箱の中も同じ並べ方です。</li>
-          <li>ホームの「最初に戻す」で、ToDo も最初の状態（架空の例）に戻ります。</li>
+          <li>ホームの「最初に戻す」で、ToDo も最初の状態（例の ToDo）に戻ります。</li>
         </ul>
         <FieldList fields={TODO_FIELDS} />
       </Fold>
