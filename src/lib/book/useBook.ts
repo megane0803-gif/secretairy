@@ -5,17 +5,9 @@
 // 書くのはこのブラウザの中だけ（サーバーには送らない）。
 
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
-import type { BookedRow } from "../ai/wire";
 import { BOOK_KEY, readBrowser, subscribeBrowser, writeBrowser, type BrowserWrite } from "../browser";
 import { demoClock, demoInstant, shopToday } from "../calendar";
 import { allKartes, resolveSeedKartes, toVisits, withSeedKarteEdits } from "../karte/record";
-import {
-  loadBook,
-  resolveChatReservations,
-  seedAnchor,
-  sortReservations,
-  type Reservation,
-} from "../reservations";
 import { withSeats } from "../capacity";
 import { withHolidays } from "../holidays";
 import { getShop, type ShopSettings } from "../settings";
@@ -23,7 +15,8 @@ import { useCapacity } from "../useCapacity";
 import { useHolidays } from "../useHolidays";
 import type { BookData } from "./data";
 import { updateBook } from "./store";
-import { activeChat, emptyBook, parseBook, pendingApprovals, type BookState } from "./state";
+import { assembleBook } from "./assemble";
+import { emptyBook, parseBook, pendingApprovals, type BookState } from "./state";
 
 const read = () => readBrowser(BOOK_KEY);
 
@@ -78,19 +71,8 @@ export function useBook(data: BookData) {
   const nowShop = clock.now;
 
   const view = useMemo(() => {
-    const anchor = seedAnchor(shop, state.anchor, today);
-    const chat = resolveChatReservations(data.menus, data.customers, activeChat(state, nowIso));
-    const book = loadBook(shop, data.menus, today, anchor, chat);
-    const all: Reservation[] = sortReservations(book.all);
-    const booked: BookedRow[] = all.map((r) => ({
-      id: r.id,
-      customerId: r.customer.id,
-      menuId: r.menu.id,
-      date: r.date,
-      start: r.start,
-      status: r.status,
-      newCustomer: r.customer.firstVisit,
-    }));
+    // 台帳を組み立てる1か所（book/assemble.ts。予約サイト・台帳から入れる・AI の仕事と同じ）
+    const { anchor, book, all, booked } = assembleBook({ shop, menus: data.menus, customers: data.customers }, state, today, nowIso);
     const kartes = allKartes(withSeedKarteEdits(resolveSeedKartes(data.seedKartes, all), state.seedKarteEdits), state.kartes);
     return { anchor, book, all, booked, kartes, visits: toVisits(kartes), pending: pendingApprovals(state, nowIso) };
   }, [data, shop, state, today, nowIso]);

@@ -14,6 +14,7 @@ import { useBook } from "@/lib/book/useBook";
 import { OWNER_TAG } from "@/lib/book/owner";
 import { freeRanges, type LedgerDay, type Reservation } from "@/lib/reservations";
 import { useLedgerView, WeekNav } from "./LedgerView";
+import { openProps } from "./TimetableGrid";
 
 type Book = ReturnType<typeof useBook>;
 
@@ -26,6 +27,8 @@ export function Ledger({ data, className }: { data: BookData; className?: string
   // 見ている週はページの共通の親（LedgerView.tsx）が持つ。空いている時間を押すと、下から1枚の「入れる」画面（1枚も親が持つ）
   const view = useLedgerView();
   const onPick = (date: string, start: string) => view.act({ kind: "open", target: { date, start } });
+  // 予約の行を押すと、その予約の1枚（見る・取り消す・変える。ReservationSheet。1枚は親が持つ）
+  const onOpen = (id: string) => view.act({ kind: "detail", id });
 
   return (
     <section className={["ledger", className].filter(Boolean).join(" ")}>
@@ -51,7 +54,7 @@ export function Ledger({ data, className }: { data: BookData; className?: string
                   {d.reservations.length > 0 && (
                     <>
                       <p className="problems small">✗ お休みの日に残っている予約 {d.reservations.length}件（お客様に別の日時を案内してください）</p>
-                      <SlotList list={d.reservations} />
+                      <SlotList list={d.reservations} onOpen={onOpen} />
                     </>
                   )}
                 </>
@@ -64,7 +67,7 @@ export function Ledger({ data, className }: { data: BookData; className?: string
                   <span className="day-hours">
                     {d.hours.open}–{d.hours.close}
                   </span>
-                  <SlotList list={d.reservations} />
+                  <SlotList list={d.reservations} onOpen={onOpen} />
                   {!d.outside && <FreeTimes book={book} day={d} onPick={onPick} />}
                 </>
               )}
@@ -80,13 +83,14 @@ export function Ledger({ data, className }: { data: BookData; className?: string
 }
 
 /** 1日の予約の行（日ごとのカード） */
-function SlotList({ list }: { list: Reservation[] }) {
+function SlotList({ list, onOpen }: { list: Reservation[]; onOpen: (id: string) => void }) {
   return (
     <ul className="slots">
       {list.map((r) => (
         <li
           key={r.id}
-          className={`${r.status === "hold" ? "slot hold" : r.source === "chat" ? "slot confirmed fresh" : r.source === "site" ? "slot confirmed from-site" : "slot confirmed"} ${menuColorClass(r.menu)}`}
+          className={`${r.status === "hold" ? "slot hold" : r.source === "chat" ? "slot confirmed fresh" : r.source === "site" ? "slot confirmed from-site" : "slot confirmed"} ${menuColorClass(r.menu)} openable`}
+          {...openProps(() => onOpen(r.id), `${r.start}–${r.end} ${r.menu.name} ${r.customer.surname} 様${r.status === "hold" ? "（仮押さえ）" : ""}。押すと中身を見る`)}
         >
           <ActorTag actor={reservationActor(r)} />
           <span className="slot-time num">

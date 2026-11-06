@@ -11,6 +11,7 @@ import { calDay, toHHMM, toMinutes } from "@/lib/calendar";
 import { comboIdOf, resolveMenu } from "@/lib/combo";
 import type { BookData } from "@/lib/book/data";
 import { ownerBook, ownerCheck, ownerSlotContext, OWNER_TAG, type OwnerCheck, type OwnerOutcome } from "@/lib/book/owner";
+import { CUSTOMER_PAGE, lastLabel, pickCountLabel, pickCustomers } from "@/lib/book/pickCustomer";
 import { useBook } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
 import { SAVE_FAILED_MESSAGE } from "@/lib/browser";
@@ -19,14 +20,14 @@ import { useRules } from "@/lib/rules/useRules";
 import type { SheetTarget } from "@/lib/book/weekView";
 export type { SheetTarget };
 
-/** 一覧に出すお客様の数（名字で探すと絞れる） */
-const SHOWN = 8;
 
 export function OwnerBookSheet({ data, target, onClose }: { data: BookData; target: SheetTarget; onClose: () => void }) {
   const book = useBook(data);
   const { rules } = useRules(data.seedRules);
   const [start, setStart] = useState(target.start);
   const [query, setQuery] = useState("");
+  // 出すお客様の数（「もっと表示」で足す）
+  const [limit, setLimit] = useState(CUSTOMER_PAGE);
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [menuIds, setMenuIds] = useState<string[]>([]);
   // 2回目に押した時：オーナーが見て「それでも入れる」としたルール
@@ -56,11 +57,11 @@ export function OwnerBookSheet({ data, target, onClose }: { data: BookData; targ
     return out.includes(target.start) ? out : [target.start, ...out];
   }, [day.hours, step, target.start]);
 
-  const found = useMemo(() => {
-    const q = query.trim();
-    const list = q ? data.customers.filter((c) => c.surname.includes(q) || (c.kana ?? "").includes(q)) : data.customers;
-    return list.slice(0, SHOWN);
-  }, [data.customers, query]);
+  // 名字とよみで探し（カタカナでも）、前回来た日が新しい順（book/pickCustomer.ts）
+  const pick = useMemo(() => pickCustomers(data.customers, book.kartes, query, limit), [data.customers, book.kartes, query, limit]);
+  const found = pick.shown;
+  const dayLabel = (d: string) => calDay(book.shop, d).label;
+  const menuLabel = (id: string) => resolveMenu(data.menus, id)?.name ?? id;
   const customer = data.customers.find((c) => c.id === customerId) ?? null;
   const menuId = menuIds.length ? comboIdOf(data.menus, menuIds) : null;
   const menu = menuId ? resolveMenu(data.menus, menuId) : undefined;
@@ -169,29 +170,45 @@ export function OwnerBookSheet({ data, target, onClose }: { data: BookData; targ
               <input
                 type="search"
                 className="sheet-search"
-                placeholder="名字で探す"
+                placeholder="名字かよみで探す"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                aria-label="お客様を名字で探す"
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setLimit(CUSTOMER_PAGE);
+                }}
+                aria-label="お客様を名字かよみで探す"
               />
+              <span className="hint" aria-live="polite">
+                {pickCountLabel(pick, query)}（前回来た日が新しい順）
+              </span>
               <div className="sheet-choices">
-                {found.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className={c.id === customerId ? "sheet-choice on" : "sheet-choice"}
-                    aria-pressed={c.id === customerId}
-                    onClick={() => {
-                      reset();
-                      setCustomerId(c.id);
-                    }}
-                  >
-                    <CustomerName surname={c.surname} fictional={c.fictional} />
-                    {c.firstVisit && <span className="tag first">初めての方</span>}
-                  </button>
-                ))}
+                {found.map(({ customer: c, last, showId }) => {
+                  const lastText = lastLabel(last, dayLabel, menuLabel);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className={c.id === customerId ? "sheet-choice on" : "sheet-choice"}
+                      aria-pressed={c.id === customerId}
+                      onClick={() => {
+                        reset();
+                        setCustomerId(c.id);
+                      }}
+                    >
+                      <CustomerName surname={c.surname} fictional={c.fictional} />
+                      {c.firstVisit && <span className="tag first">初めての方</span>}
+                      {lastText && <small className="sheet-choice-last">{lastText}</small>}
+                      {showId && <small className="sheet-choice-id num">番号 {c.id}</small>}
+                    </button>
+                  );
+                })}
                 {found.length === 0 && <p className="hint">その名字のお客様は一覧にいません（今ある一覧から選びます）</p>}
               </div>
+              {pick.more && (
+                <button type="button" className="btn sheet-more" onClick={() => setLimit((n) => n + CUSTOMER_PAGE)}>
+                  もっと表示（あと {pick.matched - found.length}人）
+                </button>
+              )}
             </section>
 
             <section className="sheet-step" aria-label="メニュー">
@@ -252,8 +269,8 @@ export function OwnerBookSheet({ data, target, onClose }: { data: BookData; targ
   );
 }
 
-/** 確かめの結果：✗（入れられない・もう一度押せば入れられる）を先に、✓ はまとめて */
-function CheckLines({ check }: { check: OwnerCheck }) {
+/** 確かめの結果：✗（入れられない・もう一度押せば入れられる）を先に、✓ はまとめて。予約を変える1枚（ReservationSheet）も使う */
+export function CheckLines({ check, verb = "入れられません" }: { check: OwnerCheck; verb?: string }) {
   const passed = check.lines.filter((l) => l.ok);
   return (
     <div className="sheet-checks">
@@ -261,7 +278,7 @@ function CheckLines({ check }: { check: OwnerCheck }) {
         <ul className="problems small">
           {check.blocked.map((l) => (
             <li key={l.key}>
-              ✗ 入れられません：{l.label}（{l.reason}）
+              ✗ {verb}：{l.label}（{l.reason}）
             </li>
           ))}
         </ul>

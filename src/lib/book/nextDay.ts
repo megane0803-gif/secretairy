@@ -56,3 +56,18 @@ export function advanceDay(deps: NextDayDeps, input: NextDayInput): NextDayOutco
   );
   return { moved: true, from, to, dayOffset: after, reminders, sentLabel };
 }
+
+/**
+ * 「翌日へ」の後に出す前日のお知らせで、画面が持つのは「どの日のお知らせか」だけ（作った時の予約の並びは持たない）。
+ * 出す時に今の台帳から数え直す（remindersNow）。別のタブで予約を取り消した・変えた時も、今の台帳と合う。
+ */
+export type ReminderDay = { date: string; dayLabel: string; sentLabel: string };
+
+export function reminderDay(out: Extract<NextDayOutcome, { moved: true }>): ReminderDay {
+  return { date: out.to.date, dayLabel: out.to.label, sentLabel: out.sentLabel };
+}
+
+/** 今の台帳（画面の台帳の全部）から、その日の前日のお知らせを数え直す */
+export function remindersNow(day: ReminderDay, all: Reservation[], template: string, shopName: string): Reminder[] {
+  return dayBeforeReminders(all, day.date, template, shopName);
+}
