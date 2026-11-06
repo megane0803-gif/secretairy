@@ -2,15 +2,16 @@
 // ブラウザの置き場所（localStorage）は、テストの中だけの物に置きかえる（台帳だけ「いっぱい」「断られた」にできる）。
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { after, before, beforeEach, describe, test } from "node:test";
 import { BOOK_KEY, BROWSER_PREFIX, JOURNAL_KEY, readBrowser, SAVE_FAILED_MESSAGE, writeBrowser } from "../browser";
 import type { HoldOffer, ReserveEvent } from "../ai/wire";
 import { createChatRuns } from "../ai/chatRuns";
 import { cutNotice, holdInto, readReserveStream } from "../ai/reserveStream";
-import { emptyBook, parseBook, sameEpoch } from "../book/state";
+import { canNextDay, emptyBook, LAST_DEMO_DAY, nextDayStep, parseBook, sameEpoch } from "../book/state";
 import { currentEpoch, readBook, updateBook } from "../book/store";
 import { resetAllWrites } from "../reset";
-import { calDay } from "../calendar";
+import { calDay, demoClock, MAX_DAY_OFFSET, realDayNote } from "../calendar";
 import { getTodos } from "../data/seed";
 import { parseJournal, writeJournal } from "../journal";
 import type { SavedKarte } from "../karte/record";
@@ -339,5 +340,56 @@ describe("直しA 3：録音から作ったメモ（6,000字まで）は、保�
   test("入力できる上限より長い物（ブラウザの中で書きかえられた物）は、上限で切る", () => {
     const s = { ...emptyBook(today), kartes: [karteOf("い".repeat(6001))] };
     assert.equal([...parseBook(JSON.stringify(s))!.kartes[0].memo].length, 6000);
+  });
+});
+
+describe("直しA 5：「翌日へ」の上限（60営業日）に来たら押せなくし、日誌とお知らせを作らない", () => {
+  test("59 → 60 は進む。60 からは進まない（moved: false）", () => {
+    const s59 = { ...emptyBook(today), dayOffset: MAX_DAY_OFFSET - 1 };
+    assert.equal(canNextDay(s59), true);
+    const a = nextDayStep(s59);
+    assert.equal(a.moved, true);
+    assert.equal(a.state.dayOffset, MAX_DAY_OFFSET);
+    assert.equal(canNextDay(a.state), false);
+    const b = nextDayStep(a.state);
+    assert.equal(b.moved, false);
+    assert.equal(b.state, a.state, "台帳は変えない");
+    assert.equal(LAST_DEMO_DAY, "デモで進められるのはここまでです");
+  });
+
+  test("上限では画面の日付も進まない（demoClock も 60 で止まる）", () => {
+    const now = new Date("2026-11-04T09:00:00+09:00");
+    assert.equal(demoClock(shop, now, MAX_DAY_OFFSET).today.date, demoClock(shop, now, MAX_DAY_OFFSET + 1).today.date);
+  });
+
+  test("ホームの「翌日へ」は、上限で押せなくし、進まなかった時は日誌・お知らせの前に戻る", () => {
+    const src = readFileSync("src/app/home/HomeSummary.tsx", "utf8");
+    assert.match(src, /disabled=\{!canNext\}/);
+    assert.match(src, /LAST_DEMO_DAY/);
+    const handler = src.slice(src.indexOf("const nextDay = "), src.indexOf("return (", src.indexOf("const nextDay = ")));
+    const stop = handler.indexOf("if (!moved) return;");
+    assert.ok(stop > 0, "進まなかったらやめる");
+    assert.ok(stop < handler.indexOf("dayBeforeReminders(") && stop < handler.indexOf("writeJournal("), "お知らせと日誌はその後");
+  });
+});
+
+describe("直しA 6：定休日に開いた時、「本当の今日は」に次の営業日を出さない", () => {
+  test("定休日（火曜）に開いて「翌日へ」で進めた時：本当の日付と、次の営業日を分けて書く", () => {
+    const tue = new Date("2026-11-10T10:00:00+09:00");
+    const c = demoClock(shop, tue, 2);
+    assert.equal(c.opened.date, "2026-11-10");
+    assert.equal(c.realToday.date, "2026-11-11", "次の営業日を今日にする仕組みは変えない");
+    const note = realDayNote(c);
+    assert.ok(note.startsWith(`本当の今日は ${calDay(shop, "2026-11-10").label}（お休み）`), note);
+    assert.ok(note.includes(`次の営業日は ${calDay(shop, "2026-11-11").label}`), note);
+  });
+  test("営業日に開いた時は、本当の今日だけ", () => {
+    const c = demoClock(shop, new Date("2026-11-04T10:00:00+09:00"), 3);
+    assert.equal(realDayNote(c), `本当の今日は ${calDay(shop, "2026-11-04").label} です`);
+  });
+  test("ホームは realDayNote を使い、realToday を「本当の今日」として出さない", () => {
+    const src = readFileSync("src/app/home/HomeSummary.tsx", "utf8");
+    assert.match(src, /realDayNote\(book\)/);
+    assert.doesNotMatch(src, /本当の今日は \{book\.realToday/);
   });
 });

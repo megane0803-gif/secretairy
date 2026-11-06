@@ -10,9 +10,9 @@ import { resolveMenu } from "@/lib/combo";
 import { ActorTag, BigNumber, Checked, CustomerName, MiniBar, ProgramTag, SectionHead } from "@/components/parts";
 import { RememberFold } from "@/components/RememberFold";
 import type { BookData } from "@/lib/book/data";
-import { withNextDay } from "@/lib/book/state";
+import { canNextDay, LAST_DEMO_DAY, nextDayStep } from "@/lib/book/state";
 import { useBook } from "@/lib/book/useBook";
-import { addDays, businessDayAt, calDay } from "@/lib/calendar";
+import { addDays, businessDayAt, calDay, realDayNote } from "@/lib/calendar";
 import { latestBefore, nextLines } from "@/lib/karte/record";
 import { writeJournal } from "@/lib/journal";
 import { dayBeforeReminders, type Reminder } from "@/lib/reminder";
@@ -55,10 +55,19 @@ export function HomeSummary({
   // 「翌日へ」で見せる前日のお知らせ（画面を開いている間だけ。本当には送らない）
   const [remind, setRemind] = useState<{ dayLabel: string; sentLabel: string; list: Reminder[] } | null>(null);
 
+  const canNext = canNextDay(book.state);
+
   const nextDay = (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted) return;
+    // 上限（60営業日）に来たら進めない。進まなかった時は、日誌もお知らせも作らない
+    let moved = false as boolean;
+    book.update((s) => {
+      const out = nextDayStep(s);
+      moved = out.moved;
+      return out.state;
+    });
+    if (!moved) return;
     const to = businessDayAt(data.shop, book.today, 1);
-    book.update(withNextDay);
     // その日（進めた先の今日）に確定の予約がある方へ、前日に届いたつもりのお知らせ（決まった形・AI なし・送らない）
     const list = to ? dayBeforeReminders(book.all, to.date, reminder.template, data.shop.name) : [];
     if (to) setRemind({ dayLabel: to.label, sentLabel: calDay(data.shop, addDays(to.date, -1)).label, list });
@@ -77,7 +86,13 @@ export function HomeSummary({
           tag={<ProgramTag />}
           aside={
             <>
-              <button type="button" className="btn small" onClick={nextDay} title="デモ用：今日を1営業日先へ進めます（定休日は飛ばす）">
+              <button
+                type="button"
+                className="btn small"
+                onClick={nextDay}
+                disabled={!canNext}
+                title={canNext ? "デモ用：今日を1営業日先へ進めます（定休日は飛ばす）" : LAST_DEMO_DAY}
+              >
                 翌日へ
               </button>
               <span className="tag text">デモ</span>
@@ -88,7 +103,12 @@ export function HomeSummary({
         {book.shifted && <p className="shifted">{book.opened.label}はお休みなので、次の営業日を「今日」にしています。</p>}
         {book.dayOffset > 0 && (
           <p className="shifted">
-            デモ：「翌日へ」で {book.dayOffset} 営業日進めています（{book.today.label} の開店前 {book.now.time} のつもり）。本当の今日は {book.realToday.label} です。
+            デモ：「翌日へ」で {book.dayOffset} 営業日進めています（{book.today.label} の開店前 {book.now.time} のつもり）。{realDayNote(book)}。
+          </p>
+        )}
+        {!canNext && (
+          <p className="shifted" role="status">
+            {LAST_DEMO_DAY}（{book.dayOffset} 営業日）。「最初に戻す」で本当の今日に戻せます。
           </p>
         )}
         <div className="morning-wrap">

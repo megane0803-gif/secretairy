@@ -135,6 +135,15 @@ export function dateFromMonthDay(today: string, month: number, day: number): str
   return make(y + 1);
 }
 
+/**
+ * 「本当の今日は ○○ です」の1文。定休日に開いた時は、本当の日付（opened）と次の営業日（realToday）を分けて書く
+ * （realToday は定休日なら次の営業日。定休日に次の営業日を今日にする仕組みは変えない）。
+ */
+export function realDayNote(c: { opened: Pick<CalDay, "date" | "label">; realToday: Pick<CalDay, "date" | "label"> }): string {
+  if (c.opened.date === c.realToday.date) return `本当の今日は ${c.opened.label} です`;
+  return `本当の今日は ${c.opened.label}（お休み）で、次の営業日は ${c.realToday.label} です`;
+}
+
 /** デモの「翌日へ」で進められる営業日の数の上限 */
 export const MAX_DAY_OFFSET = 60;
 

@@ -249,6 +249,20 @@ export function withNextDay(s: BookState): BookState {
   return { ...s, dayOffset: Math.min(MAX_DAY_OFFSET, s.dayOffset + 1) };
 }
 
+/** 「翌日へ」の上限（MAX_DAY_OFFSET 営業日）に来た時の1文 */
+export const LAST_DEMO_DAY = "デモで進められるのはここまでです";
+
+/** まだ「翌日へ」で進められるか（上限に来たらボタンを押せなくする） */
+export function canNextDay(s: Pick<BookState, "dayOffset">): boolean {
+  return s.dayOffset < MAX_DAY_OFFSET;
+}
+
+/** 「翌日へ」を1回：進んだかもいっしょに返す（進まなかった時は、日誌・前日のお知らせを作らない） */
+export function nextDayStep(s: BookState): { state: BookState; moved: boolean } {
+  if (!canNextDay(s)) return { state: s, moved: false };
+  return { state: withNextDay(s), moved: true };
+}
+
 /** 期限が過ぎた仮押さえか（承認を待っている間に holdExpiresHours を過ぎた） */
 export function isExpired(r: ChatReservation, nowIso: string): boolean {
   return r.status === "hold" && r.expiresAt <= nowIso;
