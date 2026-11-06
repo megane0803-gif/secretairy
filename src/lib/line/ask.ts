@@ -26,6 +26,8 @@ export type LineAskRequest = {
   dayOffset: number;
   /** 同じ時間に受ける人数（画面がルールのタブの数を送る。予約チャットと同じ確かめ方） */
   seats?: number;
+  /** オーナーが決めた休みの日（画面が予約のページの物を送る。予約チャットと同じ確かめ方） */
+  holidays?: string[];
 };
 
 export type LineAskResponse =
@@ -86,6 +88,7 @@ export function parseLineAskRequest(
       visits: [],
       dayOffset: b.dayOffset,
       seats: b.seats,
+      holidays: b.holidays,
     },
     menus,
     { ...ai, maxMessageChars: maxChars },
@@ -94,7 +97,16 @@ export function parseLineAskRequest(
   const mode: LineAskMode = b.mode === "script" ? "script" : "ai";
   return {
     ok: true,
-    value: { mode, text, customer, booked: r.value.booked, rules: r.value.rules, dayOffset: r.value.dayOffset, ...(r.value.seats ? { seats: r.value.seats } : {}) },
+    value: {
+      mode,
+      text,
+      customer,
+      booked: r.value.booked,
+      rules: r.value.rules,
+      dayOffset: r.value.dayOffset,
+      ...(r.value.seats ? { seats: r.value.seats } : {}),
+      ...(r.value.holidays?.length ? { holidays: r.value.holidays } : {}),
+    },
   };
 }
 
@@ -119,6 +131,7 @@ export async function runLineAsk(opts: {
       dayOffset: req.dayOffset,
       holds: [],
       seats: req.seats,
+      holidays: req.holidays,
     },
     shop,
     menus,

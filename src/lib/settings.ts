@@ -34,6 +34,13 @@ export type ShopSettings = {
   holdExpiresHours: number;
   hours: Record<DayKey, Hours>;
   closedDates: string[];
+  /**
+   * オーナーが予約のページで決めた休みの日（YYYY-MM-DD）。設定の物ではなく、ブラウザの中に残す（holidays.ts の withHolidays で重ねる）。
+   * 受け付けるかの判定（calDay）には closedDates と同じに効く。最初の状態の予約の日付を作る所（「何番目の営業日」）には使わない（baseShop で外す）
+   */
+  ownerHolidays?: string[];
+  /** 休みの日の上限（決められる数・何日先まで出すか） */
+  holidayLimits?: { max: number; aheadDays: number };
 };
 
 export type Menu = {

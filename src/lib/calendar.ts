@@ -1,6 +1,7 @@
 // 店の暦。「今日」と「何番目の営業日」を出す。
 // 最初の状態の日付は「何番目の営業日の何時」で持つので、ここで本当の日付に直す。
-// 定休日（hours が null の曜日）と休みの日（closedDates）は営業日に数えない。
+// 定休日（hours が null の曜日）と休みの日（closedDates・オーナーが決めた ownerHolidays）は営業日に数えない。
+// ただし最初の状態の予約の日付（何番目の営業日）は、オーナーの休みの日を外した店（holidays.ts の baseShop）で数える（今ある予約の日付を動かさない）。
 
 import type { DayKey, Hours, Menu, ShopSettings } from "./settings";
 
@@ -15,6 +16,8 @@ export type CalDay = {
   key: DayKey;
   hours: Hours;
   open: boolean;
+  /** オーナーが決めた休みの日（定休日の曜日・設定の closedDates とは分ける。画面の札「休みの日」） */
+  holiday?: boolean;
 };
 
 /** 店の時間帯での、開いた日の日付（YYYY-MM-DD） */
@@ -27,13 +30,15 @@ export function calDay(shop: ShopSettings, date: string): CalDay {
   const day = new Date(Date.UTC(y, m - 1, d));
   const w = day.getUTCDay();
   const key = KEYS[w];
-  const hours = shop.closedDates.includes(date) ? null : shop.hours[key];
+  const owner = !!shop.ownerHolidays?.includes(date);
+  const hours = shop.closedDates.includes(date) || owner ? null : shop.hours[key];
   return {
     date,
     label: `${m}/${d}（${JA[w]}）`,
     key,
     hours,
     open: hours !== null,
+    ...(owner && shop.hours[key] && !shop.closedDates.includes(date) ? { holiday: true } : {}),
   };
 }
 

@@ -3,6 +3,7 @@
 //   - 承認の箱の「直す」「見送り」と、LINE のボタンの「見送り」（book/state.ts の withReleased）
 //   - 予約サイト（架空）で人数をこえて仮押さえを外した時（book/site.ts）
 //   - 承認待ちの仮押さえの枠が確定の予約で埋まった時（todo/full.ts。仮押さえはそのまま）
+//   - 予約（確定・仮押さえ）がある日をオーナーが休みの日にした時（book/holiday.ts。予約はそのまま）
 // 文には元の頼み（仮押さえ）の日時とメニューを添える。同じお客様の ToDo が何件あっても、どの予約の分か見分けられるように：
 //   「大橋（架空）様に別の日時を案内（11/8（日） 15:00 カットの代わり）」
 // 鍵は「予約:お客様＠日時」（同じ仮押さえの分は、どの入口からでも2回は入らない）。
@@ -25,11 +26,11 @@ export function rescheduleTitle(surname: string, from?: Pick<RescheduleFrom, "da
 }
 
 /**
- * 足す ToDo。id は入口ごとの頭（直す・見送り = "td"・予約サイト = "td-site"・枠が埋まった = "td-full"）＋仮押さえの番号。
+ * 足す ToDo。id は入口ごとの頭（直す・見送り = "td"・予約サイト = "td-site"・枠が埋まった = "td-full"・休みの日 = "td-hol"）＋仮押さえ（予約）の番号。
  * due（YYYY-MM-DD）を渡すと期限（今日中）にする。
  */
 export function rescheduleTodo(input: {
-  idPrefix: "td" | "td-site" | "td-full";
+  idPrefix: "td" | "td-site" | "td-full" | "td-hol";
   /** 元の仮押さえの番号（元の頼みが分からなくても、承認の箱の行から分かる） */
   reservationId: string;
   surname: string;

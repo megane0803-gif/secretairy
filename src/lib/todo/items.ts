@@ -13,6 +13,7 @@ import type { AddedTodo, BookState } from "../book/state";
 import { withTodo, withTodoDone } from "../book/state";
 import { addDays, businessDayAt, calDay, openedDate, type CalDay } from "../calendar";
 import type { Todo } from "../data/types";
+import { baseShop } from "../holidays";
 import type { ShopSettings } from "../settings";
 import { readMemoKind, type MemoKind } from "./kinds";
 import { CONTACT_SOURCES, memoKey, seedTodoKey, todoKey, todoSource, type TodoSource } from "./keys";
@@ -58,7 +59,8 @@ export function resolveSeedTodos(shop: ShopSettings, anchor: CalDay, seed: Todo[
   const base = Date.parse(`${anchor.date}T00:00:00.000Z`);
   return seed.map((t, i) => {
     const createdAt = new Date(base - (seed.length - i) * 60_000).toISOString();
-    const due = typeof t.due === "number" ? businessDayAt(shop, anchor, t.due)?.date : undefined;
+    // 最初の状態の日付は、オーナーの休みの日を外した店で数える（休みにしても期限の日を動かさない）
+    const due = typeof t.due === "number" ? businessDayAt(baseShop(shop), anchor, t.due)?.date : undefined;
     const source = todoSource({ id: `td-${t.id}`, source: t.source, kind: t.source === "karte" ? "next-talk" : undefined });
     return {
       id: t.id,

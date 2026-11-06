@@ -9,11 +9,14 @@
 // 「結果が分からない」の明細と、明細を入れるのを待つ期限は残す。freee の排他（Web Locks）の中で動かし、送っている間は戻さない（ResetBook）。
 // ホームの「AI の仕事」の済みの印も消す（4行とも「これから」に戻る）。
 // ルールのタブの「同じ時間に受ける人数」は店の設定の数（config/shop.json の seats）に戻す。
+// 予約のページの「休みの日」（holidays.ts）と、予約サイトで止めた時間（book/siteStops.ts）も消す（最初の状態は無し）。
 // 日誌・オーナーが変えたルール（ルールのタブ）・表示スイッチ（「AI の仕事」の表示スイッチも）は残す。
 
 import { ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, DAILY_KEY, FREEE_KEY, JOBS_KEY, LINE_KEY, POSTS_KEY, readBrowser, writeBrowser } from "./browser";
 import { emptyBook, newEpoch } from "./book/state";
 import { CAPACITY_KEY } from "./capacity";
+import { HOLIDAYS_KEY } from "./holidays";
+import { SITE_STOPS_KEY } from "./book/siteStops";
 import { resetDesk } from "./karte/deskStore";
 import { keptOnReset, parseFreee } from "./freee/state";
 import { parseLine, withReset } from "./line/state";
@@ -40,6 +43,8 @@ export function resetAllWrites(today: string, lineRaw: string | null = null, fre
     { key: POSTS_KEY, value: null },
     { key: JOBS_KEY, value: null },
     { key: CAPACITY_KEY, value: null },
+    { key: HOLIDAYS_KEY, value: null },
+    { key: SITE_STOPS_KEY, value: null },
     ...(line ? [{ key: LINE_KEY, value: JSON.stringify(withReset(line)) }] : []),
   ];
 }

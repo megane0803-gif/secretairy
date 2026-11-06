@@ -11,6 +11,7 @@ import { getAccounting } from "../../data/seed";
 import { parseJournal } from "../../journal";
 import { resetAll } from "../../reset";
 import { emptyBook } from "../../book/state";
+import { withHolidays } from "../../holidays";
 import { getAccountingSettings, getShop, type DailyLimits } from "../../settings";
 import {
   checkDaily,
@@ -533,5 +534,46 @@ describe("日報 9：freee・会計（架空）・AI に何も送らない", () 
     writeBrowser(BOOK_KEY, JSON.stringify(emptyBook(TODAY)));
     commitDaily(browserDailyDeps, { ...ctx, epoch: undefined, action: { kind: "save", draft: draft(TODAY, "4", "32400") } });
     assert.deepEqual([...store.keys()].sort(), [BROWSER_PREFIX + BOOK_KEY, BROWSER_PREFIX + DAILY_KEY, BROWSER_PREFIX + JOURNAL_KEY].sort());
+  });
+});
+
+describe("日報 10：予約のページで決めた休みの日（直しC）も休業日として見る", () => {
+  // 11/5（木）をオーナーが休みの日にした店（台帳と同じ重ね方。useBook の withHolidays）
+  const HOLIDAY = "2026-11-05";
+  const hshop = withHolidays(shop, [HOLIDAY]);
+
+  test("1枚の休業日の判定（calDay）が休みの日を見る。休みの日の日報も入れられる", () => {
+    assert.equal(calDay(shop, HOLIDAY).open, true, "休みの日を重ねない店では営業日");
+    const d = calDay(hshop, HOLIDAY);
+    assert.equal(d.open, false);
+    assert.equal(d.holiday, true);
+    const m = memDeps();
+    const r = commitDaily(m.deps, { ...ctx, shop: hshop, epoch: "e1", action: { kind: "save", draft: draft(HOLIDAY, "2", "15000") } });
+    assert.ok(r.ok && r.kind === "add");
+    assert.deepEqual(m.box.lines, ["オーナー：日報を入れた（11/5（木） 売上 15,000円・来店 2人）"]);
+  });
+
+  test("休みの日の日報は棒と表に数を出す。日報の無い休みの日は点（休みの日の札）", () => {
+    const n = summarizeMonth("2026-11", seed, stateOf(report(HOLIDAY, 2, 15000)), hshop, TODAY);
+    const h = n.days.find((d) => d.date === HOLIDAY)!;
+    assert.deepEqual([h.open, h.holiday, h.shown, h.daily, h.sales, h.visits], [false, true, true, true, 15000, 2]);
+    assert.equal(n.total, 15000);
+    const empty = summarizeMonth("2026-11", seed, EMPTY_DAILY, hshop, TODAY).days.find((d) => d.date === HOLIDAY)!;
+    assert.deepEqual([empty.shown, empty.holiday, empty.missing], [false, true, false]);
+  });
+
+  test("「まだ」の日の数え方で、休みの日は営業日に数えない", () => {
+    const plain = summarizeMonth("2026-11", seed, EMPTY_DAILY, shop, TODAY);
+    const withH = summarizeMonth("2026-11", seed, EMPTY_DAILY, hshop, TODAY);
+    assert.ok(plain.days.find((d) => d.date === HOLIDAY)!.missing);
+    assert.equal(withH.missingCount, plain.missingCount - 1);
+    assert.ok(!withH.days.some((d) => d.date === HOLIDAY && d.missing));
+  });
+
+  test("売上の欄は、台帳と同じく休みの日を重ねた店で今日と休業日を決める", () => {
+    const src = readFileSync("src/app/accounting/SalesReport.tsx", "utf8");
+    assert.match(src, /useHolidays\(\)/);
+    assert.match(src, /withHolidays\(getShop\(\), holidays\)/);
+    assert.match(src, /demoClock\(shop,/);
   });
 });

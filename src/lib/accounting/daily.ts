@@ -229,6 +229,8 @@ export type MonthDayCell = SalesDayCell & {
   missing: boolean;
   /** 先の日で、数が無い日（表では「—」） */
   ahead: boolean;
+  /** オーナーが決めた休みの日（calDay の holiday。定休日の曜日とは札を分ける） */
+  holiday: boolean;
 };
 
 export type MonthSummary = Omit<SalesSummary, "days"> & {
@@ -239,7 +241,10 @@ export type MonthSummary = Omit<SalesSummary, "days"> & {
   missingCount: number;
 };
 
-/** その月の数（大きい数字3つ・日ごとの棒・支払い方法の割合・表）。式は summarizeSales のまま */
+/**
+ * その月の数（大きい数字3つ・日ごとの棒・支払い方法の割合・表）。式は summarizeSales のまま。
+ * shop は、店の設定に予約のページで決めた休みの日を重ねた物（holidays.ts の withHolidays）。休みの日は営業日に数えない（「まだ」にしない）。
+ */
 export function summarizeMonth(month: string, seed: SalesMonth, state: DailyState, shop: ShopSettings, today: string): MonthSummary {
   const sales = monthSales(month, seed, state);
   const s = summarizeSales(sales, shop);
@@ -248,7 +253,8 @@ export function summarizeMonth(month: string, seed: SalesMonth, state: DailyStat
   const days = s.days.map((d) => {
     const daily = own.has(d.date);
     const row = rows.has(d.date);
-    return { ...d, daily, shown: d.open || daily, missing: d.open && d.date <= today && !row, ahead: d.date > today && !row };
+    const holiday = calDay(shop, d.date).holiday === true;
+    return { ...d, daily, shown: d.open || daily, missing: d.open && d.date <= today && !row, ahead: d.date > today && !row, holiday };
   });
   return { ...s, key: month, year: Number(month.slice(0, 4)), days, missingCount: days.filter((d) => d.missing).length };
 }

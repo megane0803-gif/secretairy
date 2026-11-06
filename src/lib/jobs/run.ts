@@ -27,7 +27,7 @@ import { businessDayAt, calDay, demoClock, demoInstant } from "../calendar";
 import { resolveMenu } from "../combo";
 import type { JournalWho } from "../journal";
 import { allKartes, resolveSeedKartes, toVisits, withSeedKarteEdits } from "../karte/record";
-import { loadBook, resolveChatReservations, sortReservations } from "../reservations";
+import { loadBook, resolveChatReservations, seedAnchor, sortReservations } from "../reservations";
 import type { Rule } from "../rules/types";
 import type { AdSettings } from "../settings";
 import type { TabId } from "../tabs";
@@ -72,6 +72,8 @@ export type JobEnv = {
   accounting?: AccountingSeed;
   seeds?: JobSeed[];
   newId?: () => string;
+  /** オーナーが予約サイトで「ネットでは受けない」にした時間（予約サイトから入る行だけに効く。book/siteStops.ts） */
+  siteStops?: string[];
 };
 
 /**
@@ -113,8 +115,8 @@ export function seedOf<K extends JobId>(seeds: JobSeed[], id: K): Extract<JobSee
 export function bookView(data: BookData, state: BookState, now: Date) {
   const clock = demoClock(data.shop, now, state.dayOffset);
   const nowIso = now.toISOString();
-  const anchorDay = calDay(data.shop, state.anchor);
-  const anchor = anchorDay.open ? anchorDay : clock.today;
+  // 起点は休みの日を見ない（今ある予約の日付を動かさない。reservations.ts の seedAnchor）
+  const anchor = seedAnchor(data.shop, state.anchor, clock.today);
   const chat = resolveChatReservations(data.menus, data.customers, activeChat(state, nowIso));
   const all = sortReservations(loadBook(data.shop, data.menus, clock.today, anchor, chat).all);
   const booked = all.map((r) => ({
@@ -232,6 +234,8 @@ async function reserveJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
       dayOffset: view.clock.dayOffset,
       // 同じ時間に受ける人数（画面の台帳と同じ数）
       seats: env.data.shop.seats,
+      // 休みの日（予約のページで決めた分。画面の台帳と同じ）
+      holidays: env.data.shop.ownerHolidays ?? [],
     };
     const events = await env.ask.reserve(body);
     const r: ReserveRound = { reply: "", candidates: [], hold: null, todo: false, noAi: false, busy: false, bad: null };
@@ -417,7 +421,7 @@ async function siteJob(env: JobEnv): Promise<JobOutcome> {
   let out: SiteOutcome | null = null;
   // 予約サイト（架空）の「ここで予約が入る（デモ）」と同じ変え方（空いている枠に1件。承認の箱は通さない）
   env.store.setBook((s) => {
-    out = siteBook(s, { data: env.data, rules: env.rules, now: env.now() }, "free");
+    out = siteBook(s, { data: env.data, rules: env.rules, now: env.now(), stops: env.siteStops ?? [] }, "free");
     return out.state;
   });
   const o = out as SiteOutcome | null;

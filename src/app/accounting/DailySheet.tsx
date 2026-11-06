@@ -145,7 +145,9 @@ export function DailySheet({ date, today, seed, daily, shop, limits, onClose, on
           {day && (
             <small className="hint">
               {day.label}
-              {!day.open && <strong className="daily-closed">・この日は休業日です（臨時に営業した日も入れられます）</strong>}
+              {!day.open && (
+                <strong className="daily-closed">・この日は休業日です（{day.holiday ? "休みの日" : "定休日"}。臨時に営業した日も入れられます）</strong>
+              )}
               {from === "seed" && "・最初から入っている数を出しています"}
               {from === "daily" && "・入れた日報の数を出しています"}
             </small>

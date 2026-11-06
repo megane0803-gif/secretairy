@@ -1,6 +1,8 @@
 // ホームの「最初に戻す」1回で、予約・カルテ・広告・経理（自動のルールも）・LINE の預かりが全部最初に戻る。
 // ブラウザの置き場所（localStorage）は、テストの中だけの物に置きかえる。
 
+import { HOLIDAYS_KEY } from "../holidays";
+import { SITE_STOPS_KEY } from "../book/siteStops";
 import { CAPACITY_KEY } from "../capacity";
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
@@ -78,10 +80,15 @@ describe("最初に戻す", () => {
     assert.ok(store.has(BROWSER_PREFIX + RULES_KEY), "ルールのタブの変更は残す");
   });
 
-  test("書く物：予約は今日を起点に作り直し、広告と経理と発信の下書き・「AI の仕事」の済みの印・同じ時間に受ける人数は消す", () => {
+  test("書く物：予約は今日を起点に作り直し、広告と経理と発信の下書き・「AI の仕事」の済みの印・同じ時間に受ける人数・休みの日・予約サイトで止めた時間は消す", () => {
     const w = resetAllWrites("2026-11-04");
     // 経理の freee（テスト事業所）の画面の記録（FREEE_KEY）も戻す。freee の中の記録は残る（§1.8.1）
-    assert.deepEqual(w.map((x) => x.key).sort(), [ACCOUNTING_KEY, DAILY_KEY, ADS_KEY, BOOK_KEY, JOBS_KEY, POSTS_KEY, CAPACITY_KEY, FREEE_KEY].sort());
+    assert.deepEqual(
+      w.map((x) => x.key).sort(),
+      [ACCOUNTING_KEY, DAILY_KEY, ADS_KEY, BOOK_KEY, JOBS_KEY, POSTS_KEY, CAPACITY_KEY, FREEE_KEY, HOLIDAYS_KEY, SITE_STOPS_KEY].sort(),
+    );
+    assert.equal(w.find((x) => x.key === HOLIDAYS_KEY)!.value, null, "休みの日は最初の状態（無し）に戻る");
+    assert.equal(w.find((x) => x.key === SITE_STOPS_KEY)!.value, null, "予約サイトで止めた時間は最初の状態（無し）に戻る");
     assert.equal(w.find((x) => x.key === FREEE_KEY)!.value, null);
     assert.equal(w.find((x) => x.key === CAPACITY_KEY)!.value, null, "同じ時間に受ける人数は設定の数に戻る");
     assert.equal(w.find((x) => x.key === POSTS_KEY)!.value, null);

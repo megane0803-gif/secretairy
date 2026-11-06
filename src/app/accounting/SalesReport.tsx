@@ -13,18 +13,22 @@ import { useBookState, useMinute } from "@/lib/book/useBook";
 import { DAILY_KEY, readBrowser, subscribeBrowser } from "@/lib/browser";
 import { demoClock } from "@/lib/calendar";
 import { getAccounting } from "@/lib/data/seed";
+import { withHolidays } from "@/lib/holidays";
 import { getAccountingSettings, getShop } from "@/lib/settings";
+import { useHolidays } from "@/lib/useHolidays";
 import { DailySheet } from "./DailySheet";
 
 const readRaw = () => readBrowser(DAILY_KEY);
 
 export function SalesReport() {
-  const shop = getShop();
+  // 店の設定に、予約のページで決めた休みの日を重ねる（台帳と同じ。useBook）。休業日の判定はこの shop の calDay
+  const { dates: holidays } = useHolidays();
+  const shop = useMemo(() => withHolidays(getShop(), holidays), [holidays]);
   const seed = getAccounting().sales;
   const limits = getAccountingSettings().daily;
   const book = useBookState();
   const minute = useMinute();
-  // 今日は「翌日へ」で進めた今日（予約の台帳と同じ決め方。calendar.ts の demoClock）
+  // 今日は「翌日へ」で進めた今日（予約の台帳と同じ決め方。休みの日を重ねてから calendar.ts の demoClock）
   const today = useMemo(() => demoClock(shop, new Date(minute * 60_000), book.state.dayOffset).today.date, [shop, minute, book.state.dayOffset]);
   const raw = useSyncExternalStore(subscribeBrowser, readRaw, () => null);
   const daily = useMemo(() => parseDaily(raw), [raw]);
@@ -117,7 +121,7 @@ export function SalesReport() {
               <span style={{ height: `${s.maxDay > 0 && d.sales > 0 ? Math.max(4, Math.round((d.sales / s.maxDay) * 100)) : 0}%` }} />
             </button>
           ) : (
-            <span key={d.date} className="daybar closed" role="img" aria-label={`${d.label} 定休日`} title={`${d.label} 定休日`}>
+            <span key={d.date} className="daybar closed" role="img" aria-label={`${d.label} ${d.holiday ? "休みの日" : "定休日"}`} title={`${d.label} ${d.holiday ? "休みの日" : "定休日"}`}>
               <i />
             </span>
           ),
@@ -143,7 +147,7 @@ export function SalesReport() {
           </>
         ) : (
           <span className="hint">
-            棒を押すと、その日の売上と来店が出ます。点は定休日です。{hasDaily && "棒の下の印は、日報から入った日です。"}
+            棒を押すと、その日の売上と来店が出ます。点は定休日{s.days.some((d) => d.holiday) && "・休みの日"}です。{hasDaily && "棒の下の印は、日報から入った日です。"}
           </span>
         )}
       </p>
@@ -197,7 +201,7 @@ export function SalesReport() {
                       <td className="num">{d.visits > 0 ? yen(Math.round(d.sales / d.visits)) : "—"}</td>
                     </>
                   ) : (
-                    <td colSpan={3}>定休日</td>
+                    <td colSpan={3}>{d.holiday ? "休みの日" : "定休日"}</td>
                   )}
                 </tr>
               ))}
