@@ -13,9 +13,9 @@ import type { BookData } from "@/lib/book/data";
 import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
 import { memoDue } from "@/lib/todo/due";
-import { withMemoTodo } from "@/lib/todo/items";
 import { KIND_LABEL, MEMO_KINDS, type MemoKind } from "@/lib/todo/kinds";
 import { maskNames, restoreNames } from "@/lib/todo/names";
+import { commitMemoTodo } from "@/lib/todo/throw";
 import { useTodos } from "@/lib/todo/useTodos";
 import type { TodoMode, TodoRequest, TodoResponse } from "@/lib/todo/wire";
 
@@ -59,24 +59,16 @@ export function MemoThrow({ data, maxChars, label = "メモを投げる", hideLa
         return;
       }
       const title = restoreNames(out.title, memo, found);
-      let added: string | null = null;
-      todos.book.update((s) => {
-        const r = withMemoTodo(s, todos.seedItems, { title, memo, due: memoDue(memo, todos.today), category: kind }, new Date().toISOString(), data.shop);
-        added = r.todo?.title ?? null;
-        return r.state;
-      });
-      if (!added) {
-        setNote("同じ物があるので足しませんでした。");
-        return;
-      }
-      writeJournal(
-        { who: out.via === "ai" ? "AI" : "プログラム", text: `メモを ToDo に足した${how === "script" ? "（決まった返事）" : ""}：${title}（元のメモはそのまましまった）` },
-        ...(out.note ? [{ who: "プログラム" as const, text: `メモを投げる：${out.note}` }] : []),
+      // 書けた時だけ日誌・「足しました」・入力を空に（todo/throw.ts）。書けなかった時は入力と種類を残す
+      const r = commitMemoTodo(
+        { update: todos.book.update, journal: writeJournal },
+        { title, memo, due: memoDue(memo, todos.today), category: kind, via: out.via, how, note: out.note, seedItems: todos.seedItems, shop: data.shop, nowIso: new Date().toISOString() },
       );
+      setNote(r.message);
+      if (!r.ok) return;
       setText("");
       setKind(null);
       if (how === "ai") setNoAi(false);
-      setNote(`✓ 足しました：${title}${out.note ? `（${out.note}）` : ""}`);
     } catch {
       setNoAi(true);
     } finally {

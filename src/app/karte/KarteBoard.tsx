@@ -13,7 +13,8 @@ import { setDesk } from "@/lib/karte/deskStore";
 
 import { editedLabels, sectionsToSave } from "@/lib/karte/edit";
 import { removedSentence } from "@/lib/karte/gate";
-import { kartesOf, nextTalkTitle, withKarteSaved, type SaveOutcome, type SavedKarte } from "@/lib/karte/record";
+import { kartesOf, nextTalkTitle, type SavedKarte } from "@/lib/karte/record";
+import { commitKarteSave } from "@/lib/karte/save";
 import { writeJournal } from "@/lib/journal";
 import type { KarteEditSettings, KarteHeading } from "@/lib/settings";
 import { useState } from "react";
@@ -51,34 +52,22 @@ export function KarteBoard({ data, headings, editLimits }: { data: BookData; hea
       savedAt: now,
       ...(edited.length ? { edited, editedAt: Object.fromEntries(edited.map((id) => [id, now])) } : {}),
     };
-    let out: SaveOutcome | null = null;
-    book.update((s) => {
-      out = withKarteSaved(s, k, c.surname, headings);
-      return out.state;
-    });
-    const result = out as SaveOutcome | null;
-    const who = `${c.surname}（架空）様`;
-    if (!result || !result.ok) {
-      setDone(result?.reason ?? "保存できませんでした。もう一度押してください。");
-      return;
-    }
-    const todoText =
-      result.todo !== null
-        ? `ToDo「次回話すこと」に1件足した：${result.todo.title}`
-        : result.todoSkipped === "same"
-          ? "ToDo「次回話すこと」は同じ物があるので足さなかった"
-          : "次回提案が空なので ToDo には足さなかった";
-    writeJournal({
-      who: "オーナー",
-      text: `人が保存：${who}のカルテ（${book.today.label} ${selected.menu.name}${editedNames.length ? `。人が直した見出し：${editedNames.join("・")}` : ""}）。${todoText}`,
-    });
-    setDesk((s) => {
-      const drafts = { ...s.drafts };
-      delete drafts[key];
-      return { drafts };
-    });
-    setEditing(null);
-    setDone(`✓ 保存しました。${todoText}`);
+    // 書けた時だけ、日誌・案を消す・「保存しました」（save.ts）。書けなかった時は案とメモを残して理由を出す
+    const r = commitKarteSave(
+      {
+        update: book.update,
+        journal: writeJournal,
+        dropDraft: () =>
+          setDesk((s) => {
+            const drafts = { ...s.drafts };
+            delete drafts[key];
+            return { drafts };
+          }),
+      },
+      { karte: k, surname: c.surname, headings, dayLabel: book.today.label, menuName: selected.menu.name, editedNames },
+    );
+    if (r.ok) setEditing(null);
+    setDone(r.message);
   };
 
   const cancel = () => {

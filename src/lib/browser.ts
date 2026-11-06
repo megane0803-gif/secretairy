@@ -12,14 +12,31 @@ export function readBrowser(key: string): string | null {
   }
 }
 
-export function writeBrowser(key: string, value: string | null): void {
+/**
+ * 書けたか。full = 置き場所がいっぱい（QuotaExceededError）/ denied = 書き込みを断られた（内緒モード・止めてある など）。
+ * 例外は外へ投げず、失敗として返す。失敗した時は前の中身のまま（読み直しても前の中身が出る）。
+ */
+export type BrowserWrite = { ok: true } | { ok: false; why: "full" | "denied" };
+
+/** 書けなかった時に画面に出す1文（カルテの保存・メモを投げる） */
+export const SAVE_FAILED_MESSAGE = "ブラウザに保存できませんでした。入力はそのまま残しています。";
+
+function isQuota(e: unknown): boolean {
+  if (!e || typeof e !== "object") return false;
+  const x = e as { name?: unknown; code?: unknown };
+  return x.name === "QuotaExceededError" || x.name === "NS_ERROR_DOM_QUOTA_REACHED" || x.code === 22 || x.code === 1014;
+}
+
+export function writeBrowser(key: string, value: string | null): BrowserWrite {
+  let out: BrowserWrite = { ok: true };
   try {
     if (value === null) window.localStorage.removeItem(PREFIX + key);
     else window.localStorage.setItem(PREFIX + key, value);
-  } catch {
-    // 書けないときは、この画面を開いている間だけ効く
+  } catch (e) {
+    out = { ok: false, why: isQuota(e) ? "full" : "denied" };
   }
   listeners.forEach((f) => f());
+  return out;
 }
 
 /** useSyncExternalStore 用 */
