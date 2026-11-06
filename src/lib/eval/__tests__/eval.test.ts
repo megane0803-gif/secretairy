@@ -1184,7 +1184,7 @@ describe("10. 「確定しました」と言わない：確定したと伝える
 
   test("README の結果の欄：直す前の3回（合格9・不合格1。7 は見張りの拾いすぎ）を残し、直した後の3回（合格10）を並べる", () => {
     const readme = readFileSync(join(ROOT, "README.md"), "utf8");
-    const sec = readme.slice(readme.indexOf("### 結果（本物の AI で3回）"), readme.indexOf("## 使った物と権利"));
+    const sec = readme.slice(readme.indexOf("### 結果（本物の AI で流した記録）"), readme.indexOf("## 使った物と権利"));
     assert.match(sec, /#### 直す前/);
     assert.match(sec, /#### 直した後/);
     const before = sec.slice(sec.indexOf("#### 直す前"), sec.indexOf("#### 直した後"));
