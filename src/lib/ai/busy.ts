@@ -2,6 +2,8 @@
 // 返事に理由の文が無い・読めない時の、画面に出す文。AI の窓口を呼ぶ画面はみなここを通す（決まった返事（AI なし）も同じ窓口なので同じ扱い）。
 // 入力と作りかけの案は消さない（ここは文を決めるだけ）。
 
+import { NO_AI_MESSAGE } from "./wire";
+
 /** 混んでいる時の1文（「今は AI につながりません」とは分ける：待てば戻る） */
 export const AI_BUSY_MESSAGE = "いま AI の窓口が混んでいます。1分ほど待ってから、もう一度押してください。";
 
@@ -48,4 +50,22 @@ export async function postAi(path: string, body: unknown, init: { signal?: Abort
     data = null;
   }
   return { kind: "answer", status: res.status, data };
+}
+
+/**
+ * 窓口の返事を、画面で使う形に読む（JSON で { ok } を返す窓口：カルテ・発信・広告・ルール・メモ）。
+ * busy = 混んでいる（429）/ つながらない・JSON でない・5xx の形の違う物 = no-ai（今までと同じ）/
+ * ok: false で理由の文が無い・読めない、と、形の違う 4xx = bad-request で message は ""（画面は failText で決まった1文にする）。
+ * T は、code に "busy" | "no-ai" | "bad-request" と message を持つ失敗の形を含む返事の型。
+ */
+export function answerOf<T extends { ok: boolean }>(call: AiCall): T {
+  const fail = (code: "busy" | "no-ai" | "bad-request", message: string) => ({ ok: false, code, message }) as unknown as T;
+  if (call.kind === "busy") return fail("busy", AI_BUSY_MESSAGE);
+  if (call.kind === "down" || call.data === null || typeof call.data !== "object") return fail("no-ai", NO_AI_MESSAGE);
+  const d = call.data as Record<string, unknown>;
+  if (typeof d.ok !== "boolean") return call.status >= 500 ? fail("no-ai", NO_AI_MESSAGE) : fail("bad-request", "");
+  if (d.ok) return d as unknown as T;
+  if (d.code === "no-ai") return fail("no-ai", reasonOf(d) ?? NO_AI_MESSAGE);
+  if (d.code === "gate") return d as unknown as T;
+  return { ...d, code: typeof d.code === "string" ? d.code : "bad-request", message: reasonOf(d) ?? "" } as unknown as T;
 }

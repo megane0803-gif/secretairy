@@ -13,6 +13,7 @@ import { actionVerb, yen, type AdAction } from "@/lib/ads/report";
 import { approveAd, withAdFixed, withAdFixUsed, withAdSkipped, type AdProposal } from "@/lib/ads/state";
 import { useAds } from "@/lib/ads/useAds";
 import type { AdsMode } from "@/lib/ads/wire";
+import { AI_BUSY_MESSAGE, failText } from "@/lib/ai/busy";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import { demoClock } from "@/lib/calendar";
 import { useBookState } from "@/lib/book/useBook";
@@ -116,7 +117,8 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
       if (res.code === "no-ai") {
         setNoAi(true);
         setNote(`${NO_AI_MESSAGE}。案はそのままです。`);
-      } else setNote(`うまくいきませんでした。${res.message}。一言を短くして送ってください。`);
+      } else if (res.code === "busy") setNote(`${AI_BUSY_MESSAGE}案と一言はそのままです。`);
+      else setNote(failText(res.message, "一言を短くして送ってください。"));
       return;
     }
     setNoAi(false);

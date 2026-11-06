@@ -13,6 +13,7 @@ import { createContext, useContext, useRef, useState, type ReactNode } from "rea
 import { ActorTag, CustomerName } from "@/components/parts";
 import { RememberFold } from "@/components/RememberFold";
 import { useAds } from "@/lib/ads/useAds";
+import { AI_BUSY_MESSAGE, AI_FAILED_MESSAGE } from "@/lib/ai/busy";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import type { BookData } from "@/lib/book/data";
 import { useBook } from "@/lib/book/useBook";
@@ -47,7 +48,8 @@ function noteOf(o: JobOutcome): string | null {
   if (o.kind === "skip") return o.note;
   if (o.kind === "limit") return "1回に AI を呼べる数を超えるので、動かしませんでした。もう一度押してください";
   if (o.kind === "no-ai") return NO_AI_MESSAGE;
-  if (o.kind === "failed") return `うまくいきませんでした（${o.note}）。もう一度押してください`;
+  if (o.kind === "busy") return AI_BUSY_MESSAGE;
+  if (o.kind === "failed") return o.note.trim() ? `うまくいきませんでした（${o.note}）。もう一度押してください` : AI_FAILED_MESSAGE;
   return null;
 }
 

@@ -18,6 +18,7 @@ import { demoClock } from "@/lib/calendar";
 import { getShop } from "@/lib/settings";
 import { useAds } from "@/lib/ads/useAds";
 import type { AdsMode } from "@/lib/ads/wire";
+import { AI_BUSY_MESSAGE, failText } from "@/lib/ai/busy";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import { useBookState } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
@@ -75,9 +76,15 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
         setNoAi(true);
         return;
       }
+      if (res.code === "busy") {
+        // 混んでいる（1分10回まで）：案は作らず、待ってから押しなおせる（「今は AI につながりません」とは分ける）
+        writeJournal({ who: "プログラム", text: "AI の窓口が混んでいたので、広告の案は出していません" });
+        setShown({ kind: "note", text: AI_BUSY_MESSAGE });
+        return;
+      }
       if (useMode === "ai") setNoAi(false);
       if (res.code === "bad-request") {
-        setShown({ kind: "note", text: `うまくいきませんでした。${res.message}。画面を開きなおしてから押してください。` });
+        setShown({ kind: "note", text: failText(res.message, "画面を開きなおしてから押してください。") });
         return;
       }
       writeJournal(...res.steps);

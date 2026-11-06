@@ -25,6 +25,8 @@ export type PostsResponse =
   | { ok: true; text: string; checks: PostGateCheck[]; tries: number; cut: boolean; steps: PostStep[] }
   | { ok: false; code: "gate"; checks: PostGateCheck[]; problems: string[]; tries: number; steps: PostStep[] }
   | { ok: false; code: "no-ai"; message: string }
+  /** 画面の側だけ：窓口が混んでいる（429）。サーバーは返さない */
+  | { ok: false; code: "busy"; message: string }
   | { ok: false; code: "bad-request"; message: string };
 
 const MAX_MEMOS = 10;

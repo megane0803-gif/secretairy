@@ -30,4 +30,4 @@ export type KarteDraft = {
 
 export type KarteResponse =
   | ({ ok: true } & KarteDraft)
-  | { ok: false; code: "no-ai" | "bad-request" | "refused"; message: string };
+  | { ok: false; code: "no-ai" | "bad-request" | "refused" | "busy"; message: string };

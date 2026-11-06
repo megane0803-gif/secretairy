@@ -7,6 +7,7 @@
 // 残すのはブラウザの中（IndexedDB）だけ。「最初に戻す」で消える（store.ts の resetRecordings）。
 
 import { useSyncExternalStore } from "react";
+import { AI_FAILED_MESSAGE, reasonOf } from "../ai/busy";
 import { NO_AI_MESSAGE } from "../ai/wire";
 import { writeJournal } from "../journal";
 import { getDesk } from "../karte/deskStore";
@@ -136,7 +137,8 @@ async function summarize(text: string, signal?: AbortSignal): Promise<{ notes: s
       out = null;
     }
     if (!out || (!out.ok && out.code === "no-ai")) throw new Error(NO_AI_MESSAGE);
-    if (!out.ok) throw new Error(out.message);
+    // 理由の文が無い・読めない時は「undefined」を出さず、決まった1文に
+    if (!out.ok) throw new Error(reasonOf(out) ?? AI_FAILED_MESSAGE);
     return { notes: out.notes, removed: out.removed.length };
   }
   throw new Error("AI を呼ぶ回数の上限に来ました。少し待ってから続きから押してください");

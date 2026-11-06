@@ -19,7 +19,7 @@ export type TodoRequest = {
 /** via = だれが文を決めたか（ai = Claude / program = 決まった返事、または門で止めたのでメモから作った） */
 export type TodoTitle = { mode: TodoMode; title: string; via: "ai" | "program"; note?: string };
 
-export type TodoResponse = ({ ok: true } & TodoTitle) | { ok: false; code: "no-ai" | "bad-request" | "refused"; message: string };
+export type TodoResponse = ({ ok: true } & TodoTitle) | { ok: false; code: "no-ai" | "bad-request" | "refused" | "busy"; message: string };
 
 type Parsed = { ok: true; value: TodoRequest } | { ok: false; reason: string };
 

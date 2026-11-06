@@ -8,6 +8,7 @@
 // 選ばなくても送れる（ToDo の「その他」の箱に入る）。種類はオーナーが選んだ物だけで、AI には送らない・決めさせない。
 
 import { useId, useState } from "react";
+import { AI_BUSY_MESSAGE, failText } from "@/lib/ai/busy";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import type { BookData } from "@/lib/book/data";
 import { writeJournal } from "@/lib/journal";
@@ -17,7 +18,8 @@ import { KIND_LABEL, MEMO_KINDS, type MemoKind } from "@/lib/todo/kinds";
 import { maskNames, restoreNames } from "@/lib/todo/names";
 import { commitMemoTodo } from "@/lib/todo/throw";
 import { useTodos } from "@/lib/todo/useTodos";
-import type { TodoMode, TodoRequest, TodoResponse } from "@/lib/todo/wire";
+import { askTodoTitle } from "@/lib/todo/client";
+import type { TodoMode, TodoRequest } from "@/lib/todo/wire";
 
 /** label・hideLabel は渡した時だけ使う（ホームは欄の題名を外に出すので、入力欄の名前は読み上げだけにする） */
 export function MemoThrow({ data, maxChars, label = "メモを投げる", hideLabel = false }: { data: BookData; maxChars: number; label?: string; hideLabel?: boolean }) {
@@ -43,19 +45,14 @@ export function MemoThrow({ data, maxChars, label = "メモを投げる", hideLa
     const { masked, found } = maskNames(memo, data.customers);
     const body: TodoRequest = { mode: how, memo: masked, rules: rules.filter((r) => !r.locked) };
     try {
-      const res = await fetch("/api/ai/todo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      let out: TodoResponse | null = null;
-      try {
-        out = (await res.json()) as TodoResponse;
-      } catch {
-        out = null;
-      }
-      if (!out || (!out.ok && out.code === "no-ai")) {
+      const out = await askTodoTitle(body);
+      if (!out.ok && out.code === "no-ai") {
         setNoAi(true);
         return;
       }
+      // 混んでいる（429）・理由の文が無い：入力と種類はそのまま、1文だけ出す
       if (!out.ok) {
-        setNote(`うまくいきませんでした。${out.message}。`);
+        setNote(out.code === "busy" ? AI_BUSY_MESSAGE : failText(out.message));
         return;
       }
       const title = restoreNames(out.title, memo, found);
