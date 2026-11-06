@@ -152,7 +152,7 @@ export function ownerBook(state: BookState, ctx: OwnerContext, input: OwnerInput
     expiresAt: nowIso,
     via: "owner",
   };
-  const label = `${slot.customer.surname}（架空）様 ${candidateLabel(ctx.data, placed)}`;
+  const label = `${slot.customer.surname}様 ${candidateLabel(ctx.data, placed)}`;
   const ruleNames = check.rules.map((r) => `「${r.name ?? r.label}」`).join("・");
   const text = `台帳から予約を入れた（${label}）${ruleNames ? `。ルール${ruleNames}に当たったが、オーナーが確かめて入れた` : ""}`;
   return {

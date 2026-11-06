@@ -1,6 +1,6 @@
 // 広告の「効いたかの判定」と「毎週の見直しの報告」の形と、ブラウザに残っていた物の読み方（docs/SPEC.md §1.7.1・§1.7.2）。
 // 置き場所は広告の承認の箱と同じ secretairy:ads（state.ts の AdsState の judgements・reports）。
-// なので「最初に戻す」「広告（架空）を最初に戻す」で、いっしょに消える。
+// なので「最初に戻す」「広告を最初に戻す」で、いっしょに消える。
 
 import type { AdWeek } from "../data/types";
 import type { AdAction } from "./report";

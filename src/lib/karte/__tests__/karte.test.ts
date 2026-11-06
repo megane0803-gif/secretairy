@@ -162,13 +162,13 @@ describe("保存（人のボタン）", () => {
     assert.equal(out.state.kartes.length, 1);
     assert.equal(out.state.todos.length, s0.todos.length + 1);
     assert.equal(out.state.todos[0].kind, "next-talk");
-    assert.equal(out.state.todos[0].title, "上野（架空）様：半年後ごろ、伸びた根元だけ（ほか1行はカルテに）");
+    assert.equal(out.state.todos[0].title, "上野様：半年後ごろ、伸びた根元だけ（ほか1行はカルテに）");
   });
 
   test("次回提案が1行なら「ほか」は付けない", async () => {
     const out = withKarteSaved(emptyBook(today), await saved("c01"), "青木", headings);
     assert.ok(out.ok);
-    assert.equal(out.state.todos[0].title, "青木（架空）様：2か月後ごろ、前髪だけのカット");
+    assert.equal(out.state.todos[0].title, "青木様：2か月後ごろ、前髪だけのカット");
   });
 
   test("同じ日にもう一度は保存しない（その日はもう直さない）", async () => {

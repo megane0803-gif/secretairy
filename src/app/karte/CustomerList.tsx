@@ -12,6 +12,7 @@ import { useBook } from "@/lib/book/useBook";
 import { calDay } from "@/lib/calendar";
 import { resolveMenu } from "@/lib/combo";
 import { filterCustomers, KANA_ROWS, kanaRowOf, lastVisitLabel, lastVisitOf, type KanaRowId } from "@/lib/karte/customers";
+import { guestName, isGuestTitle } from "@/lib/guestName";
 import { kartesOf, nextLines } from "@/lib/karte/record";
 import type { KarteEditSettings, KarteHeading } from "@/lib/settings";
 import { useTodos } from "@/lib/todo/useTodos";
@@ -31,11 +32,11 @@ export function CustomerList({ data, headings, editLimits }: { data: BookData; h
   const kartes = person ? kartesOf(book.kartes, person.id) : [];
   const latest = kartes[0];
   const talk = latest ? nextLines(latest, headings) : [];
-  const talkTodos = person ? todos.filter((t) => t.source === "karte" && t.title.startsWith(`${person.surname}（架空）様：`)) : [];
+  const talkTodos = person ? todos.filter((t) => t.source === "karte" && isGuestTitle(t.title, person.surname)) : [];
 
   return (
     <section className="karte-customers" aria-labelledby="karte-customers-h">
-      <h2 id="karte-customers-h">お客様一覧（{data.customers.length}人・みな架空）</h2>
+      <h2 id="karte-customers-h">お客様一覧（{data.customers.length}人）</h2>
       <div className="karte-customers-find">
         <label htmlFor="karte-customers-q" className="hint">
           名字で探す
@@ -79,7 +80,7 @@ export function CustomerList({ data, headings, editLimits }: { data: BookData; h
                     setDone(null);
                   }}
                 >
-                  <CustomerName surname={c.surname} fictional={c.fictional} />
+                  <CustomerName surname={c.surname} />
                   {c.kana && <small className="hint">{c.kana}</small>}
                   <span className={last ? "karte-last" : "karte-last none"}>{lastVisitLabel(last, (d) => calDay(data.shop, d).label, menuName)}</span>
                   <span className="hint">
@@ -94,9 +95,9 @@ export function CustomerList({ data, headings, editLimits }: { data: BookData; h
       )}
 
       {person && (
-        <div className="karte-customer-open" aria-label={`${person.surname}（架空）様のカルテ`}>
+        <div className="karte-customer-open" aria-label={`${guestName(person.surname)}のカルテ`}>
           <h3>
-            <CustomerName surname={person.surname} fictional={person.fictional} /> のカルテ（新しい順）
+            <CustomerName surname={person.surname} /> のカルテ（新しい順）
           </h3>
           <div className="karte-talk">
             <p className="hint">次回話すこと（いちばん新しいカルテの次回提案）</p>

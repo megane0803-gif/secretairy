@@ -749,7 +749,7 @@ describe("freee：画面の記録と流れ", () => {
     assert.equal(new Set(creates).size, creates.length, "1件も二重に登録していない");
   });
 
-  test("サーバーが 500 台・読めない返事の時も「結果が分からない」。つなぎが切れた時は「失敗」で止める（会計（架空）に切り替えない）", async () => {
+  test("サーバーが 500 台・読めない返事の時も「結果が分からない」。つなぎが切れた時は「失敗」で止める（会計に切り替えない）", async () => {
     const freee = new FakeFreee();
     await handleImport(req("/api/freee/import"), makeDeps(freee));
     const w5 = wire(freee, { transport: () => Promise.resolve({ status: 504, body: null }) });

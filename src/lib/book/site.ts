@@ -1,5 +1,5 @@
-// 予約サイト（架空）→ 台帳の向き（docs/SPEC.md §1.4）。予約サイト同士をつなぐ有料のサービスの代わりを、自分で作る所。
-// ここは形と変え方だけ（どこにも書かない）。書くのは予約サイト（架空）の画面（BookingSite.tsx）と、ホームの「AI の仕事」（jobs/run.ts）。
+// 予約サイト → 台帳の向き（docs/SPEC.md §1.4）。予約サイト同士をつなぐ有料のサービスの代わりを、自分で作る所。
+// ここは形と変え方だけ（どこにも書かない）。書くのは予約サイトの画面（BookingSite.tsx）と、ホームの「AI の仕事」（jobs/run.ts）。
 //
 // お客様が予約サイトで自分で決めた予約なので、承認の箱は通さずに「確定」で台帳に入る（札は「予約サイトから」・色は外の相手 = 藍）。
 // これは 🔒「確定は人」（店の側の確定）とは別の物：店の AI・自動の処理が確定するのではなく、外のお客様が自分で決めた予約を受け取るだけ。
@@ -9,7 +9,7 @@
 //   free   … 空いている枠に1件（台帳の確定・仮押さえ・同じ時間に受ける人数・店の設定・ルールを judge.ts で確かめて、通った最初の枠）
 //   onHold … デモの見せ場：いちばん古い承認待ちの仮押さえと同じ枠に入れる（予約サイトには仮押さえは見えないので、確定の予約だけで確かめる）
 // どちらも、オーナーが「ネットでは受けない」にした時間（siteStops.ts）にかかる枠には入れない（その時刻に始まる物も、重なる物も）。
-// 二重予約を防ぐ：入った予約で同じ時間に受ける人数をこえる仮押さえは外し、ToDo に「○○（架空）様に別の日時を案内」を今日中として足す。
+// 二重予約を防ぐ：入った予約で同じ時間に受ける人数をこえる仮押さえは外し、ToDo に「○○様に別の日時を案内」を今日中として足す。
 
 import { candidateLabel, findSlots, judgeSlot, type SlotContext } from "../ai/slots";
 import type { BookedRow, Candidate } from "../ai/wire";
@@ -19,6 +19,7 @@ import { siteStep, stopHit } from "./siteStops";
 import type { JournalWho } from "../journal";
 import { resolveChatReservations, type ChatReservation } from "../reservations";
 import type { Rule } from "../rules/types";
+import { guestName } from "../guestName";
 import { rescheduleTodo } from "../todo/reschedule";
 import type { BookData } from "./data";
 import { assembleBook, toRow } from "./assemble";
@@ -32,7 +33,7 @@ export type SiteMode = "free" | "onHold";
 /** 予約サイトから入った予約の id の頭 */
 export const SITE_ID_PREFIX = "site-";
 
-export const SITE_NAME = "予約サイト（架空）";
+export const SITE_NAME = "予約サイト";
 
 /** 日誌の「だれ」（外の相手。札は「外 予約サイト」） */
 export const SITE_WHO: JournalWho = "予約サイト";
@@ -87,7 +88,7 @@ export function ledgerView(data: BookData, state: BookState, now: Date) {
   return { clock, nowIso, all };
 }
 
-/** 入れる順のお客様（架空）。入った数で1人ずつずらす（同じ方ばかりにしない） */
+/** 入れる順のお客様。入った数で1人ずつずらす（同じ方ばかりにしない） */
 function rotate<T>(list: T[], n: number): T[] {
   if (list.length === 0) return list;
   const k = n % list.length;
@@ -104,7 +105,7 @@ function overflows(target: Span, others: Span[], seats: number): boolean {
 }
 
 /**
- * 予約サイト（架空）で、架空のお客様の予約が1件入る。AI は使わない。
+ * 予約サイトで、架空のお客様の予約が1件入る。AI は使わない。
  * 入ったら台帳に確定で入り（承認の箱は通さない）、重なって人数をこえる仮押さえは外して ToDo に足す。
  */
 export function siteBook(state: BookState, ctx: SiteContext, mode: SiteMode): SiteOutcome {
@@ -209,12 +210,12 @@ export function siteBook(state: BookState, ctx: SiteContext, mode: SiteMode): Si
     released.push({ approvalId: p.row.approval.id, reservation: r, surname, todo: todo.title });
   }
 
-  const who = `${customer.surname}（架空）様`;
+  const who = guestName(customer.surname);
   const journal: { who: JournalWho; text: string }[] = [
     { who: SITE_WHO, text: `${SITE_NAME}から1件入った：${who} ${label}（お客様が自分で決めた予約なので、承認の箱は通さずに台帳へ）` },
     ...released.map((x) => ({
       who: "プログラム" as const,
-      text: `${SITE_NAME}の予約と同じ枠だったので、${x.surname}（架空）様の仮押さえ（${candidateLabel(data, x.reservation)}）を外し、ToDo に「${x.todo}」（今日中）を足した（二重予約を防ぐ。AI は使っていない）`,
+      text: `${SITE_NAME}の予約と同じ枠だったので、${guestName(x.surname)}の仮押さえ（${candidateLabel(data, x.reservation)}）を外し、ToDo に「${x.todo}」（今日中）を足した（二重予約を防ぐ。AI は使っていない）`,
     })),
   ];
   const message = `${SITE_NAME}から1件入りました：${who} ${label}${released.length ? `。同じ枠の仮押さえ ${released.length}件を外し、ToDo に「別の日時を案内」を足しました` : ""}`;

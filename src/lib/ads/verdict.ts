@@ -171,7 +171,7 @@ export function revertLabel(j: Pick<AdJudgement, "no" | "text" | "action">): str
 }
 
 /**
- * 🔒 戻す案の「承認」：広告（架空）の画面で、止めた（外した）言葉を元に戻す。人が承認の箱の「承認」を押したときだけ呼ぶ。
+ * 🔒 戻す案の「承認」：広告の管理画面で、止めた（外した）言葉を元に戻す。人が承認の箱の「承認」を押したときだけ呼ぶ。
  * 戻すと判定はそのまま残る（日誌にも）。止めた言葉の一覧から外れるので、次の見直しでまた選べる。
  */
 export function approveRevert(ads: AdsState, id: string, nowIso: string, channel: string): { ads: AdsState; journal: Journal } {

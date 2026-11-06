@@ -22,7 +22,7 @@ export type Reservation = {
   status: ReservationStatus;
   menu: Menu;
   customer: Customer;
-  /** seed = 最初の状態（店が受けて確定した予約）/ chat = 予約チャットから入った物 / site = 予約サイト（架空）から入った物 / owner = オーナーが台帳から入れた物 */
+  /** seed = 最初の状態（店が受けて確定した予約）/ chat = 予約チャットから入った物 / site = 予約サイトから入った物 / owner = オーナーが台帳から入れた物 */
   source: "seed" | "chat" | "site" | "owner";
 };
 
@@ -41,7 +41,7 @@ export type ChatReservation = {
   /** 仮押さえの期限（ISO）。確定した物には使わない */
   expiresAt: string;
   /**
-   * site = 予約サイト（架空）から入った予約（お客様が自分で決めたので、承認の箱は通さずに確定で入る。book/site.ts）
+   * site = 予約サイトから入った予約（お客様が自分で決めたので、承認の箱は通さずに確定で入る。book/site.ts）
    * owner = オーナーが台帳から入れた予約（電話・店頭で受けた物。人のボタンで確定。book/owner.ts）
    */
   via?: "site" | "owner";
@@ -130,7 +130,7 @@ export function withSeedResEdits(list: Reservation[], menus: Menu[], edits: Reco
   return sortReservations(out);
 }
 
-/** 予約チャット（と予約サイト（架空））から入った予約を、台帳の形にする */
+/** 予約チャット（と予約サイト）から入った予約を、台帳の形にする */
 export function resolveChatReservations(menus: Menu[], customers: Customer[], list: ChatReservation[]): Reservation[] {
   const out: Reservation[] = [];
   for (const r of list) {

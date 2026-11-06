@@ -195,7 +195,7 @@ export function OwnerBookSheet({ data, target, onClose }: { data: BookData; targ
                         setCustomerId(c.id);
                       }}
                     >
-                      <CustomerName surname={c.surname} fictional={c.fictional} />
+                      <CustomerName surname={c.surname} />
                       {c.firstVisit && <span className="tag first">初めての方</span>}
                       {lastText && <small className="sheet-choice-last">{lastText}</small>}
                       {showId && <small className="sheet-choice-id num">番号 {c.id}</small>}

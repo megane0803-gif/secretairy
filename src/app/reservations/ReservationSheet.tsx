@@ -196,7 +196,7 @@ export function ReservationSheet({
             <dl className="sheet-facts">
               <dt>お客様</dt>
               <dd>
-                <CustomerName surname={r.customer.surname} fictional={r.customer.fictional} />
+                <CustomerName surname={r.customer.surname} />
                 {r.customer.firstVisit && <span className="tag first">初めての方</span>}
               </dd>
               <dt>日時</dt>

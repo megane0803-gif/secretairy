@@ -1,6 +1,6 @@
 "use client";
 
-// 予約サイト（架空）。台帳の横に並べる、お客様が見る空き状況のつもりの画面。
+// 予約サイト。台帳の横に並べる、お客様が見る空き状況のつもりの画面。
 // 台帳 → 予約サイト：台帳で「確定」した予約を受け取り、その枠を塞ぐ。仮押さえは送らない。
 // 予約サイト → 台帳：「ここで予約が入る（デモ）」で、架空のお客様が自分で決めた予約が1件、空いている枠に入る
 // （承認の箱は通さずに確定で台帳へ。札は「予約サイトから」。src/lib/book/site.ts）。AI は使わない。
@@ -68,10 +68,9 @@ export function BookingSite({ data }: { data: BookData }) {
   };
 
   return (
-    <section className="site" aria-label="予約サイト（架空）">
+    <section className="site" aria-label="予約サイト">
       <div className="site-head">
         <strong>{data.shop.name} 予約サイト</strong>
-        <span className="tag fictional">架空</span>
       </div>
       <p className="hint">
         台帳で確定した予約を受け取って、枠を塞ぎます。仮押さえは送りません。予約サイトでお客様が決めた予約は、承認の箱を通さずに台帳へ入ります（予約サイト → 台帳）。

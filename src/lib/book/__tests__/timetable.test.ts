@@ -1,9 +1,9 @@
 // 予約タブの見た目のテスト（数え方・承認の箱・判定は変えない。出し方だけ）。
 // - 1週間の予約台帳の時間割（PC）：横に今日から7日・縦に営業時間・帯の長さは時間の長さ・確定は実線・仮押さえは点線のしま模様
-//   今日の列は目立たせ、定休日の列は灰色。帯の中にお客様（架空）とメニュー
+//   今日の列は目立たせ、定休日の列は灰色。帯の中にお客様とメニュー
 // - 帯の色はメニュー（src/lib/book/menuColor.ts）。だれが入れたか（人・外・AI）は帯の頭の札だけ
 // - PC は真ん中の列の一番上（右の列の予約チャットと横に並ぶ）。スマホは日ごとのカードのまま（予約チャットが上の並びも今のまま）
-// - 予約サイト（架空）の ○△× の表は残す
+// - 予約サイトの ○△× の表は残す
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -103,7 +103,7 @@ describe("1. 時間割の並べ方（src/lib/book/timetable.ts）", () => {
     if (cut && straight) assert.ok(Math.abs(straight.height - cut.height * 3) < 0.05);
   });
 
-  test("最初の状態の確定（店が受けた予約）は「人」、仮押さえは「AI」、承認で確定は「人」、予約サイト（架空）から入った予約だけ「外」", () => {
+  test("最初の状態の確定（店が受けた予約）は「人」、仮押さえは「AI」、承認で確定は「人」、予約サイトから入った予約だけ「外」", () => {
     for (const b of tt.columns.flatMap((c) => c.bands)) {
       if (b.status === "hold") assert.equal(b.actor, "ai");
       else assert.equal(b.actor, "human");
@@ -154,11 +154,12 @@ describe("1. 時間割の並べ方（src/lib/book/timetable.ts）", () => {
     assert.deepEqual([by("chat-2").lane, by("chat-2").lanes], [0, 1]);
   });
 
-  test("帯の読み上げの文：時刻・メニュー・お客様（架空）・確定か仮押さえか・だれが入れたか", () => {
+  test("帯の読み上げの文：時刻・メニュー・お客様・確定か仮押さえか・だれが入れたか", () => {
     const b = timetable(loadBook(shop, menus, today, today, chat([{ start: "15:00" }])).week).columns[0].bands.find((x) => x.id === "chat-0")!;
     const t = bandTitle(b);
     assert.match(t, /^15:00–16:00 カット /);
-    assert.match(t, /（架空）様/);
+    assert.match(t, / 青木様 /);
+    assert.doesNotMatch(t, /架空/, "名前に「（架空）」の札を付けない");
     assert.match(t, /仮押さえ（承認待ち）/);
     assert.match(t, /［AI：AI がした事］/);
   });
@@ -198,16 +199,16 @@ describe("2. 時間割の出し方（TimetableGrid）", () => {
     assert.equal(count(html, /class="minibar"/g), open);
   });
 
-  test("帯：確定は実線（confirmed）、仮押さえは点線のしま模様（hold）。どの帯にもお客様の「架空」の札とメニュー", () => {
+  test("帯：確定は実線（confirmed）、仮押さえは点線のしま模様（hold）。どの帯にもお客様の名前とメニュー（「架空」の札は付けない）", () => {
     const bands = tt.columns.flatMap((c) => c.bands);
     assert.equal(count(html, /<li class="tt-band /g), bands.length);
     assert.equal(count(html, /<li class="tt-band confirmed /g), bands.filter((b) => b.status === "confirmed").length);
     assert.equal(count(html, /<li class="tt-band hold /g), bands.filter((b) => b.status === "hold").length);
-    assert.equal(count(html, /class="tag fictional">架空</g), bands.length);
+    assert.doesNotMatch(html, /架空/);
     for (const b of bands) assert.ok(html.includes(`${b.surname} 様`), b.surname);
     assert.match(html, /<span class="tag hold">仮押さえ<\/span>/);
     assert.match(html, /<span class="tag ok">承認で確定<\/span>/);
-    assert.equal(count(html, /<span class="tag from-site">予約サイトから<\/span>/g), 1, "予約サイト（架空）から入った帯に札");
+    assert.equal(count(html, /<span class="tag from-site">予約サイトから<\/span>/g), 1, "予約サイトから入った帯に札");
   });
 
   test("帯の頭に「AI」「人」「外」の文字の札（色だけに頼らない）", () => {
@@ -247,13 +248,13 @@ describe("3. 予約タブの並び（PC は真ん中の列の一番上・右の�
   const frame = read("src/components/TabFrame.tsx");
   const css = read("src/app/globals.css");
 
-  test("予約タブは top を使わず、時間割を真ん中の列の一番上（承認待ちの予約より前）に置く。スマホ用の日ごとのカードと予約サイト（架空）も残す", () => {
+  test("予約タブは top を使わず、時間割を真ん中の列の一番上（承認待ちの予約より前）に置く。スマホ用の日ごとのカードと予約サイトも残す", () => {
     assert.doesNotMatch(page, /\btop=/);
     const tt = page.indexOf("<WeekTimetable data={data} />");
     assert.ok(tt > page.indexOf("right={"), "右の列（予約チャット）は right のまま");
     assert.ok(tt > 0 && tt < page.indexOf('aria-labelledby="res-approvals"'), "台帳 → 承認待ちの予約");
     assert.ok(page.indexOf('aria-labelledby="res-approvals"') < page.indexOf('aria-labelledby="res-steps"'), "承認待ちの予約 → AI の手順");
-    assert.ok(page.indexOf('aria-labelledby="res-steps"') < page.indexOf("<BookingSite data={data} />"), "AI の手順 → 予約サイト（架空）");
+    assert.ok(page.indexOf('aria-labelledby="res-steps"') < page.indexOf("<BookingSite data={data} />"), "AI の手順 → 予約サイト");
     assert.match(page, /<Ledger data=\{data\} className="ledger-cards" \/>/);
     assert.match(page, /<BookingSite data=\{data\} \/>/);
     assert.match(page, /rightFirstOnPhone/);
@@ -271,7 +272,7 @@ describe("3. 予約タブの並び（PC は真ん中の列の一番上・右の�
     assert.match(pc, /@media \(min-width: 1024px\) \{\s*\.ledger-timetable \{ display: block;/);
     assert.match(pc, /\.ledger\.ledger-cards \{ display: none; \}/);
     assert.match(css, /\.page\.right-first-sp > \.page-right \{ order: -1; \}/);
-    // PC は日ごとのカードを出さないので、予約サイト（架空）の横に空いた列を作らない（has-top の時だけの決まりも外した）
+    // PC は日ごとのカードを出さないので、予約サイトの横に空いた列を作らない（has-top の時だけの決まりも外した）
     assert.doesNotMatch(css, /\.book-pair \{ grid-template-columns: minmax\(0, 1fr\) minmax\(0, 280px\); \}/);
     assert.doesNotMatch(css, /\.page\.has-top \.book-pair/);
   });

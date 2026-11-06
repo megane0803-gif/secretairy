@@ -64,13 +64,13 @@ export function briefMaterial(i: BriefInput): BriefMaterial {
         if (notes.length) parts.push(`前回の注意点：${notes.join("／")}`);
       }
       if (!prev) parts.push("前回の記録なし");
-      add("reservation", n + 1, parts.join("。"), `${r.start} ${r.customer.surname}（架空）様 ${r.menu.name}`);
+      add("reservation", n + 1, parts.join("。"), `${r.start} ${r.customer.surname}様 ${r.menu.name}`);
     });
 
   let a = 0;
   for (const row of i.approvals.reservations) {
     const c = i.customers.find((x) => x.id === row.reservation.customerId);
-    const who = c ? `${c.surname}（架空）様` : "お客様（架空）";
+    const who = c ? `${c.surname}様` : "お客様";
     a += 1;
     add(
       "approval",

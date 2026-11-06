@@ -1,7 +1,7 @@
 "use client";
 
 // 経理の日報を入れる1枚（スマホは下から出る1枚・PC は小さな窓）。上から順に：日付 → 来店 → 支払い方法ごとの売上 → 合計（プログラムが足す）→「入れる」。
-// 数の確かめ・保存・日誌は accounting/daily.ts の commitDaily（人のボタンだけが呼ぶ）。どこにも送らない（freee・会計（架空）・AI のどれも呼ばない）。
+// 数の確かめ・保存・日誌は accounting/daily.ts の commitDaily（人のボタンだけが呼ぶ）。どこにも送らない（freee・会計・AI のどれも呼ばない）。
 // 書けなかった時は SAVE_FAILED_MESSAGE を出し、閉じずに数を残す。開いた時の「最初に戻す」の印を持ち、戻した後は保存しない（画面は印が変わったら閉じる）。
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";

@@ -40,15 +40,15 @@ describe("承認の箱", () => {
       assert.equal(s.chat.length, 0, "時間は変えずに外す");
       assert.equal(s.approvals[0].state, how);
       // 元の頼みの日時とメニューを添える（何の代わりを案内するのか分かるように）
-      assert.deepEqual(s.todos.map((t) => t.title), ["江口（架空）様に別の日時を案内（11/5（木） 15:00 カットの代わり）"]);
+      assert.deepEqual(s.todos.map((t) => t.title), ["江口様に別の日時を案内（11/5（木） 15:00 カットの代わり）"]);
     });
 
   test("「別の日時を案内」の文：元の頼みが分からない時は今までの文だけ。組み合わせのメニューも名前で", () => {
-    assert.equal(releasedTodoTitle("大橋"), "大橋（架空）様に別の日時を案内");
-    assert.equal(releasedTodoTitle("大橋", null), "大橋（架空）様に別の日時を案内");
+    assert.equal(releasedTodoTitle("大橋"), "大橋様に別の日時を案内");
+    assert.equal(releasedTodoTitle("大橋", null), "大橋様に別の日時を案内");
     assert.equal(
       releasedTodoTitle("大橋", { date: "2026-11-08", start: "15:00", menuId: "cut" }),
-      "大橋（架空）様に別の日時を案内（11/8（日） 15:00 カットの代わり）",
+      "大橋様に別の日時を案内（11/8（日） 15:00 カットの代わり）",
     );
     assert.match(releasedTodoTitle("大橋", { date: "2026-11-08", start: "15:00", menuId: "cut+color" }), /（11\/8（日） 15:00 カット＋カラーの代わり）$/);
   });

@@ -191,7 +191,7 @@ export function HomeSummary({
                       {r.start}
                       <small>–{r.end}</small>
                     </span>
-                    <CustomerName surname={r.customer.surname} fictional={r.customer.fictional} />
+                    <CustomerName surname={r.customer.surname} />
                     <strong>{r.menu.name}</strong>
                     {r.status === "hold" && <span className="tag hold">仮押さえ</span>}
                     {r.customer.firstVisit && <span className="slot-first">初めての方</span>}

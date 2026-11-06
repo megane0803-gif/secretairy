@@ -217,7 +217,7 @@ describe("4. 予約チャットと LINE の一言は、休みの日を候補に�
 });
 
 describe("5. 画面の判定の全部で同じに効く", () => {
-  test("予約サイト（架空）：休みの日には入らない", () => {
+  test("予約サイト：休みの日には入らない", () => {
     // 11/4〜11/9 の営業日を全部休みにすると、入るのはその先の日
     const hol = ["2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07", "2026-11-08", "2026-11-09"];
     const data = { ...getBookData(), shop: withHolidays(shop, hol) };
@@ -260,11 +260,11 @@ describe("6. 予約がある日を休みにする時：一覧と ToDo（予約�
     assert.deepEqual(list.map((r) => r.id), ["r05", "r06"]);
   });
 
-  test("その予約のお客様に ToDo「○○（架空）様に別の日時を案内（11/6（金） 10:30 パーマの代わり）」（todo/reschedule.ts の1か所）。2回押しても重ねない", () => {
+  test("その予約のお客様に ToDo「○○様に別の日時を案内（11/6（金） 10:30 パーマの代わり）」（todo/reschedule.ts の1か所）。2回押しても重ねない", () => {
     const todos = holidayTodos(reservationsOn(all, HOL), NOW.toISOString(), "2026-11-04");
     assert.deepEqual(
       todos.map((t) => t.title),
-      ["大橋（架空）様に別の日時を案内（11/6（金） 10:30 パーマの代わり）", "加藤（架空）様に別の日時を案内（11/6（金） 16:00 カットの代わり）"],
+      ["大橋様に別の日時を案内（11/6（金） 10:30 パーマの代わり）", "加藤様に別の日時を案内（11/6（金） 16:00 カットの代わり）"],
     );
     assert.deepEqual(todos.map((t) => t.id), ["td-hol-r05", "td-hol-r06"]);
     assert.ok(todos.every((t) => t.due === "2026-11-04" && t.source === "reserve"));

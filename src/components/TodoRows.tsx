@@ -5,32 +5,15 @@
 // 「…を済にしました　戻す」を少しの間（config/todo.json の undoSeconds）出す。
 // ToDo のタブとホームの「今やる3件」で同じ物を使う。
 
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { dueLabel, type TodoItem } from "@/lib/todo/items";
 import { SOURCE_LABEL } from "@/lib/todo/keys";
 import type { ShopSettings } from "@/lib/settings";
-import { CustomerName } from "./parts";
+import { withoutOldMark } from "@/lib/guestName";
 
-const NAME = /([^\s（）、。：「」]+?)（架空）様/g;
-
-/** 題の中の「○○（架空）様」は、いつもの「○○ 様 [架空]」の札で出す */
+/** ToDo の題。前の書き方（「○○（架空）様」）で残った題も、今の書き方（「○○様」）で出す（src/lib/guestName.ts） */
 export function TodoTitle({ title }: { title: string }) {
-  const parts: ReactNode[] = [];
-  let last = 0;
-  for (const m of title.matchAll(NAME)) {
-    const i = m.index ?? 0;
-    if (i > last) parts.push(title.slice(last, i));
-    parts.push(<CustomerName key={i} surname={m[1]} fictional />);
-    last = i + m[0].length;
-  }
-  if (last < title.length) parts.push(title.slice(last));
-  return (
-    <span className="todo-title">
-      {parts.map((p, i) => (
-        <Fragment key={i}>{p}</Fragment>
-      ))}
-    </span>
-  );
+  return <span className="todo-title">{withoutOldMark(title)}</span>;
 }
 
 export function TodoRow({

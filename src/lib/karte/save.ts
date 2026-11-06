@@ -48,7 +48,7 @@ export function commitKarteSave(deps: KarteSaveDeps, input: KarteSaveInput): Kar
         : "次回提案が空なので ToDo には足さなかった";
   deps.journal({
     who: "オーナー",
-    text: `人が保存：${input.surname}（架空）様のカルテ（${input.dayLabel} ${input.menuName}${input.editedNames.length ? `。人が直した見出し：${input.editedNames.join("・")}` : ""}）。${todoText}`,
+    text: `人が保存：${input.surname}様のカルテ（${input.dayLabel} ${input.menuName}${input.editedNames.length ? `。人が直した見出し：${input.editedNames.join("・")}` : ""}）。${todoText}`,
   });
   deps.dropDraft();
   return { ok: true, message: `✓ 保存しました。${todoText}` };

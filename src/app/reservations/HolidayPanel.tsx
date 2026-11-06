@@ -131,7 +131,7 @@ export function HolidayPanel({ data }: { data: BookData }) {
                 <span className="num">
                   {r.start}–{r.end}
                 </span>{" "}
-                {r.menu.name} <CustomerName surname={r.customer.surname} fictional={r.customer.fictional} />
+                {r.menu.name} <CustomerName surname={r.customer.surname} />
                 <span className={r.status === "hold" ? "tag hold" : "tag ok"}>{r.status === "hold" ? "仮押さえ" : "確定"}</span>
               </li>
             ))}

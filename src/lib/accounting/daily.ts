@@ -1,5 +1,5 @@
 // 経理の日報：その日の売上（支払い方法ごと）と来店を、オーナーが自分で入れる。
-// このブラウザの中だけに残すオーナーの記録（docs/SPEC.md §1.8・§5.1）。freee にも会計（架空）にも AI にも送らない。
+// このブラウザの中だけに残すオーナーの記録（docs/SPEC.md §1.8・§5.1）。freee にも会計にも AI にも送らない。
 // 数の確かめ・重ね方・月の選び・「まだ」の日は、どれもここ（プログラム）が決める。画面（SalesReport.tsx）とテストが同じここを使う。
 // 画面に依らない形（ブラウザに書く所は deps で受け取る。dailyStore.ts）。
 
@@ -307,7 +307,7 @@ export function dailyJournalText(kind: "add" | "edit" | "remove", date: string, 
 /**
  * 🔒 人の「入れる」「直す」「消す」ボタンだけが呼ぶ。数はプログラムが確かめ、書けた時だけ日誌に1行書きに行く
  * （writeJournal は書けたかを返さないので、日誌が書けなかった時に日報を戻すことはしない）。
- * どこにも送らない（freee・会計（架空）・AI のどれも呼ばない）。
+ * どこにも送らない（freee・会計・AI のどれも呼ばない）。
  */
 export function commitDaily(deps: DailyDeps, input: DailyCommitInput): DailyCommit {
   if ((deps.epochNow() ?? "") !== (input.epoch ?? "")) return { ok: false, message: DAILY_RESET_MESSAGE, written: true, reset: true };

@@ -1,7 +1,7 @@
 "use client";
 
 // 画面で使う「予約サイトで止めた時間」（オーナーが空き表のマスを押して、ネットでは受けないにした時間。book/siteStops.ts）。
-// 書くのはこのブラウザの中だけ。止めたらすぐ、予約サイト（架空）のデモに効く（予約チャット・台帳から入れる予約には効かない）。
+// 書くのはこのブラウザの中だけ。止めたらすぐ、予約サイトのデモに効く（予約チャット・台帳から入れる予約には効かない）。
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { readBrowser, subscribeBrowser, writeBrowser, type BrowserWrite } from "../browser";

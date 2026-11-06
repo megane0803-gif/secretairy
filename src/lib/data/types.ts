@@ -13,7 +13,7 @@ export type Customer = {
   surname: string;
   /** 名字のよみ（ひらがな）。カルテのお客様一覧で50音の行に分ける */
   kana?: string;
-  /** 架空のお客様。画面では必ず「架空」の札を出す */
+  /** 架空のお客様の印（データの印。画面では名前ごとに「架空」の札を出さない。架空であることは入力欄の近くの注意の1行と README で伝える） */
   fictional: true;
   /** まだ一度も来ていない（初めての方） */
   firstVisit: boolean;
@@ -164,7 +164,7 @@ export type AccountingSeed = {
   /** 前の月までの自動のルール */
   rules: MerchantRule[];
   history: MerchantHistory[];
-  /** 会計（架空）がカード会社から取り込んだ、未処理の通販の明細 */
+  /** 会計がカード会社から取り込んだ、未処理の通販の明細 */
   statement: CardStatement;
   /** 登録の後の「次の明細（試し）」 */
   trial: CardStatement;
@@ -229,7 +229,7 @@ export const TODO_FIELDS: FieldNote[] = [
  * ホームの「AI の仕事」で、これから来る物（最初の状態。seed/jobs.json）。1行ずつ上から順に並べる。
  * reserve = 予約の相談（架空のお客様の文。日は「何番目の営業日」と時刻で持ち、文は画面がその日の言い方で作る）
  * card = 新しい明細（経理の「次の明細（試し）」の架空の明細）/ ads = 広告の見直し / memo = メモ1件（ToDo へ）
- * site = 予約サイト（架空）から予約が入る（空いている枠に1件。AI なし。お客様と枠はプログラムが選ぶ。src/lib/book/site.ts）
+ * site = 予約サイトから予約が入る（空いている枠に1件。AI なし。お客様と枠はプログラムが選ぶ。src/lib/book/site.ts）
  */
 export type JobSeed =
   | { id: "reserve"; customerId: string; menuId: string; day: BusinessDay; start: string }

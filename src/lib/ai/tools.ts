@@ -306,7 +306,7 @@ export function runTool(ctx: ToolContext, name: string, raw: unknown): ToolOutco
   switch (tool) {
     case "previous_visit": {
       const prev = previousVisit(ctx);
-      const who = `${ctx.customer.surname}（架空）様`;
+      const who = `${ctx.customer.surname}様`;
       if (!prev)
         return {
           content: json({ found: false, note: "前回の記録なし" }),

@@ -75,7 +75,7 @@ describe("2. オーナーが足したルールに当たる時だけ、もう一�
     assert.ok(out.ok);
     if (!out.ok) return;
     assert.equal(out.journal[0].who, "オーナー");
-    assert.equal(out.journal[0].text, "台帳から予約を入れた（青木（架空）様 11/4（水） 11:00–12:00 カット）。ルール「予約は来店の3時間前まで」に当たったが、オーナーが確かめて入れた");
+    assert.equal(out.journal[0].text, "台帳から予約を入れた（青木様 11/4（水） 11:00–12:00 カット）。ルール「予約は来店の3時間前まで」に当たったが、オーナーが確かめて入れた");
   });
 
   test("メニューごとのルール（縮毛矯正は24時間前まで）も、もう一度押せば入れられる", () => {
@@ -94,7 +94,7 @@ describe("2. オーナーが足したルールに当たる時だけ、もう一�
   test("何も当たらなければ1回で入る（日誌にルールの名前は無い）", () => {
     const out = ownerBook(start, ctx, { customerId: "c01", menuId: "cut", date: "2026-11-05", start: "10:00" });
     assert.ok(out.ok);
-    if (out.ok) assert.equal(out.journal[0].text, "台帳から予約を入れた（青木（架空）様 11/5（木） 10:00–11:00 カット）");
+    if (out.ok) assert.equal(out.journal[0].text, "台帳から予約を入れた（青木様 11/5（木） 10:00–11:00 カット）");
   });
 });
 

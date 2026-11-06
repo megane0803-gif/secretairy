@@ -1,6 +1,6 @@
 "use client";
 
-// 「翌日へ」を押した後に出す、前日のお知らせ（デモ）。お客様（架空）のスマホの画面の形で、1人に1つ。
+// 「翌日へ」を押した後に出す、前日のお知らせ（デモ）。お客様のスマホの画面の形で、1人に1つ。
 // 文は決まった形（AI なし）。日時とメニューはプログラムが台帳から入れた物。🔒 本当には送らない。
 
 import { CustomerName } from "@/components/parts";
@@ -35,10 +35,10 @@ export function DayBeforeReminders({
       ) : (
         <ul className="remind-list" role="list">
           {reminders.map((m) => (
-            <li key={m.reservationId} className="remind-phone" aria-label={`${m.surname}（架空）様のスマホの画面（架空）`}>
+            <li key={m.reservationId} className="remind-phone" aria-label={`${m.surname}様のスマホの画面`}>
               <p className="remind-bar">
-                <CustomerName surname={m.surname} fictional={m.fictional} />
-                <span className="hint">のスマホ（架空）</span>
+                <CustomerName surname={m.surname} />
+                <span className="hint">のスマホ</span>
               </p>
               <p className="remind-sent hint">{sentLabel} に届いたつもり</p>
               <p className="remind-bubble">{m.text}</p>

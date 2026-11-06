@@ -75,7 +75,7 @@ describe("3. 保存の前に、人が見出しごとに直す", () => {
     const k: SavedKarte = { id: "k-1", customerId: "c01", date: "2026-11-04", menuId: "cut", memo: d.memo, sections, savedAt: "2026-11-04T05:00:00.000Z", edited };
     const out = withKarteSaved(emptyBook("2026-11-04"), k, "青木", headings);
     assert.ok(out.ok && out.todo);
-    if (out.ok) assert.equal(out.todo!.title, "青木（架空）様：次は暗めのカラー（人が直した）");
+    if (out.ok) assert.equal(out.todo!.title, "青木様：次は暗めのカラー（人が直した）");
   });
 });
 
@@ -113,7 +113,7 @@ describe("保存したカルテを後から直す", () => {
     const after = r.state.todos.filter((t) => todoKey(t) === karteKey("k-a"));
     assert.equal(after.length, 1, "足さない");
     assert.equal(after[0].id, before[0].id);
-    assert.equal(after[0].title, "青木（架空）様：次は明るめのカラー（ほか1行はカルテに）");
+    assert.equal(after[0].title, "青木様：次は明るめのカラー（ほか1行はカルテに）");
     assert.equal(r.state.todos.length, state.todos.length);
   });
 
@@ -200,13 +200,13 @@ describe("最初の状態のカルテも、保存したカルテと同じよう�
     const countBefore = items(s0).length;
     const r = withKarteEdited(s0, p01(s0), "next", "次は明るめのカラー\n前髪も相談", o);
     assert.ok(r.ok && r.todo === "updated");
-    assert.equal(r.title, "江口（架空）様：次は明るめのカラー（ほか1行はカルテに）");
+    assert.equal(r.title, "江口様：次は明るめのカラー（ほか1行はカルテに）");
     const list = items(r.state);
     assert.equal(list.length, countBefore, "足さない");
     const t = list.filter((x) => x.key === "例:カルテ:k-p01");
     assert.equal(t.length, 1);
     assert.equal(t[0].id, seedTodo.id);
-    assert.equal(t[0].title, "江口（架空）様：次は明るめのカラー（ほか1行はカルテに）");
+    assert.equal(t[0].title, "江口様：次は明るめのカラー（ほか1行はカルテに）");
     assert.equal(r.state.todos.length, 0, "足した ToDo は増えない");
   });
 

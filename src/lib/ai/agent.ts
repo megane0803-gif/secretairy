@@ -11,6 +11,7 @@
 // サーバーはここで受け取った物を残さない。答えは emit で流して返すだけ。
 
 import type Anthropic from "@anthropic-ai/sdk";
+import { guestTitleHead } from "../guestName";
 import type { AiSettings } from "../settings";
 import { dateConflict } from "./dates";
 import type { ReplyModel } from "./model";
@@ -257,7 +258,7 @@ export async function runReserve({ ctx, history, model, limits, emit: send }: Ru
   emit({ t: "done" });
 
   function addShopTodo() {
-    const title = `${ctx.customer.surname}（架空）様：${errandLine(lastUser)}`;
+    const title = `${guestTitleHead(ctx.customer.surname)}${errandLine(lastUser)}`;
     emit({ t: "step", step: { kind: "todo", text: `ToDo に足した：${title}` } });
     emit({ t: "todo", todo: { id: `td-chat-${ctx.newId()}`, title } });
   }

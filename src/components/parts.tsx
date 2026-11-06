@@ -136,11 +136,11 @@ export function InputStub({ placeholder, button }: { placeholder: string; button
   );
 }
 
-/** お客様の名前。架空のお客様には必ず「架空」の札を付ける */
-export function CustomerName({ surname, fictional }: { surname: string; fictional: boolean }) {
+/** お客様の名前（「青木 様」）。架空であることは名前ごとではなく、入力欄の近くの注意の1行で伝える（docs/SPEC.md §3.3） */
+export function CustomerName({ surname }: { surname: string }) {
   return (
     <span className="customer">
-      {surname} 様{fictional && <span className="tag fictional">架空</span>}
+      {surname} 様
     </span>
   );
 }

@@ -1,4 +1,4 @@
-// 予約サイト（架空）で、オーナーが時間ごとに「ネットでは受けない」にした時間（docs/SPEC.md §1.4）。
+// 予約サイトで、オーナーが時間ごとに「ネットでは受けない」にした時間（docs/SPEC.md §1.4）。
 // 最初の状態は無し。止めた時間はこのブラウザの中だけ（secretairy:siteStops）。「最初に戻す」で消える。
 //
 // 効かせるのは予約サイトだけ（「ここで予約が入る（デモ）」と「仮押さえと同じ枠に入れる（デモ）」。book/site.ts）。
@@ -63,6 +63,6 @@ export function stopHit(stops: string[], step: number, date: string, startMin: n
 /** 日誌の1行 */
 export function siteStopJournal(dayLabel: string, start: string, end: string, on: boolean): string {
   return on
-    ? `予約サイト（架空）で ${dayLabel} ${start}–${end} をネットでは受けないにした（この時間にかかる予約は予約サイトから入らない。予約チャットと台帳から入れる予約はそのまま）`
-    : `予約サイト（架空）で ${dayLabel} ${start}–${end} のネットの受付を戻した`;
+    ? `予約サイトで ${dayLabel} ${start}–${end} をネットでは受けないにした（この時間にかかる予約は予約サイトから入らない。予約チャットと台帳から入れる予約はそのまま）`
+    : `予約サイトで ${dayLabel} ${start}–${end} のネットの受付を戻した`;
 }

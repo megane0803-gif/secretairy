@@ -4,7 +4,7 @@
 // 門を2回通らなかったら案は出さず、日誌に書く。1週間に1つまで・もう案がある時は新しく出さない。
 // AI につながらない時は「今は AI につながりません」と出し、決まった返事（AI なし）で同じ流れを試せる。
 // 押せない時（7日に1つまで・承認待ちがある）は、ボタンのすぐ下にふつうの字で理由と次に頼める日時を出し、
-// その下に「デモ」の札と「広告（架空）を最初に戻す」を出す。押せる時は「最初に戻す」を欄の一番下に出す（いつも1か所だけ）。
+// その下に「デモ」の札と「広告を最初に戻す」を出す。押せる時は「最初に戻す」を欄の一番下に出す（いつも1か所だけ）。
 
 import { scrollToId } from "@/lib/scroll";
 import { useState } from "react";
@@ -133,8 +133,8 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
       return out.book;
     });
     ads.update(() => nextAds);
-    writeJournal({ who: "オーナー", text: "広告（架空）を最初に戻した（止めた・外した言葉と広告の案、効いたかの判定・見直しの報告、広告から足した ToDo を消した）" });
-    setShown({ kind: "note", text: "広告（架空）を最初に戻しました。" });
+    writeJournal({ who: "オーナー", text: "広告を最初に戻した（止めた・外した言葉と広告の案、効いたかの判定・見直しの報告、広告から足した ToDo を消した）" });
+    setShown({ kind: "note", text: "広告を最初に戻しました。" });
   };
 
   // 「最初に戻す」は試すための物なので「デモ」の札を付ける。部品は1つで、押せる時と押せない時で置く所だけ変える
@@ -145,7 +145,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
   );
   const resetButton = (
     <button type="button" className="btn small" onClick={reset}>
-      広告（架空）を最初に戻す
+      広告を最初に戻す
     </button>
   );
   const resetNote = <small className="hint">止めた・外した言葉と案・判定・報告を消します（日誌には残ります）</small>;

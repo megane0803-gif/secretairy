@@ -514,7 +514,7 @@ describe("日報 8：「最初に戻す」で消える。開いている1枚の�
   });
 });
 
-describe("日報 9：freee・会計（架空）・AI に何も送らない", () => {
+describe("日報 9：freee・会計・AI に何も送らない", () => {
   test("入れる・直す・消すの間に fetch を呼ばない", () => {
     writeBrowser(BOOK_KEY, JSON.stringify(emptyBook(TODAY)));
     const e = undefined;
@@ -524,14 +524,14 @@ describe("日報 9：freee・会計（架空）・AI に何も送らない", () 
     assert.equal(fetched, 0);
   });
 
-  test("日報の所は、freee・会計（架空）・AI の窓口と道具を読み込まない", () => {
+  test("日報の所は、freee・会計・AI の窓口と道具を読み込まない", () => {
     for (const f of ["src/lib/accounting/daily.ts", "src/lib/accounting/dailyStore.ts", "src/app/accounting/DailySheet.tsx", "src/app/accounting/SalesReport.tsx"]) {
       const src = readFileSync(f, "utf8");
       assert.doesNotMatch(src, /fetch\(|postAi|\/api\/|from "@?\/?.*freee|from "\.\.\/ai|accounting\/state|register\(/, f);
     }
   });
 
-  test("会計（架空）の登録の記録（accounting）には日報を書かない", () => {
+  test("会計の登録の記録（accounting）には日報を書かない", () => {
     writeBrowser(BOOK_KEY, JSON.stringify(emptyBook(TODAY)));
     commitDaily(browserDailyDeps, { ...ctx, epoch: undefined, action: { kind: "save", draft: draft(TODAY, "4", "32400") } });
     assert.deepEqual([...store.keys()].sort(), [BROWSER_PREFIX + BOOK_KEY, BROWSER_PREFIX + DAILY_KEY, BROWSER_PREFIX + JOURNAL_KEY].sort());

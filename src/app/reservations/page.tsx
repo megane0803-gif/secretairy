@@ -63,7 +63,7 @@ export default function ReservationsPage() {
       </LedgerViewProvider>
 
       <Fold summary="くわしく（最終受付と、組み合わせのメニュー）">
-        <p>お客様はみな架空の方です。最初の状態は今日から2週間分（と、前回の来店の記録）です。</p>
+        <p>最初の状態は今日から2週間分（と、前回の来店の記録）です。</p>
         <table className="table">
           <thead>
             <tr>

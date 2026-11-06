@@ -2,8 +2,9 @@
 // 見ている人のブラウザの中だけに残す（docs/SPEC.md §5.1・§7）。サーバーには送らない。
 
 import { JOURNAL_KEY, readBrowser, writeBrowser } from "./browser";
+import { withoutOldMark } from "./guestName";
 
-/** だれが（AI / オーナー / プログラム / LINE / 予約サイト（架空）。LINE と予約サイトは外の相手） */
+/** だれが（AI / オーナー / プログラム / LINE / 予約サイト。LINE と予約サイトは外の相手） */
 export type JournalWho = "AI" | "オーナー" | "プログラム" | "LINE" | "予約サイト";
 
 export type JournalEntry = { id: string; at: string; who: JournalWho; text: string };
@@ -34,7 +35,9 @@ export function parseJournal(raw: string | null): JournalEntry[] {
           typeof e.text === "string" &&
           ["AI", "オーナー", "プログラム", "LINE", "予約サイト"].includes(e.who),
       )
-      .slice(0, JOURNAL_MAX);
+      .slice(0, JOURNAL_MAX)
+      // 前の書き方（「○○（架空）様」「予約サイト（架空）」）で残った行も、今の書き方で出す（src/lib/guestName.ts）
+      .map((e) => ({ ...e, text: withoutOldMark(e.text) }));
   } catch {
     return [];
   }

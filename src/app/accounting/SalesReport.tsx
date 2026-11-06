@@ -3,7 +3,7 @@
 // 経理タブのいちばん上：売上。最初から入っている10月の数（seed/accounting.json）に、オーナーが入れた日報（このブラウザだけ）を重ねる。
 // 大きい数字3つ（売上・来店・客単価）・日ごとの小さい棒（休業日は点。日報がある日は休業日でも棒。押すとその日の売上と来店）・支払い方法の割合の棒・日ごとの表。
 // 月を選べる（最初から入っている月と、日報が入っている月）。数はどれもプログラムが日ごとの数から出す（accounting/daily.ts と sales.ts。AI は使わない）。
-// 日報は freee にも会計（架空）にも AI にも送らない。
+// 日報は freee にも会計にも AI にも送らない。
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BigNumber, Fold, MiniBar } from "@/components/parts";
@@ -73,7 +73,7 @@ export function SalesReport() {
   return (
     <section className="acct-sales" aria-labelledby="acct-sales">
       <h2 id="acct-sales">
-        {title}の売上 {month === seed.month && <span className="tag fictional">架空</span>}
+        {title}の売上
       </h2>
       <p className="hint">{DAILY_SECTION_NOTE}</p>
       <div className="acct-daily-bar">

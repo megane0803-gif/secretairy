@@ -3,7 +3,7 @@
 // 1週間の予約台帳（真ん中）。最初の状態に、このブラウザの仮押さえ・確定を重ねて出す。
 // 仮押さえと確定は形で分ける（仮押さえ = 点線としま模様）。数（件数・埋まり）はプログラムが出す。
 // 色はメニュー（薄い背景＋左の太い線。src/lib/book/menuColor.ts）。だれが入れたか（仮押さえ = AI・承認で確定と店が受けた確定 = 人・
-// 予約サイト（架空）から = 外。src/lib/actors.ts）は色ではなく、「AI」「人」「外」の札だけで見せる。
+// 予約サイトから = 外。src/lib/actors.ts）は色ではなく、「AI」「人」「外」の札だけで見せる。
 
 import { ActorTag, Checked, CustomerName, MiniBar } from "@/components/parts";
 import { reservationActor } from "@/lib/actors";
@@ -104,7 +104,7 @@ function SlotList({ list, onOpen }: { list: Reservation[]; onOpen: (id: string) 
             {r.source === "site" && <span className="tag from-site">予約サイトから</span>}
             {r.source === "owner" && <span className="tag owner">{OWNER_TAG}</span>}
           </span>
-          <CustomerName surname={r.customer.surname} fictional={r.customer.fictional} />
+          <CustomerName surname={r.customer.surname} />
           {r.customer.firstVisit && <span className="tag first">初めての方</span>}
         </li>
       ))}

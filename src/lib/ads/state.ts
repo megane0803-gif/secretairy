@@ -1,4 +1,4 @@
-// 広告の承認の箱と、「広告（架空）の画面」で止めた・外した言葉を、見ている人のブラウザの中だけに残す形（docs/SPEC.md §5.1）。
+// 広告の承認の箱と、「広告の管理画面」で止めた・外した言葉を、見ている人のブラウザの中だけに残す形（docs/SPEC.md §5.1）。
 // ここは形と変え方だけ（どこにも書かない）。書くのは useAds.ts と画面の部品。
 //
 // 🔒 確定は人：止める・外す（withAdApproved / approveAd）を呼ぶのは、人が画面の「承認」ボタンを押したときだけ。
@@ -7,6 +7,7 @@
 import { addDays, calDay } from "../calendar";
 import type { AdWeek } from "../data/types";
 import { withTodo, type AddedTodo, type BookState } from "../book/state";
+import { withoutOldMark } from "../guestName";
 import { adKey } from "../todo/keys";
 import type { JournalWho } from "../journal";
 import type { AdSettings, ShopSettings } from "../settings";
@@ -44,7 +45,7 @@ export type AdProposal = {
   team?: TeamRecord;
 };
 
-/** 「広告（架空）の画面」で止めた・外した言葉 */
+/** 「広告の管理画面」で止めた・外した言葉 */
 export type AdApplied = { no: number; action: AdAction; at: string; proposalId: string };
 
 export type AdsState = {
@@ -97,7 +98,7 @@ export function parseAds(raw: string | null): AdsState {
         action: p.action as AdAction,
         no: p.no as number,
         text: (p.text as string).slice(0, 40),
-        reason: (p.reason as string).slice(0, 200),
+        reason: withoutOldMark(p.reason as string).slice(0, 200),
         total: { clicks: isInt(t.clicks) ? t.clicks : 0, cost: isInt(t.cost) ? t.cost : 0, bookings: isInt(t.bookings) ? t.bookings : 0 },
         checks: arr(p.checks)
           .filter((c) => c && (c.id === "exists" || c.id === "noAdd" || c.id === "town") && isStr(c.label))
@@ -217,7 +218,7 @@ export function withAdSkipped(s: AdsState, id: string, nowIso: string): AdsState
   return { ...s, proposals: s.proposals.map((x) => (x.id === id && x.state === "pending" ? { ...x, state: "skipped", decidedAt: nowIso } : x)) };
 }
 
-/** 🔒 承認：「広告（架空）の画面」でその言葉を止める（外す）。人が「承認」を押したときだけ呼ぶ */
+/** 🔒 承認：「広告の管理画面」でその言葉を止める（外す）。人が「承認」を押したときだけ呼ぶ */
 export function withAdApproved(s: AdsState, id: string, nowIso: string): AdsState {
   const p = s.proposals.find((x) => x.id === id && x.state === "pending");
   if (!p) return s;
@@ -244,7 +245,7 @@ export function adTodoTitle(no: number, days: number): string {
 }
 
 /**
- * 🔒 承認ボタンを押したときの全部：広告（架空）でその言葉を止める（外す）・ToDo に期限つきで1件・日誌に1行。
+ * 🔒 承認ボタンを押したときの全部：広告でその言葉を止める（外す）・ToDo に期限つきで1件・日誌に1行。
  * 人が画面の「承認」を押したときだけ呼ぶ（AdApprovalRows.tsx が押した事を確かめてから呼ぶ）。
  */
 export function approveAd(
@@ -278,7 +279,7 @@ export function approveAd(
   };
 }
 
-/** 広告（架空）を最初に戻す：止めた・外した言葉と広告の案を消し、広告から足した ToDo も消す（日誌には残す） */
+/** 広告を最初に戻す：止めた・外した言葉と広告の案を消し、広告から足した ToDo も消す（日誌には残す） */
 export function resetAds(book: BookState): { ads: AdsState; book: BookState } {
   return { ads: EMPTY_ADS, book: { ...book, todos: book.todos.filter((t) => !t.id.startsWith(AD_TODO_PREFIX)) } };
 }

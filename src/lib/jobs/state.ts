@@ -3,8 +3,9 @@
 // 1回動かした行は「済み」になり、2回は動かない。「最初に戻す」で消える（reset.ts）。
 
 import type { TabId } from "../tabs";
+import { withoutOldMark } from "../guestName";
 
-/** 上から順に動かす行（4行＋予約サイト（架空）から予約が入る） */
+/** 上から順に動かす行（4行＋予約サイトから予約が入る） */
 export const JOB_IDS = ["reserve", "card", "ads", "memo", "site"] as const;
 export type JobId = (typeof JOB_IDS)[number];
 
@@ -51,7 +52,7 @@ export function parseJobs(raw: string | null): JobsState {
     if (!isJobId(k) || !v || typeof v !== "object") continue;
     const x = v as Record<string, unknown>;
     if (typeof x.at !== "string" || typeof x.result !== "string" || !TAB_OF[k].includes(x.tab as TabId)) continue;
-    done[k] = { at: x.at, result: x.result.slice(0, 80), tab: x.tab as TabId };
+    done[k] = { at: x.at, result: withoutOldMark(x.result).slice(0, 80), tab: x.tab as TabId };
   }
   return { v: 1, done };
 }

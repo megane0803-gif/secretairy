@@ -3,7 +3,7 @@
 //   新しい明細 … 経理の「次の明細（試し）」の架空の明細を、いま効く自動のルールで仕分け（AI なし）→ 迷う物は経理タブへ
 //   広告の見直し … 広告タブと同じ /api/ai/ads → 画面でももう一度門 → 承認の箱へ（今週の案がもうある時は動かさない）
 //   メモ … 架空のメモ1件を、メモを投げると同じ /api/ai/todo → ToDo へ
-//   予約サイトから予約が入る … 予約サイト（架空）の「ここで予約が入る（デモ）」と同じ（AI なし。book/site.ts）→ 台帳へ（承認の箱は通さない）
+//   予約サイトから予約が入る … 予約サイトの「ここで予約が入る（デモ）」と同じ（AI なし。book/site.ts）→ 台帳へ（承認の箱は通さない）
 //
 // 置き場所（JobStore）と AI の窓口（JobAsk）は外から渡す：画面はブラウザの中と fetch、テストはメモリと決まった返事。
 // 🔒 確定は人：ここから呼ぶのは仮押さえ（withHold）・承認の箱に入れる（withProposal）・ToDo に足すだけ。確定の変え方は呼ばない。
@@ -206,7 +206,7 @@ async function reserveJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
   const text = reserveText(env.data, env.store.book(), env.now(), seed);
   if (!text) return { kind: "failed", note: "日にちかメニューが見つかりません" };
   if (!take(budget, AI_CALLS.reserve)) return { kind: "limit" };
-  const who = `${customer.surname}（架空）様`;
+  const who = `${customer.surname}様`;
   env.journal({ who: "オーナー", text: `AI の仕事を動かした：予約の相談（${who}「${text}」。${env.mode === "script" ? "決まった返事・AI なし" : "AI"}）` });
 
   const round = async (messages: ReserveRequest["messages"], candidates: Candidate[]): Promise<ReserveRound> => {
@@ -408,7 +408,7 @@ async function memoJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
 async function siteJob(env: JobEnv): Promise<JobOutcome> {
   env.journal({ who: "オーナー", text: `AI の仕事を動かした：${JOB_NAME.site}（AI なし）` });
   let out: SiteOutcome | null = null;
-  // 予約サイト（架空）の「ここで予約が入る（デモ）」と同じ変え方（空いている枠に1件。承認の箱は通さない）
+  // 予約サイトの「ここで予約が入る（デモ）」と同じ変え方（空いている枠に1件。承認の箱は通さない）
   env.store.setBook((s) => {
     out = siteBook(s, { data: env.data, rules: env.rules, now: env.now(), stops: env.siteStops ?? [] }, "free");
     return out.state;
@@ -419,5 +419,5 @@ async function siteJob(env: JobEnv): Promise<JobOutcome> {
   env.journal(...o.journal);
   return o.released.length
     ? { kind: "done", result: `台帳に1件・仮押さえを外して ToDo に${o.released.length}件`, tab: "todo" }
-    : { kind: "done", result: `台帳に1件（${o.surname}（架空）様）`, tab: "reservations" };
+    : { kind: "done", result: `台帳に1件（${o.surname}様）`, tab: "reservations" };
 }

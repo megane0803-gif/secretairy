@@ -7,6 +7,7 @@ import { ACTOR_LABEL, ACTOR_MEANING, reservationActor, type Actor } from "../act
 import { toHHMM, toMinutes } from "../calendar";
 import type { LedgerDay, Reservation } from "../reservations";
 import { menuColorOf, type MenuColor } from "./menuColor";
+import { guestName } from "../guestName";
 
 /** 縦の位置と高さ（時間割の上から何 %） */
 export type Span = { top: number; height: number };
@@ -17,7 +18,7 @@ export type TimetableBand = Span & {
   status: Reservation["status"];
   /** 承認で確定した予約（予約チャットから入った確定） */
   fresh: boolean;
-  /** 予約サイト（架空）から入った予約（お客様が自分で決めた確定。承認の箱は通らない） */
+  /** 予約サイトから入った予約（お客様が自分で決めた確定。承認の箱は通らない） */
   site?: boolean;
   /** オーナーが台帳から入れた予約（人のボタンで確定。承認の箱は通らない。book/owner.ts） */
   owner?: boolean;
@@ -30,7 +31,6 @@ export type TimetableBand = Span & {
   minutes: number;
   menuName: string;
   surname: string;
-  fictional: boolean;
   firstVisit: boolean;
   /** 重なった帯の中で何番目か（0 から）と、その重なりの帯の数 */
   lane: number;
@@ -154,7 +154,6 @@ export function timetable(
         minutes: r.menu.minutes,
         menuName: r.menu.name,
         surname: r.customer.surname,
-        fictional: r.customer.fictional,
         firstVisit: r.customer.firstVisit,
         ...(lanes.get(r.id) ?? { lane: 0, lanes: 1 }),
       })),
@@ -187,9 +186,9 @@ export function freeCells(day: LedgerDay, seats: number, step: number, now?: { d
   return out;
 }
 
-/** 帯の読み上げ・ホバーの文（「10:00–11:00 カット 久保（架空）様 仮押さえ（承認待ち）［AI：AI がした事］」） */
+/** 帯の読み上げ・ホバーの文（「10:00–11:00 カット 久保様 仮押さえ（承認待ち）［AI：AI がした事］」） */
 export function bandTitle(b: TimetableBand): string {
-  const who = `${b.surname}${b.fictional ? "（架空）" : ""}様`;
+  const who = guestName(b.surname);
   const state =
     b.status === "hold" ? "仮押さえ（承認待ち）" : b.fresh ? "確定（承認で確定）" : b.site ? "確定（予約サイトから）" : b.owner ? "確定（台帳から（オーナー））" : "確定";
   const by = `［${ACTOR_LABEL[b.actor]}：${ACTOR_MEANING[b.actor]}］`;

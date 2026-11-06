@@ -45,7 +45,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <HideOnEval>
           {/* LINE のつなぎ（オーナー側）。つないでいる間だけ、どのタブでも受け取りに行く。何も描かない */}
           <LineBridge data={getBookData()} />
-          {/* 予約サイト（架空）で枠が埋まった仮押さえを、ToDo「別の日時を案内」に足す（プログラム）。何も描かない */}
+          {/* 予約サイトで枠が埋まった仮押さえを、ToDo「別の日時を案内」に足す（プログラム）。何も描かない */}
           <TodoFeeds data={getBookData()} />
           {/* 広告：判定日が来た言葉を判定する（プログラム）。結果は広告タブ・日誌・ToDo へ。何も描かない */}
           <AdsFeeds />

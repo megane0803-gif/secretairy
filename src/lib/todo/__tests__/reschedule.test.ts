@@ -1,4 +1,4 @@
-// 「○○（架空）様に別の日時を案内」の ToDo（直しB：「必ず」の11）。AI は呼ばない。
+// 「○○様に別の日時を案内」の ToDo（直しB：「必ず」の11）。AI は呼ばない。
 // 1か月分の耐久試験で、同じお客様の同じ文の ToDo が何件も並び、どの予約の分か見分けられなかった。
 // 元の頼みの日時とメニューを文に入れ、足す入口（直す・見送り／LINE の見送り／予約サイト／枠が埋まった）はみな reschedule.ts の1か所を通す。
 
@@ -31,12 +31,12 @@ const hold = (id: string, over: Partial<HoldOffer> = {}): HoldOffer => ({
 });
 
 describe("文：元の頼みの日時とメニューを添える", () => {
-  test("「大橋（架空）様に別の日時を案内（11/8（日） 15:00 カットの代わり）」", () => {
-    assert.equal(rescheduleTitle("大橋", { date: "2026-11-08", start: "15:00", menuId: "cut" }), "大橋（架空）様に別の日時を案内（11/8（日） 15:00 カットの代わり）");
+  test("「大橋様に別の日時を案内（11/8（日） 15:00 カットの代わり）」", () => {
+    assert.equal(rescheduleTitle("大橋", { date: "2026-11-08", start: "15:00", menuId: "cut" }), "大橋様に別の日時を案内（11/8（日） 15:00 カットの代わり）");
   });
   test("元の頼みが分からない時は今までの文だけ（id と鍵は付く物だけ）", () => {
     const t = rescheduleTodo({ idPrefix: "td", reservationId: "h9", surname: "大橋", from: null, nowIso: now });
-    assert.equal(t.title, "大橋（架空）様に別の日時を案内");
+    assert.equal(t.title, "大橋様に別の日時を案内");
     assert.equal(t.id, "td-h9");
     assert.equal(t.key, undefined);
     assert.equal(t.due, undefined);
@@ -60,7 +60,7 @@ describe("耐久試験の形：同じお客様の ToDo が何件あっても、�
     const titles = todoItems([], s, getShop()).map((t) => t.title);
     assert.equal(titles.length, 3);
     assert.equal(new Set(titles).size, 3, titles.join(" / "));
-    assert.ok(titles.every((t) => t.startsWith("江口（架空）様に別の日時を案内（")));
+    assert.ok(titles.every((t) => t.startsWith("江口様に別の日時を案内（")));
     assert.match(titles[1], /17:00 カットの代わり）$/);
   });
 });
@@ -75,6 +75,6 @@ describe("足す入口はみな reschedule.ts の1か所を通す", () => {
   });
   test("ほかの所で「別の日時を案内」の ToDo を組み立てない（文を作るのは reschedule.ts だけ）", () => {
     for (const p of ["src/lib/book/state.ts", "src/lib/book/site.ts", "src/lib/todo/full.ts", "src/components/ApprovalBox.tsx"])
-      assert.doesNotMatch(read(p), /title: `\$\{surname\}（架空）様に別の日時を案内`/, p);
+      assert.doesNotMatch(read(p), /title: `\$\{surname\}様に別の日時を案内`/, p);
   });
 });

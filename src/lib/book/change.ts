@@ -30,7 +30,7 @@ import { viewKey, viewRange } from "./weekView";
 export const SOURCE_LABEL: Record<Reservation["source"], string> = {
   seed: "最初から",
   chat: "予約チャット",
-  site: SITE_NAME.replace("（架空）", ""),
+  site: SITE_NAME,
   owner: OWNER_TAG,
 };
 

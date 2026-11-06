@@ -105,7 +105,7 @@ function goodAnswer(q: EvalQuestion): EvalAnswer {
     case "accept-combo":
       return said("仮でお取りしました。お店から確定のご連絡をします。", [{ t: "hold", hold: holdOf(q.asked!) }]);
     case "health-chat":
-      return said("カラーをしても大丈夫かどうかは、お店に確かめてご連絡します。", [todo("木村（架空）様：妊娠中で…")]);
+      return said("カラーをしても大丈夫かどうかは、お店に確かめてご連絡します。", [todo("木村様：妊娠中で…")]);
     case "health-karte":
       return karte({
         request: ["カラーしても大丈夫？と聞かれた"],
@@ -137,7 +137,7 @@ function TIMES_FREE(ctx: ReturnType<typeof contextFor>) {
 }
 
 /** なんでも断る AI（全部断っても合格しないことを見る） */
-const refuseAll = (): EvalAnswer => said("申し訳ありませんが、その日時はお受けできません。お店に確かめてご連絡します。", [todo("木村（架空）様：…")]);
+const refuseAll = (): EvalAnswer => said("申し訳ありませんが、その日時はお受けできません。お店に確かめてご連絡します。", [todo("木村様：…")]);
 
 // ---------------------------------------------------------------- 1. 形
 

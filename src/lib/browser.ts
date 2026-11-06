@@ -62,11 +62,11 @@ export const RULES_KEY = "rules";
 export const BOOK_KEY = "book";
 /** 広告の承認の箱・止めた／外した言葉（ads/state.ts） */
 export const ADS_KEY = "ads";
-/** 経理：通販の明細で選んだ印・会計（架空）への登録・足した自動のルール（accounting/state.ts） */
+/** 経理：通販の明細で選んだ印・会計への登録・足した自動のルール（accounting/state.ts） */
 export const ACCOUNTING_KEY = "accounting";
 /** 経理：日報（その日の売上をオーナーが入れた分。accounting/daily.ts）。このブラウザだけのオーナーの記録。「最初に戻す」で消える */
 export const DAILY_KEY = "dailyReports";
-/** 経理：freee（テスト事業所）の記録（freee/state.ts）。会計（架空）の記録（accounting）とは分けて持つ。鍵は持たない（鍵は HttpOnly の cookie） */
+/** 経理：freee（テスト事業所）の記録（freee/state.ts）。画面の中の会計の記録（accounting）とは分けて持つ。鍵は持たない（鍵は HttpOnly の cookie） */
 export const FREEE_KEY = "freee";
 /** LINE のつなぎ（line/state.ts）。その画面だけが持つ印と、届けた・受け取った物の id（LINE の人の番号は持たない） */
 export const LINE_KEY = "line";

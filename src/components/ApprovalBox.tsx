@@ -74,7 +74,7 @@ export function ApprovalBox({
     const r = row.reservation;
     const customer = data.customers.find((c) => c.id === r.customerId);
     const surname = customer?.surname ?? "お客";
-    const what = `${surname}（架空）様 ${candidateLabel(data, r)}`;
+    const what = `${surname}様 ${candidateLabel(data, r)}`;
     if (how === "approve") {
       // 休みの日の仮押さえと、開始の時刻をもう過ぎた仮押さえは確定しない（LINE の承認のボタンも同じ。book/approve.ts）
       const blocked = approveBlocker(book.shop, book.now, r);
@@ -124,7 +124,7 @@ export function ApprovalBox({
             <li key={row.approval.id} className={soon ? "approval soon" : "approval"}>
               <div className="approval-what">
                 <span className="tag hold">仮押さえ</span>
-                {customer && <CustomerName surname={customer.surname} fictional={customer.fictional} />}
+                {customer && <CustomerName surname={customer.surname} />}
                 <strong>{menu?.name ?? r.menuId}</strong>
               </div>
               <div className="approval-when num">{candidateLabel(data, r).replace(` ${menu?.name ?? r.menuId}`, "")}</div>
@@ -163,7 +163,7 @@ export function ApprovalBox({
         {!compact && (
           <li className="hint">
             承認＝確定して台帳に入ります。直す・見送り＝お客様の了解なしに時間は変えないので、仮押さえを外して ToDo に「別の日時を案内」を足します。
-            広告の案は、承認＝広告（架空）でその言葉を止める（外す）。直す＝一言で1回だけ出しなおし。見送り＝案を閉じる。
+            広告の案は、承認＝広告でその言葉を止める（外す）。直す＝一言で1回だけ出しなおし。見送り＝案を閉じる。
           </li>
         )}
       </ul>

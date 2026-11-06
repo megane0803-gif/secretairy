@@ -266,7 +266,7 @@ export function AiJobsSection() {
                 </div>
                 {id === "reserve" && customer && guestText && !done && (
                   <p className="hint">
-                    <CustomerName surname={customer.surname} fictional={customer.fictional} />「{guestText}」
+                    <CustomerName surname={customer.surname} />「{guestText}」
                   </p>
                 )}
                 {id === "memo" && memoSeed && !done && <p className="hint">「{memoSeed.text}」</p>}

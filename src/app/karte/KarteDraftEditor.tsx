@@ -114,7 +114,7 @@ export function KarteDraftEditor({
   deskKey: string;
   headings: KarteHeading[];
   limits: KarteEditSettings;
-  /** 「○○（架空）様」 */
+  /** 「○○様」 */
   who: string;
   editing: string | null;
   setEditing: (id: string | null) => void;
@@ -211,7 +211,7 @@ export function SavedKarteEditor({
         const n = karte.source === "seed" ? (r.state.seedKarteEdits?.[karte.id]?.sections[h.id] ?? []).length : (r.state.kartes.find((k) => k.id === karte.id)?.sections[h.id] ?? []).length;
         writeJournal({
           who: "オーナー",
-          text: `人が直した：${surname}（架空）様の${kind}（${dateLabel}）［${h.label}］（${n}行。言葉の門は通さない）${todo ? `。${todo}` : ""}`,
+          text: `人が直した：${surname}様の${kind}（${dateLabel}）［${h.label}］（${n}行。言葉の門は通さない）${todo ? `。${todo}` : ""}`,
         });
         onDone?.(`✓ ［${h.label}］を直しました。${todo}`);
       }}

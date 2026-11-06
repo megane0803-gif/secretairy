@@ -295,12 +295,12 @@ describe("8. 予約ではない話への返し方", () => {
     assert.equal(r.steps.length, 0);
   });
 
-  test("忘れ物の問い合わせ → 「お店に確かめてご連絡します」と、プログラムが ToDo「○○（架空）様：用件の1行」を足す", async () => {
+  test("忘れ物の問い合わせ → 「お店に確かめてご連絡します」と、プログラムが ToDo「○○様：用件の1行」を足す", async () => {
     const r = await chat(ctxAt(now), [{ role: "user", text: "昨日お店に青い傘を忘れたかもしれません。ありますか？" }]);
     assert.match(r.text, /お店に確かめてご連絡します/);
     const todo = r.events.find((e) => e.t === "todo");
     assert.ok(todo && todo.t === "todo");
-    assert.equal(todo.todo.title, "江口（架空）様：昨日お店に青い傘を忘れたかもしれません");
+    assert.equal(todo.todo.title, "江口様：昨日お店に青い傘を忘れたかもしれません");
     assert.ok(r.steps.some((s) => s.kind === "todo"));
     // ブラウザの側：ToDo に入り、日誌の1行ができる
     const out = withChatTodo(emptyBook("2026-11-04"), todo.todo, "江口", "2026-11-04T01:00:00.000Z");
@@ -313,7 +313,7 @@ describe("8. 予約ではない話への返し方", () => {
 
   test("Claude が自分の言葉で「お店に確認してご連絡します」と言った時も、ToDo を足す", async () => {
     const r = await chat(ctxAt(now), [{ role: "user", text: "駐車場はありますか" }], claudeLike([], () => "駐車場のことは、お店に確認してご連絡しますね。"));
-    assert.ok(r.events.some((e) => e.t === "todo" && e.todo.title === "江口（架空）様：駐車場はありますか"));
+    assert.ok(r.events.some((e) => e.t === "todo" && e.todo.title === "江口様：駐車場はありますか"));
   });
 
   test("仮押さえの「お店から確定のご連絡をします」では ToDo を足さない", async () => {
