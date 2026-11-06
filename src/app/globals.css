@@ -1799,10 +1799,39 @@ h3.section-title { font-size: 1rem; }
 .daily-submit { min-height: 52px; font-size: 1.1rem; font-weight: 700; }
 .daily-remove { min-height: 44px; }
 .daily-remove.on { background: var(--warn); color: var(--surface); }
+/* 合計と「入れる」の塊：PC では今まで通りに並ぶ（箱を作らない） */
+.daily-foot { display: contents; }
 @media (max-width: 1023px) {
-  /* スマホ：下から出る1枚 */
-  .daily-sheet { width: 100%; max-width: 100%; margin: auto 0 0; max-height: 92dvh; border-radius: var(--radius) var(--radius) 0 0; border-bottom: 0; }
-  .daily-form { padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
+  /* スマホ：下から出る1枚。数字のキーボードが出ている間は、その高さ（--daily-kb）だけ上げ、高さを見えている所（--daily-vvh）に合わせる（DailySheet.tsx） */
+  .daily-sheet {
+    width: 100%;
+    max-width: 100%;
+    margin: auto 0 0;
+    bottom: var(--daily-kb, 0px);
+    max-height: min(92dvh, calc(var(--daily-vvh, 100dvh) - 8px));
+    overscroll-behavior: contain;
+    border-radius: var(--radius) var(--radius) 0 0;
+    border-bottom: 0;
+  }
+  .daily-form { padding: 16px 16px 0; }
+  /* 合計と「入れる」は1枚の下に止める（台帳の「予約を入れる」1枚の .sheet-foot と同じ形）。消すボタンはその上 */
+  .daily-foot {
+    order: 10;
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 -16px;
+    padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+  }
+  .daily-foot .daily-total { border-top: 0; padding-top: 0; }
+  .daily-foot .problems { margin: 0; }
+  /* 売上の表の「まだ（押して入れる）」も指で押しやすく */
+  .acct-missing { min-height: 44px; }
 }
 
 /* ---- 台帳から予約を入れる（スマホは下から出る1枚・PC は小さな窓。OwnerBookSheet.tsx） ---- */

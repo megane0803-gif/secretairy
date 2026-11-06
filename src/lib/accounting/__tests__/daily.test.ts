@@ -36,6 +36,7 @@ import {
   type DailyState,
 } from "../daily";
 import { browserDailyDeps, readDaily } from "../dailyStore";
+import { keyboardInset } from "../../sheetInset";
 import { summarizeSales } from "../sales";
 
 const seed = getAccounting().sales;
@@ -575,5 +576,37 @@ describe("日報 10：予約のページで決めた休みの日（直しC）も
     assert.match(src, /useHolidays\(\)/);
     assert.match(src, /withHolidays\(getShop\(\), holidays\)/);
     assert.match(src, /demoClock\(shop,/);
+  });
+});
+
+describe("日報 11：スマホの1枚は「入れる」を下に止め、キーボードの分だけ上げる。「まだ」は 44px 以上（PC は変えない）", () => {
+  test("キーボードの高さ：見えている所がページの下で欠けている分。拡大している時・欠けていない時は 0", () => {
+    assert.equal(keyboardInset(844, { height: 844, offsetTop: 0 }), 0);
+    assert.equal(keyboardInset(844, { height: 508, offsetTop: 0 }), 336, "数字のキーボード");
+    assert.equal(keyboardInset(844, { height: 508, offsetTop: 120 }), 216, "ページが上へずれた分は引く");
+    assert.equal(keyboardInset(844, { height: 400, offsetTop: 0, scale: 2 }), 0, "指で拡大しただけ");
+    assert.equal(keyboardInset(844, { height: 900, offsetTop: 0 }), 0);
+    assert.equal(keyboardInset(844, null), 0);
+  });
+
+  const css = readFileSync("src/app/globals.css", "utf8");
+  const phone = (() => {
+    const at = css.indexOf("@media (max-width: 1023px) {\n  /* スマホ：下から出る1枚");
+    assert.ok(at > 0);
+    return css.slice(at, css.indexOf("\n}\n", at));
+  })();
+
+  test("「入れる」の塊はスマホの幅だけ1枚の下に止める。PC では箱を作らない（今まで通りに並ぶ）", () => {
+    assert.match(css, /\n\.daily-foot \{ display: contents; \}/);
+    assert.match(phone, /\.daily-foot \{[^}]*position: sticky;[^}]*bottom: 0;/);
+    assert.match(phone, /\.daily-sheet \{[^}]*bottom: var\(--daily-kb, 0px\);[^}]*max-height: min\(92dvh, calc\(var\(--daily-vvh, 100dvh\) - 8px\)\);/);
+    const sheet = readFileSync("src/app/accounting/DailySheet.tsx", "utf8");
+    assert.match(sheet, /<div className="daily-foot">[\s\S]*daily-total[\s\S]*daily-submit[\s\S]*<\/div>/);
+    assert.match(sheet, /visualViewport/);
+  });
+
+  test("スマホの「まだ（押して入れる）」は高さ 44px 以上。PC は 36px のまま", () => {
+    assert.match(phone, /\.acct-missing \{ min-height: 44px; \}/);
+    assert.match(css, /\n\.acct-missing \{ min-height: 36px;/);
   });
 });

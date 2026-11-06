@@ -22,6 +22,7 @@ import {
 } from "@/lib/accounting/daily";
 import { browserDailyDeps } from "@/lib/accounting/dailyStore";
 import { yen } from "@/lib/accounting/sales";
+import { keyboardInset } from "@/lib/sheetInset";
 import { currentEpoch } from "@/lib/book/store";
 import type { SalesMonth } from "@/lib/data/types";
 import type { DailyLimits, ShopSettings } from "@/lib/settings";
@@ -53,6 +54,28 @@ export function DailySheet({ date, today, seed, daily, shop, limits, onClose, on
     const d = ref.current;
     if (d && !d.open) d.showModal();
     return () => d?.close();
+  }, []);
+
+  // スマホ：数字のキーボードが出ている間は、その高さだけ1枚を上げ、1枚の高さも見えている所に合わせる（「入れる」を下へ動かさずに押せるように）。
+  // 値は CSS の変数に入れるだけで、使うのはスマホの幅の CSS だけ（PC の見た目は変えない）
+  useEffect(() => {
+    const d = ref.current;
+    const vv = window.visualViewport;
+    if (!d || !vv) return;
+    const apply = () => {
+      d.style.setProperty("--daily-kb", `${keyboardInset(window.innerHeight, vv)}px`);
+      d.style.setProperty("--daily-vvh", `${Math.round(vv.height)}px`);
+      // 1枚が縮んだら、入れている欄を1枚のまん中へ（下に止めた「入れる」の陰に隠れないように）
+      const el = document.activeElement;
+      if (el instanceof HTMLInputElement && d.contains(el)) requestAnimationFrame(() => el.scrollIntoView({ block: "center" }));
+    };
+    apply();
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    return () => {
+      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("scroll", apply);
+    };
   }, []);
 
   const ctx = { today, methods: seed.methods, limits, shop };
@@ -160,21 +183,24 @@ export function DailySheet({ date, today, seed, daily, shop, limits, onClose, on
           {seed.methods.map((m) => numberInput(m.id, m.name, "円", draft.pay[m.id] ?? ""))}
         </fieldset>
 
-        <div className="daily-total" role="status" aria-live="polite">
-          <span>合計（プログラムが足した数）</span>
-          <strong className="num">{check.total === null ? "—" : yen(check.total)}</strong>
+        {/* 合計と「入れる」は、スマホでは1枚の下に止める（台帳の「予約を入れる」1枚と同じ形）。PC では今まで通りに並ぶ（display: contents） */}
+        <div className="daily-foot">
+          <div className="daily-total" role="status" aria-live="polite">
+            <span>合計（プログラムが足した数）</span>
+            <strong className="num">{check.total === null ? "—" : yen(check.total)}</strong>
+          </div>
+          {errorOf("total") && <small className="daily-err">{errorOf("total")}</small>}
+
+          {problem && (
+            <p className="problems" role="alert">
+              {problem.text}
+            </p>
+          )}
+
+          <button type="submit" className="btn primary daily-submit">
+            {own ? "直す" : "入れる"}
+          </button>
         </div>
-        {errorOf("total") && <small className="daily-err">{errorOf("total")}</small>}
-
-        {problem && (
-          <p className="problems" role="alert">
-            {problem.text}
-          </p>
-        )}
-
-        <button type="submit" className="btn primary daily-submit">
-          {own ? "直す" : "入れる"}
-        </button>
         {own && (
           <button type="button" className={confirmRemove ? "btn danger daily-remove on" : "btn danger daily-remove"} onClick={remove}>
             {confirmRemove ? "もう一度押すと消します" : "この日の日報を消す"}
