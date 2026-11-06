@@ -11,12 +11,15 @@ import { cutNotice, holdInto, readReserveStream } from "../ai/reserveStream";
 import { canNextDay, emptyBook, LAST_DEMO_DAY, nextDayStep, parseBook, sameEpoch } from "../book/state";
 import { currentEpoch, readBook, updateBook } from "../book/store";
 import { resetAllWrites } from "../reset";
-import { calDay, demoClock, MAX_DAY_OFFSET, realDayNote } from "../calendar";
+import { businessDayAt, calDay, demoClock, MAX_DAY_OFFSET, realDayNote } from "../calendar";
 import { getTodos } from "../data/seed";
 import { parseJournal, writeJournal } from "../journal";
 import type { SavedKarte } from "../karte/record";
 import { commitKarteSave } from "../karte/save";
-import { getAiSettings, getKarteHeadings, getSavedMemoMaxChars, getShop } from "../settings";
+import { getAiSettings, getKarteHeadings, getMenus, getSavedMemoMaxChars, getShop } from "../settings";
+import { readRequest } from "../ai/script";
+import { at, chat, ctxAt } from "../ai/__tests__/helpers";
+import { scriptSortModel } from "../line/sort";
 import { resolveSeedTodos } from "../todo/items";
 import { commitMemoTodo } from "../todo/throw";
 
@@ -391,5 +394,36 @@ describe("直しA 6：定休日に開いた時、「本当の今日は」に次�
     const src = readFileSync("src/app/home/HomeSummary.tsx", "utf8");
     assert.match(src, /realDayNote\(book\)/);
     assert.doesNotMatch(src, /本当の今日は \{book\.realToday/);
+  });
+});
+
+describe("直しA 7：決まった返事（AI なし）は「19時30分」を 19:30 と読む", () => {
+  const menus = getMenus();
+  const day = calDay(shop, today);
+  for (const [text, start] of [
+    ["11/7の19時30分にカットを", "19:30"],
+    ["11/7の19時半にカットを", "19:30"],
+    ["11/7の19:30にカットを", "19:30"],
+    ["11/7の１９：３０にカットを", "19:30"],
+    ["11/7の19時にカットを", "19:00"],
+    ["11/7の19時15分にカットを", "19:15"],
+    ["11/7の9時5分にカットを", "09:05"],
+  ] as const)
+    test(`「${text}」→ ${start}`, () => {
+      assert.equal(readRequest({ menus, today: day }, text).start, start);
+    });
+
+  test("予約チャットの決まった返事：「18時30分」は 18:30 の枠で仮押さえする（18:00 ではない）", async () => {
+    const ctx = ctxAt(at(today, "09:00"));
+    const date = businessDayAt(shop, ctx.today, 3)!;
+    const r = await chat(ctx, [{ role: "user", text: `${date.label}の18時30分にカットをお願いします` }]);
+    const starts = [...r.holds.map((h) => h.start), ...(r.candidates ?? []).map((c) => c.start)];
+    assert.ok(starts.length > 0, r.text);
+    assert.equal(starts[0], "18:30", r.text);
+  });
+
+  test("LINE の一言の決まった返事も同じ読み方（19時30分 → 19:30）", async () => {
+    const pick = await scriptSortModel({ menus, today: day }).pick({ system: "", text: "11/7の19時30分にカットで仮押さえ", maxTokens: 100 });
+    assert.equal((pick?.input as { start?: string }).start, "19:30");
   });
 });
