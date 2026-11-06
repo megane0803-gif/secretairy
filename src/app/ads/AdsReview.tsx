@@ -14,10 +14,11 @@ import { canPropose, resetAds, withProposal } from "@/lib/ads/state";
 import { buildWeeklyReport, withReport } from "@/lib/ads/weekly";
 import type { GatedProposal } from "@/lib/ads/gate";
 import type { RejectedDraft } from "@/lib/ads/review";
-import { demoClock } from "@/lib/calendar";
+import { demoClock, demoInstant } from "@/lib/calendar";
 import { getShop } from "@/lib/settings";
 import { useAds } from "@/lib/ads/useAds";
 import type { AdsMode } from "@/lib/ads/wire";
+import { AI_BUSY_MESSAGE, failText } from "@/lib/ai/busy";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import { useBookState } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
@@ -39,7 +40,9 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
   const [noAi, setNoAi] = useState(false);
   const [shown, setShown] = useState<Shown | null>(null);
 
-  const can = canPropose(ads.state, new Date().toISOString(), ads.settings);
+  // 「7日に1つ」は「翌日へ」で進めた日付の時計で数える（作った時刻・画面・送る前・保存する時の全部で同じ。calendar.ts の demoInstant）
+  const clockIso = () => demoInstant(getShop(), new Date(), book.state.dayOffset).toISOString();
+  const can = canPropose(ads.state, clockIso(), ads.settings);
   const nextLabel =
     !can.ok && can.nextAt
       ? new Date(can.nextAt).toLocaleString("ja-JP", { timeZone: timezone, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
@@ -47,7 +50,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
 
   async function ask(useMode: AdsMode) {
     if (busy) return;
-    const c = canPropose(ads.state, new Date().toISOString(), ads.settings);
+    const c = canPropose(ads.state, clockIso(), ads.settings);
     if (!c.ok) return;
     setBusy(true);
     setShown(null);
@@ -60,7 +63,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
       const shop = getShop();
       return buildWeeklyReport({
         id: `rp-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-        nowIso: new Date().toISOString(),
+        nowIso: clockIso(),
         today: demoClock(shop, new Date(), book.state.dayOffset).today.date,
         table,
         shop,
@@ -75,9 +78,15 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
         setNoAi(true);
         return;
       }
+      if (res.code === "busy") {
+        // 混んでいる（1分10回まで）：案は作らず、待ってから押しなおせる（「今は AI につながりません」とは分ける）
+        writeJournal({ who: "プログラム", text: "AI の窓口が混んでいたので、広告の案は出していません" });
+        setShown({ kind: "note", text: AI_BUSY_MESSAGE });
+        return;
+      }
       if (useMode === "ai") setNoAi(false);
       if (res.code === "bad-request") {
-        setShown({ kind: "note", text: `うまくいきませんでした。${res.message}。画面を開きなおしてから押してください。` });
+        setShown({ kind: "note", text: failText(res.message, "画面を開きなおしてから押してください。") });
         return;
       }
       writeJournal(...res.steps);
@@ -100,7 +109,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
       setShown({ kind: "gate", problems: again.problems, checks: again.checks });
       return;
     }
-    const nowIso = new Date().toISOString();
+    const nowIso = clockIso();
     const id = `ad-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const weekly = report({ proposal: { ...again.proposal, id }, rejected: res.rejected });
     ads.update((s) => {

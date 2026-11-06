@@ -6,8 +6,8 @@
 
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import type { BookedRow } from "../ai/wire";
-import { BOOK_KEY, readBrowser, subscribeBrowser, writeBrowser } from "../browser";
-import { calDay, demoClock, shopToday } from "../calendar";
+import { BOOK_KEY, readBrowser, subscribeBrowser, writeBrowser, type BrowserWrite } from "../browser";
+import { calDay, demoClock, demoInstant, shopToday } from "../calendar";
 import { allKartes, resolveSeedKartes, toVisits, withSeedKarteEdits } from "../karte/record";
 import {
   loadBook,
@@ -19,6 +19,7 @@ import { withSeats } from "../capacity";
 import { getShop, type ShopSettings } from "../settings";
 import { useCapacity } from "../useCapacity";
 import type { BookData } from "./data";
+import { updateBook } from "./store";
 import { activeChat, emptyBook, parseBook, pendingApprovals, type BookState } from "./state";
 
 const read = () => readBrowser(BOOK_KEY);
@@ -48,14 +49,8 @@ export function useBookState() {
     if (!parseBook(read())) writeBrowser(BOOK_KEY, JSON.stringify(emptyBook(todayDate)));
   }, [todayDate]);
 
-  const update = useCallback(
-    (f: (s: BookState) => BookState) => {
-      // 書く直前に読みなおす（別の窓で変えた分を消さないように）
-      const cur = parseBook(read()) ?? emptyBook(todayDate);
-      writeBrowser(BOOK_KEY, JSON.stringify(f(cur)));
-    },
-    [todayDate],
-  );
+  // 書く直前に読みなおす（別の窓で変えた分を消さないように）。書けたかどうかを返す（store.ts）
+  const update = useCallback((f: (s: BookState) => BookState): BrowserWrite => updateBook(f, todayDate), [todayDate]);
 
   return { state, update };
 }
@@ -108,5 +103,7 @@ export function useBook(data: BookData) {
     dayOffset,
     now: nowShop,
     nowIso,
+    /** 「翌日へ」で進めた日付の時計（広告の「7日に1つ」を数える時。calendar.ts の demoInstant） */
+    demoNowIso: demoInstant(data.shop, now, state.dayOffset).toISOString(),
   };
 }

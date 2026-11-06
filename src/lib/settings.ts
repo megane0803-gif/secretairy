@@ -412,6 +412,11 @@ export function getRecordingMemoMaxChars(): number {
   return (ai as AiSettings).karte.maxRecordingMemoChars;
 }
 
+/** 保存したカルテの施術メモを残す・読み込む上限（字）。入力できる上限（手で書く・録音の要点）の大きい方にそろえる */
+export function getSavedMemoMaxChars(): number {
+  return Math.max(getMemoMaxChars(), getRecordingMemoMaxChars());
+}
+
 /** ToDo のメモを短いタスクの文に直すときの設定（config/ai.json の todo。モデル名は ANTHROPIC_TODO_MODEL でも差しかえられる） */
 export type TodoAiSettings = {
   model: string;
@@ -563,6 +568,8 @@ export type BriefAiSettings = {
   maxItemChars: number;
   /** 窓口（/api/ai/brief）が受け取る大きさの上限（字） */
   maxRequestChars: number;
+  /** ブラウザに残しておく答えの数（材料ごと。古い物から消す。brief/cache.ts） */
+  maxCachedAnswers: number;
 };
 
 export function getBriefAiSettings(): BriefAiSettings {
