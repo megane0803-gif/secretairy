@@ -10,7 +10,7 @@
 import type { HoldOffer, TodoOffer } from "../ai/wire";
 import { MAX_DAY_OFFSET } from "../calendar";
 import type { SavedKarte } from "../karte/record";
-import type { ChatReservation } from "../reservations";
+import type { ChatReservation, SeedResEdit } from "../reservations";
 import { getSavedMemoMaxChars } from "../settings";
 import { rescheduleTodo } from "../todo/reschedule";
 import { isGuestTitle, withoutOldMark } from "../guestName";
@@ -86,6 +86,13 @@ export type BookState = {
    * 返事を始めた時の印と今の印が同じ時だけ仮押さえを入れる（sameEpoch）。無い = まだ一度も戻していない
    */
   epoch?: string;
+  /**
+   * 最初の状態の予約（seed/reservations.json）を人が直した分（台帳の1枚で取り消した・変えた。予約の id ごと）。
+   * 最初の予約は毎回 seed から作るので、別の記録として持って重ねる（reservations.ts の withSeedResEdits）。「最初に戻す」で消える
+   */
+  seedResEdits?: Record<string, SeedResEdit>;
+  /** 予約サイトから入った予約に付けた番号の最後（取り消しても戻らない。book/site.ts。「最初に戻す」で消える） */
+  siteSeq?: number;
 };
 
 export function emptyBook(anchor: string, epoch?: string): BookState {
@@ -221,6 +228,17 @@ export function parseBook(raw: string | null): BookState | null {
           : {};
       seedKarteEdits[id.slice(0, 60)] = { sections: looseSections(e.sections), edited, editedAt };
     }
+  const seedResEdits: Record<string, SeedResEdit> = {};
+  if (d.seedResEdits && typeof d.seedResEdits === "object" && !Array.isArray(d.seedResEdits))
+    for (const [id, x] of Object.entries(d.seedResEdits as Record<string, unknown>).slice(0, 400)) {
+      const e = x as Record<string, unknown> | null;
+      if (!e || typeof e !== "object" || !isStr(e.at)) continue;
+      if (e.cancelled === true) seedResEdits[id.slice(0, 60)] = { cancelled: true, at: e.at };
+      else if (isStr(e.date) && DATE.test(e.date) && isStr(e.start) && TIME.test(e.start) && isStr(e.menuId) && e.menuId.length <= 80)
+        seedResEdits[id.slice(0, 60)] = { date: e.date, start: e.start, menuId: e.menuId, at: e.at };
+    }
+  const seq = d.siteSeq;
+  const siteSeq = typeof seq === "number" && Number.isInteger(seq) && seq > 0 && seq <= 1_000_000 ? seq : 0;
   const todoTitles: Record<string, string> = {};
   if (d.todoTitles && typeof d.todoTitles === "object" && !Array.isArray(d.todoTitles))
     for (const [id, t] of Object.entries(d.todoTitles as Record<string, unknown>).slice(0, 200)) if (isStr(t) && t.trim()) todoTitles[id.slice(0, 60)] = withoutOldMark(t).slice(0, 200);
@@ -237,6 +255,8 @@ export function parseBook(raw: string | null): BookState | null {
     ...(Object.keys(seedKarteEdits).length ? { seedKarteEdits } : {}),
     ...(isStr(d.epoch) && d.epoch.length <= 40 ? { epoch: d.epoch } : {}),
     ...(Object.keys(todoTitles).length ? { todoTitles } : {}),
+    ...(Object.keys(seedResEdits).length ? { seedResEdits } : {}),
+    ...(siteSeq ? { siteSeq } : {}),
   };
 }
 

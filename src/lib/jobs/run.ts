@@ -22,12 +22,12 @@ import { candidateLabel } from "../ai/slots";
 import { NO_AI_MESSAGE, parseHoldOffer, type Candidate, type HoldOffer, type ReserveEvent, type ReserveRequest } from "../ai/wire";
 import type { BookData } from "../book/data";
 import { siteBook, type SiteOutcome } from "../book/site";
-import { activeChat, withChatTodo, withHold, type BookState } from "../book/state";
+import { withChatTodo, withHold, type BookState } from "../book/state";
 import { businessDayAt, calDay, demoClock, demoInstant } from "../calendar";
 import { resolveMenu } from "../combo";
 import type { JournalWho } from "../journal";
 import { allKartes, resolveSeedKartes, toVisits, withSeedKarteEdits } from "../karte/record";
-import { loadBook, resolveChatReservations, seedAnchor, sortReservations } from "../reservations";
+import { assembleBook } from "../book/assemble";
 import type { Rule } from "../rules/types";
 import type { AdSettings } from "../settings";
 import type { TabId } from "../tabs";
@@ -115,19 +115,8 @@ export function seedOf<K extends JobId>(seeds: JobSeed[], id: K): Extract<JobSee
 export function bookView(data: BookData, state: BookState, now: Date) {
   const clock = demoClock(data.shop, now, state.dayOffset);
   const nowIso = now.toISOString();
-  // 起点は休みの日を見ない（今ある予約の日付を動かさない。reservations.ts の seedAnchor）
-  const anchor = seedAnchor(data.shop, state.anchor, clock.today);
-  const chat = resolveChatReservations(data.menus, data.customers, activeChat(state, nowIso));
-  const all = sortReservations(loadBook(data.shop, data.menus, clock.today, anchor, chat).all);
-  const booked = all.map((r) => ({
-    id: r.id,
-    customerId: r.customer.id,
-    menuId: r.menu.id,
-    date: r.date,
-    start: r.start,
-    status: r.status,
-    newCustomer: r.customer.firstVisit,
-  }));
+  // 台帳を組み立てる1か所（book/assemble.ts。画面の useBook と同じ。起点は休みの日を見ない・人が直した最初の予約も重ねる）
+  const { anchor, all, booked } = assembleBook(data, state, clock.today, nowIso);
   const visits = toVisits(allKartes(withSeedKarteEdits(resolveSeedKartes(data.seedKartes, all), state.seedKarteEdits), state.kartes));
   return { clock, anchor, booked, visits, nowIso };
 }

@@ -10,13 +10,12 @@ import { resolveMenu } from "@/lib/combo";
 import { ActorTag, BigNumber, Checked, CustomerName, MiniBar, ProgramTag, SectionHead } from "@/components/parts";
 import { RememberFold } from "@/components/RememberFold";
 import type { BookData } from "@/lib/book/data";
-import { advanceDay } from "@/lib/book/nextDay";
+import { advanceDay, reminderDay, remindersNow, type ReminderDay } from "@/lib/book/nextDay";
 import { canNextDay, LAST_DEMO_DAY } from "@/lib/book/state";
 import { useBook } from "@/lib/book/useBook";
 import { calDay, realDayNote } from "@/lib/calendar";
 import { latestBefore, nextLines } from "@/lib/karte/record";
 import { writeJournal } from "@/lib/journal";
-import type { Reminder } from "@/lib/reminder";
 import { freeRanges } from "@/lib/reservations";
 import { useApprovals } from "@/lib/useApprovals";
 import type { BriefAiSettings, KarteHeading, ReminderSettings, TodoSettings } from "@/lib/settings";
@@ -58,7 +57,9 @@ export function HomeSummary({
   const free = freeRanges(book.shop, book.today, book.all, book.now.date === book.today.date ? book.now.time : undefined);
   const day = book.book.week.find((d) => d.date === book.today.date);
   // 「翌日へ」で見せる前日のお知らせ（画面を開いている間だけ。本当には送らない）
-  const [remind, setRemind] = useState<{ dayLabel: string; sentLabel: string; list: Reminder[] } | null>(null);
+  // 持つのは「どの日のお知らせか」だけ。出す時に今の台帳から数え直す（別のタブで取り消した・変えた時も合うように。nextDay.ts の remindersNow）
+  const [remind, setRemind] = useState<ReminderDay | null>(null);
+  const remindList = remind ? remindersNow(remind, book.all, reminder.template, book.shop.name) : [];
 
   const canNext = canNextDay(book.state);
 
@@ -74,7 +75,7 @@ export function HomeSummary({
       return;
     }
     setNextNote(null);
-    setRemind({ dayLabel: out.to.label, sentLabel: out.sentLabel, list: out.reminders });
+    setRemind(reminderDay(out));
   };
 
   return (
@@ -148,7 +149,7 @@ export function HomeSummary({
 
         {remind && (
           <DayBeforeReminders
-            reminders={remind.list}
+            reminders={remindList}
             dayLabel={remind.dayLabel}
             sentLabel={remind.sentLabel}
             demoNote={reminder.demoNote}

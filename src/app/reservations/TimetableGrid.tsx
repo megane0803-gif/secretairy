@@ -25,9 +25,34 @@ function bandStyle(b: TimetableBand): CSSProperties {
   };
 }
 
+/** 帯・行を押せるようにする（li のまま。見た目は変えない）。Enter と スペースでも開く */
+export function openProps(open: () => void, label: string) {
+  return {
+    role: "button",
+    tabIndex: 0,
+    "aria-label": label,
+    onClick: open,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        open();
+      }
+    },
+  } as const;
+}
+
 const round = (n: number) => Math.round(n * 100) / 100;
 
-export function TimetableGrid({ tt, onPick }: { tt: Timetable; onPick?: (date: string, start: string) => void }) {
+export function TimetableGrid({
+  tt,
+  onPick,
+  onOpen,
+}: {
+  tt: Timetable;
+  onPick?: (date: string, start: string) => void;
+  /** 予約の帯を押した時（その予約の1枚を開く。見た目は変えない） */
+  onOpen?: (id: string) => void;
+}) {
   const hours = (tt.to - tt.from) / 60;
   return (
     <div className="tt" style={{ "--tt-hours": hours } as CSSProperties} role="group" aria-label="1週間の予約台帳（時間割）">
@@ -86,7 +111,13 @@ export function TimetableGrid({ tt, onPick }: { tt: Timetable; onPick?: (date: s
           {tt.now?.date === c.date && <span className="tt-now" style={{ top: `${tt.now.top}%` }} title="いま" aria-hidden />}
           <ul className="tt-bands">
             {c.bands.map((b) => (
-              <li key={b.id} className={bandClass(b)} style={bandStyle(b)} title={bandTitle(b)}>
+              <li
+                key={b.id}
+                className={onOpen ? `${bandClass(b)} openable` : bandClass(b)}
+                style={bandStyle(b)}
+                title={bandTitle(b)}
+                {...(onOpen ? openProps(() => onOpen(b.id), `${bandTitle(b)}。押すと中身を見る`) : {})}
+              >
                 <span className="tt-band-top">
                   <ActorTag actor={b.actor} />
                   <span className="tt-band-time num">

@@ -104,6 +104,32 @@ export function resolveReservations(
   return sortReservations(out);
 }
 
+/**
+ * 最初の状態の予約を人が直した分（台帳の1枚の「取り消す」「この内容に変える」。book/state.ts の seedResEdits。予約の id ごと）。
+ * cancelled = 取り消した / それ以外 = 直した後の本当の日付・開始・menuId（組み合わせは「+」でつなぐ）
+ */
+export type SeedResEdit = { cancelled: true; at: string } | { cancelled?: false; date: string; start: string; menuId: string; at: string };
+
+/**
+ * 最初の状態の予約（日付を決めた後）に、人が直した分を重ねる。取り消した物は外し、直した物は日付・開始・メニュー・終わる時刻を数え直す。
+ * 週の表示・件数・空きの数えより前に、ここ1か所で（loadBook が呼ぶ）。
+ */
+export function withSeedResEdits(list: Reservation[], menus: Menu[], edits: Record<string, SeedResEdit> | undefined): Reservation[] {
+  if (!edits || !Object.keys(edits).length) return list;
+  const out: Reservation[] = [];
+  for (const r of list) {
+    const e = edits[r.id];
+    if (!e) {
+      out.push(r);
+      continue;
+    }
+    if (e.cancelled) continue;
+    const menu = resolveMenu(menus, e.menuId);
+    out.push(menu ? make(r.id, e.date, e.start, r.status, menu, r.customer, r.source) : r);
+  }
+  return sortReservations(out);
+}
+
 /** 予約チャット（と予約サイト）から入った予約を、台帳の形にする */
 export function resolveChatReservations(menus: Menu[], customers: Customer[], list: ChatReservation[]): Reservation[] {
   const out: Reservation[] = [];
@@ -209,8 +235,10 @@ export function loadBook(
   today: CalDay,
   anchor: CalDay = today,
   chat: Reservation[] = [],
+  /** 最初の状態の予約を人が直した分（取り消した・変えた。book/state.ts の seedResEdits） */
+  seedEdits?: Record<string, SeedResEdit>,
 ) {
-  const all = sortReservations([...resolveReservations(shop, menus, anchor), ...chat]);
+  const all = sortReservations([...withSeedResEdits(resolveReservations(shop, menus, anchor), menus, seedEdits), ...chat]);
   const ahead = all.filter((r) => r.date >= today.date);
   return {
     all,

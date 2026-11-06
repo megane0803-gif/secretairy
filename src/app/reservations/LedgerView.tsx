@@ -25,7 +25,9 @@ import {
   type ViewRange,
   type ViewState,
 } from "@/lib/book/weekView";
+import { scrollToId } from "@/lib/scroll";
 import { OwnerBookSheet } from "./OwnerBookSheet";
+import { ReservationSheet } from "./ReservationSheet";
 
 type LedgerViewValue = {
   range: ViewRange;
@@ -102,6 +104,20 @@ export function LedgerViewProvider({ data, children }: { data: BookData; childre
     <Ctx.Provider value={value}>
       {children}
       {view.sheet && <OwnerBookSheet key={`${view.sheet.date} ${view.sheet.start}`} data={data} target={view.sheet} onClose={() => act({ kind: "close" })} />}
+      {/* 予約を押して開く1枚。「翌日へ」「最初に戻す」（印 viewKey が変わる）で閉じる（syncView）。古い中身は保存しない（change.ts） */}
+      {view.detail && (
+        <ReservationSheet
+          key={`${key} ${view.detail}`}
+          data={data}
+          id={view.detail}
+          onClose={() => act({ kind: "close" })}
+          onMoved={(date) => act({ kind: "pick", date })}
+          onApprovals={() => {
+            act({ kind: "close" });
+            scrollToId("res-approvals");
+          }}
+        />
+      )}
     </Ctx.Provider>
   );
 }

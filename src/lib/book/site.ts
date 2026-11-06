@@ -17,12 +17,15 @@ import { demoClock, toMinutes } from "../calendar";
 import { resolveMenu } from "../combo";
 import { siteStep, stopHit } from "./siteStops";
 import type { JournalWho } from "../journal";
-import { loadBook, resolveChatReservations, seedAnchor, sortReservations, type ChatReservation, type Reservation } from "../reservations";
+import { resolveChatReservations, type ChatReservation } from "../reservations";
 import type { Rule } from "../rules/types";
 import { guestName } from "../guestName";
 import { rescheduleTodo } from "../todo/reschedule";
 import type { BookData } from "./data";
-import { activeChat, pendingApprovals, withTodo, type BookState } from "./state";
+import { assembleBook, toRow } from "./assemble";
+import { pendingApprovals, withTodo, type BookState } from "./state";
+
+export { toRow };
 
 /** free = 空いている枠に1件 / onHold = 仮押さえと同じ枠に（デモの見せ場） */
 export type SiteMode = "free" | "onHold";
@@ -68,25 +71,22 @@ export function siteCount(s: BookState): number {
   return s.chat.filter(isSiteReservation).length;
 }
 
+/**
+ * 次に付ける予約サイトの番号。取り消しても戻らない（覚えた最後の番号 siteSeq と、今ある予約サイトの番号の大きい方の次）。
+ * 「残っている件数＋1」にすると、取り消した後に入れた予約の番号が重なるため
+ */
+export function nextSiteSeq(s: BookState): number {
+  const used = s.chat.filter(isSiteReservation).map((r) => Number(r.id.slice(SITE_ID_PREFIX.length))).filter((x) => Number.isInteger(x) && x > 0);
+  return Math.max(s.siteSeq ?? 0, ...used, 0) + 1;
+}
+
 /** 台帳を画面と同じ組み立て方で（useBook と同じ部品）。確定・仮押さえ（期限の切れていない物）・予約サイトの物。台帳から入れる予約（owner.ts）も使う */
 export function ledgerView(data: BookData, state: BookState, now: Date) {
   const clock = demoClock(data.shop, now, state.dayOffset);
   const nowIso = now.toISOString();
-  const anchor = seedAnchor(data.shop, state.anchor, clock.today);
-  const chat = resolveChatReservations(data.menus, data.customers, activeChat(state, nowIso));
-  const all = sortReservations(loadBook(data.shop, data.menus, clock.today, anchor, chat).all);
+  const { all } = assembleBook(data, state, clock.today, nowIso);
   return { clock, nowIso, all };
 }
-
-export const toRow = (r: Reservation): BookedRow => ({
-  id: r.id,
-  customerId: r.customer.id,
-  menuId: r.menu.id,
-  date: r.date,
-  start: r.start,
-  status: r.status,
-  newCustomer: r.customer.firstVisit,
-});
 
 /** 入れる順のお客様。入った数で1人ずつずらす（同じ方ばかりにしない） */
 function rotate<T>(list: T[], n: number): T[] {
@@ -171,8 +171,9 @@ export function siteBook(state: BookState, ctx: SiteContext, mode: SiteMode): Si
   }
 
   const customer = data.customers.find((c) => c.id === pick!.customerId)!;
+  const seq = nextSiteSeq(state);
   const placed: ChatReservation = {
-    id: `${SITE_ID_PREFIX}${n + 1}`,
+    id: `${SITE_ID_PREFIX}${seq}`,
     customerId: customer.id,
     menuId: pick.candidate.menuId,
     date: pick.candidate.date,
@@ -182,7 +183,7 @@ export function siteBook(state: BookState, ctx: SiteContext, mode: SiteMode): Si
     expiresAt: nowIso,
     via: "site",
   };
-  let next: BookState = { ...state, chat: [...state.chat, placed] };
+  let next: BookState = { ...state, chat: [...state.chat, placed], siteSeq: seq };
   const label = candidateLabel(data, placed);
 
   // 二重予約を防ぐ：同じ時間に受ける人数をこえるなら、重なる仮押さえを外す（仮押さえと同じ枠を選んだ時はその仮押さえから。あとは新しい順）
