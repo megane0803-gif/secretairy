@@ -30,7 +30,7 @@ export function KarteBoard({ data, headings, editLimits }: { data: BookData; hea
   const [done, setDone] = useState<string | null>(null);
   // 人が直している見出し（開いている間は保存を押せない）
   const [editing, setEditing] = useState<string | null>(null);
-  const menuName = (id: string) => resolveMenu(data.menus, id)?.name ?? id;
+  const menuName = (id: string) => resolveMenu(book.data.menus, id)?.name ?? id;
 
   const save = (e: React.MouseEvent) => {
     // 人がボタンを押したときだけ（スクリプトから押したことにはできない）

@@ -74,7 +74,7 @@ export function LinePanel({ data, headings, needsPasscode = false }: { data: Boo
 
   const sendMorning = async (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted || !state?.linked || busy) return;
-    const menuName = (id: string) => data.menus.find((m) => m.id === id)?.name ?? id;
+    const menuName = (id: string) => book.data.menus.find((m) => m.id === id)?.name ?? id;
     const items = book.all
       .filter((r) => r.date === book.today.date)
       .map((r) => {

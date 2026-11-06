@@ -2057,3 +2057,18 @@ h3.section-title { font-size: 1rem; }
   .btn.holiday-more { min-height: 44px; padding: 6px 14px; }
   .site-cell { min-height: 44px; }
 }
+
+/* ルールのタブの「メニュー」の欄（時間・値段・最終受付を直す。src/app/rules/MenuPanel.tsx） */
+.menu-edit { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.menu-edit p { margin: 0; }
+.menu-edit-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.menu-edit-row { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.menu-edit-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.menu-edit-name small { flex-basis: 100%; }
+.menu-edit-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.menu-edit-fields label { display: flex; flex-direction: column; gap: 2px; font-size: 0.85rem; min-width: 0; }
+.menu-edit-fields select,
+.menu-edit-fields input { width: 100%; min-width: 0; font: inherit; font-variant-numeric: tabular-nums; padding: 4px 6px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); }
+.menu-edit-fields input[aria-invalid="true"] { border-color: var(--warn); }
+.menu-edit-diff { border: 1px solid var(--accent); border-radius: var(--radius-sm); padding: 8px 10px; background: var(--accent-soft); }
+.menu-edit-diff ul { margin: 4px 0; padding-left: 1.2em; }

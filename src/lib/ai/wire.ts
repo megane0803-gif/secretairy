@@ -2,6 +2,7 @@
 // サーバーは受け取った物を残さない。答え（文・手順・候補・仮押さえ）を1行ずつの JSON で流して返すだけ。
 
 import type { Rule } from "../rules/types";
+import type { Menu } from "../settings";
 
 /** 画面から送る、台帳の1件（確定・仮押さえ・過去の来店） */
 export type BookedRow = {
@@ -58,6 +59,11 @@ export type ReserveRequest = {
   seats?: number;
   /** オーナーが決めた休みの日（YYYY-MM-DD）。無ければ 0日。サーバーは形・本当にある日・数の上限を確かめなおす（holidays.ts） */
   holidays?: string[];
+  /**
+   * メニュー（ルールのタブで直した時間・値段・最終受付を重ねた全部）。無ければ設定のまま。
+   * サーバーは id がそろっているか・id と名前と色と includes が設定と同じか・数が幅の中かを確かめなおす（menuEdits.ts の readMenus）
+   */
+  menus?: Menu[];
 };
 
 /** 仮押さえ。サーバーがプログラムでもう一度判定してから出す。残すのは画面（ブラウザ）の側 */

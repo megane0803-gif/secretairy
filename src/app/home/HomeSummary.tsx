@@ -52,7 +52,7 @@ export function HomeSummary({
   // 今日まで＝期限が今日、期限切れ＝期限が今日より前（お客様への連絡で過ぎた物も入る）。先の日の物は入れない
   const due = useTodos(data).dueCounts;
   const todays = book.all.filter((r) => r.date === book.today.date);
-  const menuName = (id: string) => resolveMenu(data.menus, id)?.name ?? id;
+  const menuName = (id: string) => resolveMenu(book.data.menus, id)?.name ?? id;
   // 今日のこれからの空き（いまの時刻より前の枠は数えない）
   const free = freeRanges(book.shop, book.today, book.all, book.now.date === book.today.date ? book.now.time : undefined);
   const day = book.book.week.find((d) => d.date === book.today.date);

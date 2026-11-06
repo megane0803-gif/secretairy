@@ -43,7 +43,7 @@ export function BriefNotes({ data, headings, limits }: { data: BookData; heading
         approvals,
         todos,
         customers: data.customers,
-        menuName: (id) => resolveMenu(data.menus, id)?.name ?? id,
+        menuName: (id) => resolveMenu(book.data.menus, id)?.name ?? id,
         dayLabel: (d) => calDay(data.shop, d).label,
         maxItems: limits.maxItems,
         maxItemChars: limits.maxItemChars,

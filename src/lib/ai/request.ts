@@ -9,6 +9,7 @@ import type { Rule } from "../rules/types";
 import { validateOwnerRule } from "../rules/validate";
 import { clampSeats, seatsRangeOf, withSeats } from "../capacity";
 import { readHolidays, withHolidays } from "../holidays";
+import { readMenus } from "../menuEdits";
 import { getShop, type AiSettings, type Menu, type ShopSettings } from "../settings";
 import { MAX_SHOWN } from "./replies";
 import type { ToolContext } from "./tools";
@@ -25,8 +26,13 @@ type Parsed = { ok: true; value: ReserveRequest } | { ok: false; reason: string 
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object";
 
-export function parseReserveRequest(body: unknown, menus: Menu[], ai: Pick<AiSettings, "maxMessages" | "maxMessageChars">): Parsed {
+export function parseReserveRequest(body: unknown, base: Menu[], ai: Pick<AiSettings, "maxMessages" | "maxMessageChars">): Parsed {
   if (!isObj(body)) return { ok: false, reason: "形がおかしいです" };
+  // 直したメニュー（ルールのタブ）：id がそろっているか・名前と色と includes が設定と同じか・数が幅の中か。1つでもおかしければ断る。
+  // 確かめた後は、台帳・候補・カルテの日付の確かめも直したメニューで（id は設定と同じ）
+  const own = readMenus(body.menus, base, getShop());
+  if (!own.ok) return { ok: false, reason: own.reason };
+  const menus = own.value;
   const mode = body.mode === "script" ? "script" : "ai";
 
   if (!Array.isArray(body.messages) || body.messages.length === 0) return { ok: false, reason: "会話がありません" };
@@ -115,6 +121,7 @@ export function parseReserveRequest(body: unknown, menus: Menu[], ai: Pick<AiSet
       holds,
       ...(seats !== null ? { seats } : {}),
       ...(hol.value.length ? { holidays: hol.value } : {}),
+      ...(own.edited ? { menus } : {}),
     },
   };
 }
@@ -145,6 +152,11 @@ export function ownerShop(shop: ShopSettings, req: Pick<ReserveRequest, "seats" 
   return withHolidays(withSeats(shop, req.seats), req.holidays);
 }
 
+/** 設定のメニューに、画面から来た直したメニュー（確かめ済みの物だけ）を重ねる */
+export function ownerMenus(menus: Menu[], req: Pick<ReserveRequest, "menus">): Menu[] {
+  return req.menus ?? menus;
+}
+
 /** 道具が使う形にする。いまの時刻はサーバーの時計（店の時間帯）で決める（「翌日へ」の分だけ先へずらす） */
 export function contextFor(
   req: ReserveRequest,
@@ -159,7 +171,8 @@ export function contextFor(
   const clock = demoClock(own, now, req.dayOffset);
   return {
     shop: own,
-    menus,
+    // 直したメニュー（ルールのタブ。parseReserveRequest で確かめ済み）を重ねる
+    menus: ownerMenus(menus, req),
     rules: req.rules,
     booked: req.booked,
     visits: req.visits,

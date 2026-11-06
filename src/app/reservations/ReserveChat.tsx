@@ -32,6 +32,7 @@ import { currentEpoch } from "@/lib/book/store";
 import { useBook } from "@/lib/book/useBook";
 import { writeJournal } from "@/lib/journal";
 import { useRules } from "@/lib/rules/useRules";
+import { currentMenusMark } from "@/lib/useMenus";
 import { getChatMaxChars } from "@/lib/settings";
 
 type Msg = { from: "guest" | "ai" | "note"; text: string };
@@ -68,7 +69,7 @@ export function ReserveChat({ data }: { data: BookData }) {
       customer
         ? {
             shop: book.shop,
-            menus: data.menus,
+            menus: book.data.menus,
             rules,
             booked: book.booked,
             customer: { id: customer.id, surname: customer.surname, firstVisit: customer.firstVisit },
@@ -97,6 +98,24 @@ export function ReserveChat({ data }: { data: BookData }) {
     setCandidates([]);
     setConvHolds([]);
   }, [book.state.epoch, runs, data]);
+
+  // メニューを直した（ルールのタブ。メニューの設定の印が変わった）：直す前の時間で動いていた返事を止め、会話も最初に戻す
+  // （直す前の候補・仮押さえを、直した後の台帳に入れない。epoch と同じ考え方）
+  const menusRef = useRef(book.menusMark);
+  useEffect(() => {
+    if (menusRef.current === book.menusMark) return;
+    menusRef.current = book.menusMark;
+    const stopped = runs.stop();
+    if (stopped) {
+      setBusy(false);
+      const was = data.customers.find((c) => c.id === stopped);
+      writeJournal({ who: "プログラム", text: `メニューを直したので、流れていた返事を止めた（${was ? `${was.surname}様` : "前のお客様"}の相談。後から届いた分は入れない）` });
+    }
+    setNotice(null);
+    setMsgs([{ from: "ai", text: `${data.shop.name} の予約の係です。ご希望のメニューと日にちを教えてください。` }]);
+    setCandidates([]);
+    setConvHolds([]);
+  }, [book.menusMark, runs, data]);
 
   const scroll = () => requestAnimationFrame(() => logRef.current?.lastElementChild?.scrollIntoView({ block: "nearest" }));
 
@@ -128,8 +147,11 @@ export function ReserveChat({ data }: { data: BookData }) {
     setNotice(null);
     // 始めた時の台帳の印。あいだに「最初に戻す」があれば、この返事の知らせは使わない
     const epoch = currentEpoch();
+    // 始めた時のメニューの設定の印。あいだにメニューを直したら、この返事の知らせ（候補・仮押さえ）は使わない
+    const menusAt = currentMenusMark();
+    const sameMenus = () => currentMenusMark() === menusAt;
     const run = runs.start(customer.id, epoch);
-    const live = () => runs.isCurrent(run.id) && sameEpoch({ epoch: currentEpoch() }, epoch);
+    const live = () => runs.isCurrent(run.id) && sameEpoch({ epoch: currentEpoch() }, epoch) && sameMenus();
     const useMode = over?.mode ?? mode;
     const before = over?.msgs ?? msgs;
     const history: ChatTurn[] = [
@@ -157,6 +179,8 @@ export function ReserveChat({ data }: { data: BookData }) {
       seats: book.shop.seats,
       // 休みの日（予約のページで決めた分）。サーバーは形と数を確かめてから使う
       holidays: book.shop.ownerHolidays ?? [],
+      // 直したメニュー（ルールのタブ）。サーバーは形と数を確かめてから使う
+      menus: book.data.menus,
     };
     // この相談の中で増えた・外した仮押さえ（画面の側でも、この会話の物かを確かめる）
     const mine = new Set(body.holds);
@@ -211,11 +235,11 @@ export function ReserveChat({ data }: { data: BookData }) {
           const h = parseHoldOffer(e.hold);
           if (!h || h.customerId !== customer.id) break;
           // 戻した後の台帳・同じ仮押さえがもうある時は入れない（日誌も書かない）
-          if (!holdInto(book.update, h, epoch)) break;
+          if (!holdInto(book.update, h, epoch, sameMenus)) break;
           mine.add(h.id);
           setConvHolds((l) => (l.includes(h.id) ? l : [...l, h.id]));
-          held.push(candidateLabel(data, h));
-          writeJournal({ who: "AI", text: `仮押さえした：${who} ${candidateLabel(data, h)}（承認の箱へ）` });
+          held.push(candidateLabel(book.data, h));
+          writeJournal({ who: "AI", text: `仮押さえした：${who} ${candidateLabel(book.data, h)}（承認の箱へ）` });
           break;
         }
         case "release": {
@@ -225,7 +249,7 @@ export function ReserveChat({ data }: { data: BookData }) {
           book.update((s) => (sameEpoch(s, epoch) ? withGuestReleased(s, e.holdId, customer.id, new Date().toISOString()) : s));
           mine.delete(e.holdId);
           setConvHolds((l) => l.filter((x) => x !== e.holdId));
-          writeJournal({ who: "AI", text: `仮押さえを外した（${who}の頼み）：${r ? candidateLabel(data, r) : e.holdId}（承認の箱から外した）` });
+          writeJournal({ who: "AI", text: `仮押さえを外した（${who}の頼み）：${r ? candidateLabel(book.data, r) : e.holdId}（承認の箱から外した）` });
           break;
         }
         case "todo": {

@@ -3,11 +3,11 @@ import { ApprovalBox } from "@/components/ApprovalBox";
 import { TabPage } from "@/components/TabPage";
 import { Fold, Panel } from "@/components/parts";
 import { getBookData } from "@/lib/book/data";
-import { lastStartOf } from "@/lib/reservations";
 import { BookingSite } from "./BookingSite";
 import { HolidayPanel } from "./HolidayPanel";
 import { Ledger } from "./Ledger";
 import { LedgerViewProvider } from "./LedgerView";
+import { MenuTable } from "./MenuTable";
 import { MonthCalendar } from "./MonthCalendar";
 import { ReserveChat } from "./ReserveChat";
 import { WeekTimetable } from "./WeekTimetable";
@@ -16,7 +16,6 @@ export const dynamic = "force-dynamic";
 
 export default function ReservationsPage() {
   const data = getBookData();
-  const anyClose = Object.values(data.shop.hours).find((h) => h)?.close ?? "";
 
   return (
     <TabPage
@@ -64,29 +63,8 @@ export default function ReservationsPage() {
 
       <Fold summary="くわしく（最終受付と、組み合わせのメニュー）">
         <p>最初の状態は今日から2週間分（と、前回の来店の記録）です。</p>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>メニュー</th>
-              <th>かかる時間</th>
-              <th>最終受付</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.menus.map((m) => (
-              <tr key={m.id}>
-                <td>
-                  {m.name}
-                  {m.includes && (
-                    <small className="hint"> （{m.includes.map((id) => data.menus.find((x) => x.id === id)?.name ?? id).join("・")}のルールも効く）</small>
-                  )}
-                </td>
-                <td className="num">{m.minutes}分</td>
-                <td className="num">{lastStartOf(m, anyClose)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <MenuTable data={data} />
+        <p className="hint">時間・値段・最終受付は、ルールのタブの「メニュー」で直せます。</p>
       </Fold>
     </TabPage>
   );

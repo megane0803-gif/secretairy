@@ -114,7 +114,7 @@ export function LineBridge({ data }: { data: BookData }) {
         for (const id of pick) {
           const row = L.book.pending.find((p) => p.approval.id === id);
           const ad = L.ads.pending && L.ads.pending.id === id ? L.ads.pending : null;
-          const card = row ? reservationCard(row, data, stillOk(ctx, row)) : ad ? adCard(ad, getAdSettings().channel) : null;
+          const card = row ? reservationCard(row, L.book.data, stillOk(ctx, row)) : ad ? adCard(ad, getAdSettings().channel) : null;
           if (!card) continue;
           const res = await lineApi.send({ token: s.token, messages: [{ type: "approval", card }], once: id });
           if (res.ok && res.via !== "skipped") writeJournal({ who: "プログラム", text: `LINE に承認待ちを届けた：${card.what} ${card.when}` });
@@ -135,7 +135,8 @@ export function LineBridge({ data }: { data: BookData }) {
   function slotCtx(L: typeof latest.current) {
     return {
       shop: L.book.shop,
-      menus: data.menus,
+      // メニューは台帳の book.data.menus（ルールのタブで直した分も）
+      menus: L.book.data.menus,
       rules: L.rules,
       booked: L.book.booked,
       customer: { id: "", surname: "", firstVisit: false },
@@ -148,7 +149,7 @@ export function LineBridge({ data }: { data: BookData }) {
     const L = latest.current;
     return {
       shop: L.book.shop,
-      menus: data.menus,
+      menus: L.book.data.menus,
       customers: data.customers,
       nowIso: new Date().toISOString(),
       today: L.book.today.date,
@@ -205,7 +206,11 @@ export function LineBridge({ data }: { data: BookData }) {
       seats: L.book.shop.seats,
       // 休みの日（予約のページで決めた分）。サーバーは形と数を確かめてから判定に使う
       holidays: L.book.shop.ownerHolidays ?? [],
+      // 直したメニュー（ルールのタブ）。サーバーは id・名前・色・組み合わせの中身と数の幅を確かめてから使う
+      menus: L.book.data.menus,
     };
+    // 送った時のメニューの設定の印。返事を待つ間にメニューを直したら、その返事の仮押さえは入れない
+    const menusAt = L.book.menusMark;
     let res: LineAskResponse = await lineApi.ask({ ...body, mode });
     let note = "";
     if (!res.ok && res.code === "no-ai" && mode === "ai") {
@@ -217,6 +222,11 @@ export function LineBridge({ data }: { data: BookData }) {
     if (!res.ok) {
       writeJournal({ who: "プログラム", text: `LINE の一言を振り分けられなかった：${res.message}` });
       await reply(token, ev, LINE_TEXT.retry(res.message));
+      return;
+    }
+    if (res.kind === "hold" && latest.current.book.menusMark !== menusAt) {
+      writeJournal({ who: "プログラム", text: "LINE の一言の仮押さえを入れなかった（返事を待つ間にメニューを直したため）" });
+      await reply(token, ev, LINE_TEXT.retry("返事を待つ間にメニューを直したので、入れませんでした"));
       return;
     }
     const answer = res;

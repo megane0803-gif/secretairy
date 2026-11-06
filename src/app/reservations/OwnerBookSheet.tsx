@@ -61,10 +61,10 @@ export function OwnerBookSheet({ data, target, onClose }: { data: BookData; targ
   const pick = useMemo(() => pickCustomers(data.customers, book.kartes, query, limit), [data.customers, book.kartes, query, limit]);
   const found = pick.shown;
   const dayLabel = (d: string) => calDay(book.shop, d).label;
-  const menuLabel = (id: string) => resolveMenu(data.menus, id)?.name ?? id;
+  const menuLabel = (id: string) => resolveMenu(book.data.menus, id)?.name ?? id;
   const customer = data.customers.find((c) => c.id === customerId) ?? null;
-  const menuId = menuIds.length ? comboIdOf(data.menus, menuIds) : null;
-  const menu = menuId ? resolveMenu(data.menus, menuId) : undefined;
+  const menuId = menuIds.length ? comboIdOf(book.data.menus, menuIds) : null;
+  const menu = menuId ? resolveMenu(book.data.menus, menuId) : undefined;
 
   const ctx = { data: book.data, rules, now: new Date(book.nowIso) };
   // 入れる前の確かめ（いまの台帳で）
@@ -214,7 +214,7 @@ export function OwnerBookSheet({ data, target, onClose }: { data: BookData; targ
             <section className="sheet-step" aria-label="メニュー">
               <span className="sheet-label">3. メニュー（いくつか選ぶと組み合わせ）</span>
               <div className="sheet-choices">
-                {data.menus.map((m) => (
+                {book.data.menus.map((m) => (
                   <button
                     key={m.id}
                     type="button"

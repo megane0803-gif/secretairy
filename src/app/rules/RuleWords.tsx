@@ -8,6 +8,7 @@
 // 🔒 を緩める文は欄を埋めずに理由をつけて断り、日誌に1行。今の種類に当てはまらなければ「まだ足せません」。
 // AI が使えないときは、この欄を出さない（手で足す欄はそのまま）。
 
+import type { Menu } from "@/lib/settings";
 import { useId, useState } from "react";
 import { writeJournal } from "@/lib/journal";
 import { lockedConflict } from "@/lib/rules/validate";
@@ -17,10 +18,13 @@ import type { RuleDraft, RuleReading, RuleWordsRequest, WordsAnswers, WordsResul
 
 export function RuleWords({
   maxChars,
+  menus,
   onFill,
   onNoAi,
 }: {
   maxChars: number;
+  /** 今のメニュー（台帳の book.data.menus。ルールのタブで直した時間・最終受付も）。窓口へいっしょに送る */
+  menus: Menu[];
   /** 読み取った中身で下の足す欄を埋める（保存はしない）。null = 前に埋めた中身を消す（断った・聞き返し中・まだ足せない） */
   onFill: (draft: RuleDraft | null) => void;
   /** AI につながらなかった（この欄を出さなくする） */
@@ -83,13 +87,13 @@ export function RuleWords({
       return;
     }
     setResult(null);
-    void ask({ mode: "ai", text: sentence });
+    void ask({ mode: "ai", text: sentence, menus });
   }
 
   // 聞き返しに答える：前の読みと答えをサーバーに送り返し、プログラムでもう一度通す（AI は呼ばない）
   const answer = (key: keyof WordsAnswers, value: string) => {
     if (!asked?.reading || busy) return;
-    void ask({ mode: "ai", text: asked.text, reading: asked.reading, answers: { ...asked.answers, [key]: value } });
+    void ask({ mode: "ai", text: asked.text, reading: asked.reading, answers: { ...asked.answers, [key]: value }, menus });
   };
 
   const original = asked && (

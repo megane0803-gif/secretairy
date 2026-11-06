@@ -96,8 +96,8 @@ export function ReservationSheet({
     return out.includes(start) || !start ? out : [start, ...out];
   }, [day?.hours, step, start]);
 
-  const menuId = menuIds.length ? comboIdOf(data.menus, menuIds) : null;
-  const menu = menuId ? resolveMenu(data.menus, menuId) : undefined;
+  const menuId = menuIds.length ? comboIdOf(book.data.menus, menuIds) : null;
+  const menu = menuId ? resolveMenu(book.data.menus, menuId) : undefined;
   const same = !!r && !!menu && date === r.date && start === r.start && menu.id === r.menu.id;
 
   const check: OwnerCheck | null = useMemo(() => {
@@ -272,7 +272,7 @@ export function ReservationSheet({
                   </div>
                   <span className="hint">メニュー（いくつか選ぶと組み合わせ）</span>
                   <div className="sheet-choices">
-                    {data.menus.map((m) => (
+                    {book.data.menus.map((m) => (
                       <button
                         key={m.id}
                         type="button"
