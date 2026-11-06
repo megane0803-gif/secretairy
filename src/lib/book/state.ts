@@ -11,6 +11,7 @@ import type { HoldOffer, TodoOffer } from "../ai/wire";
 import { MAX_DAY_OFFSET } from "../calendar";
 import type { SavedKarte } from "../karte/record";
 import type { ChatReservation } from "../reservations";
+import { getSavedMemoMaxChars } from "../settings";
 import { chatKey, reserveKey, SEED_TODO_KEYS, todoKey, TODO_SOURCES, type TodoSource } from "../todo/keys";
 import { readMemoKind, type MemoKind } from "../todo/kinds";
 
@@ -193,7 +194,8 @@ export function parseBook(raw: string | null): BookState | null {
       date: k.date as string,
       menuId: k.menuId as string,
       ...(isStr(k.reservationId) ? { reservationId: k.reservationId } : {}),
-      memo: (k.memo as string).slice(0, 4000),
+      // 入力できる上限（録音の要点は config/ai.json の karte.maxRecordingMemoChars）にそろえる。字は1文字ずつ数える（入力欄と同じ）
+      memo: [...(k.memo as string)].slice(0, getSavedMemoMaxChars()).join(""),
       sections: looseSections(k.sections),
       savedAt: k.savedAt as string,
       ...(Array.isArray(k.edited) ? { edited: k.edited.filter(isStr).slice(0, 20) } : {}),

@@ -15,7 +15,7 @@ import { getTodos } from "../data/seed";
 import { parseJournal, writeJournal } from "../journal";
 import type { SavedKarte } from "../karte/record";
 import { commitKarteSave } from "../karte/save";
-import { getKarteHeadings, getShop } from "../settings";
+import { getAiSettings, getKarteHeadings, getSavedMemoMaxChars, getShop } from "../settings";
 import { resolveSeedTodos } from "../todo/items";
 import { commitMemoTodo } from "../todo/throw";
 
@@ -307,5 +307,37 @@ describe("直しA 9：予約チャットの返事が途中で切れたら知ら�
     assert.equal(put(hold("h-c", { menuId: "color" })), true);
     assert.equal(put(hold("h-d")), false);
     assert.equal(readBook(today).chat.length, 3);
+  });
+});
+
+describe("直しA 3：録音から作ったメモ（6,000字まで）は、保存して読み込み直しても切れない", () => {
+  const karteOf = (memo: string): SavedKarte => ({
+    id: `k-${today}-c02-1`,
+    customerId: "c02",
+    date: today,
+    menuId: "cut",
+    memo,
+    sections: { treatment: ["カット"] },
+    savedAt: `${today}T08:00:00.000Z`,
+  });
+  test("保存と読み込みの上限は、入力できる上限（録音の要点）にそろう", () => {
+    assert.equal(getSavedMemoMaxChars(), Math.max(getAiSettings().karte.maxMemoChars, getAiSettings().karte.maxRecordingMemoChars));
+    assert.equal(getSavedMemoMaxChars(), 6000);
+  });
+  for (const n of [4000, 4001, 6000])
+    test(`${n.toLocaleString("ja-JP")}字のメモは、保存して読み込み直しても${n.toLocaleString("ja-JP")}字のまま`, () => {
+      const memo = "あ".repeat(n - 1) + "🙂";
+      const r = commitKarteSave(
+        { update: (f) => updateBook(f, today), journal: writeJournal, dropDraft: () => {} },
+        { karte: karteOf(memo), surname: "石田", headings, dayLabel: "11/4（水）", menuName: "カット", editedNames: [] },
+      );
+      assert.equal(r.ok, true);
+      const back = readBook(today).kartes[0];
+      assert.equal([...back.memo].length, n);
+      assert.equal(back.memo, memo);
+    });
+  test("入力できる上限より長い物（ブラウザの中で書きかえられた物）は、上限で切る", () => {
+    const s = { ...emptyBook(today), kartes: [karteOf("い".repeat(6001))] };
+    assert.equal([...parseBook(JSON.stringify(s))!.kartes[0].memo].length, 6000);
   });
 });
