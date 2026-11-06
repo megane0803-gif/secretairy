@@ -115,7 +115,7 @@ export function HolidayPanel({ data }: { data: BookData }) {
         })}
       </ul>
       {days.length > FIRST && (
-        <button type="button" className="btn small" onClick={() => setMore((x) => !x)}>
+        <button type="button" className="btn small holiday-more" onClick={() => setMore((x) => !x)}>
           {more ? "近い日だけにする" : `もっと先を見る（${days.length}日先まで）`}
         </button>
       )}

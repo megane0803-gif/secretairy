@@ -11,7 +11,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { contextFor, parseReserveRequest } from "../ai/request";
-import { findSlots, judgeSlot } from "../ai/slots";
+import { findOnDays, findSlots, judgeSlot, noSlotOf } from "../ai/slots";
+import { openTodayLine } from "../ai/replies";
 import { at, bookedAt, chat, ctxAt } from "../ai/__tests__/helpers";
 import { EMPTY_ADS } from "../ads/state";
 import { approveBlocker } from "../book/approve";
@@ -334,5 +335,20 @@ describe("7. 承認の時：休みの日と過ぎた時刻の仮押さえは確�
     assert.match(box, /const blocked = approveBlocker\(book\.shop, book\.now, r\);\s*if \(blocked\) return refuse\(what, blocked\);/);
     assert.match(box, /disabled=\{!!blocked\}/);
     assert.match(box, /✗ 確定しませんでした/);
+  });
+});
+
+describe("8. お客様への文：休みの日は「（定休日）」を付けない（定休日は今のまま）", () => {
+  test("空きが1つも無い時の1文（頼まれた日がお休み）", () => {
+    const s = withHolidays(shop, [HOL]);
+    const ctx = ctxAt(NOW, { shop: s });
+    assert.equal(noSlotOf(findOnDays(ctx, "cut", [HOL])).text, "その日はお休みなので、お受けできません。");
+    assert.equal(noSlotOf(findOnDays(ctx, "cut", ["2026-11-10"])).text, "その日はお休み（定休日）なので、お受けできません。");
+  });
+
+  test("「今日やってますか」の答え", () => {
+    const s = withHolidays(shop, ["2026-11-04"]);
+    assert.match(openTodayLine(s, { date: "2026-11-04", time: "09:00" }), /^今日（11\/4（水））はお休みです。次は/);
+    assert.match(openTodayLine(shop, { date: "2026-11-10", time: "09:00" }), /^今日（11\/10（火））はお休み（定休日）です。/);
   });
 });

@@ -4,9 +4,9 @@
 import { addDays, calDay, toHHMM, toMinutes, type CalDay } from "../calendar";
 import { comboIdOf, partsOf, resolveMenu } from "../combo";
 import { scopeTag } from "../rules/describe";
-import { judge, type Verdict } from "../rules/judge";
+import { HOLIDAY_REASON, judge, type Verdict } from "../rules/judge";
 import { expandMenuIds } from "../rules/strictest";
-import { baseSay, COMBO_REFUSAL, comboSay, INTERNAL_REFUSAL, plainReason, ruleSay, tellsRule } from "../rules/tellable";
+import { baseSay, CLOSED_DAY_SAY, COMBO_REFUSAL, comboSay, INTERNAL_REFUSAL, plainReason, ruleSay, tellsRule } from "../rules/tellable";
 import type { Rule } from "../rules/types";
 import type { Menu, ShopSettings } from "../settings";
 import type { BookedRow, Candidate, Visit } from "./wire";
@@ -65,6 +65,7 @@ export function judgeSlot(ctx: SlotContext, c: Candidate): Verdict {
     },
     now: ctx.now,
     hours: day.hours,
+    holiday: !!day.holiday,
     seats: ctx.shop.seats,
     menus: ctx.menus,
     existing: ctx.booked.map((b) => ({
@@ -184,7 +185,11 @@ function countOut(excluded: Map<string, { ex: Exclusion; count: number }>, ex: E
   excluded.set(ex.key, cur);
 }
 
-const CLOSED_DAY: Exclusion = { key: "base:open-day", kind: "base", label: "営業日", reason: "お休みの日です", tell: true, say: baseSay("open-day", "")! };
+/** お休みの日で外した理由。オーナーの休みの日は「（定休日）」を付けない（tellable.ts の baseSay） */
+function closedDay(day: CalDay): Exclusion {
+  const reason = day.holiday ? HOLIDAY_REASON : "お休みの日です";
+  return { key: "base:open-day", kind: "base", label: "営業日", reason, tell: true, say: baseSay("open-day", reason)! };
+}
 
 /**
  * 始める時刻を、希望の時刻（near）に近い順に並べる。同じ近さなら、希望の時刻より後の方を先に
@@ -218,7 +223,7 @@ function scanDay(
 ): Candidate[] {
   const out: Candidate[] = [];
   if (!day.open) {
-    countOut(excluded, CLOSED_DAY);
+    countOut(excluded, closedDay(day));
     return out;
   }
   for (const start of orderNear(startsOf(ctx, day), near)) {
@@ -341,7 +346,8 @@ export const NO_SLOT_INTERNAL = "ご希望の日には、お受けできる時�
  */
 export function noSlotOf(search: SlotSearch): { text: string; tell: boolean } {
   const top = [...search.excluded].filter((e) => e.ex.key !== "base:open-day").sort((a, b) => b.count - a.count)[0];
-  if (!top) return { text: "その日はお休み（定休日）なので、お受けできません。", tell: true };
+  // 頼まれた日がお休み：定休日なら「（定休日）」、オーナーの休みの日なら付けない（外した理由の文のまま）
+  if (!top) return { text: search.excluded.find((e) => e.ex.key === "base:open-day")?.ex.say ?? CLOSED_DAY_SAY, tell: true };
   if (!top.ex.tell) return { text: NO_SLOT_INTERNAL, tell: false };
   if (top.ex.key === "base:hours") return { text: "営業時間の中に収まる枠が無いので、お受けできません。", tell: true };
   if (top.ex.key === "base:menu-last") return { text: `最終受付に間に合う枠が無いので、お受けできません（${top.ex.reason}）。`, tell: true };
