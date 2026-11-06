@@ -5,7 +5,7 @@ import { Fold, Panel } from "@/components/parts";
 import { getBookData } from "@/lib/book/data";
 import { lastStartOf } from "@/lib/reservations";
 import { BookingSite } from "./BookingSite";
-import { HolidayPanel } from "./HolidayPanel";
+import { HolidayList } from "./HolidayList";
 import { Ledger } from "./Ledger";
 import { LedgerViewProvider } from "./LedgerView";
 import { MonthCalendar } from "./MonthCalendar";
@@ -45,15 +45,16 @@ export default function ReservationsPage() {
           <AiSteps />
         </section>
 
-        <section className="inline-box" aria-labelledby="res-holidays">
-          <h2 id="res-holidays">休みの日（オーナーが決める）</h2>
-          <HolidayPanel data={data} />
-        </section>
-
-        {/* 月のカレンダー（見るだけ）。PC は承認の箱・AI の手順の場所を動かさないよう、時間割の箱の外のここに。スマホは日ごとのカードのすぐ上 */}
+        {/* 月のカレンダー（「休みを決める」を入れると、日を押して休みにする・戻す）。PC は承認の箱・AI の手順の場所を動かさないよう、時間割の箱の外のここに。スマホは日ごとのカードのすぐ上 */}
         <section className="inline-box" aria-labelledby="res-month">
           <h2 id="res-month">月のカレンダー</h2>
           <MonthCalendar data={data} />
+        </section>
+
+        {/* 休みの日の一覧（カレンダーの下。戻すだけ。新しく休みにするのはカレンダーから） */}
+        <section className="inline-box" aria-labelledby="res-holidays">
+          <h2 id="res-holidays">休みの日の一覧（オーナーが決める）</h2>
+          <HolidayList data={data} />
         </section>
 
         <div className="book-pair">
