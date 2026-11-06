@@ -80,6 +80,8 @@ export const JOBS_SWITCH_KEY = "jobsSwitch";
 export const HOME_FOLDS_KEY = "homeFolds";
 /** 見た目（look.ts。スマート・夜・和紙・ポップ。「最初に戻す」では消さない。画面を開いた瞬間に効かせるため layout.tsx の小さな script からも読む） */
 export const LOOK_KEY = "look";
+/** ホームの「今日の注意」（朝の要点の AI の一言）の答え。材料ごとに残し、開き直しても材料が同じなら AI を呼ばない（brief/cache.ts。「最初に戻す」では消さない） */
+export const BRIEF_KEY = "briefAnswers";
 /** 日誌（journal.ts） */
 export const JOURNAL_KEY = "journal";
 export const BROWSER_PREFIX = PREFIX;

@@ -568,6 +568,8 @@ export type BriefAiSettings = {
   maxItemChars: number;
   /** 窓口（/api/ai/brief）が受け取る大きさの上限（字） */
   maxRequestChars: number;
+  /** ブラウザに残しておく答えの数（材料ごと。古い物から消す。brief/cache.ts） */
+  maxCachedAnswers: number;
 };
 
 export function getBriefAiSettings(): BriefAiSettings {
