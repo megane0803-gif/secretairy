@@ -709,6 +709,10 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .approval-what { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .approval-when { font-size: 1.15rem; font-weight: 700; }
 .approval-why { margin: 0; font-size: 0.85rem; color: var(--muted); }
+/* 仮押さえが外れるまでの残り。1時間を切った行は太字（色で急がせない）。同じ日のほかの予約の1行 */
+.approval-left { margin: 2px 0; font-size: 0.85rem; color: var(--muted); }
+.approval-left.soon { font-weight: 700; color: var(--text); }
+.approval-same { margin: 2px 0; font-size: 0.85rem; color: var(--text); overflow-wrap: anywhere; }
 .approval-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .approval-buttons .btn { min-width: 72px; }
 .checked.small, .problems.small { font-size: 0.8rem; margin: 0; }
@@ -824,9 +828,13 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 /* ToDo のタブ：PC は右の列に「メモを投げる」と今やる3件、スマホはページの上にメモの欄だけ */
 .pc-only { display: none; }
 .sp-only { display: block; }
+.pc-inline { display: none; }
+.sp-inline { display: inline; }
 @media (min-width: 1024px) {
   .pc-only { display: block; }
   .sp-only { display: none; }
+  .pc-inline { display: inline; }
+  .sp-inline { display: none; }
 }
 
 /* ---- カルテ ---- */
@@ -934,7 +942,8 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .ad-review { display: flex; flex-direction: column; gap: 8px; }
 .ad-review .btn.big { font-size: 1.05rem; padding: 10px 14px; }
 /* 押せない時の理由と次に頼める日時は、ボタンのすぐ下にふつうの字の大きさで（小さい hint にしない） */
-.ad-review-why { margin: 0; font-size: 1rem; color: var(--text); overflow-wrap: anywhere; }
+.ad-review-why { margin: 0; font-size: 1rem; font-weight: 400; color: var(--text); overflow-wrap: anywhere; }
+.ad-review-go { margin-left: 4px; font-weight: 700; white-space: nowrap; }
 .ad-review-reset { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .ad-review-reset p { margin: 0; font-size: 0.9rem; color: var(--muted); }
 /* 広告タブの一番上の「4週分」と、その下の承認待ちの箱の間をあける */

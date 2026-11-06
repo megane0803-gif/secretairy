@@ -101,3 +101,21 @@ describe("8. 経理：「あと N件 選ぶ」は選ぶ所へのリンク・押�
     assert.match(head, /<ChooseLink>\s*人が選ぶ/);
   });
 });
+
+describe("12. 広告：「AI に見直してもらう」がうまくいった直後の出し方", () => {
+  const review = read("src/app/ads/AdsReview.tsx");
+  it("うまくいった1行（✓ 承認の箱に入れました…すぐ下で決める ↓）が、押せない理由より先", () => {
+    const ok = review.indexOf("承認の箱に入れました：{shown.text}");
+    const why = review.indexOf('<p className="ad-review-why"');
+    assert.ok(ok > 0 && why > ok, "うまくいった1行が先");
+    assert.match(review, /すぐ下で決める ↓/);
+    assert.match(review, /href=\{`#\$\{ADS_APPROVALS_ID\}`\}/);
+    assert.match(review, /export const ADS_APPROVALS_ID = "ads-approvals";/);
+    assert.match(read("src/app/ads/page.tsx"), /<h2 id="ads-approvals">/);
+  });
+  it("押せない理由はふつうの字（太字にしない）", () => {
+    assert.match(css, /\.ad-review-why \{[^}]*font-weight: 400;/);
+    const why = review.slice(review.indexOf('<p className="ad-review-why"'), review.indexOf("</p>", review.indexOf('<p className="ad-review-why"')));
+    assert.doesNotMatch(why, /<strong>/);
+  });
+});
