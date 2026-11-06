@@ -4,6 +4,7 @@
 
 import { businessDayAt, calDay } from "../../calendar";
 import type { AdPastDecision } from "../../data/types";
+import { baseShop } from "../../holidays";
 import type { ShopSettings } from "../../settings";
 import { actionFor, actionVerb, findRow, totalOf, townIn, WEEK_LABELS, yen, type AdAction, type AdTable } from "../report";
 import { VERDICT_LABEL, type AdJudgement } from "../results";
@@ -68,9 +69,11 @@ export function pastDecisions(
       date: (p.decidedAt as string).slice(0, 10),
       bookings: p.total.bookings,
     }));
-  const anchor = calDay(ctx.shop, ctx.anchor);
+  // 最初の状態の日付は、オーナーの休みの日を外した店で数える（holidays.ts の baseShop）
+  const base = baseShop(ctx.shop);
+  const anchor = calDay(base, ctx.anchor);
   const fromSeed: PastDecision[] = seedPast.flatMap((d) => {
-    const day = businessDayAt(ctx.shop, anchor, d.day);
+    const day = businessDayAt(base, anchor, d.day);
     return day ? [{ text: d.text, action: d.action, decision: d.decision, date: day.date, bookings: d.bookings }] : [];
   });
   return [...fromState, ...fromSeed].sort((a, b) => b.date.localeCompare(a.date)).slice(0, Math.max(0, ctx.max));

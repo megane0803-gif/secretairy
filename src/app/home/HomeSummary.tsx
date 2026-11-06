@@ -57,13 +57,14 @@ export function HomeSummary({
 
   const nextDay = (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted) return;
-    const to = businessDayAt(data.shop, book.today, 1);
+    // 休みの日（予約のページで決めた分）も飛ばす。サーバーの「今日」と同じ決め方（calendar.ts の demoClock）
+    const to = businessDayAt(book.shop, book.today, 1);
     book.update(withNextDay);
     // その日（進めた先の今日）に確定の予約がある方へ、前日に届いたつもりのお知らせ（決まった形・AI なし・送らない）
     const list = to ? dayBeforeReminders(book.all, to.date, reminder.template, data.shop.name) : [];
-    if (to) setRemind({ dayLabel: to.label, sentLabel: calDay(data.shop, addDays(to.date, -1)).label, list });
+    if (to) setRemind({ dayLabel: to.label, sentLabel: calDay(book.shop, addDays(to.date, -1)).label, list });
     writeJournal(
-      { who: "オーナー", text: `デモ：翌日へ（${book.today.label} → ${to?.label ?? "次の営業日"}。定休日は飛ばす）` },
+      { who: "オーナー", text: `デモ：翌日へ（${book.today.label} → ${to?.label ?? "次の営業日"}。定休日と休みの日は飛ばす）` },
       ...(to ? [{ who: "プログラム" as const, text: `デモ：前日のお知らせを${list.length}件見せた（${to.label}のご予約。決まった形・実際には送信していない）` }] : []),
     );
   };

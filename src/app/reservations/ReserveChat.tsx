@@ -130,6 +130,8 @@ export function ReserveChat({ data }: { data: BookData }) {
       dayOffset: book.dayOffset,
       // 同じ時間に受ける人数（ルールのタブで変えた分）。サーバーは幅を確かめなおして使う
       seats: book.shop.seats,
+      // 休みの日（予約のページで決めた分）。サーバーは形と数を確かめてから使う
+      holidays: book.shop.ownerHolidays ?? [],
     };
     // この相談の中で増えた・外した仮押さえ（画面の側でも、この会話の物かを確かめる）
     const mine = new Set(body.holds);

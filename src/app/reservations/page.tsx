@@ -5,6 +5,7 @@ import { Fold, Panel } from "@/components/parts";
 import { getBookData } from "@/lib/book/data";
 import { lastStartOf } from "@/lib/reservations";
 import { BookingSite } from "./BookingSite";
+import { HolidayPanel } from "./HolidayPanel";
 import { Ledger } from "./Ledger";
 import { ReserveChat } from "./ReserveChat";
 import { WeekTimetable } from "./WeekTimetable";
@@ -38,6 +39,11 @@ export default function ReservationsPage() {
         <h2 id="res-steps">AI の手順</h2>
         <p className="hint">どの道具で何を調べ、どのルールで外したかを、プログラムが1行ずつ書きます。</p>
         <AiSteps />
+      </section>
+
+      <section className="inline-box" aria-labelledby="res-holidays">
+        <h2 id="res-holidays">休みの日（オーナーが決める）</h2>
+        <HolidayPanel data={data} />
       </section>
 
       <div className="book-pair">

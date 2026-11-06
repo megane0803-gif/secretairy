@@ -7,17 +7,20 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import type { BookedRow } from "../ai/wire";
 import { BOOK_KEY, readBrowser, subscribeBrowser, writeBrowser } from "../browser";
-import { calDay, demoClock, shopToday } from "../calendar";
+import { demoClock, shopToday } from "../calendar";
 import { allKartes, resolveSeedKartes, toVisits, withSeedKarteEdits } from "../karte/record";
 import {
   loadBook,
   resolveChatReservations,
+  seedAnchor,
   sortReservations,
   type Reservation,
 } from "../reservations";
 import { withSeats } from "../capacity";
+import { withHolidays } from "../holidays";
 import { getShop, type ShopSettings } from "../settings";
 import { useCapacity } from "../useCapacity";
+import { useHolidays } from "../useHolidays";
 import type { BookData } from "./data";
 import { activeChat, emptyBook, parseBook, pendingApprovals, type BookState } from "./state";
 
@@ -62,24 +65,27 @@ export function useBookState() {
 
 /**
  * 画面で使う形：今日・起点・全部の予約・7日分・承認待ち・AI に送る台帳・カルテ。
- * shop は、店の設定に「同じ時間に受ける人数」（ルールのタブで変えた分）を重ねた物。数を使う所はみなこれを使う。
+ * shop は、店の設定に「同じ時間に受ける人数」（ルールのタブで変えた分）と「休みの日」（予約のページで決めた分）を重ねた物。
+ * 数・受け付けるかの判定を使う所はみなこれを使う（最初の状態の予約の日付は休みの日を見ないので動かない。reservations.ts の seedAnchor）。
  */
 export function useBook(data: BookData) {
   const minute = useMinute();
   const { seats } = useCapacity();
-  const shop: ShopSettings = useMemo(() => withSeats(data.shop, seats), [data.shop, seats]);
+  const { dates: holidays } = useHolidays();
+  const shop: ShopSettings = useMemo(() => withHolidays(withSeats(data.shop, seats), holidays), [data.shop, seats, holidays]);
   const now = useMemo(() => new Date(minute * 60_000), [minute]);
   const { state, update } = useBookState();
-  // デモの「翌日へ」で進めた分だけ、今日を先へずらす（サーバーも同じ決め方。calendar.ts の demoClock）
-  const clock = useMemo(() => demoClock(data.shop, now, state.dayOffset), [data.shop, now, state.dayOffset]);
+  // デモの「翌日へ」で進めた分だけ、今日を先へずらす（サーバーも同じ決め方。calendar.ts の demoClock）。
+  // 休みの日を重ねてから今日を決める（休みにした日が今日なら、次の営業日を今日にする）
+  const clock = useMemo(() => demoClock(shop, now, state.dayOffset), [shop, now, state.dayOffset]);
   const { today, opened, shifted, realToday, dayOffset } = clock;
   const nowIso = now.toISOString();
   const nowShop = clock.now;
 
   const view = useMemo(() => {
-    const anchor = calDay(data.shop, state.anchor);
+    const anchor = seedAnchor(shop, state.anchor, today);
     const chat = resolveChatReservations(data.menus, data.customers, activeChat(state, nowIso));
-    const book = loadBook(shop, data.menus, today, anchor.open ? anchor : today, chat);
+    const book = loadBook(shop, data.menus, today, anchor, chat);
     const all: Reservation[] = sortReservations(book.all);
     const booked: BookedRow[] = all.map((r) => ({
       id: r.id,
@@ -97,7 +103,7 @@ export function useBook(data: BookData) {
   return {
     ...view,
     shop,
-    /** 店の設定に、同じ時間に受ける人数を重ねた BookData（AI の仕事・LINE などにそのまま渡す） */
+    /** 店の設定に、同じ時間に受ける人数と休みの日を重ねた BookData（AI の仕事・LINE などにそのまま渡す） */
     data: shop === data.shop ? data : { ...data, shop },
     state,
     update,
