@@ -1838,6 +1838,17 @@ h3.section-title { font-size: 1rem; }
 }
 .sheet-foot p { margin: 0; }
 
+/* 台帳の予約を押して開く1枚（ReservationSheet.tsx）。形は「予約を入れる」の1枚と同じ */
+.sheet-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 0; align-items: center; }
+.sheet-facts dt { color: var(--muted); font-size: 0.9rem; }
+.sheet-facts dd { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; overflow-wrap: anywhere; }
+.sheet-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.sheet-confirm { display: flex; flex-direction: column; gap: 6px; }
+.sheet-when select:disabled { opacity: 0.6; }
+/* 押せる予約（帯と日ごとのカードの行）：見た目（色・並び・大きさ）は変えず、指の形と、キーボードで選んだ時の枠だけ */
+.tt-band.openable, .slot.openable { cursor: pointer; }
+.tt-band.openable:focus-visible, .slot.openable:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 /* 日ごとのカードの空いている時間（押すと入れる画面） */
 .free-times { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .free-times-row { display: flex; flex-wrap: wrap; gap: 6px; }

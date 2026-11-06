@@ -22,8 +22,12 @@ export function WeekTimetable({ data }: { data: BookData }) {
       <LedgerNotes book={book} />
       <WeekNav />
       <div className="tt-wrap">
-        {/* 空いたマスを押すと、小さな窓の「入れる」画面（台帳から入れる＝オーナーの確定。1枚はページの共通の親が持つ） */}
-        <TimetableGrid tt={tt} onPick={(date, start) => view.act({ kind: "open", target: { date, start } })} />
+        {/* 予約の帯を押すと、その予約の1枚（見る・取り消す・変える。ReservationSheet）。空いたマスを押すと、小さな窓の「入れる」画面（台帳から入れる＝オーナーの確定。1枚はページの共通の親が持つ） */}
+        <TimetableGrid
+          tt={tt}
+          onPick={(date, start) => view.act({ kind: "open", target: { date, start } })}
+          onOpen={(id) => view.act({ kind: "detail", id })}
+        />
       </div>
       <LedgerChecks book={book} />
       <LedgerReset book={book} data={data} />

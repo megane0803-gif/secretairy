@@ -207,11 +207,13 @@ export type ViewState = {
   month: string | null;
   /** 開いている「台帳から入れる」の1枚 */
   sheet: SheetTarget | null;
+  /** 押して開いた予約の1枚（予約の id）。「台帳から入れる」の1枚とは同時に開かない */
+  detail?: string | null;
 };
 
 export const viewKey = (epoch: string | undefined, dayOffset: number): string => `${epoch ?? ""}|${dayOffset}`;
 
-export const freshView = (key: string): ViewState => ({ key, start: null, month: null, sheet: null });
+export const freshView = (key: string): ViewState => ({ key, start: null, month: null, sheet: null, detail: null });
 
 /** 「翌日へ」「最初に戻す」（同じ日に押した時も、印 epoch が変わる）の後は、今日の週・今日の月に戻し、開いている1枚も閉じる */
 export function syncView(s: ViewState, key: string): ViewState {
@@ -224,6 +226,7 @@ export type ViewAction =
   | { kind: "pick"; date: string }
   | { kind: "month"; dir: -1 | 1 }
   | { kind: "open"; target: SheetTarget }
+  | { kind: "detail"; id: string }
   | { kind: "close" };
 
 /** 押した時の変え方。週を動かしたら、カレンダーもその週の始まりの日の月に戻す */
@@ -242,8 +245,11 @@ export function viewReduce(s: ViewState, a: ViewAction, ctx: { todayDate: string
     }
     case "open":
       // 範囲の外の日には新しく入れない
-      return inRange(a.target.date, ctx.range) ? { ...s, sheet: a.target } : s;
+      return inRange(a.target.date, ctx.range) ? { ...s, sheet: a.target, detail: null } : s;
+    case "detail":
+      // 入っている予約は、範囲の外の日でも見られる（見るだけかどうかは1枚が決める）
+      return { ...s, detail: a.id, sheet: null };
     case "close":
-      return { ...s, sheet: null };
+      return { ...s, sheet: null, detail: null };
   }
 }

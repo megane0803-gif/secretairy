@@ -252,8 +252,8 @@ export function OwnerBookSheet({ data, target, onClose }: { data: BookData; targ
   );
 }
 
-/** 確かめの結果：✗（入れられない・もう一度押せば入れられる）を先に、✓ はまとめて */
-function CheckLines({ check }: { check: OwnerCheck }) {
+/** 確かめの結果：✗（入れられない・もう一度押せば入れられる）を先に、✓ はまとめて。予約を変える1枚（ReservationSheet）も使う */
+export function CheckLines({ check, verb = "入れられません" }: { check: OwnerCheck; verb?: string }) {
   const passed = check.lines.filter((l) => l.ok);
   return (
     <div className="sheet-checks">
@@ -261,7 +261,7 @@ function CheckLines({ check }: { check: OwnerCheck }) {
         <ul className="problems small">
           {check.blocked.map((l) => (
             <li key={l.key}>
-              ✗ 入れられません：{l.label}（{l.reason}）
+              ✗ {verb}：{l.label}（{l.reason}）
             </li>
           ))}
         </ul>

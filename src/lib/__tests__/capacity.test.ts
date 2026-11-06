@@ -91,7 +91,7 @@ describe("3. どの画面も同じ1つの数を使う", () => {
     const useBook = read("src/lib/book/useBook.ts");
     assert.match(useBook, /const \{ seats \} = useCapacity\(\);/);
     assert.match(useBook, /withSeats\(data\.shop, seats\)/);
-    assert.match(useBook, /loadBook\(shop, data\.menus/);
+    assert.match(useBook, /assembleBook\(\{ shop, menus: data\.menus/);
     const files = [
       "src/app/reservations/BookingSite.tsx",
       "src/app/reservations/Ledger.tsx",
