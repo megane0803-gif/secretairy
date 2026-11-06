@@ -1818,6 +1818,9 @@ h3.section-title { font-size: 1rem; }
   min-width: 0;
 }
 .sheet-choice small { color: var(--muted); }
+.sheet-choice .sheet-choice-last { flex-basis: 100%; font-size: 0.8rem; }
+.sheet-choice .sheet-choice-id { font-size: 0.7rem; }
+.btn.sheet-more { min-height: 44px; align-self: flex-start; }
 .sheet-choice.on { border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
 .sheet-end { margin: 0; }
 .sheet-checks { display: flex; flex-direction: column; gap: 4px; }
