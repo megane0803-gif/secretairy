@@ -13,7 +13,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "SecretAIry",
-  description: "美容室のための AI 秘書（架空の店）",
+  description: "美容室のための AI 秘書",
 };
 
 export const viewport: Viewport = {
