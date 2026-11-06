@@ -3,7 +3,7 @@
 // 予約のページの共通の親：見ている週・月のカレンダーの月・開いている「台帳から入れる」の1枚を、ここ1つだけが持つ（docs/SPEC.md §1.3.1）。
 // PC の時間割（WeekTimetable）・スマホの日ごとのカード（Ledger）・月のカレンダー（MonthCalendar）は、みなここから読む（いつも同じ週）。
 // 数え方は src/lib/book/weekView.ts。見ている週はブラウザに残さない（開き直すと今日の週）。
-// 「翌日へ」「最初に戻す」（印 epoch と実際に進んだ dayOffset が変わる）の後は、今日の週・月に戻し、開いている1枚を閉じる。
+// 「翌日へ」「最初に戻す」（印 epoch と実際に進んだ dayOffset が変わる）の後は、今日の週・月に戻し、開いている1枚を閉じる（月のカレンダーの「休みを決める」も切に戻す）。
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import type { BookData } from "@/lib/book/data";
@@ -26,6 +26,7 @@ import {
   type ViewState,
 } from "@/lib/book/weekView";
 import { scrollToId } from "@/lib/scroll";
+import { HolidayFlowProvider } from "./HolidayFlow";
 import { OwnerBookSheet } from "./OwnerBookSheet";
 import { ReservationSheet } from "./ReservationSheet";
 
@@ -42,6 +43,8 @@ type LedgerViewValue = {
   canNext: boolean;
   /** 月のカレンダーで出す月（YYYY-MM） */
   month: string;
+  /** 月のカレンダーの「休みを決める」が入っているか（最初は切。開き直し・「翌日へ」・「最初に戻す」で切） */
+  holidayMode: boolean;
   act: (a: ViewAction) => void;
   /** 日を押した：その日から7日の台帳へ移り、見えている台帳の日までスクロール */
   pickDay: (date: string) => void;
@@ -96,13 +99,15 @@ export function LedgerViewProvider({ data, children }: { data: BookData; childre
     canPrev: canStep(start, -1, range),
     canNext: canStep(start, 1, range),
     month: view.month ?? monthOf(start),
+    holidayMode: view.holidayMode === true,
     act,
     pickDay,
   };
 
   return (
     <Ctx.Provider value={value}>
-      {children}
+      {/* 休みの日を決める流れ（月のカレンダーと休みの日の一覧が同じ物を使う。開いている一覧は同じ印 viewKey で閉じる） */}
+      <HolidayFlowProvider data={data}>{children}</HolidayFlowProvider>
       {view.sheet && <OwnerBookSheet key={`${view.sheet.date} ${view.sheet.start}`} data={data} target={view.sheet} onClose={() => act({ kind: "close" })} />}
       {/* 予約を押して開く1枚。「翌日へ」「最初に戻す」（印 viewKey が変わる）で閉じる（syncView）。古い中身は保存しない（change.ts） */}
       {view.detail && (

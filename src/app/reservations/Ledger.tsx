@@ -206,7 +206,7 @@ export function LedgerReset({ book, data }: { book: Book; data: BookData }) {
   return (
     <div className="reset-row">
       <span className="hint">
-        起点：{book.anchor.label}（このブラウザで初めて開いた日）。架空の予約はこの日から数えて置いています。
+        起点：{book.anchor.label}（このブラウザで初めて開いた日）。最初の予約はこの日から数えて置いています。
       </span>
       <ResetBook data={data} />
     </div>

@@ -276,11 +276,14 @@ describe("6. 予約がある日を休みにする時：一覧と ToDo（予約�
   });
 
   test("画面：予約がある日はまず一覧、もう一度押した時だけ休みにする。人が押した時だけ", () => {
-    const p = read("src/app/reservations/HolidayPanel.tsx");
-    assert.match(p, /if \(on && list\.length\) return setAsk/);
+    // 流れは1か所（holidayFlow.ts の決め方と書き方・HolidayFlow.tsx の画面の形）。くわしくは book/__tests__/holidayFlow.test.ts
+    const p = read("src/app/reservations/HolidayFlow.tsx");
+    const lib = read("src/lib/book/holidayFlow.ts");
+    assert.match(p, /if \(p\.kind === "ask"\) return setRaw/);
     assert.match(p, /それでも休みにする/);
     assert.match(p, /if \(!e\.nativeEvent\.isTrusted\) return;/);
-    assert.match(p, /writeJournal\(\{ who: "オーナー", text: holidayJournal/);
+    assert.match(p, /if \(!e\.nativeEvent\.isTrusted \|\| !flow\.ask\) return;/);
+    assert.match(lib, /deps\.journal\(\{ who: "オーナー", text: holidayJournal/);
   });
 });
 
