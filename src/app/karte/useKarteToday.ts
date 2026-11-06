@@ -8,6 +8,9 @@ import { useBook } from "@/lib/book/useBook";
 import { deskKey, useDesk } from "@/lib/karte/deskStore";
 import { savedOn } from "@/lib/karte/record";
 
+/** 真ん中の「AI のカルテの案」のカードの id（スマホで案まで画面を動かす先・案へ飛ぶリンクの先） */
+export const KARTE_DRAFT_ID = "karte-draft";
+
 export function useKarteToday(data: BookData) {
   const book = useBook(data);
   const desk = useDesk();

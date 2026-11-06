@@ -3,8 +3,10 @@
 // 発信のタブ：③見て、手で直して「下書きを保存」（PostsDraft。真ん中の列の「下書きを作る」の下）と、
 // 保存した下書きを種類ごとに並べる所（PostsSaved。右の列）。
 // 保存はオーナーのボタンだけ（isTrusted で確かめる）。承認の箱は通さない。送信・公開はしない。
+// どちらにも「コピー」（クリップボードに入れるだけ。コピーできないブラウザでは文を選ぶ。src/lib/copy.ts）。
 
 import { useState } from "react";
+import { CopyButton } from "@/components/CopyButton";
 import { afterHandEdit, PostTeam } from "@/components/PostTeam";
 import type { BookData } from "@/lib/book/data";
 import type { PostMemo } from "@/lib/data/types";
@@ -31,6 +33,9 @@ function insertLabel(i: PostInsert, draft: { closedFrom?: "materials" | "shop"; 
   if (draft.unreadable && (i === "openings" || i === "closed")) return undefined;
   return i === "closed" ? CLOSED_FROM_LABEL[draft.closedFrom ?? "shop"] : INSERT_LABEL[i];
 }
+
+/** 見て直す所の下書きの欄（コピーできない時に選ぶ先） */
+const DRAFT_TEXT_ID = "posts-draft-text";
 
 function timeLabel(iso: string, timeZone: string): string {
   return new Date(iso).toLocaleString("ja-JP", { timeZone, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -125,6 +130,7 @@ export function PostsDraft({ settings, data, memos }: { settings: PostsSettings;
             <label className="posts-edit">
               <span className="karte-memo-label">下書き（手で直せます）</span>
               <textarea
+                id={DRAFT_TEXT_ID}
                 value={draft.text}
                 rows={Math.min(30, Math.max(8, draft.text.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil([...l].length / 36)), 1)))}
                 onChange={(e) => {
@@ -139,6 +145,10 @@ export function PostsDraft({ settings, data, memos }: { settings: PostsSettings;
                 <span className="num">{[...draft.text].length}</span>字（目安 {kind.targetChars}字前後・{kind.shape}）
               </span>
             </label>
+            {/* コピー（クリップボードに入れるだけ。送信・公開ではない）。手で直した後の文をそのまま */}
+            <p className="posts-copy">
+              <CopyButton text={draft.text} targetId={DRAFT_TEXT_ID} />
+            </p>
             {draft.cut && <p className="problems">長くなったので、途中までの下書きです。</p>}
             {desk.failed && (
               <p className="problems" role="status">
@@ -219,7 +229,12 @@ export function PostsSaved({ settings, timezone }: { settings: PostsSettings; ti
                         <span className="num posts-at">{timeLabel(p.at, timezone)}</span>
                         <span className="posts-first">{firstLine(p.text)}</span>
                       </summary>
-                      <p className="posts-full">{p.text}</p>
+                      <p className="posts-full" id={`posts-full-${p.id}`}>
+                        {p.text}
+                      </p>
+                      <p className="posts-copy">
+                        <CopyButton text={p.text} targetId={`posts-full-${p.id}`} />
+                      </p>
                     </details>
                   </li>
                 ))}

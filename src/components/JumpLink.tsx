@@ -7,23 +7,13 @@
 import type { ReactNode } from "react";
 import { HOME_JUMPS, type HomeJumpId } from "@/lib/home/jump";
 import { openHomeFold } from "@/lib/home/useHomeFolds";
+import { scrollToId } from "@/lib/scroll";
 
-/** その欄まで動かす（畳んでいれば開いてから）。読み上げのために飛んだ先へ focus も移す */
+/** その欄まで動かす（畳んでいれば開いてから） */
 export function jumpTo(id: HomeJumpId): void {
   const j = HOME_JUMPS[id];
   if (j.fold) openHomeFold(j.fold);
-  // 開いた欄が描き直されてから動かす（2回待つ）
-  window.requestAnimationFrame(() =>
-    window.requestAnimationFrame(() => {
-      const el = document.getElementById(j.target);
-      if (!el) return;
-      const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      el.scrollIntoView({ block: "start", behavior: still ? "auto" : "smooth" });
-      if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "-1");
-      el.focus({ preventScroll: true });
-      window.history.replaceState(null, "", `#${j.target}`);
-    }),
-  );
+  scrollToId(j.target, { hash: true });
 }
 
 export function JumpLink({ to, className, title, children }: { to: HomeJumpId; className?: string; title?: string; children: ReactNode }) {

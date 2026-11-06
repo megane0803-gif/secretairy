@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSyncExternalStore } from "react";
+import { useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import { NAV_KEY, readBrowser, subscribeBrowser, writeBrowser } from "@/lib/browser";
+import { scrollLeftToShow } from "@/lib/scroll";
 import { isTabShown, type TabSwitches } from "@/lib/settings";
 import { TAB_IDS, TABS } from "@/lib/tabs";
 import { useTabSwitches } from "@/lib/useTabSwitches";
@@ -16,6 +17,21 @@ export function TabNav({ baseSwitches, shopName }: { baseSwitches: TabSwitches; 
   const collapsed = useSyncExternalStore(subscribeBrowser, readCollapsed, () => false);
   const shown = TAB_IDS.filter((id) => isTabShown(id, switches)).map((id) => TABS[id]);
   const hidden = TAB_IDS.filter((id) => !isTabShown(id, switches)).map((id) => TABS[id]);
+
+  // スマホのタブの帯（横に動かす帯）では、開いているタブが帯の外に隠れないように、見える位置まで帯を動かす。
+  // PC（縦に並ぶ）は帯がはみ出さないので動かさない。ページは縦に動かさない（帯の scrollLeft だけ）。
+  const listRef = useRef<HTMLUListElement>(null);
+  useLayoutEffect(() => {
+    const ul = listRef.current;
+    const a = ul?.querySelector<HTMLElement>('a[aria-current="page"]');
+    if (!ul || !a || ul.scrollWidth <= ul.clientWidth) return;
+    const box = ul.getBoundingClientRect();
+    const item = a.getBoundingClientRect();
+    ul.scrollLeft = scrollLeftToShow(
+      { width: ul.clientWidth, scrollLeft: ul.scrollLeft, scrollWidth: ul.scrollWidth },
+      { left: item.left - box.left, width: item.width },
+    );
+  }, [pathname, shown.length]);
 
   const toggle = () => {
     const next = !collapsed;
@@ -41,7 +57,7 @@ export function TabNav({ baseSwitches, shopName }: { baseSwitches: TabSwitches; 
           {collapsed ? "»" : "«"}
         </button>
       </div>
-      <ul>
+      <ul ref={listRef}>
         {shown.map((t) => {
           const active = pathname === t.path || pathname.startsWith(t.path + "/");
           return (

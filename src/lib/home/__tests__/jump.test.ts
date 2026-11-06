@@ -36,9 +36,9 @@ describe("ホーム：数字のカードの飛ぶ先", () => {
     assert.match(summary, /<Link href=\{TABS\.todo\.path\}[^>]*>\s*<BigNumber label="ToDo 期限切れ" value=\{due\.overdue\}/);
   });
 
-  it("畳める欄は開いてから動かす（openHomeFold の後に scrollIntoView）", () => {
+  it("畳める欄は開いてから動かす（openHomeFold の後に scrollToId）", () => {
     const open = link.indexOf("openHomeFold(j.fold)");
-    const scroll = link.indexOf("scrollIntoView");
+    const scroll = link.indexOf("scrollToId(j.target");
     assert.ok(open > 0 && scroll > open);
     assert.match(link, /href=\{`#\$\{HOME_JUMPS\[to\]\.target\}`\}/, "JavaScript が無くても飛べる形");
   });

@@ -8,6 +8,7 @@
 // 送り始めたら、明細と店用／私用の選びを固定する。送っている間は、登録のし直しと「最初に戻す」を止める。
 // つながりが切れても、途中の登録を黙って会計（架空）に切り替えない。
 
+import { ChooseLink } from "./ChooseLink";
 import { useEffect, useState } from "react";
 import { BigNumber, Fold } from "@/components/parts";
 import { md, yen } from "@/lib/accounting/sales";
@@ -175,9 +176,9 @@ export function FreeePanel({ freee }: { freee: Freee }) {
         <>
           <p className="acct-left" role="status">
             {gate.remaining > 0 ? (
-              <>
-                あと <strong className="num">{gate.remaining}</strong>件 選ぶ
-              </>
+              <ChooseLink>
+                あと <strong className="num">{gate.remaining}</strong>件 選ぶ ↓
+              </ChooseLink>
             ) : (
               "全部選びました"
             )}
