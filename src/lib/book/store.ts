@@ -12,3 +12,8 @@ export function readBook(todayDate: string): BookState {
 export function updateBook(f: (s: BookState) => BookState, todayDate: string): BrowserWrite {
   return writeBrowser(BOOK_KEY, JSON.stringify(f(readBook(todayDate))));
 }
+
+/** 今の台帳の「最初に戻す」の印（book/state.ts の epoch）。まだ無ければ undefined */
+export function currentEpoch(): string | undefined {
+  return parseBook(readBrowser(BOOK_KEY))?.epoch;
+}

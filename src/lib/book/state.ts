@@ -78,10 +78,25 @@ export type BookState = {
   seedKarteEdits?: Record<string, SeedKarteEdit>;
   /** 最初の状態の ToDo の文を書きかえた分（最初の状態のカルテの次回提案を直した時。id ごと。「最初に戻す」で消える） */
   todoTitles?: Record<string, string>;
+  /**
+   * 「最初に戻す」のたびに変わる印（reset.ts が作る）。戻す前に始まった予約チャットの返事が、戻した後の台帳に入らないように、
+   * 返事を始めた時の印と今の印が同じ時だけ仮押さえを入れる（sameEpoch）。無い = まだ一度も戻していない
+   */
+  epoch?: string;
 };
 
-export function emptyBook(anchor: string): BookState {
-  return { v: 1, anchor, chat: [], approvals: [], todos: [], kartes: [], dayOffset: 0, todoMarks: {} };
+export function emptyBook(anchor: string, epoch?: string): BookState {
+  return { v: 1, anchor, chat: [], approvals: [], todos: [], kartes: [], dayOffset: 0, todoMarks: {}, ...(epoch ? { epoch } : {}) };
+}
+
+/** 「最初に戻す」の印を作る */
+export function newEpoch(nowMs: number = Date.now()): string {
+  return `r-${nowMs.toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** 台帳が、その印の時のままか（あいだに「最初に戻す」が無かったか） */
+export function sameEpoch(s: Pick<BookState, "epoch">, epoch: string | undefined): boolean {
+  return (s.epoch ?? "") === (epoch ?? "");
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -214,6 +229,7 @@ export function parseBook(raw: string | null): BookState | null {
     todoMarks,
     // 直した分があるときだけ持つ（無ければ今までと同じ形）
     ...(Object.keys(seedKarteEdits).length ? { seedKarteEdits } : {}),
+    ...(isStr(d.epoch) && d.epoch.length <= 40 ? { epoch: d.epoch } : {}),
     ...(Object.keys(todoTitles).length ? { todoTitles } : {}),
   };
 }
@@ -252,6 +268,16 @@ export function pendingApprovals(s: BookState, nowIso: string): PendingRow[] {
     if (r && r.status === "hold" && !isExpired(r, nowIso)) out.push({ approval: a, reservation: r });
   }
   return out;
+}
+
+/**
+ * 同じお客様・同じメニュー・同じ日時の、まだ承認待ちの仮押さえ。期限の切れた物は数えない。
+ * 予約チャットで返事が途中で切れて送り直した時に、2つにしないために使う（ai/reserveStream.ts の holdInto）
+ */
+export function sameHold(s: BookState, h: Pick<HoldOffer, "customerId" | "menuId" | "date" | "start" | "heldAt">): ChatReservation | undefined {
+  return s.chat.find(
+    (r) => r.status === "hold" && r.customerId === h.customerId && r.menuId === h.menuId && r.date === h.date && r.start === h.start && !isExpired(r, h.heldAt),
+  );
 }
 
 /** 仮押さえを足して、承認の箱に1行入れる（同じ仮押さえは2回入れない） */

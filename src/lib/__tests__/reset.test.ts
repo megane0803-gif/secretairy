@@ -65,7 +65,9 @@ describe("最初に戻す", () => {
 
     resetAll("2026-11-04");
 
-    assert.deepEqual(parseBook(readBrowser(BOOK_KEY)), emptyBook("2026-11-04"));
+    const reset = parseBook(readBrowser(BOOK_KEY));
+    assert.ok(reset?.epoch, "戻すたびに印が変わる（戻す前の予約チャットの返事を入れない）");
+    assert.deepEqual(reset, emptyBook("2026-11-04", reset?.epoch));
     assert.equal(readBrowser(ADS_KEY), null);
     assert.deepEqual(parseAds(readBrowser(ADS_KEY)), EMPTY_ADS);
     assert.equal(readBrowser(ACCOUNTING_KEY), null);
@@ -122,7 +124,8 @@ describe("最初に戻す", () => {
 
     const out = resetAll("2026-11-04");
 
-    assert.deepEqual(parseBook(readBrowser(BOOK_KEY)), emptyBook("2026-11-04"), "仮押さえ・承認の箱・保存したカルテ・翌日へが消える");
+    const resetBook = parseBook(readBrowser(BOOK_KEY));
+    assert.deepEqual(resetBook, emptyBook("2026-11-04", resetBook?.epoch), "仮押さえ・承認の箱・保存したカルテ・翌日へが消える");
     assert.equal(readBrowser(ADS_KEY), null);
     assert.equal(readBrowser(ACCOUNTING_KEY), null);
     const back = parseLine(readBrowser(LINE_KEY));

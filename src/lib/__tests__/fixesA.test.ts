@@ -4,8 +4,12 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, test } from "node:test";
 import { BOOK_KEY, BROWSER_PREFIX, JOURNAL_KEY, readBrowser, SAVE_FAILED_MESSAGE, writeBrowser } from "../browser";
-import { emptyBook, parseBook } from "../book/state";
-import { readBook, updateBook } from "../book/store";
+import type { HoldOffer, ReserveEvent } from "../ai/wire";
+import { createChatRuns } from "../ai/chatRuns";
+import { cutNotice, holdInto, readReserveStream } from "../ai/reserveStream";
+import { emptyBook, parseBook, sameEpoch } from "../book/state";
+import { currentEpoch, readBook, updateBook } from "../book/store";
+import { resetAllWrites } from "../reset";
 import { calDay } from "../calendar";
 import { getTodos } from "../data/seed";
 import { parseJournal, writeJournal } from "../journal";
@@ -153,5 +157,155 @@ describe("直しA 1：保存できなかった時は「保存しました」「�
     assert.equal(r.ok, true);
     assert.equal(readBook(today).todos.length, 1);
     assert.equal(journal().filter((e) => e.text.startsWith("メモを ToDo に足した")).length, 1);
+  });
+});
+
+// ── 予約チャットの返事（2・9） ─────────────────────────────
+const hold = (id: string, over: Partial<HoldOffer> = {}): HoldOffer => ({
+  id,
+  customerId: "c01",
+  menuId: "cut",
+  date: "2026-11-07",
+  start: "15:00",
+  heldAt: `${today}T01:00:00.000Z`,
+  expiresAt: `${today}T13:00:00.000Z`,
+  reason: "空いていてルールに合う",
+  ...over,
+});
+const enc = new TextEncoder();
+const line = (e: ReserveEvent) => enc.encode(JSON.stringify(e) + "\n");
+/** 手で流す返事（push で1行ずつ・end で閉じる） */
+function manualStream() {
+  let ctl!: ReadableStreamDefaultController<Uint8Array>;
+  const body = new ReadableStream<Uint8Array>({ start: (c) => void (ctl = c) });
+  return { body, push: (b: Uint8Array) => ctl.enqueue(b), end: () => ctl.close(), fail: () => ctl.error(new Error("network")) };
+}
+const tick = () => new Promise((r) => setTimeout(r, 0));
+/** 画面（ReserveChat）と同じつなぎ方：始めた時の印・止めたか・仮押さえを入れる */
+function chatRun(runs: ReturnType<typeof createChatRuns>) {
+  const epoch = currentEpoch();
+  const run = runs.start("c01", epoch);
+  const live = () => runs.isCurrent(run.id) && sameEpoch({ epoch: currentEpoch() }, epoch);
+  const held: string[] = [];
+  const onEvent = (e: ReserveEvent) => {
+    if (!live()) return;
+    if (e.t === "hold" && holdInto((f) => updateBook(f, today), e.hold, epoch)) {
+      held.push(e.hold.id);
+      writeJournal({ who: "AI", text: `仮押さえした：${e.hold.id}` });
+    }
+  };
+  return { epoch, live, onEvent, held };
+}
+
+describe("直しA 2：返事を待っている間に「最初に戻す」を押したら、戻す前の相談の仮押さえは入れない", () => {
+  test("返事を止めたまま最初に戻し、後から返事を届けても、戻した後の台帳に仮押さえは入らない（日誌も書かない）", async () => {
+    const runs = createChatRuns();
+    const s = manualStream();
+    const c = chatRun(runs);
+    const reading = readReserveStream(s.body, c.onEvent, c.live);
+    s.push(line({ t: "text", d: "お調べします" }));
+    await tick();
+    // 最初に戻す（ResetBook と同じ書き方）→ 画面は印が変わったのを見て止める
+    for (const w of resetAllWrites(today)) writeBrowser(w.key, w.value);
+    writeJournal({ who: "オーナー", text: "最初に戻した" });
+    const newEpoch = currentEpoch();
+    assert.ok(newEpoch && newEpoch !== c.epoch, "戻すと印が変わる");
+    assert.equal(runs.stopIfReset(newEpoch), "c01", "流れていた返事を止める");
+    // 後から届いた返事
+    s.push(line({ t: "hold", hold: hold("h-late") }));
+    s.push(line({ t: "done" }));
+    s.end();
+    assert.equal(await reading, "stopped");
+    assert.equal(readBook(today).chat.length, 0);
+    assert.equal(readBook(today).approvals.length, 0);
+    assert.equal(journal()[0].text, "最初に戻した", "「最初に戻した」の後に「仮押さえした」が並ばない");
+  });
+
+  test("止められなかった（ほかの窓で戻した）時も、印が違うので仮押さえは入れない", () => {
+    const epoch = currentEpoch();
+    for (const w of resetAllWrites(today)) writeBrowser(w.key, w.value);
+    assert.equal(holdInto((f) => updateBook(f, today), hold("h-other"), epoch), false);
+    assert.equal(readBook(today).chat.length, 0);
+    // 戻した後に始めた相談は入る
+    assert.equal(holdInto((f) => updateBook(f, today), hold("h-new"), currentEpoch()), true);
+    assert.equal(readBook(today).chat.length, 1);
+  });
+
+  test("印は読み込み直しても残り、戻すたびに変わる", () => {
+    const a = resetAllWrites(today).find((w) => w.key === BOOK_KEY)!.value!;
+    const b = resetAllWrites(today).find((w) => w.key === BOOK_KEY)!.value!;
+    assert.ok(parseBook(a)?.epoch);
+    assert.notEqual(parseBook(a)?.epoch, parseBook(b)?.epoch);
+  });
+});
+
+describe("直しA 9：予約チャットの返事が途中で切れたら知らせる。送り直しても仮押さえを2つにしない", () => {
+  test("終わりの印の無い返事は cut（「返事が途中で切れました。もう一度送ってください。」）", async () => {
+    const runs = createChatRuns();
+    const s = manualStream();
+    const c = chatRun(runs);
+    const reading = readReserveStream(s.body, c.onEvent, c.live);
+    s.push(line({ t: "text", d: "空いている時間は" }));
+    s.end();
+    assert.equal(await reading, "cut");
+    assert.equal(cutNotice(c.held), "返事が途中で切れました。もう一度送ってください。");
+  });
+
+  test("最後の行が途中で切れている・読んでいる途中で通信が切れた も cut。終わりの印まで来れば done", async () => {
+    const half = manualStream();
+    const r1 = readReserveStream(half.body, () => {}, () => true);
+    half.push(enc.encode('{"t":"text","d":"お調'));
+    half.end();
+    assert.equal(await r1, "cut");
+
+    const broken = manualStream();
+    const r2 = readReserveStream(broken.body, () => {}, () => true);
+    broken.push(line({ t: "text", d: "お調べします" }));
+    await tick();
+    broken.fail();
+    assert.equal(await r2, "cut");
+
+    const ok = manualStream();
+    const r3 = readReserveStream(ok.body, () => {}, () => true);
+    ok.push(line({ t: "text", d: "どうぞ" }));
+    ok.push(enc.encode(JSON.stringify({ t: "done" })));
+    ok.end();
+    assert.equal(await r3, "done");
+  });
+
+  test("仮押さえを受け取った後に切れて送り直しても、仮押さえは1つのまま（承認の箱も1行）", async () => {
+    const runs = createChatRuns();
+    const first = manualStream();
+    const c1 = chatRun(runs);
+    const r1 = readReserveStream(first.body, c1.onEvent, c1.live);
+    first.push(line({ t: "hold", hold: hold("h-1") }));
+    first.end();
+    assert.equal(await r1, "cut");
+    runs.finish(1);
+    assert.deepEqual(c1.held, ["h-1"]);
+    assert.ok(cutNotice(["11/7（土）15:00 カット"]).includes("仮押さえは、もう承認の箱に入っています"));
+
+    // 送り直し：AI がもう一度同じ枠を仮押さえしようとする（別の id）
+    const second = manualStream();
+    const c2 = chatRun(runs);
+    const r2 = readReserveStream(second.body, c2.onEvent, c2.live);
+    second.push(line({ t: "hold", hold: hold("h-2", { heldAt: `${today}T01:05:00.000Z` }) }));
+    second.push(line({ t: "done" }));
+    second.end();
+    assert.equal(await r2, "done");
+    assert.deepEqual(c2.held, [], "同じ枠の承認待ちがもうあるので入れない");
+    const b = readBook(today);
+    assert.equal(b.chat.length, 1);
+    assert.equal(b.approvals.filter((a) => a.state === "pending").length, 1);
+    assert.equal(journal().filter((e) => e.text.startsWith("仮押さえした")).length, 1);
+  });
+
+  test("ほかの日時・ほかのメニューの仮押さえは、同じお客様でも入る", () => {
+    const put = (h: HoldOffer) => holdInto((f) => updateBook(f, today), h, currentEpoch());
+    assert.equal(put(hold("h-a")), true);
+    assert.equal(put(hold("h-b", { start: "16:00" })), true);
+    assert.equal(put(hold("h-c", { menuId: "color" })), true);
+    assert.equal(put(hold("h-d")), false);
+    assert.equal(readBook(today).chat.length, 3);
   });
 });

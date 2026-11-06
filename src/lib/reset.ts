@@ -12,7 +12,7 @@
 // 日誌・オーナーが変えたルール（ルールのタブ）・表示スイッチ（「AI の仕事」の表示スイッチも）は残す。
 
 import { ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, FREEE_KEY, JOBS_KEY, LINE_KEY, POSTS_KEY, readBrowser, writeBrowser } from "./browser";
-import { emptyBook } from "./book/state";
+import { emptyBook, newEpoch } from "./book/state";
 import { CAPACITY_KEY } from "./capacity";
 import { resetDesk } from "./karte/deskStore";
 import { keptOnReset, parseFreee } from "./freee/state";
@@ -29,7 +29,8 @@ export function resetAllWrites(today: string, lineRaw: string | null = null, fre
   const line = parseLine(lineRaw);
   const freeeKept = keptOnReset(parseFreee(freeeRaw), nowMs);
   return [
-    { key: BOOK_KEY, value: JSON.stringify(emptyBook(today)) },
+    // 戻すたびに印を変える（戻す前に始まった予約チャットの返事を、戻した後の台帳に入れない。book/state.ts の sameEpoch）
+    { key: BOOK_KEY, value: JSON.stringify(emptyBook(today, newEpoch(nowMs))) },
     { key: ADS_KEY, value: null },
     { key: ACCOUNTING_KEY, value: null },
     // freee（テスト事業所）の画面の記録（明細ごとの状態・固定した選び）。freee の中の取引は消さない（消して戻すボタンは作らない）
