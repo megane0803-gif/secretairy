@@ -6,7 +6,8 @@ import { LineBridge } from "@/components/LineBridge";
 import { TabNav } from "@/components/TabNav";
 import { TodoFeeds } from "@/components/TodoFeeds";
 import { getBookData } from "@/lib/book/data";
-import { BROWSER_PREFIX, NAV_KEY, RIGHT_KEY } from "@/lib/browser";
+import { BROWSER_PREFIX, LOOK_KEY, NAV_KEY, RIGHT_KEY } from "@/lib/browser";
+import { lookRestoreScript } from "@/lib/look";
 import { getShop, getTabSwitches } from "@/lib/settings";
 import "./globals.css";
 
@@ -20,10 +21,11 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-// 畳んだ左のタブ・右の列の幅を、画面が出る前に効かせる（ちらつかないように）
+// 畳んだ左のタブ・右の列の幅・選んだ見た目を、画面が出る前に効かせる（ちらつかないように。一瞬スマートが見えないように）
 const restoreLayout = `(function(){try{var d=document.documentElement,p=${JSON.stringify(BROWSER_PREFIX)};
 if(localStorage.getItem(p+${JSON.stringify(NAV_KEY)})==="1")d.dataset.nav="collapsed";
-var w=Number(localStorage.getItem(p+${JSON.stringify(RIGHT_KEY)}));if(w>0)d.style.setProperty("--right-w",w+"px");}catch(e){}})();`;
+var w=Number(localStorage.getItem(p+${JSON.stringify(RIGHT_KEY)}));if(w>0)d.style.setProperty("--right-w",w+"px");}catch(e){}})();
+${lookRestoreScript(BROWSER_PREFIX + LOOK_KEY)}`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
