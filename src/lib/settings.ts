@@ -216,8 +216,19 @@ export type AccountingSettings = {
   service: string;
   /** 明細の出どころ（例「カード会社（架空）」） */
   cardSource: string;
+  /** 経理の日報（その日の売上をオーナーが入れる。accounting/daily.ts）の上限 */
+  daily: DailyLimits;
   /** freee（テスト事業所）とのつなぎ（オーナーのブラウザだけ。鍵・秘密は環境変数。docs/SPEC.md §1.8.1） */
   freee: FreeeSettings;
+};
+
+export type DailyLimits = {
+  /** 1日の売上の合計（円）の上限 */
+  maxTotalYen: number;
+  /** 1日の来店（人）の上限 */
+  maxVisits: number;
+  /** 保存できる日報の日数の上限（達したら新しい日だけ断る。古い日報は勝手に消さない） */
+  maxDays: number;
 };
 
 export type FreeeSettings = {

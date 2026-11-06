@@ -1,6 +1,6 @@
 // ホームと台帳の「最初に戻す」：このブラウザに残した変化を1回で全部最初に戻す。
 // 予約（仮押さえ・承認の箱・足した ToDo・保存したカルテ・「翌日へ」）は本当の今日を起点に作り直し、
-// 広告（案・止めた／外した言葉）と経理（選んだ印・登録・足した自動のルール）は消す。
+// 広告（案・止めた／外した言葉）と経理（選んだ印・登録・足した自動のルール・日報）は消す。
 // カルテの施術メモ・案（LINE から入れたメモも。画面を開いている間だけの物）も消す。
 // 発信（保存した下書き。画面を開いている間だけの材料・下書きも）も消す。
 // LINE の預かり：届けた承認待ちの印を消し、画面は続けてサーバーの預かり物（/api/line/link の clear）も消す。つなぎそのものは残す。
@@ -11,7 +11,7 @@
 // ルールのタブの「同じ時間に受ける人数」は店の設定の数（config/shop.json の seats）に戻す。
 // 日誌・オーナーが変えたルール（ルールのタブ）・表示スイッチ（「AI の仕事」の表示スイッチも）は残す。
 
-import { ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, FREEE_KEY, JOBS_KEY, LINE_KEY, POSTS_KEY, readBrowser, writeBrowser } from "./browser";
+import { ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, DAILY_KEY, FREEE_KEY, JOBS_KEY, LINE_KEY, POSTS_KEY, readBrowser, writeBrowser } from "./browser";
 import { emptyBook, newEpoch } from "./book/state";
 import { CAPACITY_KEY } from "./capacity";
 import { resetDesk } from "./karte/deskStore";
@@ -33,6 +33,8 @@ export function resetAllWrites(today: string, lineRaw: string | null = null, fre
     { key: BOOK_KEY, value: JSON.stringify(emptyBook(today, newEpoch(nowMs))) },
     { key: ADS_KEY, value: null },
     { key: ACCOUNTING_KEY, value: null },
+    // 経理の日報（オーナーが入れたその日の売上）。消すと売上の欄は最初から入っている10月に戻る
+    { key: DAILY_KEY, value: null },
     // freee（テスト事業所）の画面の記録（明細ごとの状態・固定した選び）。freee の中の取引は消さない（消して戻すボタンは作らない）
     { key: FREEE_KEY, value: freeeKept ? JSON.stringify(freeeKept) : null },
     { key: POSTS_KEY, value: null },
