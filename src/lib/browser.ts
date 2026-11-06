@@ -61,6 +61,8 @@ export const JOBS_KEY = "jobs";
 export const JOBS_SWITCH_KEY = "jobsSwitch";
 /** ホームの欄の開け閉め（home/folds.ts。欄ごとに覚える。「最初に戻す」では消さない） */
 export const HOME_FOLDS_KEY = "homeFolds";
+/** 見た目（look.ts。スマート・夜・和紙・ポップ。「最初に戻す」では消さない。画面を開いた瞬間に効かせるため layout.tsx の小さな script からも読む） */
+export const LOOK_KEY = "look";
 /** 日誌（journal.ts） */
 export const JOURNAL_KEY = "journal";
 export const BROWSER_PREFIX = PREFIX;

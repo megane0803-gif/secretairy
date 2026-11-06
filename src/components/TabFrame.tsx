@@ -5,6 +5,7 @@ import { Children, type ReactNode } from "react";
 import type { TabSwitches } from "@/lib/settings";
 import { TABS, type TabId } from "@/lib/tabs";
 import { useTabSwitches } from "@/lib/useTabSwitches";
+import { LookPicker } from "./LookPicker";
 import { Splitter } from "./Splitter";
 
 export function TabFrame({
@@ -115,11 +116,19 @@ export function TabFrame({
         {!top && pending}
         {!top && head}
         {body}
-        {/* 表示スイッチは見出しの横に出さず、ページの終わりに畳んでおく（必須のタブは隠せないので出さない） */}
+        {/* 表示スイッチは見出しの横に出さず、ページの終わりに畳んでおく（必須のタブは隠せないので出さない）。
+            見た目の選び（§3.5）も同じ閉じた折りたたみの中。必須のタブは同じ場所に閉じた「見た目」を1つだけ置く（初めの画面に行を足さない） */}
         {!def.required && (
           <details className="fold tab-switch-fold">
             <summary>このタブの表示</summary>
             <div>{toggle}</div>
+            <LookPicker withHead />
+          </details>
+        )}
+        {def.required && (
+          <details className="fold tab-switch-fold look-fold">
+            <summary>見た目</summary>
+            <LookPicker />
           </details>
         )}
       </main>
