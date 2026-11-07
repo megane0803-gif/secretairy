@@ -20,6 +20,17 @@ export type CalDay = {
   holiday?: boolean;
 };
 
+/**
+ * 暦に本当にある日付か（YYYY-MM-DD。11/32・うるう年でない年の 2/29・4/31・00 月・00 日は false）。
+ * 日付を受け取る所はみなここで確かめる（Date.UTC は 11/32 を 12/2 に回すので、回す前の文字のまま確かめる）
+ */
+export function isRealDate(x: unknown): x is string {
+  if (typeof x !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(x)) return false;
+  const [y, m, d] = x.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  return y >= 1900 && t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
+}
+
 /** 店の時間帯での、開いた日の日付（YYYY-MM-DD） */
 export function openedDate(shop: Pick<ShopSettings, "timezone">, now = new Date()): string {
   return now.toLocaleDateString("en-CA", { timeZone: shop.timezone });
@@ -31,7 +42,8 @@ export function calDay(shop: ShopSettings, date: string): CalDay {
   const w = day.getUTCDay();
   const key = KEYS[w];
   const owner = !!shop.ownerHolidays?.includes(date);
-  const hours = shop.closedDates.includes(date) || owner ? null : shop.hours[key];
+  // 暦に無い日付（11/32 など）は開いていない日にする（次の月に回した日の営業時間で受けない）
+  const hours = !isRealDate(date) || shop.closedDates.includes(date) || owner ? null : shop.hours[key];
   return {
     date,
     label: `${m}/${d}（${JA[w]}）`,
@@ -132,7 +144,7 @@ export function dateFromMonthDay(today: string, month: number, day: number): str
   const y = Number(today.slice(0, 4));
   const make = (year: number) => {
     const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) === date ? date : null;
+    return isRealDate(date) ? date : null;
   };
   const thisYear = make(y);
   if (!thisYear) return null; // 2/30 のような無い日

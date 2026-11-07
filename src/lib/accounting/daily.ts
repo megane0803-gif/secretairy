@@ -5,7 +5,7 @@
 
 import type { BrowserWrite } from "../browser";
 import { SAVE_FAILED_MESSAGE } from "../browser";
-import { calDay } from "../calendar";
+import { calDay, isRealDate } from "../calendar";
 import type { SalesDay, SalesMonth } from "../data/types";
 import type { JournalWho } from "../journal";
 import type { DailyLimits, ShopSettings } from "../settings";
@@ -54,13 +54,8 @@ export const SPLIT_LABEL = { total: "1日の売上（税込）", tech: "技術�
 /** 内訳の欄の id（DailyField）。parts = 技術＋店販が1日の売上と合わない時 */
 export const SPLIT_FIELD = { total: "split.total", tech: "split.tech", retail: "split.retail", parts: "split.parts" } as const;
 
-/** 本当にある日付（YYYY-MM-DD） */
-export function isRealDate(date: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
-  const [y, m, d] = date.split("-").map(Number);
-  const t = new Date(Date.UTC(y, m - 1, d));
-  return y >= 1900 && t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
-}
+/** 本当にある日付（YYYY-MM-DD）。確かめ方は calendar.ts の1か所（予約・休みの日と同じ） */
+export { isRealDate };
 
 /** 2026-11-06 → 2026-11 */
 export const monthOf = (date: string) => date.slice(0, 7);

@@ -1,6 +1,7 @@
 // 予約チャットの、画面とサーバー（/api/ai/reserve）のあいだの形。
 // サーバーは受け取った物を残さない。答え（文・手順・候補・仮押さえ）を1行ずつの JSON で流して返すだけ。
 
+import { isRealDate } from "../calendar";
 import type { Rule } from "../rules/types";
 import type { Menu } from "../settings";
 
@@ -115,6 +116,6 @@ export function parseHoldOffer(x: unknown): HoldOffer | null {
   const expiresAt = str("expiresAt");
   const reason = str("reason");
   if (!id || !customerId || !menuId || !date || !start || !heldAt || !expiresAt || reason === null) return null;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(start)) return null;
+  if (!isRealDate(date) || !/^\d{2}:\d{2}$/.test(start)) return null;
   return { id, customerId, menuId, date, start, heldAt, expiresAt, reason: reason.slice(0, 200) };
 }

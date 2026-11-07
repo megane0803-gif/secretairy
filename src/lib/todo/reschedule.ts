@@ -9,7 +9,7 @@
 // 鍵は「予約:お客様＠日時」（同じ仮押さえの分は、どの入口からでも2回は入らない）。
 
 import type { AddedTodo } from "../book/state";
-import { calDay } from "../calendar";
+import { calDay, isRealDate } from "../calendar";
 import { resolveMenu } from "../combo";
 import { browserMenus } from "../menuEdits";
 import { getMenus, getShop } from "../settings";
@@ -49,6 +49,6 @@ export function rescheduleTodo(input: {
     done: false,
     source: "reserve",
     ...(from ? { key: reserveKey(from.customerId, from.date, from.start) } : {}),
-    ...(input.due && /^\d{4}-\d{2}-\d{2}$/.test(input.due) ? { due: input.due } : {}),
+    ...(input.due && isRealDate(input.due) ? { due: input.due } : {}),
   };
 }

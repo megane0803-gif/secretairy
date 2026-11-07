@@ -2,7 +2,7 @@
 // 台帳とルールは画面から毎回送られてくる。サーバーでは残さない。
 // ルールは鍵つきを先頭に足しなおし、オーナーのルールは validate.ts で同じように確かめる（送られた物で鍵つきは緩まない）。
 
-import { demoClock, MAX_DAY_OFFSET } from "../calendar";
+import { demoClock, isRealDate, MAX_DAY_OFFSET } from "../calendar";
 import { resolveMenu } from "../combo";
 import { LOCKED_RULES } from "../rules/locked";
 import type { Rule } from "../rules/types";
@@ -15,7 +15,6 @@ import { MAX_SHOWN } from "./replies";
 import type { ToolContext } from "./tools";
 import type { BookedRow, Candidate, ChatTurn, ReserveRequest, Visit } from "./wire";
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const MAX_BOOKED = 2000;
 const MAX_RULES = 200;
@@ -50,7 +49,7 @@ export function parseReserveRequest(body: unknown, base: Menu[], ai: Pick<AiSett
   const candidates: Candidate[] = (Array.isArray(body.candidates) ? body.candidates : [])
     .filter(
       (c): c is Record<string, unknown> =>
-        isObj(c) && typeof c.menuId === "string" && menuIds.has(c.menuId) && typeof c.date === "string" && DATE.test(c.date) && typeof c.start === "string" && TIME.test(c.start),
+        isObj(c) && typeof c.menuId === "string" && menuIds.has(c.menuId) && isRealDate(c.date) && typeof c.start === "string" && TIME.test(c.start),
     )
     .slice(0, MAX_SHOWN)
     .map((c) => ({ menuId: c.menuId as string, date: c.date as string, start: c.start as string }));
@@ -60,6 +59,8 @@ export function parseReserveRequest(body: unknown, base: Menu[], ai: Pick<AiSett
   const customer = { id: cu.id.slice(0, 40), surname: cu.surname.slice(0, 20), firstVisit: cu.firstVisit === true };
 
   if (!Array.isArray(body.booked) || body.booked.length > MAX_BOOKED) return { ok: false, reason: "台帳の形がおかしいです" };
+  // 台帳の行に暦に無い日付（11/32 など）が1つでもあれば、その行を外さずに相談全体を断る（外すとその日が空いて見え、予約が通ってしまう）
+  if (body.booked.some((b) => isObj(b) && !isRealDate(b.date))) return { ok: false, reason: "台帳の日付は暦にある日付（YYYY-MM-DD）で入れてください" };
   const booked: BookedRow[] = body.booked
     .filter(
       (b): b is Record<string, unknown> =>
@@ -68,8 +69,7 @@ export function parseReserveRequest(body: unknown, base: Menu[], ai: Pick<AiSett
         typeof b.customerId === "string" &&
         typeof b.menuId === "string" &&
         menuIds.has(b.menuId) &&
-        typeof b.date === "string" &&
-        DATE.test(b.date) &&
+        isRealDate(b.date) &&
         typeof b.start === "string" &&
         TIME.test(b.start) &&
         (b.status === "confirmed" || b.status === "hold"),
@@ -93,7 +93,7 @@ export function parseReserveRequest(body: unknown, base: Menu[], ai: Pick<AiSett
   const visits: Visit[] = (Array.isArray(body.visits) ? body.visits : [])
     .filter(
       (v): v is Record<string, unknown> =>
-        isObj(v) && typeof v.customerId === "string" && typeof v.menuId === "string" && menuIds.has(v.menuId) && typeof v.date === "string" && DATE.test(v.date),
+        isObj(v) && typeof v.customerId === "string" && typeof v.menuId === "string" && menuIds.has(v.menuId) && isRealDate(v.date),
     )
     .slice(0, MAX_VISITS)
     .map((v) => ({ customerId: v.customerId as string, menuId: v.menuId as string, date: v.date as string }));

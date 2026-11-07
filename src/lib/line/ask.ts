@@ -6,7 +6,8 @@
 //    予約 ──▶ 予約チャットと同じ道具（check_rules → place_hold）とプログラムの判定 ──▶ 仮押さえまで（🔒 確定はしない）
 
 import { contextFor, parseReserveRequest } from "../ai/request";
-import { candidateLabel } from "../ai/slots";
+import { candidateLabel, menuName } from "../ai/slots";
+import { isRealDate } from "../calendar";
 import { runTool, type ToolOutcome } from "../ai/tools";
 import type { BookedRow, HoldOffer, Step } from "../ai/wire";
 import type { Rule } from "../rules/types";
@@ -60,6 +61,9 @@ export function searchedAlternatives(o: Pick<ToolOutcome, "isError" | "combo" | 
   if (o.isError) return false;
   return !(o.combo && !o.hidden);
 }
+
+/** 一言の日にちが暦にない時（11/32 など）のオーナーへの理由 */
+export const LINE_UNREAL_DATE_REASON = "日にちが暦にない日付なので、受けられません";
 
 export const LINE_HOLD_REASON = "オーナーが LINE で頼みました（空きとルールはプログラムで確かめ済み）";
 
@@ -154,6 +158,19 @@ export async function runLineAsk(opts: {
     ...(sorted.start ? [] : ["時刻"]),
   ];
   if (missing.length) return { ok: true, via, kind: "hold-missing", missing };
+
+  // 暦に無い日付（11/32 など）は道具に渡さずに断る（暦の計算で次の月の日に読みかえない）
+  if (!isRealDate(sorted.date))
+    return {
+      ok: true,
+      via,
+      kind: "hold-no",
+      reason: LINE_UNREAL_DATE_REASON,
+      alternatives: [],
+      searched: false,
+      label: `${sorted.date} ${sorted.start} ${menuName(ctx, sorted.menuId)}`,
+      steps: [{ kind: "reject", text: `日にち（${sorted.date}）が暦にないので、仮押さえしなかった` }],
+    };
 
   // 予約チャットと同じ道具・同じ判定を通す（AI が決めた日時でも、プログラムが受けられると言った物だけ）
   const input = { menu_id: sorted.menuId, date: sorted.date, start: sorted.start };

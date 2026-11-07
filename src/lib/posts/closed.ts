@@ -7,7 +7,7 @@
 // 年：書いてあればそれ。無ければ、期間の終わり（1日ずつはその日）が今日以降になるいちばん近い年。
 // 形と曜日もここで出す（「12月31日（木）〜1月5日（火）」）。続いている日は「〜」でまとめる。
 
-import { addDays, dayDiff } from "../calendar";
+import { addDays, dayDiff, isRealDate } from "../calendar";
 
 /** 材料のお休みの日付 */
 export type OwnerClosed =
@@ -48,7 +48,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 function realDate(y: number, m: number, d: number): string | null {
   if (!(m >= 1 && m <= 12 && d >= 1 && d <= 31)) return null;
   const s = `${y}-${pad(m)}-${pad(d)}`;
-  return new Date(Date.UTC(y, m - 1, d)).toISOString().slice(0, 10) === s ? s : null;
+  return isRealDate(s) ? s : null;
 }
 
 /** 「12月31日（木）」（月日と曜日） */
