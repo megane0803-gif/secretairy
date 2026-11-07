@@ -330,6 +330,22 @@ describe("freee：サーバーがつながりを持ち続ける（置き場の�
     }
   });
 
+  test("更新用の鍵が返ってこない時は、今どおり cookie だけでつなぐ（置き場には置かない・来た人は試せない）", async () => {
+    const f = new FakeFreee();
+    f.refresh = "";
+    const store = memoryStore(() => clock.now);
+    const deps = makeDeps(f, store);
+    const start = await handleStart(ownerReq("/api/freee/start"), deps);
+    const loc = new URL(start.headers.get("location")!);
+    const sc = start.headers.getSetCookie().find((c) => c.startsWith(STATE_COOKIE))!.split(";")[0];
+    const q = new URLSearchParams({ code: "c", state: loc.searchParams.get("state")! });
+    const cb = await handleCallback(ownerReq(`/api/freee/callback?${q}`, { method: "GET", cookie: sc }), deps);
+    assert.equal(cb.headers.get("location"), "/accounting?freee=connected-cookie#freee");
+    assert.ok(cb.headers.getSetCookie().some((c) => c.startsWith(`${TOKEN_COOKIE}=`) && !/Max-Age=0/.test(c)), "cookie には入れる");
+    assert.equal(await store.get(FREEE_KV.token), null);
+    assert.equal((await bodyOf(await read(deps))).code, "not-connected");
+  });
+
   test("事業所の番号が FREEE_COMPANY_ID と違う時は置かない・置いてあっても使わない", async () => {
     const f = new FakeFreee();
     const store = memoryStore(() => clock.now);
