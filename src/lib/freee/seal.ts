@@ -1,10 +1,11 @@
 // freee（テスト事業所）の cookie の中身を、書きかえを見破れる形で暗号化する（AES-256-GCM）。
 // 暗号の鍵は環境変数 FREEE_COOKIE_KEY（32バイトを base64 にした文字）。鍵はここで使うだけで、画面・ログには出さない。
-// 使い道（state の cookie か、鍵の cookie か）を「付け足しの印」（AAD）に入れるので、片方の cookie をもう片方に使い回せない。
+// 使い道（state の cookie か、鍵の cookie か、サーバーの置き場（KV）に置く鍵か）を「付け足しの印」（AAD）に入れるので、
+// 片方をもう片方に使い回せない（cookie の中身を KV に、KV の中身を cookie に入れ替えても読めない）。
 
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
-export type SealPurpose = "state" | "token";
+export type SealPurpose = "state" | "token" | "kv-token";
 
 const VERSION = "1";
 

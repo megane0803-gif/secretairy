@@ -348,6 +348,32 @@ export type FreeeSettings = {
   importUnknownWaitSeconds: number;
   /** 「freee に明細を入れる」1回の押しで、画面が窓口を続けて呼ぶ回数の上限 */
   maxImportCalls: number;
+  /** 来た人がそのまま試せる窓口（/api/freee/try。docs/SPEC.md §1.8.2） */
+  try: FreeeTrySettings;
+};
+
+/** 回数の上限：1日（全体・店の日付）・1分（全体）・同じ送り元から1日 */
+export type TryLimits = { daily: number; perMinute: number; perSenderDaily: number };
+
+/**
+ * 来た人がそのまま試せる窓口（config/accounting.json の freee.try）。
+ * holdSeconds = 最後に書いてから元に戻すまでの秒数（この間はその形のまま見られる）/ maxItemsPerTrial = 1回の試しで登録できる件数 /
+ * lockSeconds = 書く時の「同時に1回」の印の期限（持ち時間より長く）/ refreshLockSeconds = 鍵を延ばす印の期限 /
+ * refreshMarginSeconds = 鍵の期限のこの秒数前から延ばす / kvTokenDays = 置き場に鍵を置く日数 /
+ * trialKeepDays = 元に戻す記録を置く日数 / maxRequestChars = 受け取る大きさ（字）/
+ * register・read = 登録と、読む・読み直すの回数の上限（元に戻すはこの数とは別）
+ */
+export type FreeeTrySettings = {
+  holdSeconds: number;
+  maxItemsPerTrial: number;
+  lockSeconds: number;
+  refreshLockSeconds: number;
+  refreshMarginSeconds: number;
+  kvTokenDays: number;
+  trialKeepDays: number;
+  maxRequestChars: number;
+  register: TryLimits;
+  read: TryLimits;
 };
 
 export function getFreeeSettings(): FreeeSettings {
