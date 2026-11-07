@@ -7,7 +7,8 @@ import { readdirSync, readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, test } from "node:test";
 import { emptyBook } from "../../book/state";
 import { getAds } from "../../data/seed";
-import { memoryStore, type KvStore } from "../../line/store";
+import { memoryStore, upstashStore, type KvStore } from "../../line/store";
+import { fakeUpstash } from "../../line/__tests__/fakeUpstash";
 import { checkPasscode } from "../../server/passcode";
 import { getAdSettings, getMenus, getShop, getSiteOrigin } from "../../settings";
 import { RESULT_FORMAT, SYNC_FORMAT, SYNC_VERSION, syncPayload, type SyncPayload } from "../connect";
@@ -2061,6 +2062,107 @@ describe("直しW：日ごとの塩は、置けた時は自分の値をそのま
   });
 });
 
+describe("直しW：書くのは元の所・読むのは写しから、の作り物の Upstash で、try が最後まで通る（塩・数・印・resetAt・送る・読み直し）", () => {
+  const DAY = "2026-11-07";
+  const IP = "203.0.113.7";
+  const CONF = { url: "https://kv.example.test", token: "kv-token" };
+
+  /** 本番と同じく、窓口の1回の呼び出しごとに置き場を作る（sync token は呼び出しをまたがない）。呼び出しの間には写しが追いつく */
+  async function setupWith(up: ReturnType<typeof fakeUpstash>) {
+    const w = await prepared({ store: upstashStore(CONF, up.fetch) });
+    up.catchUp();
+    return w;
+  }
+  async function tryWith(w: { deps: LiveDeps }, up: ReturnType<typeof fakeUpstash>, body: unknown) {
+    w.deps.store = upstashStore(CONF, up.fetch);
+    const from = up.calls.length;
+    const r = await handleLiveTry(tryReq(body), w.deps);
+    const b = (await r.json()) as Record<string, any>;
+    const calls = up.calls.slice(from);
+    up.catchUp();
+    return { status: r.status, headers: r.headers, b, calls };
+  }
+
+  test("塩 → 3つの数（INCR と EXPIRE）→ 印 → resetAt → 送る → 読み直し → 自分の印を消す、まで通る", async () => {
+    const up = fakeUpstash({ now });
+    const w = await setupWith(up);
+    assert.equal(up.value(LIVE_KEY.lock), null, "用意の後に印は残らない（自分の印か確かめる GET は sync token で元の所から読む）");
+    const before = w.google.mutateCalls.length;
+    const r = await tryWith(w, up, { kind: "stop", no: 7 });
+    assert.equal(r.status, 200, JSON.stringify(r.b));
+    assert.equal(r.b.line.outcome, "done");
+    // 塩：置けた時は自分の値（読み直さない）
+    const salt = up.value(LIVE_KEY.trySalt(DAY));
+    assert.match(salt ?? "", /^[0-9a-f]{32}$/);
+    assert.ok(!r.calls.some((c) => c.cmds.some((x) => x[0] === "GET" && x[1] === LIVE_KEY.trySalt(DAY))), "塩は読み直さない");
+    // 3つの数：1つずつ足し、期限が付いた
+    const keys = [LIVE_KEY.trySource(DAY, sourceHash(salt!, sourceBucket(IP))), LIVE_KEY.tryMinute(Math.floor(clock / 60_000)), LIVE_KEY.tryDay(DAY)];
+    for (const k of keys) {
+      assert.equal(up.value(k), "1", k);
+      assert.ok(Number.isFinite(up.until(k)), `${k} に期限`);
+    }
+    // 印：取って、終わったら自分の印か確かめてから消した（確かめの GET は省いていない）
+    assert.ok(r.calls.some((c) => c.cmds.some((x) => x[0] === "SET" && x[1] === LIVE_KEY.lock && x.includes("NX"))));
+    assert.ok(r.calls.some((c) => c.cmds.some((x) => x[0] === "GET" && x[1] === LIVE_KEY.lock)), "自分の印かを確かめる GET");
+    assert.equal(up.value(LIVE_KEY.lock), null, "自分の印を消した");
+    // resetAt：mutate の前に置き、返事にも入る
+    assert.equal(up.value(LIVE_KEY.resetAt), new Date(clock).toISOString());
+    assert.equal(r.b.list.resetAt, up.value(LIVE_KEY.resetAt));
+    // 送る：validateOnly → 本当の1回。読み直しの一覧がある
+    assert.deepEqual(w.google.mutateCalls.slice(before).map((m) => [m.validateOnly, m.partialFailure]), [[true, false], [false, false]]);
+    assert.equal(r.b.list.keywords.find((k: any) => k.text === "髪型 流行り").status, "止めている");
+    // sync token：この呼び出しの最初には付けず、2回目からは前の返事の値。窓口はみな /pipeline
+    assert.equal(r.calls[0].syncToken, null, "最初の呼び出しには付けない（前の呼び出しの置き場の token は引き継がない）");
+    assert.ok(r.calls.slice(1).every((c) => c.syncToken), "2回目からは付ける");
+    assert.ok(r.calls.every((c) => c.url === `${CONF.url}/pipeline`));
+    // 次の人も 409 にならずに試せる（印が残っていない）
+    clock += 61_000;
+    const r2 = await tryWith(w, up, { kind: "exclude", no: 10 });
+    assert.equal(r2.status, 200, JSON.stringify(r2.b));
+    assert.equal(r2.b.line.outcome, "done");
+    assert.equal(up.value(keys[0]), "2", "同じ日・同じ送り元は同じ塩で数える");
+  });
+
+  test("（比べ）sync token を見ない置き場だと、自分の印か確かめる GET が写しから読み、印を消さずに残す（確かめは省かないので、ほかの印は消さない）", async () => {
+    const up = fakeUpstash({ now, honorSyncToken: false });
+    const w = await prepared({ store: upstashStore(CONF, up.fetch) });
+    // 用意の印が写しに見えず、消さずに残っている（期限で消える）
+    assert.notEqual(up.value(LIVE_KEY.lock), null);
+    up.reset();
+    w.deps.store = upstashStore(CONF, up.fetch);
+    const r = await handleLiveTry(tryReq({ kind: "stop", no: 7 }), w.deps);
+    assert.equal(r.status, 200, "塩は自分の値を使うので、ここでも 503 にはならない");
+    assert.notEqual(up.value(LIVE_KEY.lock), null, "印を確かめられない時は消さない");
+  });
+
+  test("ほかの所が落ちた時も 503 no-store で、何も書かない（3つの数の INCR／EXPIRE・塩・印・resetAt）・印は残さない", async () => {
+    const cases: [string, (c: string[]) => boolean][] = [
+      ["塩の SET", (c) => c[0] === "SET" && c[1].startsWith("ads:live:try:salt:")],
+      ["送り元の INCR", (c) => c[0] === "INCR" && c[1].startsWith("ads:live:try:src:")],
+      ["送り元の EXPIRE", (c) => c[0] === "EXPIRE" && c[1].startsWith("ads:live:try:src:")],
+      ["1分の INCR", (c) => c[0] === "INCR" && c[1].startsWith("ads:live:try:min:")],
+      ["1分の EXPIRE", (c) => c[0] === "EXPIRE" && c[1].startsWith("ads:live:try:min:")],
+      ["1日の INCR", (c) => c[0] === "INCR" && c[1].startsWith("ads:live:try:day:")],
+      ["1日の EXPIRE", (c) => c[0] === "EXPIRE" && c[1].startsWith("ads:live:try:day:")],
+      ["印の SET", (c) => c[0] === "SET" && c[1] === LIVE_KEY.lock],
+      ["resetAt の SET", (c) => c[0] === "SET" && c[1] === LIVE_KEY.resetAt],
+    ];
+    for (const [name, failOn] of cases) {
+      let failing = false;
+      const up = fakeUpstash({ now, failOn: (c) => failing && failOn(c) });
+      const w = await setupWith(up);
+      const n = writes(w.google).length;
+      failing = true;
+      const r = await tryWith(w, up, { kind: "stop", no: 7 });
+      assert.equal(r.status, 503, name);
+      assert.match(r.headers.get("cache-control") ?? "", /no-store/, name);
+      assert.equal(r.b.code, "no-store", name);
+      assert.equal(writes(w.google).length, n, `${name}：本当の書き込みは無い`);
+      assert.equal(up.value(LIVE_KEY.lock), null, `${name}：印は残さない`);
+    }
+  });
+});
+
 describe("鍵の扱い（リポジトリ・設定）", () => {
   test("PEM や鍵の JSON をリポジトリに入れない（テストは generateKeyPairSync で作る）", () => {
     for (const f of ["src/lib/ads/__tests__/live.test.ts", "src/lib/ads/__tests__/fakeGoogle.ts", "config/ads.json", ".env.example"]) {
@@ -2083,7 +2185,8 @@ describe("README", () => {
     for (const w of ["元の形に戻してから", "承認した1件だけ", "テスト用アカウントの中だけ・店の広告には届かない理由", "オーナーの「送る」との違い", "種類（止める・外す・足す）と番号", "付けない（次の人が元に戻すため）", "人を確かめる物ではありません", "x-real-ip", "生の IP は Redis にもログにも残しません"])
       assert.ok(sec.includes(w), w);
     // 直しW：直しU の後の本番で 503 だったこと・直した所・Merge の後に確かめること（まだ確かめていない・次の日の最初の1回）
-    for (const w of ["503 no-store", "置けた時は作った値をそのまま使い", "`upstash-sync-token`", "承認の箱から1件承認して、try が通った", "**まだ確かめていません**", "次の日に確かめます"])
+    assert.doesNotMatch(sec, /LINE・試験10問・広告の[^。]*にも効きます/, "全部に効くとは書かない");
+    for (const w of ["503 no-store", "置けた時は作った値をそのまま使い", "`upstash-sync-token`", "同じ置き場の中で、書いた直後に読む時だけ", "別々に作った置き場の間では引き継ぎません", "省いていません", "INCR と EXPIRE", "承認の箱から1件承認して、try が通った", "**まだ確かめていません**", "次の日に確かめます"])
       assert.ok(sec.includes(w), w);
     assert.doesNotMatch(sec, /100%|必ず|すぐ反映/);
     const guard = readme.slice(readme.indexOf("### だれでも呼べる窓口の守り（今の作り）"), readme.indexOf("### 動かし方の手順"));

@@ -43,6 +43,9 @@ export const SYNC_TOKEN_HEADER = "upstash-sync-token";
  * そこで、返事の見出し upstash-sync-token を覚え、この置き場の次の呼び出しに付ける（Upstash の公式の部品の「Read Your Writes」と同じ）。
  * 返事ごとに新しい値に替え、返事に無ければ前の値のまま。最初の呼び出しには付けない。
  * 覚えるのはこの置き場の中だけ（置き場は窓口の1回の呼び出しごとに作る。プロセス全体では共有しない＝ほかの呼び出しと混ぜない）。
+ * なので効くのは「同じ置き場の中で、書いた直後に読む時」だけ。別々に作った置き場の間では引き継がない
+ * （例：試験10問の startRun と evalGate は別々に置き場を作るので、そこには効かない）。
+ * token を付けるのは、送る窓口（/pipeline）の呼び出し全部。
  */
 export function upstashStore(conf = storeEnv(), fetchFn: typeof fetch = (input, init) => fetch(input, init)): KvStore {
   if (!conf) throw new NoStoreError("Redis の環境変数がありません");

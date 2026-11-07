@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { SYNC_TOKEN_HEADER, upstashStore } from "../store";
+import { fakeUpstash as laggingUpstash } from "./fakeUpstash";
 
 const CONF = { url: "https://kv.example.test", token: "tok" };
 
@@ -91,5 +92,20 @@ describe("直しW：upstash-sync-token（書いた直後の読み直しを書い
     await upstashStore(CONF, fetchFn).get("k");
     assert.equal(auth, "Bearer tok");
     assert.equal(SYNC_TOKEN_HEADER, "upstash-sync-token");
+  });
+
+  test("効くのは同じ置き場の中だけ：書いた直後の GET は元の所から読む・別々に作った置き場には引き継がない。送るのは /pipeline", async () => {
+    const up = laggingUpstash({ now: () => 0 });
+    const a = upstashStore(CONF, up.fetch);
+    assert.equal(await a.set("k", "v", { ex: 60, nx: true }), true);
+    assert.equal(await a.get("k"), "v", "同じ置き場の中では、書いた直後でも読める");
+    // 別々に作った置き場（例：試験10問の startRun と evalGate）は token を持たないので、最初の読みは写しから（まだ写っていない）
+    const b = upstashStore(CONF, up.fetch);
+    assert.equal(await b.get("k"), null);
+    assert.deepEqual(
+      up.calls.map((c) => c.syncToken),
+      [null, "t1", null],
+    );
+    assert.ok(up.calls.every((c) => c.url === `${CONF.url}/pipeline`), "token を付けるのは pipeline の窓口");
   });
 });
