@@ -19,6 +19,8 @@ export type FakeCampaign = { id: number; name: string; status: Status; budget: s
 export type FakeGroup = { id: number; campaignId: number; name: string; status: Status };
 export type FakeCriterion = { groupId: number; id: number; text: string; match: Match; status: Status };
 export type FakeNegative = { campaignId: number; id: number; text: string; match: Match; status: Status };
+/** キーワードではないキャンペーンの条件（地域・言語など。直しU の「元に戻す」が触らないことを確かめる） */
+export type FakeOtherCriterion = { campaignId: number; id: number; type: "LOCATION" | "LANGUAGE"; negative: boolean; status: Status };
 
 export type FakeHooks = {
   /** 送った後、変えてから返事を落とす（通信が切れた形） */
@@ -45,6 +47,7 @@ export type FakeGoogle = {
   groups: FakeGroup[];
   criteria: FakeCriterion[];
   negatives: FakeNegative[];
+  others: FakeOtherCriterion[];
   hooks: FakeHooks;
   /** 届いた呼び出し（URL・見出し・中身。テストで見る） */
   calls: { url: string; headers: Record<string, string>; body: string }[];
@@ -87,6 +90,7 @@ export function fakeGoogle(p: { publicKeyPem: string; email: string; managerId: 
     groups: [],
     criteria: [],
     negatives: [],
+    others: [],
     hooks: {},
     calls: [],
     tokenCalls: 0,
@@ -176,7 +180,15 @@ export function fakeGoogle(p: { publicKeyPem: string; email: string; managerId: 
           };
         });
       case "campaign_criterion":
-        return g.negatives.map((n) => ({
+        return [
+          ...g.others.map((o) => ({
+            "campaign_criterion.resource_name": rn(cid, "campaignCriteria", `${o.campaignId}~${o.id}`),
+            "campaign_criterion.campaign": rn(cid, "campaigns", o.campaignId),
+            "campaign_criterion.type": o.type,
+            "campaign_criterion.negative": o.negative,
+            "campaign_criterion.status": o.status,
+          })),
+          ...g.negatives.map((n) => ({
           "campaign_criterion.resource_name": rn(cid, "campaignCriteria", `${n.campaignId}~${n.id}`),
           "campaign_criterion.campaign": rn(cid, "campaigns", n.campaignId),
           "campaign_criterion.type": "KEYWORD",
@@ -184,7 +196,8 @@ export function fakeGoogle(p: { publicKeyPem: string; email: string; managerId: 
           "campaign_criterion.status": n.status,
           "campaign_criterion.keyword.text": n.text,
           "campaign_criterion.keyword.match_type": n.match,
-        }));
+        })),
+        ];
       default:
         return null;
     }
@@ -327,7 +340,7 @@ export function fakeGoogle(p: { publicKeyPem: string; email: string; managerId: 
     if (new Set(temps).size !== temps.length) return googleError(400, "INVALID_ARGUMENT", { newResourceCreationError: "DUPLICATE_TEMP_IDS" });
 
     // 写しの上で順に行い、全部できたら（または partialFailure なら行ごとに）本物に写す
-    const snap = JSON.parse(JSON.stringify({ budgets: g.budgets, campaigns: g.campaigns, groups: g.groups, criteria: g.criteria, negatives: g.negatives }));
+    const snap = JSON.parse(JSON.stringify({ budgets: g.budgets, campaigns: g.campaigns, groups: g.groups, criteria: g.criteria, negatives: g.negatives, others: g.others }));
     const work = { ...snap } as typeof snap;
     const tempMap = new Map<string, string>();
     const errors: OpError[] = [];
@@ -347,6 +360,7 @@ export function fakeGoogle(p: { publicKeyPem: string; email: string; managerId: 
       g.groups = work.groups;
       g.criteria = work.criteria;
       g.negatives = work.negatives;
+      g.others = work.others;
       if (g.hooks.dropAfterMutate) throw new TypeError("fetch failed");
     }
     const body: Record<string, unknown> = { mutateOperationResponses: validateOnly ? [] : responses };
@@ -364,7 +378,7 @@ export function fakeGoogle(p: { publicKeyPem: string; email: string; managerId: 
     return reply(body);
   }
 
-  type Work = { budgets: FakeBudget[]; campaigns: FakeCampaign[]; groups: FakeGroup[]; criteria: FakeCriterion[]; negatives: FakeNegative[] };
+  type Work = { budgets: FakeBudget[]; campaigns: FakeCampaign[]; groups: FakeGroup[]; criteria: FakeCriterion[]; negatives: FakeNegative[]; others: FakeOtherCriterion[] };
 
   function ref(cid: string, v: unknown, kind: string, tempMap: Map<string, string>): number | null {
     if (typeof v !== "string") return null;
@@ -486,6 +500,34 @@ export function fakeGoogle(p: { publicKeyPem: string; email: string; managerId: 
       const id = newId();
       w.negatives.push({ campaignId: cp, id, text: k.text, match: k.matchType, status: "ENABLED" });
       return done("campaignCriterionResult", `customers/${cid}/campaignCriteria/${cp}~${id}`);
+    }
+    // remove は resourceName の文字だけ（公式の形：{ remove: "customers/…" }）
+    if (kind === "adGroupCriterionOperation" && action[0] === "remove") {
+      const m = typeof c === "string" ? String(c).match(new RegExp(`^customers/${cid}/adGroupCriteria/(\\d+)~(\\d+)$`)) : null;
+      const k = m ? w.criteria.find((x) => x.groupId === Number(m[1]) && x.id === Number(m[2])) : undefined;
+      if (!k || k.status === "REMOVED") return { error: { mutateError: "RESOURCE_NOT_FOUND" } };
+      w.criteria = w.criteria.filter((x) => x !== k);
+      return done("adGroupCriterionResult", String(c));
+    }
+    if (kind === "campaignCriterionOperation" && action[0] === "remove") {
+      const m = typeof c === "string" ? String(c).match(new RegExp(`^customers/${cid}/campaignCriteria/(\\d+)~(\\d+)$`)) : null;
+      const at = m ? { campaignId: Number(m[1]), id: Number(m[2]) } : null;
+      const n = at ? w.negatives.find((x) => x.campaignId === at.campaignId && x.id === at.id) : undefined;
+      const o = at ? w.others.find((x) => x.campaignId === at.campaignId && x.id === at.id) : undefined;
+      if (!n && !o) return { error: { mutateError: "RESOURCE_NOT_FOUND" } };
+      if (n) w.negatives = w.negatives.filter((x) => x !== n);
+      if (o) w.others = w.others.filter((x) => x !== o);
+      return done("campaignCriterionResult", String(c));
+    }
+    if (kind === "campaignOperation" && action[0] === "update") {
+      if (o.updateMask !== "status") return { error: { fieldMaskError: "FIELD_MASK_MISSING" } };
+      if (Object.keys(c).sort().join(",") !== "resourceName,status") return { error: { fieldMaskError: "FIELD_NOT_FOUND" } };
+      if (!ENUM_STATUS.includes(String(c.status))) return { error: { fieldError: "INVALID_VALUE" } };
+      const id = ref(cid, c.resourceName, "campaigns", tempMap);
+      const cp = id === null ? undefined : w.campaigns.find((x) => x.id === id);
+      if (!cp || cp.status === "REMOVED") return { error: { mutateError: "RESOURCE_NOT_FOUND" } };
+      cp.status = c.status as Status;
+      return done("campaignResult", String(c.resourceName));
     }
     // 広告文（adGroupAdOperation）など、ほかの操作はこの作品からは送らない
     return { error: { mutateError: "UNSUPPORTED_IN_FAKE" } };

@@ -4,7 +4,7 @@
 
 import type { AdsState } from "../state";
 import type { SyncPayload } from "../connect";
-import { LIVE_PATHS, type LiveFail, type LiveReadResponse, type LiveSendResponse, type LiveSetupResponse, type LiveStatusResponse } from "./wire";
+import { LIVE_PATHS, type LiveFail, type LiveReadResponse, type LiveSendResponse, type LiveSetupResponse, type LiveStatusResponse, type LiveTryResponse, type TryKind } from "./wire";
 
 export const LOST_MESSAGE = "返事が届きませんでした。送れたか分かりません（読み直してください）";
 
@@ -33,6 +33,8 @@ export const liveStatus = () => call<LiveStatusResponse>(LIVE_PATHS.status, { me
 export const liveSetup = (passcode: string) => call<LiveSetupResponse>(LIVE_PATHS.setup, post({ passcode }));
 export const liveSend = (passcode: string, payload: SyncPayload) => call<LiveSendResponse>(LIVE_PATHS.send, post({ passcode, payload }));
 export const liveRead = () => call<LiveReadResponse>(LIVE_PATHS.read, post({}));
+/** だれでも試す（直しU）：送るのは種類と番号の2つだけ（言葉は送らない）。返事が届かなくても、自動では呼び直さない */
+export const liveTry = (kind: TryKind, no: number) => call<LiveTryResponse>(LIVE_PATHS.try, post({ kind, no }));
 
 const OUTCOME_LABEL = { done: "反映した", already: "", failed: "できなかった", unknown: "分からない（読み直してください）" } as const;
 
@@ -44,22 +46,37 @@ export function outcomeText(l: { outcome: keyof typeof OUTCOME_LABEL; reason?: s
 
 const sameWords = (a: string, b: string) => a.replace(/\s+/g, " ").trim().toLowerCase() === b.replace(/\s+/g, " ").trim().toLowerCase();
 
+export const RESET_BY_TRY_NOTE = "オーナーが送った後に、ほかの人の試しで元の形に戻りました";
+
 /**
  * 読み直しの一覧は、ブラウザの印よりも正しい物として扱う：「本物に反映済み」の印があるのに、一覧ではそうなっていない言葉を出す。
+ * 直しU：だれかの試しで「元の形」に戻した時刻（read.resetAt）より前の印とは比べず、1行だけ出す（その後の印とだけ比べる）。
  */
 export function driftOf(s: AdsState, read: Extract<LiveReadResponse, { ok: true }>, adGroup: string): string[] {
   const out: string[] = [];
+  const resetAt = read.resetAt ? Date.parse(read.resetAt) : NaN;
+  let before = false;
+  /** 比べてよい印か（戻した時刻より後） */
+  const fresh = (realAt: string | undefined): boolean => {
+    if (!realAt) return false;
+    if (!Number.isNaN(resetAt) && !(Date.parse(realAt) > resetAt)) {
+      before = true;
+      return false;
+    }
+    return true;
+  };
   for (const p of s.proposals) {
-    if (!p.realAt) continue;
+    if (!fresh(p.realAt)) continue;
     if (p.action === "stop" && !read.keywords.some((k) => sameWords(k.text, p.text) && k.status === "止めている"))
       out.push(`「${p.text}」は印がありますが、読み直すと止まっていません`);
     if (p.action === "exclude" && !read.negatives.some((n) => sameWords(n.text, p.text) && n.match === "完全一致"))
       out.push(`「${p.text}」は印がありますが、読み直すと外していません`);
   }
   for (const p of s.adds ?? []) {
-    if (!p.realAt) continue;
+    if (!fresh(p.realAt)) continue;
     if (!read.keywords.some((k) => sameWords(k.text, p.text) && k.match === "フレーズ一致" && k.group === adGroup))
       out.push(`「${p.text}」は印がありますが、読み直すと足していません`);
   }
+  if (before) out.push(RESET_BY_TRY_NOTE);
   return out;
 }

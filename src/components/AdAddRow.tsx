@@ -4,6 +4,8 @@
 // 大きいカード1枚：「前 → 後」と理由1文、数（表からプログラムが入れた物）、足す用のプログラムの確認（✓ 4つ）。
 // ボタンは「承認」「見送り」（直すは無い）。AI のチームの会議は付けない。LINE には届けない。
 // 🔒 確定は人：足すのは、人が画面の「承認」を押したときだけ（ブラウザの本物の操作か確かめる）。
+// 直しU：承認の後に、テスト用の広告アカウントを元の形に戻してからこの1件を送る窓口を1回呼ぶ（AdApprovalRows の startTry と同じ道）。
+// 窓口を呼んでいる間（liveBusy）は「承認」を押せない。
 
 import { useState } from "react";
 import { addLabel } from "@/lib/ads/add";
@@ -14,15 +16,16 @@ import { useAds } from "@/lib/ads/useAds";
 import { SAVE_FAILED_MESSAGE } from "@/lib/browser";
 import { writeJournal, type JournalWho } from "@/lib/journal";
 import { getMenus } from "@/lib/settings";
-import { GateChecks } from "./AdApprovalRows";
+import { GateChecks, LIVE_BUSY_TITLE, startTry, type AdDone } from "./AdApprovalRows";
 
-export function AdAddRow({ p, onDone }: { p: AdAddProposal; onDone?: (text: string) => void }) {
+export function AdAddRow({ p, onDone, liveBusy = false }: { p: AdAddProposal; onDone?: (d: AdDone) => void; liveBusy?: boolean }) {
   const ads = useAds();
   const [note, setNote] = useState<string | null>(null);
 
   const approve = (e: React.MouseEvent) => {
     // 人がボタンを押したときだけ（スクリプトから押したことにはできない）
     if (!e.nativeEvent.isTrusted) return;
+    if (liveBusy) return;
     const nowIso = new Date().toISOString();
     const words = featuredWords(ads.settings, getMenus());
     let journal: { who: JournalWho; text: string }[] = [];
@@ -38,7 +41,8 @@ export function AdAddRow({ p, onDone }: { p: AdAddProposal; onDone?: (text: stri
     writeJournal(...journal);
     if (problems) return void setNote(`足しませんでした：${problems.join("。")}`);
     setNote(null);
-    onDone?.(`✓ ${ads.settings.channel}で ${p.no}番「${p.text}」を広告を出す言葉に足しました（広告の管理画面に1行。お金は動いていません）`);
+    // 作品の中の承認は効いた。そのあとテスト用の広告アカウントに、元の形に戻してからこの1件を送る（つないでいなければ呼ばない）
+    startTry({ kind: "add", no: p.no, text: p.text, todo: false }, (d) => onDone?.(d));
   };
 
   const skip = (e: React.MouseEvent) => {
@@ -82,14 +86,16 @@ export function AdAddRow({ p, onDone }: { p: AdAddProposal; onDone?: (text: stri
       </p>
       <GateChecks checks={p.checks} />
       <div className="approval-buttons" role="group" aria-label="この足す案をどうするか">
-        <button type="button" className="btn primary" onClick={approve}>
+        <button type="button" className="btn primary" onClick={approve} disabled={liveBusy} title={liveBusy ? LIVE_BUSY_TITLE : undefined}>
           承認
         </button>
         <button type="button" className="btn" onClick={skip}>
           見送り
         </button>
       </div>
-      <p className="hint small">承認＝広告の管理画面の「広告を出す言葉」に1行足します（フレーズ一致。お金は動きません）。見送り＝案を閉じます。</p>
+      <p className="hint small">
+        承認＝広告の管理画面の「広告を出す言葉」に1行足します（フレーズ一致。お金は動きません）。テスト用の広告アカウントにつながっている時は、元の形に戻してからこの1件を送ります。見送り＝案を閉じます。
+      </p>
       {note && (
         <p className="hint" role="status">
           {note}
