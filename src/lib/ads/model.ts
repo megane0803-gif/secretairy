@@ -3,12 +3,14 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ToolCall } from "../ai/model";
-import type { AdToolDef } from "./tools";
+import type { AdAddToolDef, AdToolDef } from "./tools";
 
 export type AdsModelRequest = {
   system: string;
   messages: Anthropic.Beta.BetaMessageParam[];
-  tools: AdToolDef[];
+  tools: (AdToolDef | AdAddToolDef)[];
+  /** 1回の返事で道具を何回も呼んでよいか（足す案だけ。止める・外すは1回に1つ） */
+  parallel?: boolean;
   /** 1回の返事の長さの上限（トークン。config/ai.json の ads.maxReplyTokens） */
   maxTokens: number;
 };

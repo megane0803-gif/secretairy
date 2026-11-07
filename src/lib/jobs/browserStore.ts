@@ -2,7 +2,7 @@
 // 読むときは毎回読みなおし、書く直前にも読みなおす（useBook・useAds・useAccounting と同じ形）。
 
 import { parseAccounting } from "../accounting/state";
-import { parseAds } from "../ads/state";
+import { isEmptyAds, parseAds } from "../ads/state";
 import { emptyBook, parseBook } from "../book/state";
 import { ACCOUNTING_KEY, ADS_KEY, BOOK_KEY, JOBS_KEY, readBrowser, writeBrowser } from "../browser";
 import { shopToday } from "../calendar";
@@ -18,7 +18,7 @@ export function browserJobStore(): JobStore {
     ads: () => parseAds(readBrowser(ADS_KEY)),
     setAds: (f) => {
       const next = f(parseAds(readBrowser(ADS_KEY)));
-      writeBrowser(ADS_KEY, next.proposals.length === 0 && next.applied.length === 0 ? null : JSON.stringify(next));
+      writeBrowser(ADS_KEY, isEmptyAds(next) ? null : JSON.stringify(next));
     },
     accounting: () => parseAccounting(readBrowser(ACCOUNTING_KEY)),
     jobs: () => parseJobs(readBrowser(JOBS_KEY)),

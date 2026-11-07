@@ -4,7 +4,7 @@
 // 経理は承認の箱を使わないので数えない（§1.8）。
 
 import type { AdJudgement } from "./ads/results";
-import { pendingAd, type AdProposal, type AdsState } from "./ads/state";
+import { pendingAd, pendingAdds, type AdAddProposal, type AdProposal, type AdsState } from "./ads/state";
 import { pendingRevert } from "./ads/verdict";
 import type { BookedRow } from "./ai/wire";
 import { pendingApprovals, type BookState, type PendingRow } from "./book/state";
@@ -12,8 +12,10 @@ import { pendingApprovals, type BookState, type PendingRow } from "./book/state"
 export type ApprovalQueue = {
   /** 予約の仮押さえの行（古い順。期限の切れた物は出さない） */
   reservations: PendingRow[];
-  /** 広告の案の行（あれば1つ） */
+  /** 広告の案の行（止める・外す。あれば1つ） */
   ad: AdProposal | null;
+  /** 広告の足す案の行（止める・外すの行の下に出す。作った順。LINE には届けない） */
+  adAdds: AdAddProposal[];
   /** 広告の「戻す案」の行（効いたかの判定で予約が減った言葉。あれば1つ。ads/verdict.ts。無ければ持たない） */
   adRevert?: AdJudgement;
   /** 承認の箱の行の数（= 上の帯・朝の要点の「承認待ち」） */
@@ -23,8 +25,15 @@ export type ApprovalQueue = {
 export function approvalQueue(book: BookState, ads: AdsState, nowIso: string): ApprovalQueue {
   const reservations = pendingApprovals(book, nowIso);
   const ad = pendingAd(ads);
+  const adAdds = pendingAdds(ads);
   const adRevert = pendingRevert(ads);
-  return { reservations, ad, ...(adRevert ? { adRevert } : {}), count: reservations.length + (ad ? 1 : 0) + (adRevert ? 1 : 0) };
+  return {
+    reservations,
+    ad,
+    adAdds,
+    ...(adRevert ? { adRevert } : {}),
+    count: reservations.length + (ad ? 1 : 0) + adAdds.length + (adRevert ? 1 : 0),
+  };
 }
 
 /** 承認の箱のどの行を出すか。ホームは全部、予約タブは予約の行だけ（広告の案は広告タブとホームで押す） */
@@ -34,9 +43,9 @@ export type ApprovalView = "all" | "reservations";
 export function approvalsFor(
   queue: ApprovalQueue,
   view: ApprovalView,
-): { reservations: PendingRow[]; ad: AdProposal | null; adRevert?: AdJudgement; count: number } {
-  if (view === "reservations") return { reservations: queue.reservations, ad: null, count: queue.reservations.length };
-  return { reservations: queue.reservations, ad: queue.ad, ...(queue.adRevert ? { adRevert: queue.adRevert } : {}), count: queue.count };
+): { reservations: PendingRow[]; ad: AdProposal | null; adAdds: AdAddProposal[]; adRevert?: AdJudgement; count: number } {
+  if (view === "reservations") return { reservations: queue.reservations, ad: null, adAdds: [], count: queue.reservations.length };
+  return { reservations: queue.reservations, ad: queue.ad, adAdds: queue.adAdds, ...(queue.adRevert ? { adRevert: queue.adRevert } : {}), count: queue.count };
 }
 
 /** 残りがこれより少ない仮押さえの行は、上に回して太字にする（赤で急がせない） */

@@ -5,7 +5,8 @@ import { LOCKED_RULES } from "../rules/locked";
 import type { Rule } from "../rules/types";
 import { validateOwnerRule } from "../rules/validate";
 import type { GateCheck, GatedProposal } from "./gate";
-import type { AdAction, AdTable, AdTableRow } from "./report";
+import type { AddPick } from "./add";
+import type { AdAction, AdTable, AdTableRow, AddMark } from "./report";
 import type { RejectedDraft, ReviewStep } from "./review";
 
 /** ai = Claude に聞く / script = 決まった返事（AI なし。テストと、AI につながらないときのお試し用） */
@@ -20,15 +21,20 @@ export type AdsRequest = {
   fix?: { text: string; current: { action: AdAction; no: number } };
 };
 
+/**
+ * adds = 足す案（止める・外すの後の別の1回。止める・外すが門を通らなかった時も付く。直す時は付かない）。
+ * 止める・外すの中身（proposal・checks・steps など）は足す案があっても今と同じ。
+ */
 export type AdsResponse =
-  | { ok: true; proposal: GatedProposal; checks: GateCheck[]; tries: number; steps: ReviewStep[]; rejected?: RejectedDraft[] }
-  | { ok: false; code: "gate"; checks: GateCheck[]; problems: string[]; tries: number; steps: ReviewStep[]; rejected?: RejectedDraft[] }
+  | { ok: true; proposal: GatedProposal; checks: GateCheck[]; tries: number; steps: ReviewStep[]; rejected?: RejectedDraft[]; adds?: AddPick }
+  | { ok: false; code: "gate"; checks: GateCheck[]; problems: string[]; tries: number; steps: ReviewStep[]; rejected?: RejectedDraft[]; adds?: AddPick }
   | { ok: false; code: "no-ai"; message: string }
   /** 画面の側だけ：窓口が混んでいる（429）。サーバーは返さない */
   | { ok: false; code: "busy"; message: string }
   | { ok: false; code: "bad-request"; message: string };
 
 const MAX_ROWS = 40;
+const ADD_MARKS: readonly AddMark[] = ["pending", "added", "skipped"];
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object";
 const count = (x: unknown) => typeof x === "number" && Number.isInteger(x) && x >= 0 && x < 1e9;
 
@@ -51,6 +57,8 @@ function parseRows(x: unknown, kind: AdTableRow["kind"]): AdTableRow[] | null {
       ...(typeof r.menuId === "string" ? { menuId: r.menuId.slice(0, 40) } : {}),
       weeks,
       off: r.off === true,
+      // 足す案の印は調べた言葉だけ
+      ...(kind === "term" && ADD_MARKS.includes(r.addMark as AddMark) ? { addMark: r.addMark as AddMark } : {}),
     });
   }
   return out;

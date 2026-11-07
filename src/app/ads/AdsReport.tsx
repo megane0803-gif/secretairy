@@ -6,10 +6,30 @@
 // 数はどれもプログラムが表から出す（AI は数を作らない）。止めた・外した行は薄くする。
 
 import { BigNumber, MiniColumns } from "@/components/parts";
-import { totalOf, townIn, WEEK_LABELS, weeklyTotals, yen, type AdTableRow } from "@/lib/ads/report";
+import { addedRows, totalOf, townIn, WEEK_LABELS, weeklyTotals, yen, type AdTableRow } from "@/lib/ads/report";
 import { useAds } from "@/lib/ads/useAds";
 
-function Rows({ rows, towns, offWord }: { rows: AdTableRow[]; towns: string[]; offWord: string }) {
+/** 足した言葉の行（広告を出す言葉の一覧の下。数はまだ無いので「—」） */
+function AddedRow({ r }: { r: AdTableRow }) {
+  return (
+    <tr className="added">
+      <td className="num">—</td>
+      <td>
+        <span className="ad-word">
+          {r.text}
+          <span className="tag ok">足した</span>
+          <small className="hint">（{r.no}番の調べた言葉から）</small>
+        </span>
+      </td>
+      <td className="num">—</td>
+      <td className="num">—</td>
+      <td className="num">—</td>
+      <td>—</td>
+    </tr>
+  );
+}
+
+function Rows({ rows, towns, offWord, added = [] }: { rows: AdTableRow[]; towns: string[]; offWord: string; added?: AdTableRow[] }) {
   return (
     <div className="ad-scroll">
       <table className="table ad-table">
@@ -42,6 +62,7 @@ function Rows({ rows, towns, offWord }: { rows: AdTableRow[]; towns: string[]; o
                       </span>
                     )}
                     {r.off && <span className="tag offtag">{offWord}</span>}
+                    {r.addMark === "added" && <span className="tag ok">もう足した</span>}
                   </span>
                 </td>
                 <td className="num">{t.clicks.toLocaleString("ja-JP")}回</td>
@@ -53,6 +74,9 @@ function Rows({ rows, towns, offWord }: { rows: AdTableRow[]; towns: string[]; o
               </tr>
             );
           })}
+          {added.map((r) => (
+            <AddedRow key={`added-${r.no}`} r={r} />
+          ))}
         </tbody>
       </table>
     </div>
@@ -104,6 +128,8 @@ export function AdsReport() {
   const { table, settings } = useAds();
   const stopped = table.keywords.filter((r) => r.off);
   const excluded = table.searchTerms.filter((r) => r.off);
+  // 足した言葉（数はまだ無い。週ごとの合計・止める案には入れない）
+  const added = addedRows(table);
 
   return (
     <>
@@ -120,6 +146,13 @@ export function AdsReport() {
               <span className={r.off ? "tag offtag" : "tag ok"}>{r.off ? "止めた" : "出している"}</span>
             </li>
           ))}
+          {added.map((r) => (
+            <li key={`added-${r.no}`}>
+              — {r.text}
+              <span className="tag ok">足した</span>
+              <small className="hint">（フレーズ一致・数はまだ無い）</small>
+            </li>
+          ))}
         </ul>
         <strong>外した言葉（この言葉で調べた方には出さない）</strong>
         {excluded.length === 0 ? (
@@ -134,15 +167,16 @@ export function AdsReport() {
             ))}
           </ul>
         )}
-        {stopped.length + excluded.length > 0 && (
+        {stopped.length + excluded.length + added.length > 0 && (
           <p className="hint">
             止めた {stopped.length}・外した {excluded.length}
+            {added.length > 0 && `・足した ${added.length}`}
           </p>
         )}
       </section>
 
       <h2>広告を出す言葉（止められる）</h2>
-      <Rows rows={table.keywords} towns={settings.towns} offWord="止めた" />
+      <Rows rows={table.keywords} towns={settings.towns} offWord="止めた" added={added} />
       <h2 style={{ marginTop: 16 }}>お客さんが調べた言葉（多い順・外せる）</h2>
       <Rows rows={table.searchTerms} towns={settings.towns} offWord="外した" />
       <p className="hint">町の名前（{settings.towns.join("・")}）が入った言葉は、近くのお客様の言葉なので外しません（プログラムが確かめます）。</p>

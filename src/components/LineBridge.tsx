@@ -8,7 +8,6 @@
 // 🔒 確定は人：確定するのは press の知らせ（LINE のボタン）だけ。一言（text）や AI の答えからは確定しない。
 
 import { useEffect, useRef } from "react";
-import { pendingAd } from "@/lib/ads/state";
 import { readAdsState, useAds, writeAdsState } from "@/lib/ads/useAds";
 import type { BookData } from "@/lib/book/data";
 import { currentEpoch, readBook, updateBook } from "@/lib/book/store";
@@ -17,7 +16,7 @@ import { shopToday } from "@/lib/calendar";
 import { deskKey, setDesk } from "@/lib/karte/deskStore";
 import { writeJournal, type JournalWho } from "@/lib/journal";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
-import { adCard, applyAsk, karteTargetFor, reservationCard, stillOk, type ApplyOutcome } from "@/lib/line/apply";
+import { adCard, applyAsk, karteTargetFor, lineApprovalIds, reservationCard, stillOk, type ApplyOutcome } from "@/lib/line/apply";
 import type { LineAskResponse } from "@/lib/line/ask";
 import { LINE_TEXT, sentStatus } from "@/lib/line/messages";
 import { commitPress, LINE_PRESS_FAILED_STATUS, type PressStore } from "@/lib/line/press";
@@ -83,7 +82,7 @@ export function LineBridge({ data }: { data: BookData }) {
         if (!cur || cur.token !== token) return;
         if (res.linked && !cur.linked) {
           const L = latest.current;
-          const ids = [...L.book.pending.map((p) => p.approval.id), ...(L.ads.pending ? [L.ads.pending.id] : [])];
+          const ids = lineApprovalIds(L.book.pending.map((p) => p.approval.id), L.ads.state);
           updateLineState((x) => (x && x.token === token ? withLinked(x, res.until, ids) : x));
           writeJournal({ who: "LINE", text: `つなぐ番号で LINE とつないだ（期限 ${when(res.until, data.shop.timezone)} まで。画面を開いている間だけ動く）` });
         }
@@ -103,7 +102,8 @@ export function LineBridge({ data }: { data: BookData }) {
   }, [active, token, settings.pollSeconds]);
 
   // 承認の箱に新しい行が入ったら、LINE に届ける（1行1回。サーバーでも once で1回だけ通す）
-  const pendingIds = [...book.pending.map((p) => p.approval.id), ...(ads.pending ? [ads.pending.id] : [])].join(",");
+  // 足す案・戻す案は LINE に届けない（line/apply.ts の lineApprovalIds）
+  const pendingIds = lineApprovalIds(book.pending.map((p) => p.approval.id), ads.state).join(",");
   useEffect(() => {
     if (!s?.linked || !active || notifying.current) return;
     const fresh = pendingIds.split(",").filter((id) => id && !s.notified.includes(id));

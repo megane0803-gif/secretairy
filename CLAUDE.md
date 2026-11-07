@@ -112,7 +112,7 @@ src/lib/brief/cache.ts 朝の要点の AI の一言の答えを材料ごとに�
 - 1回の来店で複数のメニューは `src/lib/combo.ts`（設定に無い組み合わせは id を「+」でつなぐ）を通す。
 - カルテの AI は下書きまで。プログラムの言葉の門（`src/lib/karte/gate.ts`。言葉は `locked.ts` の `KARTE_GATE_WORDS`。減らさない）を通し、保存は人の「保存」ボタンだけ。お客様の名前は AI に送らない。テストでは `scriptKarteWriter` に置きかえる。
 - 録音からメモを作る（仕様書 §1.5.1）：声はブラウザの外に出さない（文字にするのは Web Worker の Whisper）。送るのは文字だけで、名字は〔お客様〕に置きかえる。要点にも言葉の門（`gateLine`）を通し、メモに入れるのも保存も人のボタン。テストでは作った音・決まった文字起こし・`scriptNotesWriter` を使う（Whisper と Claude は呼ばない）。
-- 広告の見直しの道具は `src/lib/ads/tools.ts` の2つ（止める・外す）だけ。言葉を足す道具は足さない。案は門（`src/lib/ads/gate.ts`）を通してから承認の箱へ。テストでは `src/lib/ads/script.ts` に置きかえる。
+- 広告の見直しの道具は `src/lib/ads/tools.ts` の止める・外すの2つ（この2つでは言葉を足せない。門の「言葉を足していない」はそのまま）と、そのあとの別の1回の「足す」（`add_keyword`）だけ。足すのは、売りのメニューの名前が入って予約につながった調べ言葉だけで、プログラムが決めた候補（`src/lib/ads/add.ts`）の番号から選ぶ。売り以外へは広げない。売りの言葉が入っているかの確かめは `src/lib/ads/featured.ts` の `featuredWordIn` の1か所（足す案・書き出し・`connect/` の見本のスクリプトの全部。スクリプトは本体を写し、テストで同じか確かめる）。案は門（`src/lib/ads/gate.ts`・`add.ts`）を通してから承認の箱へ。足すの行は `secretairy:ads` の `adds`（止める・外すの `proposals` とは別）で、LINE・AI のチームの会議・効いたかの判定・戻す案・毎週の報告・ToDo には入れない。「承認待ちは1つ」「7日に1つ」は1回の見直しの行をまとめて1回（`canPropose`）。窓口の中身は `src/lib/ads/serve.ts`（広告タブ・ホームの仕事・テストが同じ物を通す）。テストでは `src/lib/ads/script.ts` に置きかえる。
 - 広告の効いたかの判定はプログラム（`src/lib/ads/verdict.ts`。後の数は `seed/ads.json` の `after`）。戻す案は承認の箱へ（戻すのは人の「承認」だけ）。毎週の見直しの報告は `src/lib/ads/weekly.ts`（数はプログラム）。AI の文は広告の言葉の門（`src/lib/ads/words.ts`）を通す。一言のまとめ（`/api/ai/ads/note`・Haiku）は数字なし・AI が使えない時は出さない。テストでは決まった文を返す物に置きかえる（`src/lib/ads/__tests__/results.test.ts`）。
 
 - 広告の案の「AI のチーム」の会議（`src/lib/ads/team/`・窓口は `/api/ai/ads/team`・画面は `src/components/AdTeam.tsx`。仕様書 §1.7.4）：SecretAIry はオーナーの側近で、案をチームで話し合ってから出す。決めるのは今の承認の箱のボタンだけで、会議には確定・承認の道具を渡さない（会議は広告も承認の箱も変えない）。

@@ -1,6 +1,7 @@
 // 広告の見直しの案を Claude（Anthropic の API）で作る。サーバーの側だけで使う（鍵は .env.local の ANTHROPIC_API_KEY）。
 // 1回の返事の長さは max_tokens で上限を付ける（config/ai.json の ads.maxReplyTokens）。
-// 道具は「止める」「外す」の2つだけ。1回に1つだけ呼ばせる（disable_parallel_tool_use）。
+// 止める・外すの見直しの道具は「止める」「外す」の2つだけ。1回に1つだけ呼ばせる（disable_parallel_tool_use）。
+// 足す案の1回は「足す」の道具だけで、候補ごとに呼んでよい（parallel。何件まで受けるかはプログラムが決める）。
 
 import Anthropic from "@anthropic-ai/sdk";
 import { NoAiError, type ToolCall } from "../ai/model";
@@ -23,7 +24,7 @@ export function claudeAdsModel(model: string, apiKey: string | undefined = proce
           output_config: { effort: "low" },
           // 道具の形（番号と理由だけ）をくずさない
           tools: req.tools.map((t) => ({ ...t, strict: true })),
-          tool_choice: { type: "auto", disable_parallel_tool_use: true },
+          tool_choice: { type: "auto", disable_parallel_tool_use: !req.parallel },
           // 安全のために断られたとき、別のモデルで答えなおす（サーバーの側で）
           betas: ["server-side-fallback-2026-07-01"],
           fallbacks: "default",

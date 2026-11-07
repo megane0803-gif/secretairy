@@ -194,6 +194,10 @@ export type AdsAiSettings = {
   maxTries: number;
   /** 「直す」のオーナーの一言の長さの上限（字）。画面でも使う */
   maxFixChars: number;
+  /** 足す案で AI を呼ぶ回数の上限（止める・外すの maxTries とは別の1回。作り直しはしない） */
+  maxAddCalls: number;
+  /** 1回の見直しで出す足す案の数の上限。画面でも使う */
+  maxAdds: number;
   /** 窓口（/api/ai/ads）が受け取る大きさの上限（字） */
   maxRequestChars: number;
 };
@@ -201,6 +205,11 @@ export type AdsAiSettings = {
 /** 「直す」の一言の長さの上限（字）。画面でも使う（鍵や環境変数は読まない） */
 export function getAdsFixMaxChars(): number {
   return (ai as { ads: { maxFixChars: number } }).ads.maxFixChars;
+}
+
+/** 1回の見直しで出す足す案の数の上限。画面でも使う（鍵や環境変数は読まない） */
+export function getAdsMaxAdds(): number {
+  return (ai as { ads: { maxAdds: number } }).ads.maxAdds;
 }
 
 /** 広告の判定と報告の「一言のまとめ」で AI（Haiku）を呼ぶときの上限（config/ai.json の adsNote） */
