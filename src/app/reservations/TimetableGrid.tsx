@@ -1,6 +1,8 @@
 // 1週間の予約台帳の時間割（見た目だけ。並べ方は src/lib/book/timetable.ts）。
 // 横に今日から7日、縦に営業時間。予約は時間の長さの分だけ縦に伸びる帯で、確定は実線、仮押さえは点線のしま模様（形で分ける）。
 // 今日の列は目立たせ、定休日の列は灰色。列の頭に件数（大きい数字）と埋まり（小さい棒）。
+// スマホ（1024 より狭い時）も同じ部品で、見た目だけを globals.css で詰める：列の頭は曜日と日にち（今日は丸）・件数と棒ははぶく・
+// 30分は点線（tt-half）・帯の中は名字（＋様）だけ（時刻・メニュー名・札ははぶく。帯を押せば予約の1枚で分かる）。
 // 帯の色はメニュー（薄い背景＋左の太い線。src/lib/book/menuColor.ts・globals.css の --menu-<名前>）。字はふつうの字の色。
 // だれが入れたか（AI・人・外）は色ではなく、帯の頭の札（ActorTag）だけで見せる。
 
@@ -58,7 +60,12 @@ export function TimetableGrid({
     <div className="tt" style={{ "--tt-hours": hours } as CSSProperties} role="group" aria-label="1週間の予約台帳（時間割）">
       <div className="tt-corner" aria-hidden />
       {tt.columns.map((c) => (
-        <div key={c.date} className={["tt-head", c.isToday ? "today" : "", c.open ? "" : "closed", c.outside ? "outside" : ""].filter(Boolean).join(" ")}>
+        <div key={c.date} className={["tt-head", c.isToday ? "today" : "", c.open ? "" : "closed", c.holiday ? "holiday" : "", c.outside ? "outside" : ""].filter(Boolean).join(" ")}>
+          {/* スマホの列の頭（PC は隠す）：曜日・日にち（今日は丸で囲む） */}
+          <span className="tt-day-sp" aria-hidden>
+            <span className="tt-dow">{c.dow}</span>
+            <span className="tt-dnum num">{c.dayNum}</span>
+          </span>
           <span className="tt-date">
             {c.label}
             {c.isToday && <span className="tag">今日</span>}
@@ -87,9 +94,13 @@ export function TimetableGrid({
         <div
           key={c.date}
           id={`tt-col-${c.date}`}
-          className={["tt-col", c.isToday ? "today" : "", c.open ? "" : "closed", c.outside ? "outside" : ""].filter(Boolean).join(" ")}
-          aria-label={`${c.label}${c.isToday ? "（今日）" : ""}${c.open ? `：${c.count}件` : "：お休み"}`}
+          className={["tt-col", c.isToday ? "today" : "", c.open ? "" : "closed", c.holiday ? "holiday" : "", c.outside ? "outside" : ""].filter(Boolean).join(" ")}
+          aria-label={`${c.label}${c.isToday ? "（今日）" : ""}${c.open ? `：${c.count}件` : c.holiday ? "：休みの日" : "：お休み"}`}
         >
+          {/* 30分の点線（スマホだけ出す。PC は列の背景の薄い線のまま） */}
+          {tt.halves.map((top) => (
+            <span key={top} className="tt-half" style={{ top: `${top}%` }} aria-hidden />
+          ))}
           {c.off.map((s, i) => (
             <span key={i} className="tt-offhours" style={{ top: `${s.top}%`, height: `${s.height}%` }} aria-hidden />
           ))}

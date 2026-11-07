@@ -64,6 +64,13 @@ export function weekLabel(shop: ShopSettings, start: string): string {
   return `${calDay(shop, start).label}〜${calDay(shop, addDays(start, 6)).label}`;
 }
 
+/** スマホの台帳の上の短い範囲：「11月2日〜8日」（月をまたぐ時は「10月29日〜11月4日」） */
+export function weekLabelShort(start: string): string {
+  const [, m1, d1] = start.split("-").map(Number);
+  const [, m2, d2] = addDays(start, 6).split("-").map(Number);
+  return m1 === m2 ? `${m1}月${d1}日〜${d2}日` : `${m1}月${d1}日〜${m2}月${d2}日`;
+}
+
 /** 台帳で見せる1日（範囲の外の日は outside。薄くし、新しく入れない） */
 export type ViewDay = LedgerDay & { outside: boolean };
 

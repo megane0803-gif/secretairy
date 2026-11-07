@@ -1,11 +1,12 @@
 // 予約チャットの、Claude への指示。並びは 🔒 鍵つき → 店の文のルール（prompt.ts）→ 予約の係の約束 → いまの様子。
 // 型のルールは Claude に判定させない。可否と空きは道具（プログラム）が出し、Claude はそれに従うだけ。
 
-import { calDay, lastStartOf } from "../calendar";
+import { calDay } from "../calendar";
 import { instructionsFor } from "../rules/prompt";
 import { rulesFor, strictest } from "../rules/strictest";
 import { tellsRule } from "../rules/tellable";
 import { weekRange } from "./dates";
+import { menuDataLines } from "./menuData";
 import { ASK_SHOP_REPLY, openTodayLine, THANKS_REPLY } from "./replies";
 import { candidateLabel, menuName, type SlotContext } from "./slots";
 import type { Candidate } from "./wire";
@@ -62,8 +63,8 @@ export function reserveSystem(ctx: SlotContext, shown: Candidate[], holds: ConvH
     .join("・");
   lines.push(`- 営業時間：${open}`);
   const close = Object.values(ctx.shop.hours).find((h) => h)?.close ?? "20:00";
-  lines.push("- メニュー（id・名前・時間・最終受付）：");
-  for (const m of ctx.menus) lines.push(`  - ${m.id}：${m.name}・${m.minutes}分・最終受付 ${lastStartOf(m, close)}`);
+  // メニューの名前（オーナーが足した物も）は、お店のデータとして渡す（指示として読ませない。menuData.ts）
+  lines.push(...menuDataLines(ctx.menus, close));
   if (shown.length) {
     lines.push("- 直前にお客様へ出した候補：");
     shown.forEach((c, i) => lines.push(`  - ${i + 1}つ目：${candidateLabel(ctx, c)}（menu_id=${c.menuId} date=${c.date} start=${c.start}）`));

@@ -11,6 +11,7 @@
 import type { AddedTodo } from "../book/state";
 import { calDay } from "../calendar";
 import { resolveMenu } from "../combo";
+import { browserMenus } from "../menuEdits";
 import { getMenus, getShop } from "../settings";
 import { guestName } from "../guestName";
 import { reserveKey } from "./keys";
@@ -22,8 +23,8 @@ export type RescheduleFrom = { id: string; customerId: string; menuId: string; d
 export function rescheduleTitle(surname: string, from?: Pick<RescheduleFrom, "date" | "start" | "menuId"> | null): string {
   const base = `${guestName(surname)}に別の日時を案内`;
   if (!from) return base;
-  // メニューの名前だけ読む（名前はルールのタブで直せないので、直したメニューでも同じ文。時間は文に入れない）
-  const menu = resolveMenu(getMenus(), from.menuId)?.name ?? from.menuId;
+  // メニューの名前だけ読む（時間は文に入れない）。足したメニュー（ルールのタブ）の名前も出すので、このブラウザに残したメニューから読む
+  const menu = resolveMenu(browserMenus(getMenus(), getShop()), from.menuId)?.name ?? from.menuId;
   return `${base}（${calDay(getShop(), from.date).label} ${from.start} ${menu}の代わり）`;
 }
 
