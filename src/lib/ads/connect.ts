@@ -72,16 +72,6 @@ export function syncPayload(s: AdsState, words: readonly string[], settings: Con
   };
 }
 
-/** 見本の結果（デモ）：渡す中身の全部を「反映した」とした結果。本物の側の代わりに、画面で読み込みを試すため */
-export function sampleResult(payload: SyncPayload): { format: typeof RESULT_FORMAT; version: typeof SYNC_VERSION; campaign: string; results: SyncResultItem[] } {
-  return {
-    format: RESULT_FORMAT,
-    version: SYNC_VERSION,
-    campaign: payload.campaign,
-    results: payload.items.map((i) => ({ id: i.id, kind: i.kind, text: i.text, status: "done" as const })),
-  };
-}
-
 export type SyncRead = { ok: false; note: string } | { ok: true; marks: { id: string; kind: SyncKind }[]; notes: string[] };
 
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);

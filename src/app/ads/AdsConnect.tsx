@@ -5,12 +5,11 @@
 // 今の画面の見た目と動画を変えないため、閉じた折りたたみの中に小さく置く。鍵・合言葉・本物の広告の番号は出さない。
 
 import { useMemo, useState } from "react";
-import { readSyncResult, sampleResult, syncPayload, withSynced } from "@/lib/ads/connect";
+import { readSyncResult, syncPayload, withSynced } from "@/lib/ads/connect";
 import { featuredWords } from "@/lib/ads/featured";
 import { readAdsState, useAds } from "@/lib/ads/useAds";
 import { SAVE_FAILED_MESSAGE } from "@/lib/browser";
 import { writeJournal } from "@/lib/journal";
-import { DEMO_TAG_NOTE } from "@/lib/notices";
 import { getMenus } from "@/lib/settings";
 
 export function AdsConnect() {
@@ -95,18 +94,6 @@ export function AdsConnect() {
           <button type="button" className="btn small" onClick={load} disabled={!paste.trim()}>
             読み込む
           </button>
-          <button
-            type="button"
-            className="btn small"
-            onClick={() => payload && setPaste(JSON.stringify(sampleResult(payload), null, 2))}
-            disabled={!payload || payload.items.length === 0}
-            title="本物の側の代わりに、渡す中身の全部を「反映した」とした結果を欄に入れます"
-          >
-            見本の結果を入れる
-          </button>
-          <span className="tag text" title={DEMO_TAG_NOTE}>
-            デモ<span className="sr-only">（{DEMO_TAG_NOTE}）</span>
-          </span>
         </div>
         {read && (
           <div role="status">
