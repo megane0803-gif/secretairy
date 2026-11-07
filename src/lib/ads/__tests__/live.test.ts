@@ -2217,6 +2217,13 @@ describe("README", () => {
     assert.match(proof, /\| `\/api\/ads\/live\/send` \| POST・Origin なし \| 403 \|/);
     assert.match(proof, /cross-site.*\| 403 \|/);
     assert.match(proof, /\| `\/api\/ads\/live\/send` \| GET \| 405 \|/);
+    // だれでも試す窓口の本番の行（2026-11-08。守りの 403・405・400 と、承認BOXからの1件の 200）
+    assert.match(proof, /\| `\/api\/ads\/live\/try` \| POST・Origin なし／ほかのサイト \| 403（何も書かない） \|/);
+    assert.match(proof, /\| `\/api\/ads\/live\/try` \| GET \| 405 \|/);
+    assert.match(proof, /\| `\/api\/ads\/live\/try` \| POST・Origin は本番（`\{\}`／2件の配列／壊れた JSON） \| 400（何も書かない） \|/);
+    assert.match(proof, /\| `\/api\/ads\/live\/try` \| POST を1回（合言葉なし。ホームの承認BOXから「足す」案を1件承認） \| 200/);
+    assert.match(proof, /確かめていないこと：回数の上限を本番で使い切ること・連打・日付が変わった後の最初の1回/);
+    assert.doesNotMatch(proof, /まだ呼んでいません|上の表には入れていません/);
     assert.match(proof, /「書けるか」は、環境変数とオーナー用の合言葉の設定があるかから決めた札で、Google に書けたことの確かめではありません/);
     assert.match(proof, /合言葉なしで送った時も、間違いの数に1つ足す作り/);
     assert.doesNotMatch(proof, /100%|必ず|すぐ反映|数を使わない/);
