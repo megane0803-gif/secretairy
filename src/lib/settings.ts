@@ -227,8 +227,10 @@ export function getAdsAiSettings(): AdsAiSettings {
 export type AccountingSettings = {
   /** 明細を取り込み、登録する先（画面の札。例「会計」）。オーナーのブラウザで freee（テスト事業所）につながっている時は freee の札（freee.label） */
   service: string;
-  /** 明細の出どころ（例「カード会社」） */
-  cardSource: string;
+  /** つないでいない画面の明細の説明（アプリの中の架空のカードと銀行の明細） */
+  statementNote: string;
+  /** 入金の行の近くの1行（つないでいない画面） */
+  incomeNote: string;
   /** 経理の日報（その日の売上をオーナーが入れる。accounting/daily.ts）の上限 */
   daily: DailyLimits;
   /** freee（テスト事業所）とのつなぎ（オーナーのブラウザだけ。鍵・秘密は環境変数。docs/SPEC.md §1.8.1） */
@@ -258,6 +260,16 @@ export type FreeeSettings = {
   apiBase: string;
   /** 使うカードの口座の名前（プログラムでは作らない。ちょうど1つの時だけ使う） */
   cardName: string;
+  /** 使う銀行の口座の名前（プログラムでは作らない。ちょうど1つで銀行口座の時だけ使う。無ければ銀行の分だけ出さない） */
+  bankName: string;
+  /** つないでいる時の明細の説明 */
+  statementNote: string;
+  /** 入金の行の近くの1行（つないでいる時） */
+  incomeNote: string;
+  /** 読む期間：今日のこの日数前から（終わりは、架空の明細の最後の日と今日の遅い方） */
+  listDays: number;
+  /** 一覧に出す件数の上限（カードと銀行を合わせて。超えたら新しい方からこの件数だけ） */
+  maxListRows: number;
   /** 店用の科目の名前（freee から名前で引く） */
   accountItemName: string;
   /** 店用の税区分の名前（freee の画面の名前 name_ja） */

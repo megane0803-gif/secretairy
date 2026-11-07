@@ -1,7 +1,8 @@
 "use client";
 
 // 経理タブの右の列：freee（テスト事業所）につながっている時（オーナーのブラウザだけ）。
-// 人が仕分けて「登録」を押した分だけを、freee の明細から取引として登録する（freee の側でも明細が処理済みになる）。
+// 一覧は freee から読んだ、まだ処理していない明細（カード・銀行）。人が仕分けて「登録」を押した出金だけを、
+// freee の明細から取引として登録する（freee の側でも明細が処理済みになる）。入金は登録しない（見せるだけ）。
 // AI は使わない。科目も金額もプログラムと設定が決める（金額は明細のまま・科目と税区分は config/accounting.json）。
 //
 // 🔒 確定は人：登録は、人が画面のボタンを押したとき（isTrusted）だけ。1件ずつ順に送る。
@@ -11,13 +12,14 @@
 import { ChooseLink } from "./ChooseLink";
 import { useEffect, useState } from "react";
 import { BigNumber, Fold } from "@/components/parts";
+import { ACCOUNT_LABEL } from "@/lib/accounting/rows";
 import { md, yen } from "@/lib/accounting/sales";
-import { merchantName, ruleLabel, USE_LABEL } from "@/lib/accounting/sort";
-import { usesOf, withRulesFromFreee } from "@/lib/accounting/state";
-import { useAccounting } from "@/lib/accounting/useAccounting";
-import { countsOf, dealIdsOf, FREEE_STATE_LABEL, stateOf } from "@/lib/freee/state";
-import { readFreeeRecord, type useFreee } from "@/lib/freee/useFreee";
-import type { MerchantRule } from "@/lib/data/types";
+import { ruleLabel, USE_LABEL } from "@/lib/accounting/sort";
+import { liveUsesOf, withRulesFromLive } from "@/lib/accounting/state";
+import { useStatement } from "@/lib/accounting/useStatement";
+import { countsOf, dealIdsOf, FREEE_STATE_LABEL, recordKeys, stateOf } from "@/lib/freee/state";
+import { listErrorText, readFreeeRecord, type useFreee } from "@/lib/freee/useFreee";
+import type { CardUse, MerchantRule } from "@/lib/data/types";
 import { writeJournal } from "@/lib/journal";
 
 type Freee = ReturnType<typeof useFreee>;
@@ -60,20 +62,21 @@ export function useCallbackNote(): string | null {
 }
 
 export function FreeePanel({ freee }: { freee: Freee }) {
-  const acct = useAccounting();
-  const { seed, gate, state } = acct;
+  const st = useStatement();
+  const { acct, view, phase } = st;
+  const { seed, state } = acct;
+  const gate = view.gate;
   const { record, status, settings, sending } = freee;
   const callbackNote = useCallbackNote();
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const nos = seed.statement.items.map((i) => i.no);
-  const counts = countsOf(record, nos);
+  const keys = recordKeys(record);
+  const counts = countsOf(record, keys);
   const connected = status === "connected";
-  const done = counts.registered + counts.already;
-  const left = nos.length - done;
-  const uses = record.uses ?? usesOf(seed, state);
-  const canChoose = !record.uses; // 送り始める前だけ、選びが要る
-  const needsCheck = counts.unknown > 0 || counts.failed > 0;
+  const listed = phase.phase === "ok";
+  const targets = view.targets;
+  const uses: Record<string, CardUse> = { ...liveUsesOf(view.sorted, state), ...(record.uses ?? {}) };
+  const unknownKeys = keys.filter((k) => stateOf(record, k) === "unknown");
 
   const onImport = async (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted || busy || sending || freee.importWait) return;
@@ -86,16 +89,19 @@ export function FreeePanel({ freee }: { freee: Freee }) {
       return;
     }
     const head = `入れた ${r.created}件・もうあった ${r.existed}件${r.check ? `・確かめが要る ${r.check}件（入れていません）` : ""}`;
-    if (r.holdUntil) setNote(`${head}。${r.stopped ?? ""}。${timeOf(r.holdUntil)}まで待ってから、もう一度押してください（freee から読み直して、まだ無い物だけ入れます）`);
-    else setNote(r.stopped ? `${head}。${r.stopped}` : head);
+    const bank = r.bank ? `。${r.bank}（銀行の分は入れていません）` : "";
+    const after = "。一覧に出すには「freee から読み直す」を押してください";
+    if (r.holdUntil) setNote(`${head}${bank}。${r.stopped ?? ""}。${timeOf(r.holdUntil)}まで待ってから、もう一度押してください（freee から読み直して、まだ無い物だけ入れます）`);
+    else setNote(r.stopped ? `${head}${bank}。${r.stopped}` : `${head}${bank}${after}`);
   };
 
   const onRegister = async (e: React.MouseEvent) => {
-    if (!e.nativeEvent.isTrusted || busy || sending) return;
-    if (canChoose && !gate.ok) return;
+    if (!e.nativeEvent.isTrusted || busy || sending || !listed) return;
+    if (!gate.ok || targets.length === 0) return;
     setBusy(true);
     setNote(`freee から読み直して照らし合わせてから、1件ずつ送ります…`);
-    const r = await freee.register(uses, nos);
+    const sent = targets.map((t) => ({ key: t.key, id: t.txnId!, account: t.account, date: t.date, amount: t.amount }));
+    const r = await freee.register(uses, sent);
     setBusy(false);
     if (!r.ok) {
       setNote(r.reason);
@@ -103,19 +109,22 @@ export function FreeePanel({ freee }: { freee: Freee }) {
     }
     if ("run" in r) {
       // 日誌には、登録できた件数だけを書く（0件の時は書かない）
-      if (r.run.registered > 0) writeJournal({ who: "オーナー", text: `人が登録：テスト事業所の帳簿に、通販の明細 ${r.run.registered}件を取引として登録した` });
+      if (r.run.registered > 0) writeJournal({ who: "オーナー", text: `人が登録：テスト事業所の帳簿に、カードと銀行の明細（出金）${r.run.registered}件を取引として登録した` });
       const skipped = [r.skipped.check ? `確かめが要る ${r.skipped.check}件` : "", r.skipped.missing ? `freee に明細が無い ${r.skipped.missing}件` : ""].filter(Boolean).join("・");
       setNote([skipped ? `${skipped}は送っていません` : "", r.stoppedBy ? `止めました：${r.stoppedBy}` : ""].filter(Boolean).join("。") || null);
-      // 全部済んだら（登録した・もう処理済み）、「次から自動」の購入先を自動のルールに足す（画面の中の会計の記録は変えない）
-      const after = countsOf(readFreeeRecord(), nos);
-      if (after.registered + after.already === nos.length) {
+      // 送った行が全部済んだら（登録した・もう処理済み）、「次から自動」の購入先を自動のルールに足す（画面の中の会計の記録は変えない）
+      const after = readFreeeRecord();
+      const allDone = sent.every((t) => ["registered", "already"].includes(stateOf(after, t.key)));
+      if (allDone) {
         let added: MerchantRule[] = [];
+        const manualKeys = new Set([...view.sorted.fresh, ...view.sorted.known].map((x) => x.key));
+        const done = targets.filter((t) => manualKeys.has(t.key)).map((t) => ({ merchantId: t.merchantId, use: after.uses?.[t.key] ?? uses[t.key] }));
         acct.update((s) => {
-          const x = withRulesFromFreee(seed, s, new Date().toISOString());
+          const x = withRulesFromLive(seed, s, done, new Date().toISOString());
           added = x.added;
           return x.state;
         });
-        if (added.length) writeJournal({ who: "オーナー", text: `自動のルールに足した：${added.map((r) => ruleLabel(seed.merchants, r)).join("・")}（次の明細から自動で仕分ける）` });
+        if (added.length) writeJournal({ who: "オーナー", text: `自動のルールに足した：${added.map((x) => ruleLabel(seed.merchants, x)).join("・")}（次の明細から自動で仕分ける）` });
       }
     }
   };
@@ -123,12 +132,12 @@ export function FreeePanel({ freee }: { freee: Freee }) {
   const onCheck = async (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted || busy || sending) return;
     setBusy(true);
-    const r = await freee.check(nos.filter((no) => stateOf(record, no) !== "registered"));
+    const r = await freee.check();
     setBusy(false);
-    if (!r.ok) return setNote(r.reason);
+    if (!r.ok) return setNote(listErrorText(r.reason, true));
     const s = r.setup as { accountItem?: { name: string; count: number }; tax?: { name: string; count: number } } | null;
     const one = (x?: { name: string; count: number }) => (x ? `「${x.name}」${x.count === 1 ? "✓ 1つ" : `${x.count}つ（1つに決まりません）`}` : "");
-    setNote(`freee から読み直して照らし合わせました（何も書いていません）。${s ? `科目${one(s.accountItem)}・税区分${one(s.tax)}` : ""}`);
+    setNote(`freee から読み直しました（何も書いていません）。まだ処理していない明細 ${r.list.rows.length}件。${s ? `科目${one(s.accountItem)}・税区分${one(s.tax)}` : ""}`);
   };
 
   const onDisconnect = async (e: React.MouseEvent) => {
@@ -137,8 +146,9 @@ export function FreeePanel({ freee }: { freee: Freee }) {
     writeJournal({ who: "オーナー", text: "テスト事業所とのつなぎを外した（このブラウザの鍵を消した）" });
   };
 
-  const deals = dealIdsOf(record, nos);
+  const deals = dealIdsOf(record, keys);
   const run = record.lastRun;
+  const rowOf = (key: string) => view.rows.find((r) => r.key === key);
 
   return (
     <div className="ad-review" id="freee">
@@ -155,8 +165,12 @@ export function FreeePanel({ freee }: { freee: Freee }) {
         </p>
       )}
       <p className="hint">
-        経理タブと同じカード明細 {nos.length}件（日付・購入先・金額）を、口座「{settings.cardName}」に入れます。同じ印の明細がもうあれば入れません。
+        アプリの中の明細 {seed.statement.items.length}件（日付・購入先や振込元・金額）を、口座「{settings.cardName}」と「{settings.bankName}」に入れます。同じ印の明細がもうあれば入れません。
       </p>
+      <button type="button" className="btn" onClick={onCheck} disabled={!connected || busy || sending}>
+        freee から読み直す
+      </button>
+      <p className="hint">一覧を読むのは、経理のタブを開いた時と、このボタンを押した時だけです。</p>
       {callbackNote && (
         <p className="checked" role="status">
           {callbackNote}
@@ -166,21 +180,28 @@ export function FreeePanel({ freee }: { freee: Freee }) {
         <div role="alert" className="problems">
           <p>
             {status === "expired" ? "freee の鍵が切れました。" : "freee とつながっていません。"}
-            途中の登録を、画面の中の{acct.settings.service}には切り替えません。
+            一覧も途中の登録も、画面の中の{acct.settings.service}には切り替えません。
           </p>
           {status !== "off" && status !== "not-set" && status !== "loading" && <FreeeConnectForm label="もう一度 freee とつなぐ" />}
         </div>
       )}
 
-      {canChoose && (
+      {connected && phase.phase === "error" && (
+        <p className="problems" role="alert">
+          {listErrorText(phase.reason, phase.reconnect)}
+        </p>
+      )}
+      {listed && (
         <>
           <p className="acct-left" role="status">
             {gate.remaining > 0 ? (
               <ChooseLink>
                 あと <strong className="num">{gate.remaining}</strong>件 選ぶ ↓
               </ChooseLink>
-            ) : (
+            ) : targets.length > 0 ? (
               "全部選びました"
+            ) : (
+              "送る出金はありません"
             )}
           </p>
           <strong>プログラムの確認</strong>
@@ -194,23 +215,17 @@ export function FreeePanel({ freee }: { freee: Freee }) {
         </>
       )}
 
-
       <button
         type="button"
         className="btn primary big"
         onClick={onRegister}
-        disabled={!connected || busy || sending || (canChoose && !gate.ok) || left === 0}
+        disabled={!connected || !listed || busy || sending || !gate.ok || targets.length === 0}
       >
         {settings.label}に登録
       </button>
       <p className="hint">
-        選び終わるまで押せません。1件ずつ順に送ります。店用は「{settings.accountItemName}」・{settings.taxName}、私用はプライベート取引です。送り始めたら、店用／私用の選びは変えられません。
+        出金を選び終わるまで押せません。1件ずつ順に、書く直前に freee から読み直して、明細の番号・口座・日付・金額・出金・未処理が全部合う時だけ送ります。店用は「{settings.accountItemName}」・{settings.taxName}、私用はプライベート取引です。送り始めた明細の店用／私用は変えられません。入金は登録しません。
       </p>
-      {needsCheck && (
-        <button type="button" className="btn" onClick={onCheck} disabled={!connected || busy || sending}>
-          freee から読み直す
-        </button>
-      )}
       {note && (
         <p className="hint" role="status">
           {note}
@@ -218,7 +233,7 @@ export function FreeePanel({ freee }: { freee: Freee }) {
       )}
       {sending && (
         <p className="hint" role="status">
-          送っています…（終わるまで、登録のし直しと「最初に戻す」はできません）
+          freee とやりとりしています…（終わるまで、登録のし直しと「最初に戻す」はできません）
         </p>
       )}
 
@@ -237,7 +252,7 @@ export function FreeePanel({ freee }: { freee: Freee }) {
             最後の登録：登録した {run.registered}件・もう処理済み {run.already}件・送れなかった {run.failed}件・結果が分からない {run.unknown}件
           </p>
         )}
-        {counts.unknown > 0 && (
+        {unknownKeys.length > 0 && (
           <p className="problems" role="alert">
             結果が分からない明細は送り直しません。「freee から読み直す」で照らし合わせてから、もう一度登録してください。
           </p>
@@ -246,32 +261,36 @@ export function FreeePanel({ freee }: { freee: Freee }) {
           <Fold summary={`取引の番号（${deals.length}件）`}>
             <ul className="acct-rules">
               {deals.map((d) => (
-                <li key={d.no}>
-                  {d.no}番 → 取引 <span className="num">{d.dealIds.join("・")}</span>
+                <li key={d.key}>
+                  明細 {d.key.slice(1)} → 取引 <span className="num">{d.dealIds.join("・")}</span>
                 </li>
               ))}
             </ul>
           </Fold>
         )}
-        <Fold summary={`明細ごと（${nos.length}件）`}>
-          <ul className="acct-trial-rows">
-            {seed.statement.items.map((i) => {
-              const it = record.items[String(i.no)];
-              const s = stateOf(record, i.no);
-              const u = uses[String(i.no)];
-              return (
-                <li key={i.no}>
-                  <span>
-                    {i.no}番 {md(i.date)} {merchantName(seed.merchants, i.merchantId)} <span className="num">{yen(i.amount)}</span>
-                    {u && <span className={`tag use-${u}`}>{USE_LABEL[u]}</span>}
-                  </span>
-                  <span className={s === "registered" || s === "already" ? "tag ok" : s === "pending" ? "tag text" : "tag hold"}>{FREEE_STATE_LABEL[s]}</span>
-                  {it?.reason && <span className="hint">{it.reason}</span>}
-                </li>
-              );
-            })}
-          </ul>
-        </Fold>
+        {keys.length > 0 && (
+          <Fold summary={`記録のある明細（${keys.length}件）`}>
+            <ul className="acct-trial-rows">
+              {keys.map((k) => {
+                const it = record.items[k];
+                const s = stateOf(record, k);
+                const u = record.uses?.[k];
+                const row = rowOf(k);
+                return (
+                  <li key={k}>
+                    <span>
+                      {row ? `${ACCOUNT_LABEL[row.account]} ${md(row.date)} ${row.text} ` : `明細 ${k.slice(1)} `}
+                      {row && <span className="num">{yen(row.amount)}</span>}
+                      {u && <span className={`tag use-${u}`}>{USE_LABEL[u]}</span>}
+                    </span>
+                    <span className={s === "registered" || s === "already" ? "tag ok" : s === "pending" ? "tag text" : "tag hold"}>{FREEE_STATE_LABEL[s]}</span>
+                    {it?.reason && <span className="hint">{it.reason}</span>}
+                  </li>
+                );
+              })}
+            </ul>
+          </Fold>
+        )}
         <p className="hint">画面の中の{acct.settings.service}の記録とは分けて持ちます。ホームの「最初に戻す」は画面の選びを戻すだけで、freee の記録は残ります（戻した後は、freee から読み直して照らし合わせてから登録します）。</p>
       </section>
 

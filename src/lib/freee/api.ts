@@ -121,12 +121,22 @@ export function freeeClient(p: { fetch: FetchLike; settings: FreeeSettings; acce
 
     /**
      * 口座明細を全部（GET /api/1/wallet_txns。limit は100まで・offset でめくる）。
-     * range：取引日で絞る（start_date／end_date。架空の明細の期間）。明細の番号（id）で重なりを除く。
+     * range：取引日で絞る（start_date／end_date）。同じ番号（id）で中身も同じ物は1つにする（ページの重なり）。
+     * 同じ番号で中身が違う物（読んでいる間に freee の側で変わった など）は両方残す（照らし合わせで「候補2件」として止める）。
      * 1ページが limit より少なければ終わり。maxPages をこえたら止める（読み切れない時は進まない）。
+     * stopAfterOpen：まだ処理していない明細（未処理で登録待ちの金額が0より大きい）がこの件数をこえたら、そこで読むのをやめる（一覧の上限）。
      * （読んでいる間に freee の側で明細が足された・消された時の読み落としまでは防げない）
      */
-    async walletTxns(companyId: number, walletable: { type: WalletableType; id: number }, range?: { from: string; to: string }): Promise<WalletTxn[]> {
+    async walletTxns(
+      companyId: number,
+      walletable: { type: WalletableType; id: number },
+      range?: { from: string; to: string },
+      opts: { stopAfterOpen?: number } = {},
+    ): Promise<WalletTxn[]> {
       const out = new Map<number, WalletTxn>();
+      const extra: WalletTxn[] = [];
+      const same = (a: WalletTxn, b: WalletTxn) => JSON.stringify(a) === JSON.stringify(b);
+      const all = () => [...out.values(), ...extra];
       for (let page = 0; page < settings.maxPages; page++) {
         const b = (await call("GET", "/api/1/wallet_txns", {
           query: {
@@ -142,9 +152,12 @@ export function freeeClient(p: { fetch: FetchLike; settings: FreeeSettings; acce
         for (const t of b.wallet_txns) {
           const x = toTxn(t);
           if (!x) throw new FreeeBadShape("口座明細の形が違います");
-          out.set(x.id, x);
+          const had = out.get(x.id);
+          if (!had) out.set(x.id, x);
+          else if (!same(had, x) && !extra.some((e) => same(e, x))) extra.push(x);
         }
-        if (b.wallet_txns.length < settings.pageLimit) return [...out.values()];
+        if (b.wallet_txns.length < settings.pageLimit) return all();
+        if (opts.stopAfterOpen != null && all().filter(isOpen).length > opts.stopAfterOpen) return all();
       }
       throw new FreeeBadShape(`口座明細が${settings.maxPages}ページより多く、読み切れません`);
     },
@@ -154,7 +167,7 @@ export function freeeClient(p: { fetch: FetchLike; settings: FreeeSettings; acce
       company_id: number;
       walletable_type: WalletableType;
       walletable_id: number;
-      entry_side: "expense";
+      entry_side: "income" | "expense";
       amount: number;
       date: string;
       description: string;
@@ -206,6 +219,11 @@ export function freeeClient(p: { fetch: FetchLike; settings: FreeeSettings; acce
 }
 
 export type FreeeClient = ReturnType<typeof freeeClient>;
+
+/** まだ処理していない明細か（未処理 status 1 で、登録待ちの金額が0より大きい） */
+export function isOpen(t: WalletTxn): boolean {
+  return t.status === 1 && t.due_amount > 0;
+}
 
 function toTxn(t: unknown): WalletTxn | null {
   const x = t as Record<string, unknown> | null;

@@ -9,7 +9,8 @@
 // - 許可の返事・どの返事もキャッシュさせない
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import type { AccountingSeed, CardItem, CardUse } from "../data/types";
+import { accountOf, listRange, sideOf, type ListedTxn } from "../accounting/rows";
+import type { AccountingSeed, CardItem, CardUse, StatementAccount } from "../data/types";
 import type { FreeeSettings } from "../settings";
 import {
   exchangeCode,
@@ -20,10 +21,25 @@ import {
   FreeeOutOfTime,
   FreeeRejected,
   FreeeServerError,
+  isOpen,
   type FetchLike,
   type FreeeClient,
+  type WalletTxn,
 } from "./api";
-import { descriptionOf, lookup, markOf, pickCardAccount, pickOne, useAllowed, verdictOf, type Verdict } from "./match";
+import {
+  descriptionOf,
+  lookup,
+  lookupById,
+  markOf,
+  pickBankAccount,
+  pickCardAccount,
+  pickOne,
+  useAllowed,
+  verdictOf,
+  WALLETABLE_TYPE,
+  type BankAccount,
+  type Verdict,
+} from "./match";
 import { seal, unseal } from "./seal";
 
 export const TOKEN_COOKIE = "__Host-secretairy-freee";
@@ -49,6 +65,8 @@ export type FreeeDeps = {
   fetch: FetchLike;
   now: () => number;
   random: (n: number) => Buffer;
+  /** 店の時間帯（読む期間の「今日」を決める。config/shop.json の timezone） */
+  timeZone: string;
 };
 
 export function envFrom(e: Record<string, string | undefined>, cookieKey: Buffer | null): FreeeEnv {
@@ -335,9 +353,19 @@ function versionOf(seed: AccountingSeed): string {
   return seed.statement.version ?? "v1";
 }
 
-/** 明細の期間（freee の明細を読む時に、取引日で絞る） */
-function rangeOf(seed: AccountingSeed): { from: string; to: string } {
+/** 架空の明細の期間（freee に入れる時に、もうあるかを読む期間） */
+function importRange(seed: AccountingSeed): { from: string; to: string } {
   return { from: seed.statement.from, to: seed.statement.to };
+}
+
+/** 店の時間帯の今日（YYYY-MM-DD） */
+export function todayIn(timeZone: string, nowMs: number): string {
+  return new Date(nowMs).toLocaleDateString("en-CA", { timeZone });
+}
+
+/** 一覧と登録で読む期間：今日の listDays 日前から、架空の明細の最後の日と今日の遅い方まで */
+export function readRange(deps: FreeeDeps): { from: string; to: string } {
+  return listRange(todayIn(deps.timeZone, deps.now()), deps.seed.statement.to, deps.settings.listDays);
 }
 
 /** この呼び出しの持ち時間（窓口の時間の上限より短く。返事の時間を残す） */
@@ -351,14 +379,16 @@ function clientFor(deps: FreeeDeps, s: Session): FreeeClient {
   });
 }
 
-async function cardOf(api: FreeeClient, deps: FreeeDeps, companyId: number) {
-  return pickCardAccount(await api.walletables(companyId), deps.settings.cardName);
+/** 読む口座は2つだけ：カード（無ければ止める）と銀行（無ければ銀行の分だけ出さない） */
+async function accountsOf(api: FreeeClient, deps: FreeeDeps, companyId: number) {
+  const list = await api.walletables(companyId);
+  return { card: pickCardAccount(list, deps.settings.cardName), bank: pickBankAccount(list, deps.settings.bankName) };
 }
 
 /**
  * stopped.kind：unknown（入れた結果が分からない。画面は待つ期限を出す）・failed（freee が受けなかった）・
  * time（持ち時間が残っていないので、次の書き込みの前に止めた。何も分からない物は無い。画面が続きを呼ぶ）。
- * done：20件を全部見終わった。
+ * done：入れる明細を全部見終わった（銀行の口座が無い時は、銀行の分を入れずに bank に理由）。
  */
 export type ImportResult = {
   ok: true;
@@ -366,29 +396,47 @@ export type ImportResult = {
   created: number;
   existed: number;
   check: number;
+  /** 銀行の口座が無いので入れなかった件数 */
+  skipped: number;
+  /** 銀行の口座が無い時の1行 */
+  bank: string | null;
   done: boolean;
   stopped: null | { no: number; kind: "unknown" | "failed" | "time"; reason: string };
 };
 
-/** 経理タブと同じ架空のカード明細を、1件ずつ freee の明細として入れる。同じ印の明細がもうあれば入れない */
+/**
+ * 経理タブと同じ架空の明細（カード・銀行）を、1件ずつ freee の明細として入れる。カードは「SecretAIry カード」、銀行は「SecretAIry 口座」。
+ * 同じ印の明細がもうあれば入れない。銀行の口座が無い時は、銀行の分だけ入れずに理由を返す。
+ */
 export async function handleImport(request: Request, deps: FreeeDeps): Promise<Response> {
   const g = guard(request, deps, { method: "POST", session: true });
   if (!g.ok) return g.response;
   const s = g.session!;
   const api = clientFor(deps, s);
   const items = deps.seed.statement.items;
-  let card, txns;
+  let accounts;
+  const txns: Record<StatementAccount, WalletTxn[]> = { card: [], bank: [] };
   try {
-    card = await cardOf(api, deps, s.companyId);
-    if (!card.ok) return json({ ok: false, code: "card", message: card.reason }, 409);
-    txns = await api.walletTxns(s.companyId, card.walletable, rangeOf(deps.seed));
+    accounts = await accountsOf(api, deps, s.companyId);
+    if (!accounts.card.ok) return json({ ok: false, code: "card", message: accounts.card.reason }, 409);
+    txns.card = await api.walletTxns(s.companyId, accounts.card.walletable, importRange(deps.seed));
+    if (accounts.bank.ok && items.some((i) => accountOf(i) === "bank")) txns.bank = await api.walletTxns(s.companyId, accounts.bank.walletable, importRange(deps.seed));
   } catch (e) {
     return readFailure(e);
   }
-  const out: ImportResult = { ok: true, total: items.length, created: 0, existed: 0, check: 0, done: false, stopped: null };
+  const card = accounts.card;
+  const bank: BankAccount = accounts.bank;
+  const out: ImportResult = { ok: true, total: items.length, created: 0, existed: 0, check: 0, skipped: 0, bank: null, done: false, stopped: null };
   for (const item of items) {
+    const account = accountOf(item);
+    const w = account === "card" ? card.walletable : bank.ok ? bank.walletable : null;
+    if (!w) {
+      out.skipped++;
+      if (!bank.ok) out.bank = bank.reason;
+      continue;
+    }
     const mark = markOf(deps.settings.markPrefix, versionOf(deps.seed), item.no);
-    const l = lookup(txns, { companyId: s.companyId, walletableId: card.walletable.id, mark, item });
+    const l = lookup(txns[account], { companyId: s.companyId, walletableId: w.id, mark, item });
     if (l.kind === "found") {
       out.existed++;
       continue;
@@ -400,14 +448,14 @@ export async function handleImport(request: Request, deps: FreeeDeps): Promise<R
     try {
       const made = await api.createWalletTxn({
         company_id: s.companyId,
-        walletable_type: "credit_card",
-        walletable_id: card.walletable.id,
-        entry_side: "expense",
+        walletable_type: WALLETABLE_TYPE[account],
+        walletable_id: w.id,
+        entry_side: sideOf(item),
         amount: item.amount,
         date: item.date,
         description: descriptionOf(merchantNameOf(deps.seed, item), mark),
       });
-      txns.push(made);
+      txns[account].push(made);
       out.created++;
     } catch (e) {
       if (e instanceof FreeeExpired) return expired();
@@ -437,17 +485,31 @@ function merchantNameOf(seed: AccountingSeed, item: CardItem): string {
 }
 
 export type RegisterAnswer =
-  | { ok: true; no: number; result: "registered"; dealIds: number[] }
-  | { ok: true; no: number; result: "already" }
-  | { ok: true; no: number; result: "check"; reason: string }
-  | { ok: true; no: number; result: "failed"; reason: string }
-  | { ok: true; no: number; result: "unknown"; reason: string };
+  | { ok: true; id: number; result: "registered"; dealIds: number[] }
+  | { ok: true; id: number; result: "already" }
+  | { ok: true; id: number; result: "check"; reason: string }
+  | { ok: true; id: number; result: "failed"; reason: string }
+  | { ok: true; id: number; result: "unknown"; reason: string };
+
+const isDate = (x: unknown): x is string => typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x);
+const isId = (x: unknown): x is number => typeof x === "number" && Number.isSafeInteger(x) && x > 0;
+
+/** 登録で画面から来る物：freee の明細の番号・店用か私用か・口座・日付・金額（どれも freee から読み直して照らし合わせる） */
+export type RegisterTarget = { id: number; use: CardUse; account: StatementAccount; date: string; amount: number };
+
+function readTarget(body: Record<string, unknown> | null): RegisterTarget | null {
+  const b = body ?? {};
+  if (!isId(b.id) || (b.use !== "shop" && b.use !== "private") || (b.account !== "card" && b.account !== "bank") || !isDate(b.date) || !isId(b.amount)) return null;
+  return { id: b.id, use: b.use, account: b.account, date: b.date, amount: b.amount };
+}
 
 /**
- * 「freee（テスト事業所）に登録」の1件。
- * 書く直前に freee の明細を読み（ページをめくって全部）、印で探して、日付・金額・出金かまで合う時だけ進む。
- * - 未処理で登録待ち＝明細の金額 → 店用は create_deal（内訳1行・科目1つ・税区分1つ）、私用は create_private_deal
+ * 「freee（テスト事業所）に登録」の1件（freee から読んだ明細。印の無い明細も）。
+ * 書く直前に、その口座の明細を読む期間でページをめくって全部読み、明細の番号で探して、
+ * 口座・日付・金額・出金・未処理（登録待ち＝明細の金額）が全部合う時だけ進む。
+ * - 店用は create_deal（内訳1行・科目1つ・税区分1つ）、私用は create_private_deal
  * - 処理済みで登録待ち0 → already（送り直さない）
+ * - 入金 → 登録しない（売上の入金は freee のルールで売上にしている）
  * - 無視・一部だけ・値が合わない・候補2件以上 → check（止める）
  * - 送った後に返事が途切れた → unknown（送り直さない）
  */
@@ -455,27 +517,37 @@ export async function handleRegister(request: Request, deps: FreeeDeps): Promise
   const g = guard(request, deps, { method: "POST", session: true });
   if (!g.ok) return g.response;
   const s = g.session!;
-  const body = await readBody(request, deps.settings.maxRequestChars);
-  const no = body?.no;
-  const use = body?.use;
-  const item = typeof no === "number" ? deps.seed.statement.items.find((i) => i.no === no) : undefined;
-  if (!item || (use !== "shop" && use !== "private")) return json({ ok: false, code: "bad-request", message: "形がおかしいです" }, 400);
-  if (!useAllowed(item, use, deps.seed.rules)) return json({ ok: false, code: "bad-request", message: "店用・私用の選びが、購入先の自動のルールと合いません" }, 400);
-  const answer = await registerOne(deps, s, item, use);
+  const target = readTarget(await readBody(request, deps.settings.maxRequestChars));
+  if (!target) return json({ ok: false, code: "bad-request", message: "形がおかしいです" }, 400);
+  const range = readRange(deps);
+  if (target.date < range.from || target.date > range.to) return json({ ok: false, code: "bad-request", message: "読む期間の外の明細です" }, 400);
+  const answer = await registerOne(deps, s, target, range);
   if (answer === "expired") return expired();
   return json(answer);
 }
 
-async function registerOne(deps: FreeeDeps, s: Session, item: CardItem, use: CardUse): Promise<RegisterAnswer | "expired"> {
+async function registerOne(deps: FreeeDeps, s: Session, target: RegisterTarget, range: { from: string; to: string }): Promise<RegisterAnswer | "expired"> {
   const api = clientFor(deps, s);
-  const no = item.no;
-  const failed = (reason: string): RegisterAnswer => ({ ok: true, no, result: "failed", reason });
+  const id = target.id;
+  const failed = (reason: string): RegisterAnswer => ({ ok: true, id, result: "failed", reason });
   let verdict: Verdict;
   let line: { account_item_id: number; tax_code: number } | null = null;
   try {
-    const card = await cardOf(api, deps, s.companyId);
-    if (!card.ok) return failed(card.reason);
-    if (use === "shop") {
+    const accounts = await accountsOf(api, deps, s.companyId);
+    if (!accounts.card.ok) return failed(accounts.card.reason);
+    const acc = target.account === "card" ? accounts.card : accounts.bank;
+    if (!acc.ok) return failed(acc.reason);
+    // 書く直前に読む（その口座の、読む期間の全部）
+    const txns = await api.walletTxns(s.companyId, acc.walletable, range);
+    const found = lookupById(txns, { companyId: s.companyId, walletable: acc.walletable, id, markPrefix: deps.settings.markPrefix });
+    if (found.kind === "found" && found.txn.entry_side === "income")
+      return failed("入金は登録しません（売上の入金は、freee のルールで売上にしています）");
+    if (found.kind === "found" && !useAllowed(found.txn.description, target.use, deps.seed))
+      return failed("店用・私用の選びが、購入先の自動のルールと合いません");
+    verdict = verdictOf(
+      lookupById(txns, { companyId: s.companyId, walletable: acc.walletable, id, markPrefix: deps.settings.markPrefix, expect: { date: target.date, amount: target.amount } }),
+    );
+    if (verdict.kind === "ready" && target.use === "shop") {
       const [items, taxes] = [await api.accountItems(s.companyId), await api.taxes(s.companyId)];
       const a = pickOne(items, (x) => x.name === deps.settings.accountItemName && x.available);
       if (!a.ok) return failed(`科目「${deps.settings.accountItemName}」が freee で${a.count === 0 ? "見つかりません" : `${a.count}つあります`}。1つに決まらないので止めました`);
@@ -483,71 +555,100 @@ async function registerOne(deps: FreeeDeps, s: Session, item: CardItem, use: Car
       if (!t.ok) return failed(`税区分「${deps.settings.taxName}」が freee で${t.count === 0 ? "見つかりません" : `${t.count}つあります`}。1つに決まらないので止めました`);
       line = { account_item_id: a.value.id, tax_code: t.value.code };
     }
-    // 書く直前に読む
-    const txns = await api.walletTxns(s.companyId, card.walletable, rangeOf(deps.seed));
-    verdict = verdictOf(lookup(txns, { companyId: s.companyId, walletableId: card.walletable.id, mark: markOf(deps.settings.markPrefix, versionOf(deps.seed), no), item }));
   } catch (e) {
     if (e instanceof FreeeExpired) return "expired";
     const r = readFailure(e);
     return failed(((await r.json()) as { message: string }).message);
   }
-  if (verdict.kind === "missing") return failed("freee にこの明細がありません。先に「freee に明細を入れる」を押してください");
-  if (verdict.kind === "done") return { ok: true, no, result: "already" };
-  if (verdict.kind === "check") return { ok: true, no, result: "check", reason: verdict.reason };
+  if (verdict.kind === "missing") return failed("freee にこの明細がありません（読む期間の中に、この番号の明細がありません）。「freee から読み直す」を押してください");
+  if (verdict.kind === "done") return { ok: true, id, result: "already" };
+  if (verdict.kind === "check") return { ok: true, id, result: "check", reason: verdict.reason };
 
   try {
-    if (use === "shop") {
+    if (target.use === "shop") {
       const dealIds = await api.createDeal(verdict.txn.id, {
         company_id: s.companyId,
         deal_lines: [{ amount: verdict.txn.amount, account_item_id: line!.account_item_id, tax_code: line!.tax_code }],
       });
-      return { ok: true, no, result: "registered", dealIds };
+      return { ok: true, id, result: "registered", dealIds };
     }
     const dealId = await api.createPrivateDeal(verdict.txn.id, s.companyId);
-    return { ok: true, no, result: "registered", dealIds: [dealId] };
+    return { ok: true, id, result: "registered", dealIds: [dealId] };
   } catch (e) {
     if (e instanceof FreeeExpired) return "expired";
     // 持ち時間が残っていないので、送る前に止めた（freee には何も送っていない）
     if (e instanceof FreeeOutOfTime) return failed("持ち時間が足りないので送りませんでした（freee には何も書いていません）。もう一度押してください");
     if (e instanceof FreeeRejected) return failed(`freee が受けませんでした（${e.status}）${e.messages.length ? `：${e.messages.join(" / ")}` : ""}`);
     // つながらない・待ちきれない・500 台・返事の形が違う：freee の中で済んだかもしれない
-    return { ok: true, no, result: "unknown", reason: "送った後に freee の返事が途切れました。送り直さずに、freee から読み直して照らし合わせてください" };
+    return { ok: true, id, result: "unknown", reason: "送った後に freee の返事が途切れました。送り直さずに、freee から読み直して照らし合わせてください" };
   }
 }
 
 /** setup：店用の科目・税区分・カードの口座が、freee で「使える物1つ」に決まるか（読むだけ。本番の最初の確かめに使う） */
-export type SetupCheck = { card: string | null; accountItem: { name: string; count: number }; tax: { name: string; count: number } };
-export type CheckAnswer = { ok: true; items: { no: number; kind: "ready" | "done" | "check" | "missing"; reason?: string }[]; setup: SetupCheck };
+export type SetupCheck = { card: string | null; bank: string | null; accountItem: { name: string; count: number }; tax: { name: string; count: number } };
+export type CheckKind = "ready" | "done" | "check" | "missing";
 
-/** 読み直して照らし合わせる（書かない）。「結果が分からない」の後と、「最初に戻す」の後に使う */
+/** 読み直した答え：まだ処理していない明細の一覧（新しい順・上限まで）と、頼まれた明細の番号ごとの状態 */
+export type CheckAnswer = {
+  ok: true;
+  range: { from: string; to: string };
+  rows: ListedTxn[];
+  /** 上限をこえたので、新しい方から上限の件数だけ出している */
+  capped: boolean;
+  /** 銀行の口座が無い時の1行（カードの分は出す） */
+  bank: string | null;
+  items: { id: number; kind: CheckKind; reason?: string }[];
+  setup: SetupCheck;
+};
+
+/**
+ * freee から読む（書かない）。経理のタブを開いた時・「freee から読み直す」・登録の前の照らし合わせで使う。
+ * 読む口座はカードと銀行の2つだけ。期間は今日の listDays 日前から、架空の明細の最後の日と今日の遅い方まで。
+ * まだ処理していない明細（未処理で、登録待ちの金額が0より大きい）だけを、新しい順に maxListRows 件まで。
+ * ids：照らし合わせる freee の明細の番号（記録で「結果が分からない」などの物）。
+ */
 export async function handleCheck(request: Request, deps: FreeeDeps): Promise<Response> {
   const g = guard(request, deps, { method: "POST", session: true });
   if (!g.ok) return g.response;
   const s = g.session!;
   const body = await readBody(request, deps.settings.maxRequestChars);
-  const nos = Array.isArray(body?.nos) ? (body!.nos as unknown[]) : null;
-  const items = nos?.map((n) => deps.seed.statement.items.find((i) => i.no === n));
-  if (!items || items.length === 0 || items.length > deps.seed.statement.items.length || items.some((i) => !i))
-    return json({ ok: false, code: "bad-request", message: "形がおかしいです" }, 400);
+  const raw = body?.ids ?? [];
+  if (!Array.isArray(raw) || raw.length > deps.settings.maxListRows || !raw.every(isId)) return json({ ok: false, code: "bad-request", message: "形がおかしいです" }, 400);
+  const ids = [...new Set(raw as number[])];
+  const max = deps.settings.maxListRows;
+  const range = readRange(deps);
   const api = clientFor(deps, s);
   try {
-    const card = await cardOf(api, deps, s.companyId);
-    if (!card.ok) return json({ ok: false, code: "card", message: card.reason }, 409);
-    const txns = await api.walletTxns(s.companyId, card.walletable, rangeOf(deps.seed));
+    const accounts = await accountsOf(api, deps, s.companyId);
+    if (!accounts.card.ok) return json({ ok: false, code: "card", message: accounts.card.reason }, 409);
+    const read: { account: StatementAccount; walletable: { id: number; type: WalletTxn["walletable_type"] }; txns: WalletTxn[] }[] = [];
+    read.push({ account: "card", walletable: accounts.card.walletable, txns: await api.walletTxns(s.companyId, accounts.card.walletable, range, { stopAfterOpen: max }) });
+    if (accounts.bank.ok)
+      read.push({ account: "bank", walletable: accounts.bank.walletable, txns: await api.walletTxns(s.companyId, accounts.bank.walletable, range, { stopAfterOpen: max }) });
+    const open: ListedTxn[] = [];
+    for (const r of read)
+      for (const t of r.txns)
+        if (t.company_id === s.companyId && t.walletable_id === r.walletable.id && t.walletable_type === r.walletable.type && isOpen(t))
+          open.push({ id: t.id, account: r.account, date: t.date, side: t.entry_side, description: t.description.slice(0, 200), amount: t.amount });
+    open.sort((a, b) => (a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1));
+    const capped = open.length > max;
     const [accountItems, taxes] = [await api.accountItems(s.companyId), await api.taxes(s.companyId)];
     const setup: SetupCheck = {
-      card: card.walletable.name,
+      card: accounts.card.walletable.name,
+      bank: accounts.bank.ok ? accounts.bank.walletable.name : null,
       accountItem: { name: deps.settings.accountItemName, count: accountItems.filter((x) => x.name === deps.settings.accountItemName && x.available).length },
       tax: { name: deps.settings.taxName, count: taxes.filter((x) => x.name_ja === deps.settings.taxName && x.available).length },
     };
-    const out: CheckAnswer = {
-      ok: true,
-      setup,
-      items: (items as CardItem[]).map((item) => {
-        const v = verdictOf(lookup(txns, { companyId: s.companyId, walletableId: card.walletable.id, mark: markOf(deps.settings.markPrefix, versionOf(deps.seed), item.no), item }));
-        return v.kind === "check" ? { no: item.no, kind: "check", reason: v.reason } : { no: item.no, kind: v.kind };
-      }),
-    };
+    const items = ids.map((id) => {
+      for (const r of read) {
+        const l = lookupById(r.txns, { companyId: s.companyId, walletable: r.walletable, id, markPrefix: deps.settings.markPrefix });
+        if (l.kind === "missing") continue;
+        const v = verdictOf(l);
+        return v.kind === "check" ? { id, kind: "check" as const, reason: v.reason } : { id, kind: v.kind };
+      }
+      return capped ? { id, kind: "check" as const, reason: "明細が多くて読み切れず、見つかりませんでした" } : { id, kind: "missing" as const };
+    });
+    const out: CheckAnswer = { ok: true, range, rows: open.slice(0, max), capped, bank: accounts.bank.ok ? null : accounts.bank.reason, items, setup };
     return json(out);
   } catch (e) {
     return readFailure(e);

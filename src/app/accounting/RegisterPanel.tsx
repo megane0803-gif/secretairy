@@ -9,6 +9,7 @@
 import { ChooseLink } from "./ChooseLink";
 import { useState } from "react";
 import { BigNumber, Fold } from "@/components/parts";
+import { expenseRows, seedRows } from "@/lib/accounting/rows";
 import { md, yen } from "@/lib/accounting/sales";
 import { merchantName, USE_LABEL } from "@/lib/accounting/sort";
 import { register, registrationMessage, sortTrial } from "@/lib/accounting/state";
@@ -77,7 +78,7 @@ export function RegisterPanel({ freee }: { freee: ReturnType<typeof useFreee> })
           <button type="button" className="btn primary big" onClick={onRegister} disabled={!gate.ok}>
             {settings.service}に登録
           </button>
-          <p className="hint">選び終わるまで押せません。押すと、自動の分と人が選んだ分をまとめて{settings.service}に登録します。</p>
+          <p className="hint">選び終わるまで押せません。押すと、出金の自動の分と人が選んだ分をまとめて{settings.service}に登録します（入金は登録しません）。</p>
         </>
       )}
 
@@ -97,7 +98,7 @@ export function RegisterPanel({ freee }: { freee: ReturnType<typeof useFreee> })
             </p>
           </>
         ) : (
-          <p className="hint">まだ登録していません（未処理 {seed.statement.items.length}件）。本物の会計にはつながっていません。</p>
+          <p className="hint">まだ登録していません（未処理の出金 {expenseRows(seedRows(seed)).length}件。入金は見せるだけ）。本物の会計にはつながっていません。</p>
         )}
         <p>
           <span className="tag text wrap">{settings.freee.unconnectedNote}</span>
