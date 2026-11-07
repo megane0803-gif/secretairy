@@ -19,9 +19,17 @@ export type DailyReport = {
   visits: number;
   /** 支払い方法ごとの売上（税込・手数料を引く前・店販も含む。円）。キーは seed の methods の id */
   pay: Record<string, number>;
+  /**
+   * 1日の売上の内訳（任意。入れた日だけ）。total = 1日の売上（税込）＝支払い方法ごとの合計・tech = 技術売上・retail = 店販売上（商品の売上）。
+   * tech + retail = total。前に入れた日報（内訳の欄が無い）もそのまま読む（同じ v: 1 の形に欄を足しただけ）
+   */
+  split?: DailySplit;
   /** 最後に入れた・直した時刻（ISO） */
   at: string;
 };
+
+/** 1日の売上の内訳（円） */
+export type DailySplit = { total: number; tech: number; retail: number };
 
 export type DailyState = { v: 1; days: DailyReport[] };
 
@@ -36,6 +44,15 @@ export const DAILY_SECTION_NOTE = "日報はこのブラウザに保存します
 
 /** 「最初に戻す」の後に、戻す前に入れかけた数を保存しようとした時の1文 */
 export const DAILY_RESET_MESSAGE = "最初に戻したので、入れかけた数は保存しませんでした。";
+
+/** 1枚の内訳の欄の説明 */
+export const DAILY_SPLIT_NOTE = "なくてもよい欄です。入れる時は3つとも入れます（技術売上＋店販売上＝1日の売上・1日の売上＝支払い方法ごとの合計）。";
+
+/** 内訳の欄の名前（画面とエラーの文が同じ物を使う） */
+export const SPLIT_LABEL = { total: "1日の売上（税込）", tech: "技術売上", retail: "店販売上（商品の売上）" } as const;
+
+/** 内訳の欄の id（DailyField）。parts = 技術＋店販が1日の売上と合わない時 */
+export const SPLIT_FIELD = { total: "split.total", tech: "split.tech", retail: "split.retail", parts: "split.parts" } as const;
 
 /** 本当にある日付（YYYY-MM-DD） */
 export function isRealDate(date: string): boolean {
@@ -91,12 +108,21 @@ export function parseDaily(raw: string | null): DailyState {
       }
       if (bad) continue;
       seen.add(r.date);
-      days.push({ date: r.date, visits: r.visits, pay, at: typeof r.at === "string" ? r.at : "" });
+      const split = readSplit(r.split);
+      days.push({ date: r.date, visits: r.visits, pay, ...(split ? { split } : {}), at: typeof r.at === "string" ? r.at : "" });
     }
     return { v: 1, days: sortDays(days) };
   } catch {
     return EMPTY_DAILY;
   }
+}
+
+/** 内訳を読む。欄が無い（前の形）・形がおかしい・技術＋店販が合わない時は内訳なしで読む（その日の日報は残す） */
+function readSplit(x: unknown): DailySplit | null {
+  if (!x || typeof x !== "object") return null;
+  const { total, tech, retail } = x as Record<string, unknown>;
+  if (!okCount(total) || !okCount(tech) || !okCount(retail) || tech + retail !== total) return null;
+  return { total, tech, retail };
 }
 
 const sortDays = (days: DailyReport[]) => [...days].sort((a, b) => a.date.localeCompare(b.date));
@@ -107,15 +133,20 @@ export const dailyOf = (state: DailyState, date: string) => state.days.find((d) 
 
 export type Method = { id: string; name: string };
 
-/** 1枚の入力（画面の文字のまま） */
-export type DailyDraft = { date: string; visits: string; pay: Record<string, string> };
+/** 内訳の入力（画面の文字のまま。空欄は「入れていない」で、0 とは分ける） */
+export type DailySplitDraft = { total: string; tech: string; retail: string };
+
+export const EMPTY_SPLIT_DRAFT: DailySplitDraft = { total: "", tech: "", retail: "" };
+
+/** 1枚の入力（画面の文字のまま）。split が無いのは内訳を3つとも空欄にしたのと同じ */
+export type DailyDraft = { date: string; visits: string; pay: Record<string, string>; split?: DailySplitDraft };
 
 /** その日の数を読む順：その日の日報 → （最初から入っている月なら）最初から入っている数 → 空欄 */
-export type DaySource = { from: "daily" | "seed" | "empty"; visits: number; pay: Record<string, number> };
+export type DaySource = { from: "daily" | "seed" | "empty"; visits: number; pay: Record<string, number>; split?: DailySplit };
 
 export function sourceFor(date: string, state: DailyState, seed: SalesMonth): DaySource {
   const own = dailyOf(state, date);
-  if (own) return { from: "daily", visits: own.visits, pay: own.pay };
+  if (own) return { from: "daily", visits: own.visits, pay: own.pay, ...(own.split ? { split: own.split } : {}) };
   const base = monthOf(date) === seed.month ? seed.days.find((d) => d.date === date) : undefined;
   if (base) return { from: "seed", visits: base.visits, pay: base.pay };
   return { from: "empty", visits: 0, pay: {} };
@@ -127,7 +158,11 @@ export function draftFor(date: string, state: DailyState, seed: SalesMonth): { d
   const empty = src.from === "empty";
   const pay: Record<string, string> = {};
   for (const m of seed.methods) pay[m.id] = empty ? "" : String(src.pay[m.id] ?? 0);
-  return { draft: { date, visits: empty ? "" : String(src.visits), pay }, from: src.from };
+  // 内訳は入れた日報の数だけ出す（最初から入っている数と、内訳の無い日報は空欄）
+  const split: DailySplitDraft = src.split
+    ? { total: String(src.split.total), tech: String(src.split.tech), retail: String(src.split.retail) }
+    : { ...EMPTY_SPLIT_DRAFT };
+  return { draft: { date, visits: empty ? "" : String(src.visits), pay, split }, from: src.from };
 }
 
 export type DailyCheckContext = { today: string; methods: Method[]; limits: DailyLimits; shop: ShopSettings };
@@ -160,8 +195,64 @@ export function checkDaily(draft: DailyDraft, ctx: DailyCheckContext): DailyChec
   const total = payOk ? sumPay(pay) : null;
   if (total !== null && total > ctx.limits.maxTotalYen) errors.push({ field: "total", text: `売上の合計は1日 ${yen(ctx.limits.maxTotalYen)}までです。` });
 
+  const split = checkSplit(draft.split ?? EMPTY_SPLIT_DRAFT, total, ctx.limits, errors);
+
   if (errors.length || visits === null || total === null) return { ok: false, total, errors };
-  return { ok: true, report: { date: draft.date, visits, pay }, total, errors: [] };
+  return { ok: true, report: { date: draft.date, visits, pay, ...(split ? { split } : {}) }, total, errors: [] };
+}
+
+/** 少ない・多いの言い方（ずれた円を出す） */
+const gap = (have: number, want: number) => (have < want ? `${yen(want - have)}少ない` : `${yen(have - want)}多い`);
+
+/**
+ * 内訳の確かめ（プログラム）。3つとも空欄なら内訳なし（null。今の日報のまま保存できる）。
+ * 1つでも入れたら3つとも要る。0 以上の整数で、上限は1日の売上の合計と同じ（limits.maxTotalYen）。
+ * 技術売上＋店販売上＝1日の売上・1日の売上＝支払い方法ごとの合計（payTotal。足せない時は比べない）。合わない時は何円ずれているかを出す。
+ */
+export function checkSplit(
+  d: DailySplitDraft,
+  payTotal: number | null,
+  limits: DailyLimits,
+  errors: { field: DailyField; text: string }[],
+): DailySplit | null {
+  const keys = ["total", "tech", "retail"] as const;
+  const filled = keys.filter((k) => d[k].trim() !== "");
+  if (filled.length === 0) return null;
+  const n: Partial<DailySplit> = {};
+  let bad = false;
+  for (const k of keys) {
+    if (d[k].trim() === "") {
+      bad = true;
+      errors.push({ field: SPLIT_FIELD[k], text: `内訳を入れる時は3つとも要ります。${SPLIT_LABEL[k]}も入れてください（内訳を入れない時は3つとも空欄に）。` });
+      continue;
+    }
+    const v = parseCount(d[k]);
+    if (v === null) {
+      bad = true;
+      errors.push({ field: SPLIT_FIELD[k], text: `${SPLIT_LABEL[k]}は 0 以上の整数（円）で入れてください。` });
+    } else if (v > limits.maxTotalYen) {
+      bad = true;
+      errors.push({ field: SPLIT_FIELD[k], text: `${SPLIT_LABEL[k]}は1日 ${yen(limits.maxTotalYen)}までです。` });
+    } else n[k] = v;
+  }
+  if (bad) return null;
+  const s = n as DailySplit;
+  let ok = true;
+  if (s.tech + s.retail !== s.total) {
+    ok = false;
+    errors.push({
+      field: SPLIT_FIELD.parts,
+      text: `技術売上と店販売上を足すと ${yen(s.tech + s.retail)}で、1日の売上（${yen(s.total)}）より ${gap(s.tech + s.retail, s.total)}です。`,
+    });
+  }
+  if (payTotal !== null && s.total !== payTotal) {
+    ok = false;
+    errors.push({
+      field: SPLIT_FIELD.total,
+      text: `1日の売上（${yen(s.total)}）が、支払い方法ごとの合計（${yen(payTotal)}）より ${gap(s.total, payTotal)}です。`,
+    });
+  }
+  return ok ? s : null;
 }
 
 // ── 入れる・直す・消す（ブラウザに書く前の形） ────────────────
@@ -231,6 +322,8 @@ export type MonthDayCell = SalesDayCell & {
   ahead: boolean;
   /** オーナーが決めた休みの日（calDay の holiday。定休日の曜日とは札を分ける） */
   holiday: boolean;
+  /** その日の日報に入れた内訳（技術・店販。円）。入れていない日は null */
+  split: { tech: number; retail: number } | null;
 };
 
 export type MonthSummary = Omit<SalesSummary, "days"> & {
@@ -239,6 +332,8 @@ export type MonthSummary = Omit<SalesSummary, "days"> & {
   year: number;
   days: MonthDayCell[];
   missingCount: number;
+  /** その月の内訳：内訳を入れた日の技術・店販の合計と、その日数（プログラムが日ごとの数から足す） */
+  split: { tech: number; retail: number; days: number };
 };
 
 /**
@@ -248,15 +343,23 @@ export type MonthSummary = Omit<SalesSummary, "days"> & {
 export function summarizeMonth(month: string, seed: SalesMonth, state: DailyState, shop: ShopSettings, today: string): MonthSummary {
   const sales = monthSales(month, seed, state);
   const s = summarizeSales(sales, shop);
-  const own = new Set(state.days.filter((d) => monthOf(d.date) === month).map((d) => d.date));
+  const ownDays = new Map(state.days.filter((d) => monthOf(d.date) === month).map((d) => [d.date, d]));
   const rows = new Set(sales.days.map((d) => d.date));
   const days = s.days.map((d) => {
-    const daily = own.has(d.date);
+    const mine = ownDays.get(d.date);
+    const daily = mine !== undefined;
     const row = rows.has(d.date);
     const holiday = calDay(shop, d.date).holiday === true;
-    return { ...d, daily, shown: d.open || daily, missing: d.open && d.date <= today && !row, ahead: d.date > today && !row, holiday };
+    const split = mine?.split ? { tech: mine.split.tech, retail: mine.split.retail } : null;
+    return { ...d, daily, shown: d.open || daily, missing: d.open && d.date <= today && !row, ahead: d.date > today && !row, holiday, split };
   });
-  return { ...s, key: month, year: Number(month.slice(0, 4)), days, missingCount: days.filter((d) => d.missing).length };
+  const withSplit = days.filter((d) => d.split);
+  const split = {
+    tech: withSplit.reduce((a, d) => a + d.split!.tech, 0),
+    retail: withSplit.reduce((a, d) => a + d.split!.retail, 0),
+    days: withSplit.length,
+  };
+  return { ...s, key: month, year: Number(month.slice(0, 4)), days, missingCount: days.filter((d) => d.missing).length, split };
 }
 
 // ── 保存（人のボタン） ─────────────────────────────
@@ -297,11 +400,11 @@ const DONE_MESSAGE = {
   remove: "✓ 日報を消しました。",
 } as const;
 
-export function dailyJournalText(kind: "add" | "edit" | "remove", date: string, shop: ShopSettings, report?: Pick<DailyReport, "visits" | "pay">): string {
+export function dailyJournalText(kind: "add" | "edit" | "remove", date: string, shop: ShopSettings, report?: Pick<DailyReport, "visits" | "pay" | "split">): string {
   const label = calDay(shop, date).label;
   if (kind === "remove") return `日報を消した（${label}）`;
   const verb = kind === "add" ? "入れた" : "直した";
-  return `日報を${verb}（${label} 売上 ${yen(sumPay(report!.pay))}・来店 ${report!.visits}人）`;
+  return `日報を${verb}（${label} 売上 ${yen(sumPay(report!.pay))}・来店 ${report!.visits}人・${report!.split ? "内訳あり" : "内訳なし"}）`;
 }
 
 /**

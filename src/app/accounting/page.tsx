@@ -3,6 +3,7 @@ import { FieldList, Fold } from "@/components/parts";
 import { CARD_GATE_LABELS } from "@/lib/accounting/sort";
 import { CARD_FIELDS } from "@/lib/data/types";
 import { CardStatement } from "./CardStatement";
+import { DailyOpenTop } from "./DailyOpenTop";
 import { JobStatement } from "./JobStatement";
 import { RegisterColumn } from "./RegisterColumn";
 import { SalesReport } from "./SalesReport";
@@ -12,10 +13,11 @@ import { SalesReport } from "./SalesReport";
  * AI の予想は使わない：購入先ごとの自動のルールでプログラムが分け、ルールの無い物だけ人が店用か私用を選ぶ。
  * 承認の箱は使わない。登録は右の列の人のボタンだけ（オーナーのブラウザで freee（テスト事業所）とつながっている時は、そちらに登録。§1.8.1）。
  * スマホでは右の列（登録の欄・freee の欄）をページの上に出す（予約チャットと同じ rightFirstOnPhone）。PC の右の列の場所は今まで通り。
+ * スマホでは見出し「経理」のすぐ下（登録の欄より上）に「日報を入れる」（beside。PC の幅では出さず、売上の欄の中のボタンのまま）。
  */
 export default function AccountingPage() {
   return (
-    <TabPage tab="accounting" right={<RegisterColumn />} rightFirstOnPhone>
+    <TabPage tab="accounting" right={<RegisterColumn />} beside={<DailyOpenTop />} rightFirstOnPhone>
       <SalesReport />
       <JobStatement />
       <CardStatement />

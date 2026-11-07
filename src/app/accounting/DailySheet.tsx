@@ -1,6 +1,7 @@
 "use client";
 
-// 経理の日報を入れる1枚（スマホは下から出る1枚・PC は小さな窓）。上から順に：日付 → 来店 → 支払い方法ごとの売上 → 合計（プログラムが足す）→「入れる」。
+// 経理の日報を入れる1枚（スマホは下から出る1枚・PC は小さな窓）。上から順に：日付 → 来店 → 支払い方法ごとの売上 → 1日の売上の内訳（なくてもよい）→ 合計（プログラムが足す）→「入れる」。
+// 内訳（1日の売上・技術売上・店販売上）は3つとも空欄か3つとも入れる。合わない時は何円ずれているかを欄の近くに出し、保存しない（daily.ts の checkSplit）。
 // 数の確かめ・保存・日誌は accounting/daily.ts の commitDaily（人のボタンだけが呼ぶ）。どこにも送らない（freee・会計・AI のどれも呼ばない）。
 // 書けなかった時は SAVE_FAILED_MESSAGE を出し、閉じずに数を残す。開いた時の「最初に戻す」の印を持ち、戻した後は保存しない（画面は印が変わったら閉じる）。
 
@@ -11,6 +12,10 @@ import {
   commitDaily,
   dailyOf,
   DAILY_RULE_NOTE,
+  DAILY_SPLIT_NOTE,
+  EMPTY_SPLIT_DRAFT,
+  SPLIT_FIELD,
+  SPLIT_LABEL,
   draftFor,
   isRealDate,
   monthTitle,
@@ -81,6 +86,7 @@ export function DailySheet({ date, today, seed, daily, shop, limits, onClose, on
   const ctx = { today, methods: seed.methods, limits, shop };
   const check = useMemo(() => checkDaily(draft, { today, methods: seed.methods, limits, shop }), [draft, today, seed.methods, limits, shop]);
   const own = isRealDate(draft.date) ? dailyOf(daily, draft.date) : null;
+  const split = draft.split ?? EMPTY_SPLIT_DRAFT;
   const day = isRealDate(draft.date) ? calDay(shop, draft.date) : null;
 
   const pickDate = (next: string) => {
@@ -95,7 +101,12 @@ export function DailySheet({ date, today, seed, daily, shop, limits, onClose, on
   const setField = (k: string, v: string) => {
     setProblem(null);
     setConfirmRemove(false);
-    setDraft((d) => (k === "visits" ? { ...d, visits: v } : { ...d, pay: { ...d.pay, [k]: v } }));
+    setDraft((d) => {
+      if (k === "visits") return { ...d, visits: v };
+      const sk = (Object.keys(SPLIT_FIELD) as (keyof typeof SPLIT_FIELD)[]).find((x) => SPLIT_FIELD[x] === k);
+      if (sk && sk !== "parts") return { ...d, split: { ...(d.split ?? EMPTY_SPLIT_DRAFT), [sk]: v } };
+      return { ...d, pay: { ...d.pay, [k]: v } };
+    });
   };
 
   const finish = (r: DailyCommit) => {
@@ -118,7 +129,7 @@ export function DailySheet({ date, today, seed, daily, shop, limits, onClose, on
 
   const bad = (f: DailyField) => (problem?.fields.includes(f) || (!check.ok && check.errors.some((x) => x.field === f)) ? true : undefined);
   const errorOf = (f: DailyField) => (!check.ok ? check.errors.find((x) => x.field === f)?.text : undefined);
-  const numberInput = (id: string, label: string, unit: string, value: string) => {
+  const numberInput = (id: string, label: string, unit: string, value: string, opts?: { placeholder?: string; invalidToo?: DailyField }) => {
     const err = errorOf(id);
     return (
       <label className="daily-field" key={id}>
@@ -130,9 +141,9 @@ export function DailySheet({ date, today, seed, daily, shop, limits, onClose, on
             pattern="[0-9０-９,，]*"
             autoComplete="off"
             enterKeyHint="next"
-            placeholder="0"
+            placeholder={opts?.placeholder ?? "0"}
             value={value}
-            aria-invalid={bad(id)}
+            aria-invalid={bad(id) || (opts?.invalidToo ? bad(opts.invalidToo) : undefined)}
             onChange={(e) => setField(id, e.target.value)}
           />
           <span className="daily-unit">{unit}</span>
@@ -181,6 +192,20 @@ export function DailySheet({ date, today, seed, daily, shop, limits, onClose, on
         <fieldset className="daily-pay">
           <legend>支払い方法ごとの売上</legend>
           {seed.methods.map((m) => numberInput(m.id, m.name, "円", draft.pay[m.id] ?? ""))}
+        </fieldset>
+
+        {/* 1日の売上の内訳（なくてもよい。入れる時は3つとも）。空欄は 0 ではなく「入れていない」 */}
+        <fieldset className="daily-split">
+          <legend>1日の売上の内訳</legend>
+          <small className="hint">{DAILY_SPLIT_NOTE}</small>
+          <p className="daily-split-sum">
+            <span>支払い方法ごとの合計</span>
+            <strong className="num">{check.total === null ? "—" : yen(check.total)}</strong>
+          </p>
+          {numberInput(SPLIT_FIELD.total, SPLIT_LABEL.total, "円", split.total, { placeholder: "" })}
+          {numberInput(SPLIT_FIELD.tech, SPLIT_LABEL.tech, "円", split.tech, { placeholder: "", invalidToo: SPLIT_FIELD.parts })}
+          {numberInput(SPLIT_FIELD.retail, SPLIT_LABEL.retail, "円", split.retail, { placeholder: "", invalidToo: SPLIT_FIELD.parts })}
+          {errorOf(SPLIT_FIELD.parts) && <small className="daily-err">{errorOf(SPLIT_FIELD.parts)}</small>}
         </fieldset>
 
         {/* 合計と「入れる」は、スマホでは1枚の下に止める（台帳の「予約を入れる」1枚と同じ形）。PC では今まで通りに並ぶ（display: contents） */}
