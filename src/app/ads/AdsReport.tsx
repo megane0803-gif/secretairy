@@ -2,13 +2,15 @@
 
 // 広告タブの真ん中：架空の広告の4週分。
 // AdsWeeks は一番上の「検索広告の4週分」（大きい数字3つと週ごとの小さい縦棒）。
-// AdsReport はその下の「広告の管理画面」と2つの一覧。
+// AdsReport はその下の「広告の管理画面」と、そのすぐ下のテスト用の広告アカウントの今の様子（AdsLiveRead）と、2つの一覧。
 // 数はどれもプログラムが表から出す（AI は数を作らない）。止めた・外した行は薄くする。
 
 import { BigNumber, MiniColumns } from "@/components/parts";
 import { addedRows, totalOf, townIn, WEEK_LABELS, weeklyTotals, yen, type AdTableRow } from "@/lib/ads/report";
 import { realMarkedNos } from "@/lib/ads/connect";
 import { useAds } from "@/lib/ads/useAds";
+import { useLiveLink } from "@/lib/ads/live/usePanel";
+import { AdsLiveRead } from "./AdsLiveRead";
 
 /** 足した言葉の行（広告を出す言葉の一覧の下。数はまだ無いので「—」） */
 function AddedRow({ r }: { r: AdTableRow }) {
@@ -127,6 +129,9 @@ export function AdsWeeks() {
 /** 「広告の管理画面」と、広告を出す言葉・お客さんが調べた言葉の2つの一覧 */
 export function AdsReport() {
   const { table, settings, state } = useAds();
+  const link = useLiveLink();
+  // つないでいない時（プレビュー・手元・環境変数が足りない）は、ここだけに反映する
+  const off = !!link && link !== "unknown" && !link.connected;
   // 「本物に反映済み」の印（くわしくの中で結果を読み込んだ物だけ。無ければ何も出さない）
   const real = realMarkedNos(state);
   const realTag = (no: number) => (real.has(no) ? <span className="tag ok">本物に反映済み</span> : null);
@@ -141,7 +146,13 @@ export function AdsReport() {
         <h2 id="ad-site">
           広告の管理画面
         </h2>
-        <p className="hint">承認すると、ここで言葉が止まります（外れます）。本物の広告にはつながっていません。</p>
+        {off ? (
+          <p className="hint">承認すると、ここに反映します（言葉が止まる・外れる・足される）。いまはテスト用の広告アカウントにつないでいないので、ここだけです。</p>
+        ) : (
+          <p className="hint">
+            承認すると、ここに反映し、テスト用の広告アカウントにも、元の形に戻してからその1件を本当に送ります。広告は出ず、お金は動きません。テスト用アカウントの今の様子は、下の「読み直す」でだれでも見られます。
+          </p>
+        )}
         <strong>広告を出す言葉</strong>
         <ul>
           {table.keywords.map((r) => (
@@ -181,6 +192,8 @@ export function AdsReport() {
           </p>
         )}
       </section>
+
+      <AdsLiveRead />
 
       <h2>広告を出す言葉（止められる）</h2>
       <Rows rows={table.keywords} towns={settings.towns} offWord="止めた" added={added} />

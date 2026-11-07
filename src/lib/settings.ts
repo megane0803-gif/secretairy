@@ -198,7 +198,9 @@ export type AdSettings = {
  * timeoutSeconds = 1回の呼び出しの待ち時間 / serverBudgetSeconds = 1回の窓口の持ち時間 / lockSeconds = 「動いている印」の期限 /
  * tokenSeconds = 通行証の長さ / tokenReuseMarginSeconds = 切れる何秒前まで使い回すか /
  * daily = 1日（店の時間帯の日付）の上限（用意・送る・読み直す・止めるの数）/
- * passcode = オーナー用の合言葉（短い設定は無いのと同じ・長さの上限・間違いの数の上限とその時間）
+ * passcode = オーナー用の合言葉（短い設定は無いのと同じ・長さの上限・間違いの数の上限とその時間）/
+ * try = だれでも承認したら試す窓口（/api/ads/live/try。直しU）：受け取る大きさ・1日（サイト全体）・1分（サイト全体）・
+ *   同じ送り元から1日の回数（オーナーの daily とは別に数える）・「最後に元の形に戻した時刻」を置いておく日数
  */
 export type AdsLiveSettings = {
   label: string;
@@ -222,6 +224,7 @@ export type AdsLiveSettings = {
   tokenReuseMarginSeconds: number;
   daily: { setup: number; send: number; read: number; stop: number };
   passcode: { minChars: number; maxChars: number; maxWrong: number; wrongWindowSeconds: number };
+  try: { maxRequestChars: number; day: number; minute: number; perSourceDay: number; resetMarkDays: number };
 };
 
 export function getAdSettings(): AdSettings {

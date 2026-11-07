@@ -201,7 +201,8 @@ describe("結果の読み込み", () => {
     const fold = page.slice(page.indexOf("<Fold"), page.indexOf("</Fold>"));
     assert.match(fold, /<AdsConnect \/>/);
     const ui = readFileSync("src/app/ads/AdsConnect.tsx", "utf8");
-    assert.match(ui, /本物の広告に渡す形を見る（今はつないでいません）/);
+    assert.match(ui, /本物の広告に渡す形を見る（写す・結果を貼る。この欄からは送りません）/);
+    assert.doesNotMatch(ui, /今はつないでいません/, "つないでいないと読める言い方をしない（直しU）");
     // 何も送っていないのに「本物に反映済み」の印が付く道（見本の結果のボタン）は置かない。貼る欄と読み込みだけ
     assert.doesNotMatch(ui, /見本の結果|sampleResult|DEMO_TAG_NOTE/);
     assert.doesNotMatch(readFileSync("src/lib/ads/connect.ts", "utf8"), /sampleResult/);
@@ -723,7 +724,8 @@ describe("見本のスクリプト（作り物の広告で）", () => {
   test("README：本物の検索広告につなぐ道（言いすぎない・道2は今の形）", () => {
     const readme = readFileSync("README.md", "utf8");
     const sec = readme.slice(readme.indexOf("## 本物の検索広告につなぐ道"), readme.indexOf("## 録音からメモを作る"));
-    assert.match(sec, /今はつないでいません/);
+    assert.match(sec, /本物の（テスト用でない）広告のアカウントにはつないでいません/);
+    assert.match(sec, /本物の広告に渡す形を見る（写す・結果を貼る。この欄からは送りません）/);
     assert.match(sec, /本物のアカウントでは動かしていません/);
     assert.match(sec, /道1/);
     assert.match(sec, /道2/);

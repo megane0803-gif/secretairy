@@ -9,10 +9,15 @@ export const LIVE_PATHS = {
   setup: "/api/ads/live/setup",
   send: "/api/ads/live/send",
   read: "/api/ads/live/read",
+  try: "/api/ads/live/try",
 } as const;
 
 export const NOT_CONNECTED_MESSAGE = "テスト用の広告アカウントにつないでいません";
 export const BUSY_MESSAGE = "いま送っています。終わってからもう一度押してください";
+/** だれでも試す窓口（try）で、ほかの人（オーナーの用意・送るも）が動かしている時 */
+export const TRY_BUSY_MESSAGE = "ほかの人が試しています。少し待ってから、もう一度承認してください";
+/** テスト用アカウントにまだ作品のキャンペーンが無い・2つある・用意の言葉が欠けている時（試す窓口は何も書かない） */
+export const NOT_READY_MESSAGE = "まだ用意されていません（オーナーが用意します）";
 
 /** 案ごとの結果：反映した／もう〜だった／できなかった（理由）／分からない（読み直してください） */
 export type LiveOutcome = "done" | "already" | "failed" | "unknown";
@@ -38,6 +43,14 @@ export type LiveSendResponse = { ok: true; result: LiveResult; lines: LiveLine[]
 
 export type LiveKeyword = { text: string; match: string; status: string; group: string };
 export type LiveNegative = { text: string; match: string };
+/** resetAt = 最後にだれかの試し（try）で「元の形」に戻した時刻（無ければ持たない）。これより前の「本物に反映済み」の印とは比べない */
 export type LiveReadResponse =
-  | { ok: true; campaign: { found: boolean; status: string }; keywords: LiveKeyword[]; negatives: LiveNegative[]; note?: string }
+  | { ok: true; campaign: { found: boolean; status: string }; keywords: LiveKeyword[]; negatives: LiveNegative[]; note?: string; resetAt?: string }
   | LiveFail;
+
+/** だれでも試す窓口の1件（ブラウザから受け取るのは kind と no の2つだけ。言葉はサーバーが最初の表から引く） */
+export type TryKind = SyncKind;
+/** 試した1件の結果の行（反映した／もうその形だった／できなかった（理由）／分からない） */
+export type LiveTryLine = { kind: TryKind; no: number; text: string; outcome: LiveOutcome; reason?: string };
+/** 返事は、結果の行と読み直しの一覧だけ（読み直せなかった時は list が null） */
+export type LiveTryResponse = { ok: true; line: LiveTryLine; list: Extract<LiveReadResponse, { ok: true }> | null } | LiveFail;
