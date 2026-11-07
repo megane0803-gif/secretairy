@@ -3,8 +3,10 @@
 // ここは形と変え方だけ（どこにも書かない）。
 //
 // 明細ごとの状態：まだ・送っている・登録した・もう処理済み・失敗・結果が分からない。
-// 送り始めたら、明細と店用／私用の選び（uses）を固定する。送っている間は、登録のし直しと「最初に戻す」を止める。
+// 明細の鍵は freee の明細の番号（wallet_txn の id）で "t<id>"。架空の明細の番号（item.no）とは混ぜない（前の形の数だけの鍵は読まない）。
+// 送り始めたら、その明細の店用／私用の選び（uses）を固定する。送っている間は、登録のし直しと「最初に戻す」を止める。
 
+import { isTxnKey } from "../accounting/rows";
 import type { CardUse } from "../data/types";
 
 export type FreeeItemState = "pending" | "sending" | "registered" | "already" | "failed" | "unknown";
@@ -27,7 +29,7 @@ export type ImportHold = { until: string; reason: string };
 
 export type FreeeRecord = {
   v: 1;
-  /** 送り始めた時に固定した店用／私用（明細の番号 → 店用 / 私用）。まだ送っていなければ null */
+  /** 送り始めた時に固定した店用／私用（"t<freee の明細の番号>" → 店用 / 私用）。まだ送っていなければ null */
   uses: Record<string, CardUse> | null;
   items: Record<string, FreeeItem>;
   /** 送っている間の印（1件ごとに付けなおす）。古ければ止まった物とみなす */
@@ -36,9 +38,14 @@ export type FreeeRecord = {
   lastRun: FreeeRun | null;
   /** 「freee に明細を入れる」の結果が分からない時：この時刻までは入れない（過ぎても、読み直して照らし合わせてから、まだ無い物だけ入れる） */
   importHold: ImportHold | null;
+  /**
+   * このブラウザが freee とつながった印（つながっている答えを受けた時に付け、「つなぎを外す」で外す）。
+   * 鍵が切れた後も、明細の一覧を黙って架空の明細に切り替えないため。鍵は持たない。
+   */
+  linked: boolean;
 };
 
-export const EMPTY_FREEE: FreeeRecord = { v: 1, uses: null, items: {}, sendingAt: null, lastRun: null, importHold: null };
+export const EMPTY_FREEE: FreeeRecord = { v: 1, uses: null, items: {}, sendingAt: null, lastRun: null, importHold: null, linked: false };
 
 const STATES = new Set<FreeeItemState>(["pending", "sending", "registered", "already", "failed", "unknown"]);
 const isStr = (x: unknown): x is string => typeof x === "string";
@@ -59,13 +66,14 @@ export function parseFreee(raw: string | null): FreeeRecord {
   let uses: Record<string, CardUse> | null = null;
   if (d.uses && typeof d.uses === "object") {
     uses = {};
-    for (const [k, v] of Object.entries(d.uses as Record<string, unknown>)) if (/^\d+$/.test(k) && isUse(v)) uses[k] = v;
+    for (const [k, v] of Object.entries(d.uses as Record<string, unknown>)) if (isTxnKey(k) && isUse(v)) uses[k] = v;
+    if (Object.keys(uses).length === 0) uses = null;
   }
   const items: Record<string, FreeeItem> = {};
   if (d.items && typeof d.items === "object")
     for (const [k, v] of Object.entries(d.items as Record<string, unknown>)) {
       const x = v as Record<string, unknown>;
-      if (!/^\d+$/.test(k) || !x || !STATES.has(x.state as FreeeItemState) || !isStr(x.at)) continue;
+      if (!isTxnKey(k) || !x || !STATES.has(x.state as FreeeItemState) || !isStr(x.at)) continue;
       items[k] = {
         state: x.state as FreeeItemState,
         at: x.at,
@@ -80,7 +88,7 @@ export function parseFreee(raw: string | null): FreeeRecord {
       : null;
   const h = d.importHold as Record<string, unknown> | null | undefined;
   const importHold: ImportHold | null = h && typeof h === "object" && isStr(h.until) && Number.isFinite(Date.parse(h.until)) ? { until: h.until, reason: isStr(h.reason) ? h.reason.slice(0, 300) : "" } : null;
-  return { v: 1, uses, items, sendingAt: isStr(d.sendingAt) ? d.sendingAt : null, lastRun, importHold };
+  return { v: 1, uses, items, sendingAt: isStr(d.sendingAt) ? d.sendingAt : null, lastRun, importHold, linked: d.linked === true };
 }
 
 /** 明細を入れるのを待っているか（期限の前） */
@@ -104,8 +112,13 @@ export function keptOnReset(r: FreeeRecord, nowMs: number): FreeeRecord | null {
   return { ...EMPTY_FREEE, items, importHold };
 }
 
-export function stateOf(r: FreeeRecord, no: number): FreeeItemState {
-  return r.items[String(no)]?.state ?? "pending";
+export function stateOf(r: FreeeRecord, key: string): FreeeItemState {
+  return r.items[key]?.state ?? "pending";
+}
+
+/** つながった印を付ける・外す */
+export function withLinked(r: FreeeRecord, linked: boolean): FreeeRecord {
+  return r.linked === linked ? r : { ...r, linked };
 }
 
 /** 送り始めたか（選びを固定する・画面の中の会計に黙って切り替えない） */
@@ -133,24 +146,29 @@ export function withStaleRecovered(r: FreeeRecord, nowMs: number, staleSeconds: 
 }
 
 /** 次の「登録」で送る明細（まだ・失敗）。結果が分からない物は、読み直すまで送らない */
-export function toSend(r: FreeeRecord, nos: number[]): number[] {
-  return nos.filter((no) => {
-    const s = stateOf(r, no);
+export function toSend(r: FreeeRecord, keys: string[]): string[] {
+  return keys.filter((k) => {
+    const s = stateOf(r, k);
     return s === "pending" || s === "failed";
   });
 }
 
-/** 送り始める：選びを固定し（もう固定してあれば変えない）、送っている印を付ける */
+/** 送り始める：送る明細の選びを固定し（もう固定してある明細は変えない）、送っている印を付ける */
 export function withRunStart(r: FreeeRecord, uses: Record<string, CardUse>, nowIso: string): FreeeRecord {
-  return { ...r, uses: r.uses ?? { ...uses }, sendingAt: nowIso };
+  return { ...r, uses: { ...uses, ...(r.uses ?? {}) }, sendingAt: nowIso };
 }
 
-export function withSending(r: FreeeRecord, no: number, nowIso: string): FreeeRecord {
-  return { ...r, sendingAt: nowIso, items: { ...r.items, [String(no)]: { state: "sending", at: nowIso } } };
+/** この明細の選びを固定したか（送り始めた明細だけ。新しく読んだ明細は選べる） */
+export function isFixed(r: FreeeRecord, key: string): boolean {
+  return !!r.uses && key in r.uses;
 }
 
-export function withItem(r: FreeeRecord, no: number, item: Omit<FreeeItem, "at">, nowIso: string): FreeeRecord {
-  return { ...r, items: { ...r.items, [String(no)]: { ...item, at: nowIso } } };
+export function withSending(r: FreeeRecord, key: string, nowIso: string): FreeeRecord {
+  return { ...r, sendingAt: nowIso, items: { ...r.items, [key]: { state: "sending", at: nowIso } } };
+}
+
+export function withItem(r: FreeeRecord, key: string, item: Omit<FreeeItem, "at">, nowIso: string): FreeeRecord {
+  return { ...r, items: { ...r.items, [key]: { ...item, at: nowIso } } };
 }
 
 export function withRunEnd(r: FreeeRecord, run: FreeeRun): FreeeRecord {
@@ -163,14 +181,14 @@ export function withRunEnd(r: FreeeRecord, run: FreeeRun): FreeeRecord {
  */
 export function withChecked(
   r: FreeeRecord,
-  answers: { no: number; kind: "ready" | "done" | "check" | "missing"; reason?: string }[],
+  answers: { key: string; kind: "ready" | "done" | "check" | "missing"; reason?: string }[],
   nowIso: string,
   startedAtMs: number,
 ): FreeeRecord {
   let out = r;
   for (const a of answers) {
-    const cur = stateOf(out, a.no);
-    const prev = out.items[String(a.no)];
+    const cur = stateOf(out, a.key);
+    const prev = out.items[a.key];
     if (prev && Date.parse(prev.at) >= startedAtMs) continue; // 読み直しを始めた後の記録の方が新しい
     if (cur === "registered" && a.kind === "done") continue; // 登録した記録はそのまま
     if (cur === "sending") continue;
@@ -180,22 +198,27 @@ export function withChecked(
         : a.kind === "ready"
           ? { state: "pending" }
           : a.kind === "missing"
-            ? { state: "failed", reason: "freee にこの明細がありません。先に「freee に明細を入れる」を押してください" }
+            ? { state: "failed", reason: "freee の読む期間の中に、この明細がありません" }
             : { state: "failed", reason: `確かめが要る：${a.reason ?? ""}` };
-    out = withItem(out, a.no, item, nowIso);
+    out = withItem(out, a.key, item, nowIso);
   }
   return out;
 }
 
 export type FreeeCounts = Record<FreeeItemState, number>;
 
-export function countsOf(r: FreeeRecord, nos: number[]): FreeeCounts {
+export function countsOf(r: FreeeRecord, keys: string[]): FreeeCounts {
   const c: FreeeCounts = { pending: 0, sending: 0, registered: 0, already: 0, failed: 0, unknown: 0 };
-  for (const no of nos) c[stateOf(r, no)]++;
+  for (const k of keys) c[stateOf(r, k)]++;
   return c;
 }
 
-/** 取引の番号（登録した物だけ。番号の順） */
-export function dealIdsOf(r: FreeeRecord, nos: number[]): { no: number; dealIds: number[] }[] {
-  return nos.map((no) => ({ no, dealIds: r.items[String(no)]?.dealIds ?? [] })).filter((x) => x.dealIds.length > 0 && stateOf(r, x.no) === "registered");
+/** 記録にある明細の鍵（記録の数を出す・読み直しで照らし合わせる） */
+export function recordKeys(r: FreeeRecord): string[] {
+  return Object.keys(r.items);
+}
+
+/** 取引の番号（登録した物だけ） */
+export function dealIdsOf(r: FreeeRecord, keys: string[]): { key: string; dealIds: number[] }[] {
+  return keys.map((key) => ({ key, dealIds: r.items[key]?.dealIds ?? [] })).filter((x) => x.dealIds.length > 0 && stateOf(r, x.key) === "registered");
 }
