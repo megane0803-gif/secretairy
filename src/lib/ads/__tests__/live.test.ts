@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import { generateKeyPairSync, randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, test } from "node:test";
 import { emptyBook } from "../../book/state";
 import { getAds } from "../../data/seed";
@@ -15,14 +15,16 @@ import { loadSyncResult } from "../connectLoad";
 import { featuredWords } from "../featured";
 import { gaqlString, VERIFY_QUERY } from "../live/api";
 import { customerIdFrom, liveEnvFrom, LIVE_ENV, serviceKeyFrom } from "../live/env";
-import { handleLiveRead, handleLiveSend, handleLiveSetup, handleLiveStatus, keywordProblem, LIVE_KEY, scrub, type LiveDeps } from "../live/server";
+import { handleLiveRead, handleLiveSend, handleLiveSetup, handleLiveStatus, handleLiveTry, keywordProblem, LIVE_KEY, planTry, scrub, sourceHash, sourceIp, type LiveDeps } from "../live/server";
 import { accessToken, clearTokenCache, signedJwt } from "../live/token";
-import { driftOf, LOST_MESSAGE, outcomeText } from "../live/client";
+import { driftOf, LOST_MESSAGE, outcomeText, RESET_BY_TRY_NOTE } from "../live/client";
+import { approvedNotice } from "../live/notice";
 import { driftShown, livePanel, READ_LATER_NOTE, READ_LIMIT_NOTE, readFailedAfter, RESET_WHILE_SENDING, visibleRead, type LivePanelDeps, type LivePanelView } from "../live/panel";
 import type { LiveReadResponse } from "../live/wire";
 import { approveAd, approveAdd, EMPTY_ADS, tableOf, withReview, type AdsState } from "../state";
 import { buildTable } from "../report";
 import { fakeGoogle, type FakeGoogle } from "./fakeGoogle";
+import { trialTable } from "../live/trial";
 
 const ads = getAdSettings();
 const live = ads.live;
@@ -72,6 +74,7 @@ function world(over: { env?: Record<string, string | undefined>; store?: KvStore
     towns: ads.towns,
     words,
     setupKeywords: getAds().keywords.map((k) => k.text),
+    trial: trialTable(getAds(), ads, words),
     siteOrigin: SITE,
     fetch: google.fetch,
     now,
@@ -95,6 +98,12 @@ const bodyOf = async (r: Response) => (await r.json()) as Record<string, any>;
 const setupReq = (...a: [passcode?: unknown, extra?: Record<string, unknown>]) => req("/api/ads/live/setup", { body: { passcode: a.length ? a[0] : PASS, ...(a[1] ?? {}) } });
 const sendReq = (payload: unknown, ...a: [passcode?: unknown]) => req("/api/ads/live/send", { body: { passcode: a.length ? a[0] : PASS, payload } });
 const readReq = () => req("/api/ads/live/read", { body: {} });
+const tryReq = (body: unknown, h: Record<string, string> = {}) => {
+  const r = req("/api/ads/live/try", { body });
+  const headers = new Headers(r.headers);
+  for (const [k, v] of Object.entries({ "x-real-ip": "203.0.113.7", ...h })) headers.set(k, v);
+  return new Request(r.url, { method: "POST", headers, body: JSON.stringify(body) });
+};
 
 const APPROVED = "2026-11-06T01:00:00.000Z";
 function payloadOf(items: SyncPayload["items"], over: Partial<SyncPayload> = {}): SyncPayload {
@@ -250,23 +259,34 @@ describe("つながっているか・止まる時", () => {
     assert.equal(google.calls.length, 0);
   });
 
-  test("つながっている時の札とボタンの所は「くわしく」の中だけ（名前は札だけ・鍵の環境変数を画面のコードで読まない）", () => {
+  test("オーナーの用意・送るは「くわしく」の中・札と読み直すは広告の管理画面の下（名前は札だけ・鍵の環境変数を画面のコードで読まない）", () => {
     const page = readFileSync("src/app/ads/page.tsx", "utf8");
     const fold = page.slice(page.indexOf("<Fold"), page.indexOf("</Fold>"));
     assert.ok(fold.indexOf("<AdsConnect />") < fold.indexOf("<AdsLive />"), "渡す形の下");
     const ui = readFileSync("src/app/ads/AdsLive.tsx", "utf8");
-    assert.match(ui, /つながっています・広告は出ません・お金は動きません/);
+    const view = readFileSync("src/app/ads/AdsLiveRead.tsx", "utf8");
+    const report = readFileSync("src/app/ads/AdsReport.tsx", "utf8");
+    assert.match(view, /つながっています・広告は出ません・お金は動きません/);
     assert.match(ui, /テスト用アカウントに店の広告を用意する/);
     assert.match(ui, /テスト用アカウントに送る/);
-    assert.match(ui, /テスト用アカウントから読み直す/);
-    assert.match(ui, /（つなぐ手順は README）/);
+    assert.match(ui, /読み直しの一覧は、広告の管理画面の下に出ます/);
+    assert.match(view, /テスト用アカウントから読み直す/);
+    // 「読み直す」のボタンは画面に1つだけ（管理画面の下）
+    assert.doesNotMatch(ui, /テスト用アカウントから読み直す/);
+    assert.equal((view.match(/テスト用アカウントから読み直す"/g) ?? []).length, 1);
+    // 管理画面のすぐ下・2つの一覧の上
+    assert.ok(report.indexOf("</section>") < report.indexOf("<AdsLiveRead />") && report.indexOf("<AdsLiveRead />") < report.indexOf("広告を出す言葉（止められる）"));
+    assert.match(view, /（つなぐ手順は README）/);
+    assert.match(view, /つながっているか分かりませんでした（ページを読み込み直してください）/);
     assert.match(ui, /type="password"/);
     const flow = readFileSync("src/lib/ads/live/panel.ts", "utf8");
     assert.match(flow, /sameEpoch\(\{ epoch: d\.epoch\(\) \}, epoch\)/, "「最初に戻す」が途中で押されたら印を付けない");
     assert.match(flow, /if \(r\.created\) d\.journal/);
-    assert.match(ui, /epoch: currentEpoch/);
-    assert.doesNotMatch(ui, /localStorage|sessionStorage|writeBrowser/, "合言葉をブラウザに残さない");
-    for (const f of ["src/app/ads/AdsLive.tsx", "src/lib/ads/live/client.ts", "src/lib/ads/live/panel.ts", "src/lib/ads/live/wire.ts", "src/lib/ads/connectLoad.ts"]) {
+    const shared = readFileSync("src/lib/ads/live/usePanel.ts", "utf8");
+    assert.match(shared, /epoch: currentEpoch/);
+    for (const f of ["src/app/ads/AdsLive.tsx", "src/app/ads/AdsLiveRead.tsx", "src/lib/ads/live/usePanel.ts"])
+      assert.doesNotMatch(readFileSync(f, "utf8"), /localStorage|sessionStorage|writeBrowser/, "合言葉をブラウザに残さない");
+    for (const f of ["src/app/ads/AdsLive.tsx", "src/app/ads/AdsLiveRead.tsx", "src/lib/ads/live/usePanel.ts", "src/lib/ads/live/notice.ts", "src/lib/ads/live/client.ts", "src/lib/ads/live/panel.ts", "src/lib/ads/live/wire.ts", "src/lib/ads/connectLoad.ts"]) {
       const s = readFileSync(f, "utf8");
       assert.doesNotMatch(s, /process\.env|GOOGLE_ADS_|NEXT_PUBLIC_/, f);
       assert.doesNotMatch(s, /from "\.\/(env|token|api|server|deps)"|live\/(env|token|api|server|deps)"/, `${f} はサーバーの部品を読まない`);
@@ -1022,7 +1042,10 @@ describe("画面の印（直しR の読み込みと同じ道）", () => {
   const readCount = async (w: Awaited<ReturnType<typeof prepared>>) => Number((await w.store!.get(READ_DAY)) ?? 0);
 
   /** 画面の流れを、作り物の Google の窓口につなぐ（合言葉は押した時に渡す） */
-  function panelOf(w: ReturnType<typeof world>, o: { read?: () => Promise<LiveReadResponse>; send?: LivePanelDeps["send"]; epoch?: () => string | undefined } = {}) {
+  function panelOf(
+    w: ReturnType<typeof world>,
+    o: { read?: () => Promise<LiveReadResponse>; send?: LivePanelDeps["send"]; try?: LivePanelDeps["try"]; epoch?: () => string | undefined } = {},
+  ) {
     let s = state();
     const store = { read: () => s, update: (f: (x: AdsState) => AdsState) => ((s = f(s)), { ok: true as const }), words, settings: c, journal: "テスト用の広告アカウントに送った" };
     const views: LivePanelView[] = [];
@@ -1031,6 +1054,7 @@ describe("画面の印（直しR の読み込みと同じ道）", () => {
     const serverRead = async () => (await bodyOf(await handleLiveRead(readReq(), w.deps))) as LiveReadResponse;
     const panel = livePanel({
       setup: async (code) => (await bodyOf(await handleLiveSetup(setupReq(code), w.deps))) as any,
+      try: o.try ?? (async (kind, no) => (await bodyOf(await handleLiveTry(tryReq({ kind, no }), w.deps))) as any),
       send: o.send ?? (async (code, payload) => (await bodyOf(await handleLiveSend(sendReq(payload, code), w.deps))) as any),
       read: () => {
         reads += 1;
@@ -1123,12 +1147,12 @@ describe("画面の印（直しR の読み込みと同じ道）", () => {
     const v = p.panel.view();
     assert.equal(v.read, null, "古い一覧は消す");
     assert.match(v.shown!.head, /本物に反映済みの印を 3件/, "送った結果は残す");
-    assert.equal(v.readNote, "送った結果は上のとおりです。今日の読み直しは上限です。明日また読み直せます");
+    assert.equal(v.readNote, "送った結果は「くわしく」の中に出ています。今日の読み直しは上限です。明日また読み直せます");
     assert.equal(READ_LIMIT_NOTE, "今日の読み直しは上限です。明日また読み直せます");
     assert.deepEqual(p.drift(), []);
   });
 
-  test("直しT：送るはうまくいって読み直しだけ断られた時は「送った結果は上のとおりです。いまは読み直せませんでした（理由）」（送れなかったと読めない）", async () => {
+  test("直しT：送るはうまくいって読み直しだけ断られた時は「送った結果は〜に出ています。いまは読み直せませんでした（理由）」（送れなかったと読めない。直しU で場所に合う言い方）", async () => {
     const w = await prepared();
     let lose = false;
     const p = panelOf(w, { read: async () => (lose ? { ok: false, code: "lost", message: LOST_MESSAGE } : ((await bodyOf(await handleLiveRead(readReq(), w.deps))) as LiveReadResponse)) });
@@ -1138,9 +1162,9 @@ describe("画面の印（直しR の読み込みと同じ道）", () => {
     const v = p.panel.view();
     assert.equal(v.read, null);
     assert.match(v.shown!.head, /本物に反映済みの印を 3件/);
-    assert.equal(v.readNote, "送った結果は上のとおりです。いまは読み直せませんでした（返事が届きませんでした）");
+    assert.equal(v.readNote, "送った結果は「くわしく」の中に出ています。いまは読み直せませんでした（返事が届きませんでした）");
     assert.doesNotMatch(v.readNote!, /送れ(な|ませ|たか)/);
-    assert.equal(readFailedAfter("send", { ok: false, code: "no-store", message: "置き場につながりません。" }), "送った結果は上のとおりです。いまは読み直せませんでした（置き場につながりません）");
+    assert.equal(readFailedAfter("send", { ok: false, code: "no-store", message: "置き場につながりません。" }), "送った結果は「くわしく」の中に出ています。いまは読み直せませんでした（置き場につながりません）");
   });
 
   test("直しT：「用意」の後も同じ（用意の前の「キャンペーンがまだありません」を残さない・用意した後に1回だけ読み直す）", async () => {
@@ -1252,14 +1276,160 @@ describe("画面の印（直しR の読み込みと同じ道）", () => {
     assert.equal(p.panel.view().read!.list.campaign.found, true);
   });
 
-  test("直しT：画面は live/panel.ts を通す（送る前の一覧と比べない・自分で読み直しの番号を数えない）", () => {
-    const ui = readFileSync("src/app/ads/AdsLive.tsx", "utf8");
-    assert.match(ui, /livePanel\(/);
-    assert.match(ui, /driftShown\(/);
-    assert.match(ui, /visibleRead\(/);
-    assert.match(ui, /panel\.forget\(\)/, "「最初に戻す」を見て流れている読み直しを捨てる");
-    assert.doesNotMatch(ui, /driftOf\(/, "古い一覧と比べる形を画面に残さない");
-    assert.doesNotMatch(ui, /setRead\(|setReadNote\(/);
+  test("直しT・直しU：画面は live/panel.ts の流れ1つを通す（送る前の一覧と比べない・自分で読み直しの番号を数えない）", () => {
+    const shared = readFileSync("src/lib/ads/live/usePanel.ts", "utf8");
+    assert.equal((shared.match(/livePanel\(/g) ?? []).length, 1, "流れを作るのは1か所");
+    assert.match(shared, /sharedPanel\(\)\.forget\(\)/, "「最初に戻す」を見て流れている読み直しを捨てる");
+    const files = ["src/app/ads/AdsLive.tsx", "src/app/ads/AdsLiveRead.tsx", "src/components/AdApprovalRows.tsx", "src/components/AdAddRow.tsx", "src/app/ads/AdsReport.tsx"];
+    for (const f of files) {
+      const ui = readFileSync(f, "utf8");
+      assert.doesNotMatch(ui, /livePanel\(/, `${f} は流れを自分で作らない`);
+      assert.doesNotMatch(ui, /driftOf\(/, "古い一覧と比べる形を画面に残さない");
+      assert.doesNotMatch(ui, /setRead\(|setReadNote\(/);
+      assert.doesNotMatch(ui, /liveTry\(|LIVE_PATHS/, `${f} は窓口を直に呼ばない`);
+    }
+    const view = readFileSync("src/app/ads/AdsLiveRead.tsx", "utf8");
+    assert.match(view, /driftShown\(/);
+    assert.match(view, /visibleRead\(/);
+  });
+
+  // ── 直しU：だれでも承認したら試す（同じ流れ1つ） ──
+
+  test("直しU：試すは1回だけ呼び、返事の一覧（窓口の中で読み直した物）を出す。この道では「本物に反映済み」の印を付けない", async () => {
+    const w = await prepared();
+    let tries = 0;
+    const p = panelOf(w, { try: async (kind, no) => (tries++, (await bodyOf(await handleLiveTry(tryReq({ kind, no }), w.deps))) as any) });
+    const pending = syncPayload(p.ads(), words, c, NOW).payload.items.length;
+    await readBefore(p);
+    assert.equal(await p.panel.tryOne({ kind: "stop", no: 7, text: "髪型 流行り" }), true);
+    const v = p.panel.view();
+    assert.equal(tries, 1);
+    assert.equal(p.reads(), 1, "試した後に別に読み直さない（窓口の返事の一覧を使う）");
+    assert.equal(v.tried!.state, "done");
+    assert.ok(v.read && v.read.seq > v.wroteSeq);
+    assert.equal(v.read!.list.keywords.find((k) => k.text === "髪型 流行り")!.status, "止めている");
+    assert.ok([...p.ads().proposals, ...(p.ads().adds ?? [])].every((x) => !x.realAt), "印は付けない");
+    assert.equal(syncPayload(p.ads(), words, c, NOW).payload.items.length, pending, "送る案の数は今どおり");
+    assert.deepEqual(p.drift(), [], "印が無いので「印がありますが〜」も出ない");
+    assert.equal(v.busy, null);
+  });
+
+  test("直しU：返事が届かない・分からない時も、自動では呼び直さない（読み直しも自動ではしない）", async () => {
+    for (const answer of [{ ok: false, code: "lost", message: LOST_MESSAGE }, { ok: true, line: { kind: "stop", no: 7, text: "髪型 流行り", outcome: "unknown", reason: "分かりません（読み直してください）" }, list: null }] as const) {
+      const w = await prepared();
+      let tries = 0;
+      const p = panelOf(w, { try: async () => (tries++, answer as any) });
+      await p.panel.tryOne({ kind: "stop", no: 7, text: "髪型 流行り" });
+      assert.equal(tries, 1);
+      assert.equal(p.reads(), 0);
+      assert.equal(p.panel.view().tried!.state, "unknown");
+      assert.equal(p.panel.view().readNote, READ_LATER_NOTE);
+      const note = approvedNotice({ kind: "stop", no: 7, text: "髪型 流行り", todo: true, route: "started" }, p.panel.view().tried, "ads");
+      assert.match(note, /送れたか分かりません/);
+      assert.doesNotMatch(note, /できなかった|送れませんでした/);
+    }
+    const ui = readFileSync("src/lib/ads/live/usePanel.ts", "utf8") + readFileSync("src/components/AdApprovalRows.tsx", "utf8") + readFileSync("src/components/AdAddRow.tsx", "utf8");
+    assert.equal((ui.match(/tryOne\(/g) ?? []).length, 1, "試すを呼ぶのは tryAfterApprove の1か所");
+    assert.doesNotMatch(ui, /setInterval|setTimeout|retry/i, "呼び直さない");
+  });
+
+  test("直しU：試している間は「読み直す」も「用意」「送る」も、もう1つの試すも動かない・「最初に戻す」の後に遅れた返事を出さない・上限の1行", async () => {
+    const w = await prepared();
+    let epoch = "e1";
+    const hold = deferred<any>();
+    const p = panelOf(w, { epoch: () => epoch, try: () => hold.promise });
+    const first = p.panel.tryOne({ kind: "stop", no: 7, text: "髪型 流行り" });
+    assert.equal(p.panel.view().busy, "try");
+    await p.panel.reread();
+    await p.panel.setup(PASS);
+    assert.equal(await p.panel.tryOne({ kind: "add", no: 11, text: "縮毛矯正 くせ毛 ひどい" }), false);
+    assert.equal(p.reads(), 0);
+    epoch = "e2";
+    hold.resolve({ ok: true, line: { kind: "stop", no: 7, text: "髪型 流行り", outcome: "done" }, list: { ok: true, campaign: { found: true, status: "古い返事" }, keywords: [], negatives: [] } });
+    await first;
+    assert.equal(p.panel.view().tried, null, "戻した後は知らせを出さない");
+    assert.equal(p.panel.view().read, null, "戻した後は一覧を出さない");
+    // 上限：理由つきで「いまは送れませんでした」
+    const p2 = panelOf(w, { try: async () => ({ ok: false, code: "limit", message: `今日の試しは、同じ送り元から${live.try.perSourceDay}回までです。明日また試せます` }) });
+    await p2.panel.tryOne({ kind: "stop", no: 7, text: "髪型 流行り" });
+    const note = approvedNotice({ kind: "stop", no: 7, text: "髪型 流行り", todo: true, route: "started" }, p2.panel.view().tried, "ads");
+    assert.equal(note, `7番「髪型 流行り」：広告の管理画面には反映しました。テスト用の広告アカウントへは、いまは送れませんでした（今日の試しは、同じ送り元から${live.try.perSourceDay}回までです。明日また試せます）。ToDo に「効いたか見る」を足しました。`);
+  });
+
+  test("直しU：オーナーの印は、試しで元に戻した後なら「比べない側」の1行になる", async () => {
+    const w = await prepared();
+    const p = panelOf(w);
+    await p.panel.send(PASS);
+    assert.ok(p.ads().proposals.every((x) => x.realAt));
+    assert.deepEqual(p.drift(), []);
+    clock += 60_000;
+    await p.panel.tryOne({ kind: "stop", no: 7, text: "髪型 流行り" });
+    // テストの時計（clock）とブラウザの印の時刻をそろえる：印は試すより前
+    const v = p.panel.view();
+    assert.ok(v.read!.list.resetAt);
+    const marked = p.ads().proposals.map((x) => ({ ...x, realAt: "2026-11-07T00:00:00.000Z" }));
+    assert.deepEqual(driftShown({ ...p.ads(), proposals: marked, adds: p.ads().adds?.map((x) => ({ ...x, realAt: "2026-11-07T00:00:00.000Z" })) }, v, "e1", c.adGroup), [RESET_BY_TRY_NOTE]);
+  });
+
+  test("直しU：承認の知らせ（止める・外す・足す・ホーム）にサービスの名前が無い・お金は動かない・ホームは「一覧は広告のタブで」", () => {
+    const a = (kind: "stop" | "exclude" | "add", no: number, text: string) => ({ kind, no, text, todo: kind !== "add", route: "started" as const });
+    const tried = (x: ReturnType<typeof a>, state: "done" | "already") => ({ kind: x.kind, no: x.no, text: x.text, state });
+    const stop = a("stop", 7, "髪型 流行り");
+    assert.equal(
+      approvedNotice(stop, tried(stop, "done"), "ads"),
+      "✓ 7番「髪型 流行り」を止めました。テスト用の広告アカウントを元の形に戻してから送り、読み直して止まったのを確かめました（広告は出ず、お金は動きません）。ToDo に「効いたか見る」を足しました。",
+    );
+    const all = [stop, a("exclude", 10, "美容院 安い 学生"), a("add", 11, "縮毛矯正 くせ毛 ひどい")].flatMap((x) =>
+      (["ads", "home"] as const).flatMap((where) => [
+        approvedNotice(x, tried(x, "done"), where),
+        approvedNotice(x, tried(x, "already"), where),
+        approvedNotice(x, { ...tried(x, "done"), state: "refused", reason: "広告の側で受けられませんでした" }, where),
+        approvedNotice(x, null, where),
+        approvedNotice({ ...x, route: "off" }, null, where),
+        approvedNotice({ ...x, route: "unknown" }, null, where),
+        approvedNotice({ ...x, route: "not-run" }, null, where),
+      ]),
+    );
+    for (const n of all) {
+      assert.doesNotMatch(n, /Google|グーグル|100%|必ず|すぐ反映|本物の広告/, n);
+    }
+    assert.match(approvedNotice(stop, tried(stop, "done"), "home"), /一覧は広告のタブで見られます/);
+    assert.doesNotMatch(approvedNotice(stop, tried(stop, "done"), "ads"), /一覧は広告のタブ/);
+    assert.match(approvedNotice({ ...stop, route: "off" }, null, "home"), /つないでいないので、送っていません/);
+    assert.match(approvedNotice({ ...stop, route: "unknown" }, null, "ads"), /ページを読み込み直してください/);
+    assert.match(approvedNotice(a("add", 11, "縮毛矯正 くせ毛 ひどい"), tried(a("add", 11, "縮毛矯正 くせ毛 ひどい"), "done"), "ads"), /足されたのを確かめました（広告は出ず、お金は動きません）/);
+  });
+
+  test("直しU：承認の箱の広告の「承認」は試している間は押せない・試すのは広告のタブとホームの承認だけ（LINE のボタン・戻す案からは呼ばない）", () => {
+    const rows = readFileSync("src/components/AdApprovalRows.tsx", "utf8");
+    const add = readFileSync("src/components/AdAddRow.tsx", "utf8");
+    assert.match(rows, /onClick=\{\(e\) => approve\(e, p\)\} disabled=\{busy \|\| liveBusy\}/);
+    assert.match(rows, /if \(live\.view\.busy\) return;/);
+    assert.match(add, /onClick=\{approve\} disabled=\{liveBusy\}/);
+    assert.match(add, /if \(liveBusy\) return;/);
+    assert.match(rows, /startTry\(\{ kind: x\.action, no: x\.no, text: x\.text, todo: true \}/);
+    assert.match(add, /startTry\(\{ kind: "add", no: p\.no, text: p\.text, todo: false \}/);
+    // 作品の中の承認（approveAd・approveAdd）は窓口より先に・窓口に依らずに効く
+    assert.ok(rows.indexOf("approveAd(a, b, x.id") < rows.indexOf("startTry({ kind: x.action"));
+    assert.ok(add.indexOf("approveAdd(a, p.id") < add.indexOf('startTry({ kind: "add"'));
+    // ホームの承認の箱（standalone でない時）も知らせの1行を出す
+    assert.match(rows, /<AdRevertRow onDone=\{setDone\} \/>\n        \{done && \(/);
+    for (const f of ["src/components/AdRevertRow.tsx", "src/lib/line/apply.ts", "src/components/LineBridge.tsx", "src/lib/ads/verdict.ts"]) {
+      const s = readFileSync(f, "utf8");
+      assert.doesNotMatch(s, /startTry|tryAfterApprove|liveTry|tryOne|\/api\/ads\/live\/try/, f);
+    }
+    const route = readFileSync("src/app/api/ads/live/try/route.ts", "utf8");
+    assert.match(route, /export async function POST/);
+    assert.match(route, /handleLiveTry/);
+  });
+
+  test("直しU：画面の言葉に「本物の広告にはつながっていません」「（今はつないでいません）」が残っていない", () => {
+    const walk = (d: string): string[] =>
+      readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? (e.name === "__tests__" ? [] : walk(`${d}/${e.name}`)) : /\.(tsx?|json)$/.test(e.name) ? [`${d}/${e.name}`] : []));
+    for (const f of [...walk("src"), ...walk("config")]) {
+      const s = readFileSync(f, "utf8");
+      assert.doesNotMatch(s, /本物の広告にはつながっていません|（今はつないでいません）/, f);
+    }
   });
 
   test("分からない物は印を付けない・結果の1行の言い方", () => {
@@ -1267,6 +1437,501 @@ describe("画面の印（直しR の読み込みと同じ道）", () => {
     assert.equal(outcomeText({ outcome: "already", reason: "もう止まっていた", text: "a" }), "「a」：もう止まっていた");
     assert.equal(outcomeText({ outcome: "failed", reason: "言葉が見つかりません", text: "a" }), "「a」：できなかった（言葉が見つかりません）");
     assert.equal(outcomeText({ outcome: "unknown", text: "a" }), "「a」：分からない（読み直してください）");
+  });
+});
+
+describe("直しU：だれでも承認したら試す（元の形に戻す → 1件 → 読み直す）", () => {
+  const DAY = "2026-11-07";
+  const IP = "203.0.113.7";
+  const T = live.try;
+  type Mem = ReturnType<typeof memoryStore>;
+  const SETUP = getAds().keywords.map((k) => k.text);
+
+  /** 前の人が試した後の形（止めた・外した・足した・ほかの言葉・同じ言葉の2つ目・キャンペーンが出す設定） */
+  function messy(g: FakeGoogle) {
+    const grp = g.groups[0];
+    const camp = g.campaigns[0];
+    g.criteria.find((k) => k.text === "美容院 安い")!.status = "PAUSED";
+    g.criteria.push({ groupId: grp.id, id: 5001, text: "縮毛矯正 くせ毛 ひどい", match: "PHRASE", status: "ENABLED" });
+    g.criteria.push({ groupId: grp.id, id: 5002, text: "勝手な言葉", match: "BROAD", status: "ENABLED" });
+    g.criteria.push({ groupId: grp.id, id: 5003, text: "髪型 流行り", match: "EXACT", status: "ENABLED" });
+    g.negatives.push({ campaignId: camp.id, id: 5004, text: "美容院 安い 学生", match: "EXACT", status: "ENABLED" });
+    camp.status = "ENABLED";
+  }
+
+  /** 元の形にその1件を足した形か（作品の広告グループ・キャンペーンのキーワードの除外（完全一致）・キャンペーンの状態） */
+  function atBasePlus(g: FakeGoogle, item: { kind: "stop" | "exclude" | "add"; text: string } | null) {
+    const grp = g.groups[0];
+    const kws = g.criteria.filter((k) => k.groupId === grp.id);
+    const want = [...SETUP, ...(item?.kind === "add" ? [item.text] : [])];
+    assert.deepEqual(kws.map((k) => k.text).sort(), [...want].sort(), "用意の言葉（と足した1件）のほかは無い・2つ目も無い");
+    for (const k of kws) {
+      assert.equal(k.match, "PHRASE", k.text);
+      assert.equal(k.status, item?.kind === "stop" && item.text === k.text ? "PAUSED" : "ENABLED", k.text);
+    }
+    assert.deepEqual(
+      g.negatives.filter((n) => n.match === "EXACT").map((n) => n.text),
+      item?.kind === "exclude" ? [item.text] : [],
+    );
+    assert.equal(g.campaigns[0].status, "PAUSED");
+  }
+
+  /** 送る操作の中で、同じ物を2回さわっていない */
+  function touchedOnce(ops: Record<string, unknown>[]) {
+    const refs = ops.map((op) => {
+      const inner = Object.values(op)[0] as Record<string, any>;
+      return String(inner.remove ?? inner.update?.resourceName ?? `create:${JSON.stringify(inner.create?.keyword)}`);
+    });
+    assert.equal(new Set(refs).size, refs.length, `重ならない：${refs.join(" / ")}`);
+    return refs;
+  }
+
+  const tryBody = async (w: { deps: LiveDeps }, body: unknown, h: Record<string, string> = {}) => {
+    const r = await handleLiveTry(tryReq(body, h), w.deps);
+    const text = await r.clone().text();
+    clean(text);
+    return { status: r.status, b: (await r.json()) as Record<string, any>, text };
+  };
+
+  test("承認した1件ごとに、元の形に戻してから送り、同じ流れで読み直す（前の人の止めた・外した・足した物は消える）", async () => {
+    const w = await prepared();
+    messy(w.google);
+    const before = w.google.mutateCalls.length;
+    const s0 = w.google.searchCount;
+    // 7番を止める
+    const r1 = await tryBody(w, { kind: "stop", no: 7 });
+    assert.equal(r1.status, 200, r1.text);
+    assert.equal(r1.b.line.outcome, "done");
+    assert.deepEqual(Object.keys(r1.b).sort(), ["line", "list", "ok"], "返事は結果の行と一覧だけ");
+    assert.deepEqual(Object.keys(r1.b.line).sort(), ["kind", "no", "outcome", "text"]);
+    atBasePlus(w.google, { kind: "stop", text: "髪型 流行り" });
+    // 先に validateOnly、通ったら1回の mutate（全部できるか、何もできないか）
+    const m = w.google.mutateCalls.slice(before);
+    assert.deepEqual(m.map((x) => [x.validateOnly, x.partialFailure]), [[true, false], [false, false]]);
+    assert.deepEqual(m[0].ops, m[1].ops);
+    // 送った後に読み直した（この窓口の中で。「読み直す」の数には足さない）
+    assert.ok(w.google.searchCount > s0 + 6);
+    assert.equal(await w.store!.get(LIVE_KEY.day(DAY, "read")), null);
+    const k7 = r1.b.list.keywords.find((k: any) => k.text === "髪型 流行り");
+    assert.equal(k7.status, "止めている");
+    assert.equal(r1.b.list.negatives.length, 0);
+    assert.ok(r1.b.list.resetAt);
+    // 次の人：10番を外す → 7番は出す設定に戻り、外すの1件だけ
+    const r2 = await tryBody(w, { kind: "exclude", no: 10 });
+    assert.equal(r2.b.line.outcome, "done");
+    atBasePlus(w.google, { kind: "exclude", text: "美容院 安い 学生" });
+    // 次の人：11番を足す → 外したのは消え、足すの1件だけ
+    const r3 = await tryBody(w, { kind: "add", no: 11 });
+    assert.equal(r3.b.line.outcome, "done");
+    atBasePlus(w.google, { kind: "add", text: "縮毛矯正 くせ毛 ひどい" });
+    // もうその形の時は書かない（「もうその形でした」）
+    const n = w.google.mutateCalls.length;
+    const r4 = await tryBody(w, { kind: "add", no: 11 });
+    assert.equal(r4.b.line.outcome, "already");
+    assert.equal(w.google.mutateCalls.length, n);
+  });
+
+  test("元に戻す操作と1件の操作は同じ物に重ならない（止める・外す・足すの3つそれぞれ）", async () => {
+    // 止める：前の人が7番を止めていたら、7番には何もしない（戻してから止める、にしない）。ほかの止めたのは出す設定に
+    {
+      const w = await prepared();
+      messy(w.google);
+      w.google.criteria.find((k) => k.text === "髪型 流行り" && k.match === "PHRASE")!.status = "PAUSED";
+      const k7 = w.google.criteria.find((k) => k.text === "髪型 流行り" && k.match === "PHRASE")!;
+      await tryBody(w, { kind: "stop", no: 7 });
+      const ops = writes(w.google)[writes(w.google).length - 1].ops;
+      const refs = touchedOnce(ops);
+      assert.ok(!refs.some((r) => r.endsWith(`~${k7.id}`)), "7番はさわらない");
+      const k3 = w.google.criteria.find((k) => k.text === "美容院 安い")!;
+      assert.equal(ops.filter((o) => JSON.stringify(o).includes(`~${k3.id}"`)).length, 1);
+      atBasePlus(w.google, { kind: "stop", text: "髪型 流行り" });
+    }
+    // 止める：7番が出す設定なら、7番は止める1回だけ
+    {
+      const w = await prepared();
+      messy(w.google);
+      const k7 = w.google.criteria.find((k) => k.text === "髪型 流行り" && k.match === "PHRASE")!;
+      await tryBody(w, { kind: "stop", no: 7 });
+      const ops = writes(w.google)[writes(w.google).length - 1].ops;
+      touchedOnce(ops);
+      const mine = ops.filter((o) => JSON.stringify(o).includes(`~${k7.id}"`));
+      assert.deepEqual(mine, [{ adGroupCriterionOperation: { update: { resourceName: `customers/${CUSTOMER}/adGroupCriteria/${k7.groupId}~${k7.id}`, status: "PAUSED" }, updateMask: "status" } }]);
+    }
+    // 外す：同じ除外がもうあれば、それは残して重ねない（作らない・消さない）
+    {
+      const w = await prepared();
+      messy(w.google);
+      await tryBody(w, { kind: "exclude", no: 10 });
+      const ops = writes(w.google)[writes(w.google).length - 1].ops;
+      touchedOnce(ops);
+      assert.ok(!ops.some((o) => "campaignCriterionOperation" in o), "もうある除外はさわらない");
+      atBasePlus(w.google, { kind: "exclude", text: "美容院 安い 学生" });
+    }
+    // 足す：同じ言葉（フレーズ一致）がもうあれば、作らず（出す設定のまま）・完全一致の2つ目は消す
+    {
+      const w = await prepared();
+      messy(w.google);
+      await tryBody(w, { kind: "add", no: 11 });
+      const ops = writes(w.google)[writes(w.google).length - 1].ops;
+      touchedOnce(ops);
+      assert.ok(!ops.some((o) => JSON.stringify(o).includes('"create"')), "作らない");
+      atBasePlus(w.google, { kind: "add", text: "縮毛矯正 くせ毛 ひどい" });
+      // 足すが無い時は作る1回
+      const w2 = await prepared();
+      await tryBody(w2, { kind: "add", no: 14 });
+      const ops2 = writes(w2.google)[writes(w2.google).length - 1].ops;
+      assert.deepEqual(ops2, [{ adGroupCriterionOperation: { create: { adGroup: `customers/${CUSTOMER}/adGroups/${w2.google.groups[0].id}`, status: "ENABLED", keyword: { text: "ヘッドスパ 眠れる", matchType: "PHRASE" } } } }]);
+    }
+  });
+
+  test("validateOnly で断られたら何も書かない（Google の生の文・番号は返事に出ない）", async () => {
+    const w = await prepared();
+    messy(w.google);
+    w.google.hooks.rejectText = "縮毛矯正 くせ毛 ひどい";
+    w.google.criteria = w.google.criteria.filter((k) => k.id !== 5001);
+    const snap = JSON.stringify(w.google.criteria);
+    const r = await tryBody(w, { kind: "add", no: 11 });
+    assert.equal(r.status, 502);
+    assert.equal(r.b.code, "rejected");
+    assert.equal(writes(w.google).length, 1, "用意の1回のほかに書いていない");
+    assert.equal(JSON.stringify(w.google.criteria), snap);
+    assert.doesNotMatch(r.text, /invalid argument|secret detail|POLICY|9000000/i);
+  });
+
+  test("送る1件はサーバーで確かめ直す：2件以上・表に無い番号・用意の言葉のほかを止める・町の名前を外す・足す案を通らない・大きすぎる・形の違う物は書かずに断る", async () => {
+    const w = await prepared();
+    const n = w.google.mutateCalls.length;
+    const bad: [unknown, number][] = [
+      [{ items: [{ kind: "stop", no: 7 }, { kind: "stop", no: 3 }] }, 400],
+      [{ kind: "stop", no: [7, 3] }, 400],
+      [{ kind: ["stop", "add"], no: 7 }, 400],
+      [{ kind: "stop", no: 99 }, 400],
+      [{ kind: "stop", no: 9 }, 400],
+      [{ kind: "exclude", no: 3 }, 400],
+      [{ kind: "exclude", no: 9 }, 400],
+      [{ kind: "add", no: 10 }, 400],
+      [{ kind: "add", no: 15 }, 400],
+      [{ kind: "add", no: 9 }, 400],
+      [{ kind: "add", no: 2 }, 400],
+      [{ kind: "remove", no: 7 }, 400],
+      [{ kind: "stop", no: "7" }, 400],
+      [{ kind: "stop", no: 7.5 }, 400],
+      [{ kind: "stop" }, 400],
+      [[{ kind: "stop", no: 7 }], 400],
+      [{ kind: "stop", no: 7, pad: "x".repeat(T.maxRequestChars) }, 413],
+    ];
+    for (const [body, status] of bad) {
+      const r = await tryBody(w, body);
+      assert.equal(r.status, status, JSON.stringify(body).slice(0, 80));
+    }
+    // 形の読めない JSON
+    const raw = req("/api/ads/live/try", { body: {} });
+    const broken = await handleLiveTry(new Request(raw.url, { method: "POST", headers: raw.headers, body: "{kind:" }), w.deps);
+    assert.equal(broken.status, 400);
+    assert.equal(w.google.mutateCalls.length, n, "何も書いていない");
+    // 用意の言葉（setupKeywords）にない言葉は止めない
+    const w2 = await prepared();
+    w2.deps.setupKeywords = SETUP.filter((t) => t !== "髪型 流行り");
+    const r2 = await tryBody(w2, { kind: "stop", no: 7 });
+    assert.equal(r2.status, 400);
+    assert.match(r2.b.message, /用意した言葉のほかは止めません/);
+    // 町の名前・足す案の確かめの理由
+    assert.match((await tryBody(w, { kind: "exclude", no: 9 })).b.message, /町の名前/);
+    assert.match((await tryBody(w, { kind: "add", no: 10 })).b.message, /足す案の確かめ/);
+    // 足してよい番号は、最初の表で add.ts の確かめを通る物だけ（11番・14番）
+    assert.deepEqual([...w.deps.trial.addable].sort((a, b) => a - b), [11, 14]);
+  });
+
+  test("言葉（text）を付けて送っても使わない：書かれるのは表の番号の言葉だけ", async () => {
+    const w = await prepared();
+    const r = await tryBody(w, { kind: "add", no: 11, text: "好きな文字 ここに書く", payload: undefined });
+    assert.equal(r.b.line.outcome, "done");
+    assert.equal(r.b.line.text, "縮毛矯正 くせ毛 ひどい");
+    assert.ok(!w.google.criteria.some((k) => k.text.includes("好きな文字")));
+    assert.ok(!JSON.stringify(w.google.mutateCalls).includes("好きな文字"));
+    const r2 = await tryBody(w, { kind: "exclude", no: 10, text: "勝手な除外" });
+    assert.equal(r2.b.line.text, "美容院 安い 学生");
+    assert.ok(!w.google.negatives.some((x) => x.text.includes("勝手")));
+  });
+
+  test("元に戻すは、地域・言語などのほかの条件・完全一致でない除外・ほかの広告グループ・予算・名前に触らない", async () => {
+    const w = await prepared();
+    messy(w.google);
+    const camp = w.google.campaigns[0];
+    w.google.others.push({ campaignId: camp.id, id: 6001, type: "LOCATION", negative: true, status: "ENABLED" });
+    w.google.others.push({ campaignId: camp.id, id: 6002, type: "LANGUAGE", negative: false, status: "ENABLED" });
+    w.google.negatives.push({ campaignId: camp.id, id: 6003, text: "求人", match: "PHRASE", status: "ENABLED" });
+    w.google.groups.push({ id: 6004, campaignId: camp.id, name: "ほかのグループ", status: "ENABLED" });
+    w.google.criteria.push({ groupId: 6004, id: 6005, text: "ほかの言葉", match: "PHRASE", status: "ENABLED" });
+    const budgets = JSON.stringify(w.google.budgets);
+    const name = camp.name;
+    const groupName = w.google.groups[0].name;
+    const r = await tryBody(w, { kind: "stop", no: 7 });
+    assert.equal(r.b.line.outcome, "done");
+    assert.equal(w.google.others.length, 2);
+    assert.ok(w.google.negatives.some((n) => n.id === 6003), "完全一致でない除外は残す");
+    assert.ok(w.google.criteria.some((k) => k.id === 6005), "ほかの広告グループの言葉は残す");
+    assert.equal(JSON.stringify(w.google.budgets), budgets);
+    assert.equal(w.google.campaigns[0].name, name);
+    assert.equal(w.google.groups[0].name, groupName);
+    const ops = writes(w.google)[writes(w.google).length - 1].ops;
+    const kinds = new Set(ops.map((o) => `${Object.keys(o)[0]}:${Object.keys(Object.values(o)[0] as object).filter((k) => k !== "updateMask")[0]}`));
+    for (const k of kinds) assert.ok(["campaignOperation:update", "adGroupCriterionOperation:update", "adGroupCriterionOperation:remove", "campaignCriterionOperation:remove"].includes(k), k);
+    const cu = ops.find((o) => "campaignOperation" in o) as any;
+    assert.deepEqual(Object.keys(cu.campaignOperation.update).sort(), ["resourceName", "status"], "キャンペーンは状態だけ");
+    // planTry はほかのアカウントの物を操作に入れない（読む時に mine() で落とす）
+    const plan = planTry({ campaign: { rn: "customers/1111111111/campaigns/1", status: "ENABLED" }, campaigns: 1, keywords: [], negatives: [], groups: [{ rn: "customers/1111111111/adGroups/2", name: c.adGroup, status: "ENABLED" }] } as any, w.deps, { kind: "stop", no: 7, text: "髪型 流行り" });
+    assert.equal(plan.ready, false);
+  });
+
+  test("テスト用でないアカウント・用意がまだ（キャンペーンが無い・2つ・用意の言葉が欠けている）は書かずに断る", async () => {
+    {
+      const w = await prepared();
+      const n = w.google.mutateCalls.length;
+      w.google.customers.find((x) => x.id === CUSTOMER)!.testAccount = false;
+      const r = await tryBody(w, { kind: "stop", no: 7 });
+      assert.equal(r.status, 403);
+      assert.equal(r.b.message, "テスト用アカウントではないので送りませんでした");
+      assert.equal(w.google.mutateCalls.length, n);
+    }
+    {
+      const w = world();
+      const r = await tryBody(w, { kind: "stop", no: 7 });
+      assert.equal(r.status, 409);
+      assert.equal(r.b.message, "まだ用意されていません（オーナーが用意します）");
+      assert.equal(w.google.mutateCalls.length, 0);
+    }
+    {
+      const w = await prepared();
+      const n = w.google.mutateCalls.length;
+      w.google.campaigns.push({ ...w.google.campaigns[0], id: 7001 });
+      assert.equal((await tryBody(w, { kind: "stop", no: 7 })).b.code, "not-ready");
+      assert.equal(w.google.mutateCalls.length, n);
+    }
+    {
+      const w = await prepared();
+      const n = w.google.mutateCalls.length;
+      w.google.criteria = w.google.criteria.filter((k) => k.text !== "パーマ 大人");
+      assert.equal((await tryBody(w, { kind: "stop", no: 7 })).b.code, "not-ready");
+      assert.equal(w.google.mutateCalls.length, n);
+    }
+  });
+
+  test("守り：ほかのサイト・Origin なし・GET は断る。プレビュー・環境変数が足りない時は「つないでいません」（何も書かない）", async () => {
+    const w = await prepared();
+    const n = w.google.mutateCalls.length;
+    for (const origin of ["https://evil.example", null]) {
+      const r = await handleLiveTry(req("/api/ads/live/try", { origin, body: { kind: "stop", no: 7 } }), w.deps);
+      assert.equal(r.status, 403, String(origin));
+    }
+    assert.equal((await handleLiveTry(req("/api/ads/live/try", { body: { kind: "stop", no: 7 }, fetchSite: "cross-site" }), w.deps)).status, 403);
+    assert.equal((await handleLiveTry(req("/api/ads/live/try", { method: "GET" }), w.deps)).status, 405);
+    for (const env of [{ VERCEL_ENV: "preview" }, { [LIVE_ENV.customerId]: undefined }]) {
+      const v = world({ env, google: w.google });
+      const r = await handleLiveTry(tryReq({ kind: "stop", no: 7 }), v.deps);
+      assert.equal((await bodyOf(r)).code, "not-connected");
+    }
+    assert.equal(w.google.mutateCalls.length, n);
+    // 合言葉の間違いの数には何も足さない（合言葉の欄を付けても読まない）
+    await tryBody(w, { kind: "stop", no: 7, passcode: "wrong-wrong-wrong-wrong" });
+    assert.equal(await w.store!.get(LIVE_KEY.wrong), null);
+  });
+
+  test("同時に1回：オーナーの用意・送ると同じ印。動いている時は書かずに 409「ほかの人が試しています〜」", async () => {
+    const w = await prepared();
+    await w.store!.set(LIVE_KEY.lock, "owner-is-sending", { ex: live.lockSeconds });
+    const n = w.google.mutateCalls.length;
+    const r = await tryBody(w, { kind: "stop", no: 7 });
+    assert.equal(r.status, 409);
+    assert.equal(r.b.message, "ほかの人が試しています。少し待ってから、もう一度承認してください");
+    assert.equal(w.google.mutateCalls.length, n);
+    assert.equal(await w.store!.get(LIVE_KEY.lock), "owner-is-sending", "ほかの印は消さない");
+    await w.store!.del(LIVE_KEY.lock);
+    // 2つ同時：片方だけが書く
+    const [a, b] = await Promise.all([tryBody(w, { kind: "stop", no: 7 }), tryBody(w, { kind: "stop", no: 3 })]);
+    assert.deepEqual([a.status, b.status].sort(), [200, 409]);
+    assert.equal(await w.store!.get(LIVE_KEY.lock), null, "自分の印は消す");
+    // 印の期限は窓口の持ち時間より長い
+    assert.ok(live.lockSeconds > live.serverBudgetSeconds);
+  });
+
+  test("上限：1日（サイト全体）・1分（サイト全体）・同じ送り元から1日。こえたら書かない。オーナーの数・合言葉の間違いの数は変わらない", async () => {
+    // 同じ送り元
+    {
+      const w = await prepared();
+      for (let i = 0; i < T.perSourceDay; i++) {
+        clock += 61_000; // 1分の上限に当てない
+        assert.equal((await tryBody(w, { kind: "stop", no: 7 })).status, 200, `${i}`);
+      }
+      const n = w.google.mutateCalls.length;
+      clock += 61_000;
+      const r = await tryBody(w, { kind: "stop", no: 3 });
+      assert.equal(r.status, 429);
+      assert.match(r.b.message, new RegExp(`同じ送り元から${T.perSourceDay}回まで`));
+      assert.equal(w.google.mutateCalls.length, n);
+      // ほかの送り元は試せる
+      clock += 61_000;
+      assert.equal((await tryBody(w, { kind: "stop", no: 3 }, { "x-real-ip": "198.51.100.9" })).status, 200);
+      // オーナーの数は減らない・合言葉の間違いの数も変わらない
+      for (const k of ["setup", "send", "read", "stop"] as const) assert.equal(await w.store!.get(LIVE_KEY.day(DAY, k)), k === "setup" ? "1" : null, k);
+      assert.equal(await w.store!.get(LIVE_KEY.wrong), null);
+      assert.equal((await handleLiveRead(readReq(), w.deps)).status, 200);
+      assert.equal((await handleLiveSend(sendReq(payloadOf([STOP])), w.deps)).status, 200);
+    }
+    // 1分
+    {
+      const w = await prepared();
+      for (let i = 0; i < T.minute; i++) assert.equal((await tryBody(w, { kind: "stop", no: 7 }, { "x-real-ip": `198.51.100.${i}` })).status, 200);
+      const r = await tryBody(w, { kind: "stop", no: 7 }, { "x-real-ip": "198.51.100.99" });
+      assert.equal(r.status, 429);
+      assert.match(r.b.message, /1分ほど待って/);
+    }
+    // 1日（サイト全体）
+    {
+      const w = await prepared();
+      await w.store!.set(LIVE_KEY.tryDay(DAY), String(T.day), { ex: 86_400 });
+      const n = w.google.mutateCalls.length;
+      const r = await tryBody(w, { kind: "stop", no: 7 });
+      assert.equal(r.status, 429);
+      assert.match(r.b.message, new RegExp(`サイト全体で${T.day}回まで`));
+      assert.equal(w.google.mutateCalls.length, n);
+      // オーナーの送るは動く（別の数）
+      assert.equal((await handleLiveSend(sendReq(payloadOf([STOP])), w.deps)).status, 200);
+    }
+  });
+
+  test("送り元：Vercel が付ける IP（x-real-ip、無ければ x-vercel-forwarded-for）だけ。見出しを偽っても数は変わらない・生の IP は KV にもログにも出ない・塩は日ごと", async () => {
+    const w = await prepared();
+    const mem = w.store as Mem;
+    const srcKeys = () => mem.keys().filter((k) => k.startsWith("ads:live:try:src:"));
+    for (const h of [{}, { "x-forwarded-for": "10.0.0.1" }, { "x-forwarded-for": "10.0.0.2, 10.0.0.3" }, { forwarded: "for=10.0.0.4" }, { "x-client-ip": "10.0.0.5" }, { "cf-connecting-ip": "10.0.0.6" }] as Record<string, string>[]) {
+      clock += 61_000;
+      await tryBody(w, { kind: "stop", no: 7 }, h);
+    }
+    assert.equal(srcKeys().length, 1, "偽った見出しでは別の数にならない");
+    assert.equal(await mem.get(srcKeys()[0]), "6");
+    // x-real-ip が無い時は x-vercel-forwarded-for の最初
+    const r = (h: Record<string, string>) => new Request(SITE, { headers: h });
+    assert.equal(sourceIp(r({ "x-vercel-forwarded-for": "192.0.2.5, 10.0.0.1" })), "192.0.2.5");
+    assert.equal(sourceIp(r({ "x-real-ip": "192.0.2.6", "x-vercel-forwarded-for": "192.0.2.5" })), "192.0.2.6");
+    assert.equal(sourceIp(r({ "x-forwarded-for": "192.0.2.7" })), "unknown", "x-forwarded-for は見ない");
+    // 生の IP は KV のキー・値・ログ・返事に無い
+    for (const k of mem.keys()) {
+      assert.ok(!k.includes(IP), k);
+      assert.ok(!String(await mem.get(k)).includes(IP), k);
+    }
+    assert.ok(!logged.join("\n").includes(IP));
+    const resp = await tryBody(w, { kind: "stop", no: 7 });
+    assert.ok(!resp.text.includes(IP));
+    const hash = srcKeys()[0].split(":").pop()!;
+    assert.ok(!resp.text.includes(hash), "ハッシュも返さない");
+    // 塩は日ごと（KV に置き2日で消える）・数の鍵も2日で消える
+    const salt1 = await mem.get(LIVE_KEY.trySalt(DAY));
+    assert.match(String(salt1), /^[0-9a-f]{32}$/);
+    assert.equal(hash, sourceHash(salt1!, IP));
+    clock += 86_400_000;
+    await tryBody(w, { kind: "stop", no: 7 });
+    const salt2 = await mem.get(LIVE_KEY.trySalt("2026-11-08"));
+    assert.ok(salt2 && salt2 !== salt1, "日が変わると塩も変わる");
+    assert.notEqual(sourceHash(salt2!, IP), hash);
+    clock += 2 * 86_400_000 + 1000;
+    assert.equal(await mem.get(LIVE_KEY.trySalt(DAY)), null, "前の日の塩は消える");
+    assert.equal(mem.keys().filter((k) => k.includes(`:${DAY}`)).length, 0, "前の日の数の鍵も消える");
+  });
+
+  test("KV が使えない時は書かない（置き場が無い・塩を置けない・戻した時刻を置けない）", async () => {
+    {
+      const w = await prepared();
+      const n = w.google.mutateCalls.length;
+      w.deps.store = null;
+      const r = await tryBody(w, { kind: "stop", no: 7 });
+      assert.equal(r.status, 503);
+      assert.equal(w.google.mutateCalls.length, n);
+    }
+    for (const failOn of [LIVE_KEY.lock, "ads:live:try:salt:", LIVE_KEY.resetAt]) {
+      const w = await prepared();
+      const n = w.google.mutateCalls.length;
+      const base = w.store!;
+      w.deps.store = {
+        ...base,
+        get: base.get,
+        set: async (k, v, o) => {
+          if (k.startsWith(failOn)) throw new Error("kv down");
+          return base.set(k, v, o);
+        },
+      };
+      const r = await tryBody(w, { kind: "stop", no: 7 });
+      assert.equal(r.status, 503, failOn);
+      assert.equal(r.b.code, "no-store");
+      assert.equal(w.google.mutateCalls.length, n, `${failOn}：何も書かない`);
+    }
+  });
+
+  test("「最後に元の形に戻した時刻」は mutate の前に置く・読み直すの返事にも入る", async () => {
+    const w = await prepared();
+    const order: string[] = [];
+    const base = w.store!;
+    w.deps.store = { ...base, set: async (k, v, o) => (k === LIVE_KEY.resetAt && order.push("resetAt"), base.set(k, v, o)) };
+    const f = w.deps.fetch;
+    w.deps.fetch = async (u, init) => (String(u).endsWith(":mutate") && order.push("mutate"), f(u, init));
+    messy(w.google);
+    const r = await tryBody(w, { kind: "stop", no: 7 });
+    assert.equal(r.b.line.outcome, "done");
+    assert.deepEqual(order, ["resetAt", "mutate", "mutate"]);
+    const at = await base.get(LIVE_KEY.resetAt);
+    assert.equal(at, new Date(clock).toISOString());
+    assert.equal(r.b.list.resetAt, at);
+    const read = await bodyOf(await handleLiveRead(readReq(), w.deps));
+    assert.equal(read.resetAt, at);
+    // validateOnly で断られて何も書かなくても、時刻は置いてある（オーナーの印の比べが「比べない側」に倒れるだけ）
+    clock += 61_000;
+    w.google.hooks.rejectText = "ヘッドスパ 眠れる";
+    const r2 = await tryBody(w, { kind: "add", no: 14 });
+    assert.equal(r2.status, 502);
+    assert.equal(await base.get(LIVE_KEY.resetAt), new Date(clock).toISOString());
+  });
+
+  test("結果が分からない時：送った後に返事が消えたら「分からない」（「できなかった」と言わない）・読み直しで変わっていれば「反映した」", async () => {
+    const w = await prepared();
+    w.google.hooks.dropAfterMutate = true;
+    w.google.hooks.dropSearchFrom = w.google.searchCount + 100; // 読み直しは通る
+    const r = await tryBody(w, { kind: "stop", no: 7 });
+    assert.equal(r.b.line.outcome, "done", "読み直すと変わっていた");
+    const w2 = await prepared();
+    messy(w2.google);
+    w2.google.hooks.dropBeforeMutate = true;
+    w2.google.hooks.dropSearchFrom = undefined;
+    const r2 = await tryBody(w2, { kind: "stop", no: 7 });
+    assert.equal(r2.b.line.outcome, "unknown");
+    assert.notEqual(r2.b.line.outcome, "failed");
+    // 読み直しもできない時は一覧なしの「分からない」
+    const w3 = await prepared();
+    w3.google.hooks.dropAfterMutate = true;
+    // 確かめ1・今の形4・validateOnly と本当の前の確かめ2 の後、読み直しの所から切れる
+    w3.google.hooks.dropSearchFrom = w3.google.searchCount + 8;
+    const r3 = await tryBody(w3, { kind: "stop", no: 7 });
+    assert.equal(r3.b.line.outcome, "unknown");
+    assert.equal(r3.b.list, null);
+  });
+
+  test("「印がありますが〜」は、最後に元の形に戻した時刻より前の印とは比べず1行。後の印で一覧と合わない時は今どおり出る", () => {
+    const s: AdsState = {
+      ...EMPTY_ADS,
+      proposals: [
+        { id: "ad-2", action: "stop", no: 3, text: "美容院 安い", reason: "r", total: { clicks: 0, cost: 0, bookings: 0 }, checks: [], createdAt: APPROVED, state: "approved", decidedAt: APPROVED, fixed: false, mode: "ai", realAt: "2026-11-07T01:00:00.000Z" },
+      ],
+      applied: [{ no: 3, action: "stop", at: APPROVED, proposalId: "ad-2" }],
+    };
+    const list = (resetAt?: string): Extract<LiveReadResponse, { ok: true }> => ({
+      ok: true,
+      campaign: { found: true, status: "止めている（広告は出ません）" },
+      keywords: [{ text: "美容院 安い", match: "フレーズ一致", status: "出す設定", group: c.adGroup }],
+      negatives: [],
+      ...(resetAt ? { resetAt } : {}),
+    });
+    assert.deepEqual(driftOf(s, list("2026-11-07T02:00:00.000Z"), c.adGroup), ["オーナーが送った後に、ほかの人の試しで元の形に戻りました"]);
+    assert.match(driftOf(s, list("2026-11-07T00:00:00.000Z"), c.adGroup).join(), /印がありますが、読み直すと止まっていません/);
+    assert.match(driftOf(s, list(), c.adGroup).join(), /止まっていません/);
   });
 });
 
@@ -1286,6 +1951,23 @@ describe("鍵の扱い（リポジトリ・設定）", () => {
 });
 
 describe("README", () => {
+  test("直しU：だれでも試せる道（元に戻してから1件・テスト用アカウントの中だけ・店の広告に届かない理由・オーナーの送るとの違い・窓口の守りの表）", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const sec = readme.slice(readme.indexOf("#### だれでも試せる道（直しU。合言葉なし）"), readme.indexOf("- **何を**（オーナーの操作）"));
+    for (const w of ["元の形に戻してから", "承認した1件だけ", "テスト用アカウントの中だけ・店の広告には届かない理由", "オーナーの「送る」との違い", "種類（止める・外す・足す）と番号", "付けない（次の人が元に戻すため）", "人を確かめる物ではありません", "x-real-ip", "生の IP は Redis にもログにも残しません", "まだ本番では呼んでいません"])
+      assert.ok(sec.includes(w), w);
+    assert.doesNotMatch(sec, /100%|必ず|すぐ反映/);
+    const guard = readme.slice(readme.indexOf("### だれでも呼べる窓口の守り（今の作り）"), readme.indexOf("### 動かし方の手順"));
+    assert.match(guard, /だれでも試す（`\/api\/ads\/live\/try`。直しU）/);
+    for (const row of [/Origin なし／ほかのサイト.*\| 403/, /\| GET \| 405 \|/, /2件.*形の違う物 \| 400（何も書かない） \|/]) assert.match(guard, row);
+    assert.match(guard, /人を確かめる物ではありません（直に呼ばれても、下の上限で止めます）/);
+    // 今の事実：合言葉なしで書けるのは、作品のキャンペーンの中に元に戻してから表の1件だけ
+    assert.match(readme, /合言葉なしで書けるのは、テスト用アカウントの作品のキャンペーンの中に、元に戻してから表の1件だけ/);
+    assert.doesNotMatch(readme, /送れるのはオーナーだけで、お客様/);
+    const spec = readFileSync("docs/SPEC.md", "utf8");
+    assert.match(spec, /合言葉なしで書けるのは、テスト用アカウントの作品のキャンペーンの中に、元に戻してから表の1件だけ/);
+  });
+
   test("テスト用アカウントの節：何を・どの守りで・確かめていないこと・本番の確かめの結果・言いすぎない", () => {
     const readme = readFileSync("README.md", "utf8");
     const sec = readme.slice(readme.indexOf("### Google 広告のテスト用アカウントに本当に送る"), readme.indexOf("### 道1"));

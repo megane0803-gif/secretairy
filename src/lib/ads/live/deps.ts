@@ -6,17 +6,21 @@ import { getAdSettings, getMenus, getShop, getSiteOrigin } from "../../settings"
 import { featuredWords } from "../featured";
 import { liveEnvFrom } from "./env";
 import type { LiveDeps } from "./server";
+import { trialTable } from "./trial";
 
 export function liveDeps(): LiveDeps {
   const ads = getAdSettings();
   const kv = storeEnv();
+  const words = featuredWords(ads, getMenus());
   return {
     env: liveEnvFrom(process.env),
     settings: ads.live,
     connect: ads.connect,
     towns: ads.towns,
-    words: featuredWords(ads, getMenus()),
+    words,
     setupKeywords: getAds().keywords.map((k) => k.text),
+    // だれでも試す窓口が番号から言葉を引く最初の表（ブラウザからは言葉を受け取らない）
+    trial: trialTable(getAds(), ads, words),
     siteOrigin: getSiteOrigin(),
     fetch: (input, init) => fetch(input, init),
     now: () => Date.now(),

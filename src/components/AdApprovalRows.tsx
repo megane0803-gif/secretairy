@@ -5,13 +5,19 @@
 // ボタンは「承認／直す／見送り」。押すとプログラムが実行する（直すの出しなおしだけ AI を1回使う）。
 // カードの下に「チームの会議にかける」（AdTeam.tsx）。会議の声は読む物で、決めるのはこのボタンだけ。押した後、日誌に「分身の予想：…／オーナー：…」。
 // 🔒 確定は人：止める・外すのは、人が画面の「承認」を押したときだけ。押した事（ブラウザの本物の操作か）を確かめてから呼ぶ。
+// 直しU：承認（止める・外す・足す）の後に、テスト用の広告アカウントを元の形に戻してからその1件を送る窓口を1回呼ぶ（tryAfterApprove。
+// つないでいない時は呼ばない）。窓口がうまくいかなくても、作品の中の承認は今どおり効く。窓口を呼んでいる間（流れが動いている間）は
+// 広告の「承認」を押せない。知らせは広告のタブとホームの承認の箱で同じ1行（approvedNotice）。戻す案（AdRevertRow）からは呼ばない。
 
 import { useState } from "react";
+import { approvedNotice, type Approved } from "@/lib/ads/live/notice";
+import { tryAfterApprove, useLivePanel } from "@/lib/ads/live/usePanel";
 import { askAdsReview } from "@/lib/ads/client";
 import { checkDraft, proposalLabel, type GateCheck } from "@/lib/ads/gate";
 import { actionVerb, yen, type AdAction } from "@/lib/ads/report";
 import { approveAd, withAdFixed, withAdFixUsed, withAdSkipped, type AdProposal } from "@/lib/ads/state";
 import { useAds } from "@/lib/ads/useAds";
+import { SAVE_FAILED_MESSAGE } from "@/lib/browser";
 import type { AdsMode } from "@/lib/ads/wire";
 import { AI_BUSY_MESSAGE, failText } from "@/lib/ai/busy";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
@@ -51,11 +57,26 @@ function after(a: AdAction): string {
   return a === "stop" ? "止める" : "外す（この言葉では出さない）";
 }
 
+/** 承認の行の知らせ：決まった文か、承認した1件（試した結果は流れの tried から） */
+export type AdDone = string | Approved;
+
+/** 窓口を呼んでいる間（流れが動いている間）は広告の「承認」を押せない */
+export const LIVE_BUSY_TITLE = "テスト用の広告アカウントに送っている間は押せません";
+
+/** 承認した後に1回だけ試し、どうしたかを知らせに入れる */
+export function startTry(a: Approved, setDone: (d: AdDone) => void) {
+  setDone(a);
+  void tryAfterApprove({ kind: a.kind, no: a.no, text: a.text }).then((route) => setDone({ ...a, route }));
+}
+
 export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: Rule[]; standalone?: boolean }) {
   const ads = useAds();
   const bookState = useBookState();
   const { rules } = useRules(seedRules);
-  const [done, setDone] = useState<string | null>(null);
+  const live = useLivePanel();
+  const liveBusy = !!live.view.busy;
+  const [doneRaw, setDone] = useState<AdDone | null>(null);
+  const done = doneRaw === null ? null : typeof doneRaw === "string" ? doneRaw : approvedNotice(doneRaw, live.view.tried, standalone ? "ads" : "home");
   const [fixOpen, setFixOpen] = useState(false);
   const [fixText, setFixText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -64,18 +85,20 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
 
   const p = ads.pending;
   // 足す案の行（止める・外すの行の下に出す。AI のチームの会議は付けない）
-  const adds = ads.adds.map((x) => <AdAddRow key={x.id} p={x} onDone={setDone} />);
+  const adds = ads.adds.map((x) => <AdAddRow key={x.id} p={x} onDone={setDone} liveBusy={liveBusy} />);
 
   const approve = (e: React.MouseEvent, x: AdProposal) => {
     // 人がボタンを押したときだけ（スクリプトから押したことにはできない）
     if (!e.nativeEvent.isTrusted) return;
+    // テスト用の広告アカウントに送っている間は承認しない（作品の中とテスト用アカウントが食い違わないように）
+    if (live.view.busy) return;
     const shop = getShop();
     const nowIso = new Date().toISOString();
     // 「翌日へ」で進めた日もホームと同じ「今日」から数える
     const today = demoClock(shop, new Date(), bookState.state.dayOffset).today.date;
     // 広告・ToDo・日誌を同じ1回で変える（書く直前に読みなおした物で）
     let journal: { who: JournalWho; text: string }[] = [];
-    ads.update((a) => {
+    const w = ads.update((a) => {
       let next = a;
       bookState.update((b) => {
         const out = approveAd(a, b, x.id, { nowIso, today, shop, settings: ads.settings });
@@ -85,10 +108,12 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
       });
       return next;
     });
+    if (!w.ok) return void setNote(SAVE_FAILED_MESSAGE);
     const guess = teamDecisionLine(x, "approved");
     writeJournal(...journal, ...(guess ? [{ who: "プログラム" as const, text: guess }] : []));
-    setDone(`✓ ${ads.settings.channel}で ${x.no}番「${x.text}」を${x.action === "stop" ? "止めました" : "外しました"}。ToDo に「効いたか見る」を足しました`);
     setFixOpen(false);
+    // 作品の中の承認は効いた。そのあとテスト用の広告アカウントに、元の形に戻してからこの1件を送る（つないでいなければ呼ばない）
+    startTry({ kind: x.action, no: x.no, text: x.text, todo: true }, setDone);
   };
 
   const skip = (e: React.MouseEvent, x: AdProposal) => {
@@ -178,7 +203,7 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
       </p>
       <GateChecks checks={p.checks} />
       <div className="approval-buttons" role="group" aria-label="この広告の案をどうするか">
-        <button type="button" className="btn primary" onClick={(e) => approve(e, p)} disabled={busy}>
+        <button type="button" className="btn primary" onClick={(e) => approve(e, p)} disabled={busy || liveBusy} title={liveBusy ? LIVE_BUSY_TITLE : undefined}>
           承認
         </button>
         <button
@@ -241,6 +266,11 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
         {row}
         {adds}
         <AdRevertRow onDone={setDone} />
+        {done && (
+          <li className="hint" role="status">
+            {done}
+          </li>
+        )}
       </>
     );
   return (

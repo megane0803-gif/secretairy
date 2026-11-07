@@ -12,8 +12,18 @@
 // - 番号はリクエストから受け取らない（環境変数の数字だけの値）。書き込む前に毎回テスト用アカウントかを確かめる（api.ts の mutate の入口）
 // - ブラウザから来た「承認した案」は信じない：形・キャンペーンの名前・売りの言葉・町の名前・数をここで確かめ直す
 // - 返事には resourceName・番号・メールを入れない（言葉の文字も、メールや長い数字の形は伏せる）。ログには何も出さない
+//
+// だれでも試す窓口（try。直しU）：合言葉は要らない。来た人が承認した1件を、テスト用アカウントを「元の形」に戻してから送る。
+// - ブラウザから受け取るのは種類と番号の2つだけ。言葉はサーバーが最初の表（trial.ts）から引く（好きな文字を書かせない）
+// - 書けるのは、テスト用アカウントの作品のキャンペーン・広告グループの中だけ。中身は表の1件と、元の形に戻す操作だけ
+// - 同時に1回の印はオーナーの「用意」「送る」と同じ（withLock）。上限はオーナーの daily とは別に数える（try の day・minute・perSourceDay）
+// - 送り元は Vercel が付ける送り元の IP（x-real-ip、無ければ x-vercel-forwarded-for）だけを、日ごとの塩（KV に置き2日で消える）と
+//   合わせたハッシュにして数える。生の IP・ハッシュは KV のキーのほかに置かず、返事にもログにも出さない
+// - Origin の確かめは、ほかのサイトからの呼び出しを止めるための物で、人の確かめではない（直に呼ばれても上の上限で止める）
+// - 「最後に元の形に戻した時刻」は mutate の前に KV に置く（置けなければ書かない）。送るのに失敗しても、オーナーの印の比べが
+//   「比べない側」に倒れるだけ
 
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { shopNow } from "../../calendar";
 import type { KvStore } from "../../line/store";
 import { checkPasscode, passcodeUsable } from "../../server/passcode";
@@ -38,7 +48,13 @@ import {
   type LiveSendResponse,
   type LiveSetupResponse,
   type LiveStatusResponse,
+  type LiveTryLine,
+  type LiveTryResponse,
+  NOT_READY_MESSAGE,
+  TRY_BUSY_MESSAGE,
+  type TryKind,
 } from "./wire";
+import type { TrialTable } from "./trial";
 
 export type LiveDeps = {
   env: LiveEnv;
@@ -50,6 +66,8 @@ export type LiveDeps = {
   words: string[];
   /** 用意で作る言葉（今の作品の「広告を出す言葉」） */
   setupKeywords: string[];
+  /** だれでも試す窓口が番号から言葉を引く最初の表（trial.ts） */
+  trial: TrialTable;
   siteOrigin: string;
   fetch: FetchLike;
   now: () => number;
@@ -81,6 +99,15 @@ export const LIVE_KEY = {
   /** 間違いが上限に届いた時から wrongWindowSeconds 秒、合っていても受けない印 */
   locked: "ads:live:passlock",
   day: (date: string, kind: "setup" | "send" | "read" | "stop") => `ads:live:day:${date}:${kind}`,
+  /** だれでも試す窓口の数（オーナーの day とは別）。どれも DAY_SECONDS（2日）か2分で消える */
+  tryDay: (date: string) => `ads:live:try:day:${date}`,
+  tryMinute: (minute: number) => `ads:live:try:min:${minute}`,
+  /** 送り元ごとの数。hash は日ごとの塩と送り元の IP のハッシュ（生の IP は入れない） */
+  trySource: (date: string, hash: string) => `ads:live:try:src:${date}:${hash}`,
+  /** 日ごとの塩（サーバーが作る。2日で消える） */
+  trySalt: (date: string) => `ads:live:try:salt:${date}`,
+  /** 最後に「元の形」に戻した時刻（ISO） */
+  resetAt: "ads:live:resetat",
 };
 const DAY_SECONDS = 2 * 86_400;
 
@@ -153,12 +180,12 @@ async function underDaily(d: LiveDeps, kind: "setup" | "send" | "read"): Promise
   return n <= d.settings.daily[kind];
 }
 
-/** 「動いている印」を取って中身を動かし、終わったら自分の印だけ消す */
-async function withLock(d: LiveDeps, run: () => Promise<Response>): Promise<Response> {
+/** 「動いている印」を取って中身を動かし、終わったら自分の印だけ消す（用意・送る・だれでも試すの3つが同じ印） */
+async function withLock(d: LiveDeps, run: () => Promise<Response>, busyMessage = BUSY_MESSAGE): Promise<Response> {
   const store = d.store!;
   const mine = (d.random ?? randomBytes)(16).toString("hex");
   const got = await kv(() => store.set(LIVE_KEY.lock, mine, { ex: d.settings.lockSeconds, nx: true }));
-  if (!got) return fail("busy", BUSY_MESSAGE, 409);
+  if (!got) return fail("busy", busyMessage, 409);
   startClock(d);
   try {
     return await run();
@@ -700,33 +727,250 @@ export async function handleLiveRead(request: Request, d: LiveDeps): Promise<Res
     if (!(await underDaily(d, "read"))) return fail("limit", `今日の「読み直す」は${d.settings.daily.read}回までです`, 429);
     await verifyTestAccount(ctxOf(d));
     const snap = await snapshot(d);
-    if (!snap.campaign) {
-      const body: LiveReadResponse = {
-        ok: true,
-        campaign: { found: false, status: "" },
-        keywords: [],
-        negatives: [],
-        note: snap.campaigns === 0 ? "キャンペーンがまだありません（オーナーが「用意」を押すと作ります）" : "同じ名前のキャンペーンが2つ以上あります",
-      };
-      return json(body);
-    }
-    const keywords: LiveKeyword[] = snap.keywords
-      .map((k) => ({
-        text: scrub(k.text),
-        match: MATCH_WORD[k.match] ?? "ほかの合い方",
-        status: STATUS_WORD[k.status] ?? "ほかの状態",
-        group: k.groupName === d.connect.adGroup ? d.connect.adGroup : "ほかの広告グループ",
-      }))
-      .sort((a, b) => a.group.localeCompare(b.group, "ja") || a.text.localeCompare(b.text, "ja"));
-    const negatives: LiveNegative[] = snap.negatives.map((n) => ({ text: scrub(n.text), match: MATCH_WORD[n.match] ?? "ほかの合い方" })).sort((a, b) => a.text.localeCompare(b.text, "ja"));
-    const body: LiveReadResponse = {
-      ok: true,
-      campaign: { found: true, status: snap.campaign.status === "PAUSED" ? "止めている（広告は出ません）" : (STATUS_WORD[snap.campaign.status] ?? "ほかの状態") },
-      keywords,
-      negatives,
-    };
-    return json(body);
+    return json(listOf(d, snap, await resetAtOf(d)));
   });
+}
+
+/** 最後に「元の形」に戻した時刻（無ければ undefined。形の違う物は無いのと同じ） */
+async function resetAtOf(d: LiveDeps): Promise<string | undefined> {
+  const v = await kv(() => d.store!.get(LIVE_KEY.resetAt));
+  return v && !Number.isNaN(Date.parse(v)) ? new Date(Date.parse(v)).toISOString() : undefined;
+}
+
+/** 読み直しの一覧（言葉・合い方・状態・広告グループだけ。resourceName・番号は入れない）。読み直すと試すの返事が同じ形 */
+function listOf(d: LiveDeps, snap: Snapshot, resetAt: string | undefined): Extract<LiveReadResponse, { ok: true }> {
+  const at = resetAt ? { resetAt } : {};
+  if (!snap.campaign) {
+    return {
+      ok: true,
+      campaign: { found: false, status: "" },
+      keywords: [],
+      negatives: [],
+      note: snap.campaigns === 0 ? "キャンペーンがまだありません（オーナーが「用意」を押すと作ります）" : "同じ名前のキャンペーンが2つ以上あります",
+      ...at,
+    };
+  }
+  const keywords: LiveKeyword[] = snap.keywords
+    .map((k) => ({
+      text: scrub(k.text),
+      match: MATCH_WORD[k.match] ?? "ほかの合い方",
+      status: STATUS_WORD[k.status] ?? "ほかの状態",
+      group: k.groupName === d.connect.adGroup ? d.connect.adGroup : "ほかの広告グループ",
+    }))
+    .sort((a, b) => a.group.localeCompare(b.group, "ja") || a.text.localeCompare(b.text, "ja"));
+  const negatives: LiveNegative[] = snap.negatives.map((n) => ({ text: scrub(n.text), match: MATCH_WORD[n.match] ?? "ほかの合い方" })).sort((a, b) => a.text.localeCompare(b.text, "ja"));
+  return {
+    ok: true,
+    campaign: { found: true, status: snap.campaign.status === "PAUSED" ? "止めている（広告は出ません）" : (STATUS_WORD[snap.campaign.status] ?? "ほかの状態") },
+    keywords,
+    negatives,
+    ...at,
+  };
+}
+
+// ---- だれでも試す（承認した1件を、元の形に戻してから送る。合言葉なし。直しU） ----
+
+const TRY_KINDS: readonly TryKind[] = ["stop", "exclude", "add"];
+
+/** ブラウザから来た物を読む。種類と番号の2つだけを使う（text など、ほかの欄は読まない）。2件以上・形の違う物は断る */
+export function readTryItem(body: Record<string, unknown>, d: Pick<LiveDeps, "trial" | "towns" | "words" | "setupKeywords" | "settings">):
+  | { ok: true; item: { kind: TryKind; no: number; text: string } }
+  | { ok: false; message: string } {
+  if (Array.isArray(body.items) || Array.isArray(body.kind) || Array.isArray(body.no) || Array.isArray(body.payload)) return { ok: false, message: "1回に1件だけです" };
+  const kind = body.kind as TryKind;
+  const no = body.no;
+  if (!TRY_KINDS.includes(kind) || typeof no !== "number" || !Number.isInteger(no) || no < 0) return { ok: false, message: "形がおかしいです" };
+  const t = d.trial;
+  const row = (kind === "stop" ? t.keywords : t.terms).find((r) => r.no === no);
+  if (!row) return { ok: false, message: kind === "stop" ? `${no}番は止められる言葉の表にありません` : `${no}番はお客さんが調べた言葉の表にありません` };
+  const shape = keywordProblem(row.text, d.settings);
+  if (shape) return { ok: false, message: shape };
+  if (kind === "stop" && !d.setupKeywords.some((k) => sameWords(k, row.text))) return { ok: false, message: "用意した言葉のほかは止めません" };
+  if (kind === "exclude" && townIn(row.text, d.towns)) return { ok: false, message: "町の名前の入った言葉は外しません" };
+  if (kind === "add") {
+    if (!t.addable.includes(no) || !featuredWordIn(row.text, d.words)) return { ok: false, message: "足す案の確かめを通らない番号です" };
+    if (d.setupKeywords.some((k) => sameWords(k, row.text))) return { ok: false, message: "もう広告を出す言葉にあります" };
+  }
+  return { ok: true, item: { kind, no, text: tidy(row.text) } };
+}
+
+/** 送り元（Vercel が付ける送り元の IP だけ。ブラウザが付けられる x-forwarded-for などは見ない） */
+export function sourceIp(request: Request): string {
+  const real = (request.headers.get("x-real-ip") ?? "").trim();
+  if (real) return real.slice(0, 64);
+  const vf = (request.headers.get("x-vercel-forwarded-for") ?? "").split(",")[0].trim();
+  return vf ? vf.slice(0, 64) : "unknown";
+}
+
+/** 日ごとの塩（サーバーが作って KV に置く。2日で消える）。置けない・読めない時は StoreDown */
+async function saltOf(d: LiveDeps, date: string): Promise<string> {
+  const store = d.store!;
+  const fresh = (d.random ?? randomBytes)(16).toString("hex");
+  await kv(() => store.set(LIVE_KEY.trySalt(date), fresh, { ex: DAY_SECONDS, nx: true }));
+  const salt = await kv(() => store.get(LIVE_KEY.trySalt(date)));
+  if (!salt) throw new StoreDown();
+  return salt;
+}
+
+/** 送り元のハッシュ（塩と合わせる。生の IP は返さない・置かない） */
+export function sourceHash(salt: string, ip: string): string {
+  return createHash("sha256").update(`${salt}\n${ip}`).digest("hex").slice(0, 32);
+}
+
+/** 試す窓口の上限（先に足してから比べる）。同じ送り元 → 1分 → 1日の順で、こえたらそこで止める */
+async function underTryLimits(d: LiveDeps, request: Request): Promise<Response | null> {
+  const store = d.store!;
+  const t = d.settings.try;
+  const date = today(d);
+  const hash = sourceHash(await saltOf(d, date), sourceIp(request));
+  if ((await kv(() => store.incr(LIVE_KEY.trySource(date, hash), DAY_SECONDS))) > t.perSourceDay)
+    return fail("limit", `今日の試しは、同じ送り元から${t.perSourceDay}回までです。明日また試せます`, 429);
+  if ((await kv(() => store.incr(LIVE_KEY.tryMinute(Math.floor(d.now() / 60_000)), 120))) > t.minute)
+    return fail("limit", "いま試す人が多いので、1分ほど待ってから試してください", 429);
+  if ((await kv(() => store.incr(LIVE_KEY.tryDay(date), DAY_SECONDS))) > t.day) return fail("limit", `今日の試しは、サイト全体で${t.day}回までです。明日また試せます`, 429);
+  return null;
+}
+
+export async function handleLiveTry(request: Request, d: LiveDeps): Promise<Response> {
+  return safely(async () => {
+    const g = gate(request, d, "POST");
+    if (!g.ok) return g.response;
+    const body = await readBody(request, d.settings.try.maxRequestChars);
+    if (body === "big") return fail("too-big", "送る物が大きすぎます", 413);
+    if (!body) return fail("bad-request", "形がおかしいです", 400);
+    const it = readTryItem(body, d);
+    if (!it.ok) return fail("bad-request", it.message, 400);
+    if (!d.store) return fail("no-store", NO_STORE_MESSAGE, 503);
+    return withLock(
+      d,
+      async () => {
+        const over = await underTryLimits(d, request);
+        if (over) return over;
+        return tryOne(d, it.item);
+      },
+      TRY_BUSY_MESSAGE,
+    );
+  });
+}
+
+type TryItem = { kind: TryKind; no: number; text: string };
+export type TryPlan = { ready: false } | { ready: true; ops: Op[] };
+
+/**
+ * 今の形（snapshot）から、「元の形」にその1件を足した形にする操作を決める（1つの物は1回だけさわる）。
+ *   元の形：用意の言葉がみな「出す設定」（合い方は keywordMatch）・それ以外の言葉は無い・キャンペーンのキーワードの除外（完全一致）は無い・
+ *   キャンペーンは止めたまま。言葉は作品の広告グループのキーワード（除外でない物）だけを見る。除外は作品のキャンペーンの
+ *   キーワードの除外（完全一致）だけを消す（地域・言語・ほかの種類の除外や設定・予算・名前には触らない）。
+ * キャンペーンが無い・2つ以上・広告グループが1つでない・用意の言葉が欠けている時は ready: false（何も書かない）。
+ */
+export function planTry(snap: Snapshot, d: Pick<LiveDeps, "setupKeywords" | "settings" | "env">, item: TryItem): TryPlan {
+  if (!snap.campaign || snap.groups.length !== 1) return { ready: false };
+  const group = snap.groups[0];
+  const match = d.settings.keywordMatch;
+  const wanted: string[] = [];
+  for (const k of d.setupKeywords) if (!keywordProblem(k, d.settings) && !wanted.some((x) => sameWords(x, k))) wanted.push(tidy(k));
+  const inGroup = snap.keywords.filter((k) => k.groupRn === group.rn);
+  const keep = new Map<string, "ENABLED" | "PAUSED">();
+  for (const w of wanted) {
+    const k = inGroup.find((x) => sameWords(x.text, w) && x.match === match && !keep.has(x.rn));
+    if (!k) return { ready: false };
+    keep.set(k.rn, item.kind === "stop" && sameWords(item.text, w) ? "PAUSED" : "ENABLED");
+  }
+  const ops: Op[] = [];
+  let addHave = false;
+  if (item.kind === "add") {
+    const k = inGroup.find((x) => sameWords(x.text, item.text) && x.match === "PHRASE" && !keep.has(x.rn));
+    if (k) {
+      keep.set(k.rn, "ENABLED");
+      addHave = true;
+    }
+  }
+  if (snap.campaign.status !== "PAUSED")
+    ops.push({ campaignOperation: { update: { resourceName: snap.campaign.rn, status: "PAUSED" }, updateMask: "status" } });
+  for (const k of inGroup) {
+    const want = keep.get(k.rn);
+    if (!want) ops.push({ adGroupCriterionOperation: { remove: k.rn } });
+    else if (k.status !== want) ops.push({ adGroupCriterionOperation: { update: { resourceName: k.rn, status: want }, updateMask: "status" } });
+  }
+  if (item.kind === "add" && !addHave)
+    ops.push({ adGroupCriterionOperation: { create: { adGroup: group.rn, status: "ENABLED", keyword: { text: item.text, matchType: "PHRASE" } } } });
+  let negHave = false;
+  for (const n of snap.negatives.filter((x) => x.match === "EXACT")) {
+    if (item.kind === "exclude" && !negHave && sameWords(n.text, item.text)) negHave = true;
+    else ops.push({ campaignCriterionOperation: { remove: n.rn } });
+  }
+  if (item.kind === "exclude" && !negHave)
+    ops.push({ campaignCriterionOperation: { create: { campaign: snap.campaign.rn, negative: true, keyword: { text: item.text, matchType: "EXACT" } } } });
+  // 念のため：さわる物はみな、このアカウントの物だけ（snapshot が mine() で選んだ物）
+  const own = `customers/${d.env.customerId}/`;
+  const refs = ops.flatMap((op) => {
+    const inner = Object.values(op)[0] as Record<string, unknown>;
+    const v = inner.remove ?? (inner.update as Op | undefined)?.resourceName ?? (inner.create as Op | undefined)?.adGroup ?? (inner.create as Op | undefined)?.campaign;
+    return [String(v ?? "")];
+  });
+  if (refs.some((r) => !r.startsWith(own))) return { ready: false };
+  return { ready: true, ops };
+}
+
+const TRY_FAILED_NOTE = "読み直すと、元の形にこの1件を足した形になっていませんでした";
+
+async function tryOne(d: LiveDeps, item: TryItem): Promise<Response> {
+  const ctx = ctxOf(d);
+  await verifyTestAccount(ctx);
+  const snap = await snapshot(d);
+  const plan = planTry(snap, d, item);
+  if (!plan.ready) return fail("not-ready", NOT_READY_MESSAGE, 409);
+  const line = (outcome: LiveTryLine["outcome"], reason?: string): LiveTryLine => ({ kind: item.kind, no: item.no, text: item.text, outcome, ...(reason ? { reason } : {}) });
+  // もうその形（元の形にこの1件）だった：何も書かない
+  if (plan.ops.length === 0) return json({ ok: true, line: line("already", "もうその形でした"), list: listOf(d, snap, await resetAtOf(d)) } satisfies LiveTryResponse);
+
+  // mutate の前に「最後に元の形に戻した時刻」を置く（置けなければ StoreDown で書かない）
+  const at = new Date(d.now()).toISOString();
+  const okSet = await kv(() => d.store!.set(LIVE_KEY.resetAt, at, { ex: d.settings.try.resetMarkDays * 86_400 }));
+  if (!okSet) throw new StoreDown();
+
+  // 先に validateOnly で確かめ（何も変えない）、通ったら1回の mutate で送る（全部できるか、何もできないか）
+  try {
+    const v = await mutate(ctx, plan.ops, { validateOnly: true, partialFailure: false });
+    if (v.allFailed || v.failed.size) return fail("rejected", "送る前の確かめで通らなかったので、何も書きませんでした", 502);
+  } catch (e) {
+    if (e instanceof LiveError && e.code !== "not-test") return fail(e.code, `送る前の確かめができなかったので、何も書きませんでした（${e.message}）`, 502);
+    throw e;
+  }
+  let sent: "ok" | "unknown" | "failed" = "ok";
+  let why = "";
+  try {
+    const r = await mutate(ctx, plan.ops, { validateOnly: false, partialFailure: false });
+    if (r.allFailed || r.failed.size) {
+      sent = "failed";
+      why = "送りましたが、受けられませんでした";
+    }
+  } catch (e) {
+    if (!(e instanceof LiveError) || e.code === "not-test") throw e;
+    if (!e.before && unknownAfterSend(e.code)) sent = "unknown";
+    else {
+      sent = "failed";
+      why = `送れませんでした（${e.message}）`;
+    }
+  }
+  // 同じ流れの中で読み直す（この窓口の1回に含める。「読み直す」の数には足さない）
+  let after: Snapshot | null = null;
+  try {
+    after = await snapshot(d);
+  } catch (e) {
+    if (e instanceof LiveError && e.code === "not-test") throw e;
+    after = null;
+  }
+  const list = after ? listOf(d, after, at) : null;
+  if (!after) return json({ ok: true, line: line(sent === "failed" ? "failed" : "unknown", sent === "failed" ? why : "分かりません（読み直してください）"), list } satisfies LiveTryResponse);
+  const p2 = planTry(after, d, item);
+  const atTarget = p2.ready && p2.ops.length === 0;
+  const outcome: LiveTryLine = atTarget
+    ? line("done")
+    : sent === "unknown"
+      ? line("unknown", "分かりません（読み直してください）")
+      : line("failed", sent === "failed" ? why : TRY_FAILED_NOTE);
+  return json({ ok: true, line: outcome, list } satisfies LiveTryResponse);
 }
 
 export { LIVE_ERROR_MESSAGE };

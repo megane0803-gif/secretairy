@@ -1,6 +1,7 @@
 "use client";
 
-// 広告タブの「くわしく」の中：本物の広告に渡す形（docs/SPEC.md §1.7.6）。今はつないでいない。
+// 広告タブの「くわしく」の中：本物の広告に渡す形（docs/SPEC.md §1.7.6）。この欄は写す・結果を貼るだけで、どこにも送らない
+// （テスト用の広告アカウントへ送るのは、承認とこの下の欄。§1.7.8）。
 // 承認済みでまだ反映していない案を JSON にして写す（どこにも送らない）・本物の側の結果を貼って読み込む（反映した案に「本物に反映済み」の印）。
 // 今の画面の見た目と動画を変えないため、閉じた折りたたみの中に小さく置く。鍵・合言葉・本物の広告の番号は出さない。
 
@@ -29,7 +30,7 @@ export function AdsConnect() {
   if (!open)
     return (
       <details className="fold ad-connect" onToggle={(e) => setOpen(e.currentTarget.open)}>
-        <summary>本物の広告に渡す形を見る（今はつないでいません）</summary>
+        <summary>本物の広告に渡す形を見る（写す・結果を貼る。この欄からは送りません）</summary>
       </details>
     );
 
@@ -51,10 +52,10 @@ export function AdsConnect() {
 
   return (
     <details className="fold ad-connect" open onToggle={(e) => setOpen(e.currentTarget.open)}>
-      <summary>本物の広告に渡す形を見る（今はつないでいません）</summary>
+      <summary>本物の広告に渡す形を見る（写す・結果を貼る。この欄からは送りません）</summary>
       <div>
         <p className="hint small">
-          承認済みでまだ反映していない案（止める・外す・足す）を、本物の検索広告へ渡す形にしたものです。今はどこにも送っていません。鍵・合言葉・本物の広告の番号は入れていません。
+          承認済みでまだ反映していない案（止める・外す・足す）を、本物の検索広告へ渡す形にしたものです。この欄はどこにも送りません（写すのはクリップボードだけ）。鍵・合言葉・本物の広告の番号は入れていません。
           合い方は、足す＝フレーズ一致・外す＝完全一致。キャンペーン「{c.campaign}」・足す先の広告グループ「{c.adGroup}」は作り物の名前です。
         </p>
         {notes.map((n, i) => (
