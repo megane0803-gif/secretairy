@@ -218,6 +218,13 @@ const regBody = (t: WalletTxn, use: "shop" | "private") => ({
 });
 const register = (freee: FakeFreee, t: WalletTxn, use: "shop" | "private") => handleRegister(req("/api/freee/register", { body: regBody(t, use) }), makeDeps(freee));
 
+/** 後ろから数えた位置の1字を、必ず別の字（base64url の字）に置きかえる。
+ *  暗号の中身は毎回ちがうので、「決まった字に置きかえる」だと元から同じ字だった時に何も変わらない（約64回に1回、書きかえたはずの cookie が通っていた） */
+function changedAt(s: string, fromEnd: number): string {
+  const i = s.length + fromEnd;
+  return s.slice(0, i) + (s[i] === "A" ? "B" : "A") + s.slice(i + 1);
+}
+
 function tokenCookie(companyId = COMPANY, expiresAt = NOW + 3600_000): string {
   return `${TOKEN_COOKIE}=${seal(KEY, "token", { accessToken: "fake-token", companyId, expiresAt })}`;
 }
@@ -307,7 +314,7 @@ describe("freee：つなぐ（OAuth の認可コード）", () => {
       const start = await handleStart(req("/api/freee/start", { cookie: null }), deps);
       const state = new URL(start.headers.get("location")!).searchParams.get("state")!;
       const sc = setCookies(start).find((c) => c.startsWith(STATE_COOKIE))!.split(";")[0];
-      const q = new URLSearchParams({ code: "c", state: bad === "wrong" ? state.slice(0, -2) + "xx" : state });
+      const q = new URLSearchParams({ code: "c", state: bad === "wrong" ? changedAt(state, -2) : state });
       const later = bad === "expired" ? { ...deps, now: () => NOW + (settings.stateMinutes * 60 + 1) * 1000 } : deps;
       const cb = await handleCallback(req(`/api/freee/callback?${q}`, { method: "GET", cookie: bad === "nocookie" ? null : sc }), later);
       assert.equal(cb.headers.get("location"), "/accounting?freee=state#freee", bad);
@@ -371,7 +378,8 @@ describe("freee：つなぐ（OAuth の認可コード）", () => {
   test("書きかえた cookie・別の鍵の cookie・使い道の違う cookie（state を鍵に）は受けない", async () => {
     const freee = new FakeFreee();
     const good = tokenCookie();
-    const flipped = good.slice(0, -3) + (good.endsWith("A") ? "B" : "A") + good.slice(-2);
+    const flipped = changedAt(good, -3);
+    assert.notEqual(flipped, good);
     const otherKey = `${TOKEN_COOKIE}=${seal(Buffer.alloc(32, 9), "token", { accessToken: "x", companyId: COMPANY, expiresAt: NOW + 1000 })}`;
     const wrongPurpose = `${TOKEN_COOKIE}=${seal(KEY, "state", { accessToken: "x", companyId: COMPANY, expiresAt: NOW + 1000 })}`;
     for (const c of [flipped, otherKey, wrongPurpose]) {

@@ -2184,10 +2184,11 @@ describe("README", () => {
     const sec = readme.slice(readme.indexOf("#### だれでも試せる道（直しU。合言葉なし）"), readme.indexOf("- **何を**（オーナーの操作）"));
     for (const w of ["元の形に戻してから", "承認した1件だけ", "テスト用アカウントの中だけ・店の広告には届かない理由", "オーナーの「送る」との違い", "種類（止める・外す・足す）と番号", "付けない（次の人が元に戻すため）", "人を確かめる物ではありません", "x-real-ip", "生の IP は Redis にもログにも残しません"])
       assert.ok(sec.includes(w), w);
-    // 直しW：直しU の後の本番で 503 だったこと・直した所・Merge の後に確かめること（まだ確かめていない・次の日の最初の1回）
+    // 直しW：直しU の後の本番で 503 だったこと・直した所・Merge の後の本番の結果（承認BOXからの1件は 200・日付が変わった後の最初の1回はまだ）
     assert.doesNotMatch(sec, /LINE・試験10問・広告の[^。]*にも効きます/, "全部に効くとは書かない");
-    for (const w of ["503 no-store", "置けた時は作った値をそのまま使い", "`upstash-sync-token`", "同じ置き場の中で、書いた直後に読む時だけ", "別々に作った置き場の間では引き継ぎません", "省いていません", "INCR と EXPIRE", "承認BOXから1件承認して、try が通った", "**まだ確かめていません**", "次の日に確かめます"])
+    for (const w of ["503 no-store", "置けた時は作った値をそのまま使い", "`upstash-sync-token`", "同じ置き場の中で、書いた直後に読む時だけ", "別々に作った置き場の間では引き継ぎません", "省いていません", "INCR と EXPIRE", "直しW を Merge した後の本番（2026-11-08 01:26・日本時間）", "`/api/ads/live/try` は 200", "元の8語にその1語を足した形・除外0件", "本番では次の日にならないと見られないので、**まだ確かめていません**"])
       assert.ok(sec.includes(w), w);
+    assert.doesNotMatch(sec, /ここに書きます/, "確かめた後は「これから書く」と書かない");
     assert.doesNotMatch(sec, /100%|必ず|すぐ反映/);
     const guard = readme.slice(readme.indexOf("### だれでも呼べる窓口の守り（今の作り）"), readme.indexOf("### 動かし方の手順"));
     assert.match(guard, /だれでも試す（`\/api\/ads\/live\/try`。直しU）/);
@@ -2216,6 +2217,13 @@ describe("README", () => {
     assert.match(proof, /\| `\/api\/ads\/live\/send` \| POST・Origin なし \| 403 \|/);
     assert.match(proof, /cross-site.*\| 403 \|/);
     assert.match(proof, /\| `\/api\/ads\/live\/send` \| GET \| 405 \|/);
+    // だれでも試す窓口の本番の行（2026-11-08。守りの 403・405・400 と、承認BOXからの1件の 200）
+    assert.match(proof, /\| `\/api\/ads\/live\/try` \| POST・Origin なし／ほかのサイト \| 403（何も書かない） \|/);
+    assert.match(proof, /\| `\/api\/ads\/live\/try` \| GET \| 405 \|/);
+    assert.match(proof, /\| `\/api\/ads\/live\/try` \| POST・Origin は本番（`\{\}`／2件の配列／壊れた JSON） \| 400（何も書かない） \|/);
+    assert.match(proof, /\| `\/api\/ads\/live\/try` \| POST を1回（合言葉なし。ホームの承認BOXから「足す」案を1件承認） \| 200/);
+    assert.match(proof, /確かめていないこと：回数の上限を本番で使い切ること・連打・日付が変わった後の最初の1回/);
+    assert.doesNotMatch(proof, /まだ呼んでいません|上の表には入れていません/);
     assert.match(proof, /「書けるか」は、環境変数とオーナー用の合言葉の設定があるかから決めた札で、Google に書けたことの確かめではありません/);
     assert.match(proof, /合言葉なしで送った時も、間違いの数に1つ足す作り/);
     assert.doesNotMatch(proof, /100%|必ず|すぐ反映|数を使わない/);
