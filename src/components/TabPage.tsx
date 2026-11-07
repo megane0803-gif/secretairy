@@ -10,6 +10,7 @@ import { TabFrame } from "./TabFrame";
  * 表示スイッチが切れているタブは「出していません」を出す。スイッチはページの終わりに畳む（必須のタブには出さない）。
  * rightFirstOnPhone のタブは、スマホで右の列を見出しのすぐ下に出す。
  * rightAfterOnPhone のタブは、スマホで右の列を真ん中の列の rightAfterOnPhone 個目の欄のすぐ後に出す（広告タブ）。
+ * rightMidOnPhone のタブは、スマホで右の列を真ん中の列の途中に出す：after-right-sp の札を付けた欄だけを右の列の後へ（予約タブ）。
  * top を渡したタブは、PC で見出しのすぐ下に横いっぱい（真ん中と右の列をまたいで）top を出す。
  * beside を渡したタブ（ホーム）は、承認待ちの1行の隣に beside を出す（狭い時は折り返す）。
  */
@@ -18,6 +19,7 @@ export function TabPage({
   right,
   rightFirstOnPhone,
   rightAfterOnPhone,
+  rightMidOnPhone,
   top,
   beside,
   children,
@@ -28,6 +30,8 @@ export function TabPage({
   rightFirstOnPhone?: boolean;
   /** スマホでは、右の列を真ん中の列の何個目の欄の後に出すか（広告タブの「AI に見直してもらう」）。渡さないタブは今までどおり */
   rightAfterOnPhone?: number;
+  /** スマホでは、右の列を真ん中の列の途中に出す（札 after-right-sp を付けた欄だけを右の列の後へ。予約タブの予約チャット）。渡さないタブは今までどおり */
+  rightMidOnPhone?: boolean;
   /** PC で見出しのすぐ下に横いっぱいで出す物（予約タブの時間割）。スマホで出すかは中身の側で決める */
   top?: ReactNode;
   /** 承認待ちの1行の隣に出す物（ホームの「AI の仕事をまとめて動かす」）。渡さないタブは今までどおり */
@@ -35,7 +39,7 @@ export function TabPage({
   children: ReactNode;
 }) {
   return (
-    <TabFrame tab={tab} baseSwitches={getTabSwitches()} pending={<PendingBar />} right={right} rightFirstOnPhone={rightFirstOnPhone} rightAfterOnPhone={rightAfterOnPhone} top={top} beside={beside}>
+    <TabFrame tab={tab} baseSwitches={getTabSwitches()} pending={<PendingBar />} right={right} rightFirstOnPhone={rightFirstOnPhone} rightAfterOnPhone={rightAfterOnPhone} rightMidOnPhone={rightMidOnPhone} top={top} beside={beside}>
       {children}
     </TabFrame>
   );

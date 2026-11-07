@@ -1,7 +1,7 @@
 "use client";
 
 // 予約のページの共通の親：見ている週・月のカレンダーの月・開いている「台帳から入れる」の1枚を、ここ1つだけが持つ（docs/SPEC.md §1.3.1）。
-// PC の時間割（WeekTimetable）・スマホの日ごとのカード（Ledger）・月のカレンダー（MonthCalendar）は、みなここから読む（いつも同じ週）。
+// 時間割（WeekTimetable。PC もスマホも）・スマホの畳んだ日ごとのカード（Ledger.tsx の LedgerDays）・月のカレンダー（MonthCalendar）は、みなここから読む（いつも同じ週）。
 // 数え方は src/lib/book/weekView.ts。見ている週はブラウザに残さない（開き直すと今日の週）。
 // 「翌日へ」「最初に戻す」（印 epoch と実際に進んだ dayOffset が変わる）の後は、今日の週・月に戻し、開いている1枚を閉じる（月のカレンダーの「休みを決める」も切に戻す）。
 
@@ -19,6 +19,7 @@ import {
   viewReduce,
   viewWeek,
   weekLabel,
+  weekLabelShort,
   type SheetTarget,
   type ViewAction,
   type ViewDay,
@@ -36,6 +37,8 @@ type LedgerViewValue = {
   start: string;
   /** 「11/13（金）〜11/19（木）」 */
   label: string;
+  /** スマホの台帳の上の「11月13日〜19日」 */
+  shortLabel: string;
   days: ViewDay[];
   /** 今日の週を見ているか */
   atToday: boolean;
@@ -81,7 +84,7 @@ export function LedgerViewProvider({ data, children }: { data: BookData; childre
   const pickDay = useCallback(
     (date: string) => {
       act({ kind: "pick", date });
-      // 見えている方の台帳（PC の時間割かスマホの日ごとのカード）の、その日まで動かす
+      // 見えている方の台帳（時間割。畳んだ日ごとのカードは開いている時だけ見える）の、その日まで動かす
       window.setTimeout(() => {
         const el = [document.getElementById(`tt-col-${date}`), document.getElementById(`ledger-day-${date}`)].find((x) => x && x.offsetParent !== null);
         el?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -94,6 +97,7 @@ export function LedgerViewProvider({ data, children }: { data: BookData; childre
     range,
     start,
     label: weekLabel(book.shop, start),
+    shortLabel: weekLabelShort(start),
     days,
     atToday: start === book.today.date,
     canPrev: canStep(start, -1, range),
@@ -127,22 +131,32 @@ export function LedgerViewProvider({ data, children }: { data: BookData; childre
   );
 }
 
-/** 台帳の上の「前の週」「今日」「次の週」と、見ている7日の範囲 */
+/**
+ * 台帳の上の「前の週」「今日」「次の週」と、見ている7日の範囲。
+ * スマホは1行に「< 先週」「11月2日〜8日」「来週 >」（同じ動き。「今日」は今日の週でない時だけ下の行に）。PC は今までどおり。
+ */
 export function WeekNav() {
   const v = useLedgerView();
   return (
     <div className="week-nav" role="group" aria-label="見る週を動かす">
-      <button type="button" className="btn week-nav-btn" onClick={() => v.act({ kind: "step", dir: -1 })} disabled={!v.canPrev}>
-        ← 前の週
+      <button type="button" className="btn week-nav-btn week-nav-prev" onClick={() => v.act({ kind: "step", dir: -1 })} disabled={!v.canPrev} aria-label="前の週">
+        <span className="wk-pc">← 前の週</span>
+        <span className="wk-sp" aria-hidden>
+          &lt; 先週
+        </span>
       </button>
-      <button type="button" className="btn week-nav-btn" onClick={() => v.act({ kind: "today" })} disabled={v.atToday} aria-label="今日の週に戻る">
+      <button type="button" className="btn week-nav-btn week-nav-today" onClick={() => v.act({ kind: "today" })} disabled={v.atToday} aria-label="今日の週に戻る">
         今日
       </button>
-      <button type="button" className="btn week-nav-btn" onClick={() => v.act({ kind: "step", dir: 1 })} disabled={!v.canNext}>
-        次の週 →
+      <button type="button" className="btn week-nav-btn week-nav-next" onClick={() => v.act({ kind: "step", dir: 1 })} disabled={!v.canNext} aria-label="次の週">
+        <span className="wk-pc">次の週 →</span>
+        <span className="wk-sp" aria-hidden>
+          来週 &gt;
+        </span>
       </button>
       <strong className="week-nav-label num" aria-live="polite">
-        {v.label}
+        <span className="wk-pc">{v.label}</span>
+        <span className="wk-sp">{v.shortLabel}</span>
       </strong>
     </div>
   );

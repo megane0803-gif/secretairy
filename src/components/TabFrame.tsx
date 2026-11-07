@@ -15,6 +15,7 @@ export function TabFrame({
   right,
   rightFirstOnPhone = false,
   rightAfterOnPhone,
+  rightMidOnPhone = false,
   top,
   beside,
   children,
@@ -36,6 +37,13 @@ export function TabFrame({
    * 右の列の部品は1つのまま（2つ作らない）。PC は今までどおり。渡さないタブは今までどおり。rightFirstOnPhone と一緒には使わない。
    */
   rightAfterOnPhone?: number;
+  /**
+   * スマホ（1列）で、右の列を真ん中の列の途中に出す（予約タブの予約チャット）。children を包まず、札（after-right-sp）で分ける：
+   * 真ん中の列の欄のうち className に after-right-sp を付けた欄だけを右の列の後に、ほかの欄は右の列の前に出す（DOM の順のまま。CSS の並べ替え）。
+   * 前と後が DOM の上で交互になっていてもよい（PC の並びを変えずに、スマホだけ並びを変える）。右の列の部品は1つのまま。
+   * PC は今までどおり。渡さないタブは今までどおり。rightFirstOnPhone・rightAfterOnPhone と一緒には使わない。
+   */
+  rightMidOnPhone?: boolean;
   /**
    * PC で、承認待ち・見出しのすぐ下に横いっぱい（真ん中と右の列をまたいで）出す物（予約タブの時間割の台帳）。
    * 渡したときだけ、承認待ち・見出しと top を真ん中の上の帯（page-top）に出す。渡さないタブは今までどおり。
@@ -95,6 +103,9 @@ export function TabFrame({
     children
   );
 
+  // rightMidOnPhone を渡したタブだけ、欄に付けた札で右の列の前と後に分ける（包まない）
+  const mid = rightMidOnPhone && !rightFirstOnPhone && !split;
+
   const head = (
     <div className="page-head">
       <h1>
@@ -104,7 +115,7 @@ export function TabFrame({
   );
 
   return (
-    <div className={`${rightFirstOnPhone ? "page right-first-sp" : "page"}${split ? " right-after-sp" : ""}${top ? " has-top" : ""}`}>
+    <div className={`${rightFirstOnPhone ? "page right-first-sp" : "page"}${split ? " right-after-sp" : ""}${mid ? " right-mid-sp" : ""}${top ? " has-top" : ""}`}>
       {top && (
         <header className="page-top">
           {pending}

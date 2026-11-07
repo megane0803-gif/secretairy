@@ -50,7 +50,7 @@ npm run build      # 本番ビルド（push の前に通す）
 ## 画面の決まり
 
 - PC は「左にタブ・真ん中にページ・右の列」の3列、スマホは1列。横にはみ出さない。
-- タブの画面は `src/components/TabPage.tsx` で包む（承認待ちの1行・表示スイッチ・右の列が付く）。
+- タブの画面は `src/components/TabPage.tsx` で包む（承認待ちの1行・表示スイッチ・右の列が付く）。スマホで右の列の場所を変える口は3つ（`rightFirstOnPhone`＝上・`rightAfterOnPhone`＝何個目の欄の後・`rightMidOnPhone`＝札 `after-right-sp` の欄だけを後へ。予約タブ）。
 - 右の列：ホームは承認の箱・LINE とつなぐ・日誌、ほかはそのタブの入力欄。
 - 数字は大きく（`BigNumber`）、量は小さい棒（`MiniBar`）、プログラムの確認は ✓（`Checked`）、細かい所は畳む（`Fold`）。部品は `src/components/parts.tsx`。
 - AI の案は大きいカード1枚：「前 → 後」と理由1文、ボタンは「確定」「やめる」（予約の仮押さえの行は「承認／直す／見送り」。仕様書 §1.3）。
@@ -69,7 +69,7 @@ src/components/    共通の部品
 src/app/api/ai/    AI を呼ぶ窓口（サーバーの側。受け取った物は残さない）
 src/lib/           設定の読み込み・ルール（言葉で書いて足す入口は rules/words.ts）
 src/lib/ai/        予約チャットの道具・流れ・料金の答え（prices.ts）・決まった返事（テスト用）
-src/lib/book/      台帳・承認の箱・保存したカルテ・「翌日へ」（ブラウザの中に残す形）・予約サイトから入る予約（site.ts。承認の箱は通さない・AI なし）・台帳の帯の色（menuColor.ts。メニューごと・config/menus.json の color・値は globals.css の --menu-*。だれは帯の頭の札だけ）・台帳から入れる予約（owner.ts。オーナーの「入れる」ボタンだけ・確定・承認の箱は通さない・judgeSlot で入れる前と保存の直前・オーナーのルールだけはもう一度押せば入れる）・予約サイトで止めた時間（siteStops.ts。予約サイトだけに効く）・承認の時の確かめ（approve.ts。休みの日と過ぎた時刻は確定しない）・台帳の予約を押して開く1枚・取り消す・日時とメニューを変える（change.ts。確定で開始前だけ・仮押さえは承認の箱・judgeSlot は自分の1件だけ外す。最初の予約を直した分は state の seedResEdits）・台帳を組み立てる1か所（assemble.ts の assembleBook。useBook・ledgerView・bookView がみな通す）・休みにする日の予約の ToDo（holiday.ts）・休みにする・戻す流れの1か所（holidayFlow.ts。月のカレンダーの「休みを決める」と休みの日の一覧が使う。休みにできる範囲は今日を含む aheadDays 日で、台帳で見られる範囲とは別）
+src/lib/book/      台帳・承認の箱・保存したカルテ・「翌日へ」（ブラウザの中に残す形）・予約サイトから入る予約（site.ts。承認の箱は通さない・AI なし）・台帳の帯の色（menuColor.ts。メニューごと・config/menus.json の color・値は globals.css の --menu-*。だれは帯の頭の札だけ）・台帳から入れる予約（owner.ts。オーナーの「入れる」ボタンだけ・確定・承認の箱は通さない・judgeSlot で入れる前と保存の直前・オーナーのルールだけはもう一度押せば入れる）・「予約を入れる」1枚の3つの段（ownerFlow.ts。①お客様を選ぶ pickCustomer.ts（並べ方2つ・前回からの間・50音の行）→ ②メニュー menuPick.ts（前回・よく使う・全部。book.data.menus から）→ ③確かめて入れる。選び直したら先を消す）・予約サイトで止めた時間（siteStops.ts。予約サイトだけに効く）・承認の時の確かめ（approve.ts。休みの日と過ぎた時刻は確定しない）・台帳の予約を押して開く1枚・取り消す・日時とメニューを変える（change.ts。確定で開始前だけ・仮押さえは承認の箱・judgeSlot は自分の1件だけ外す。最初の予約を直した分は state の seedResEdits）・台帳を組み立てる1か所（assemble.ts の assembleBook。useBook・ledgerView・bookView がみな通す）・休みにする日の予約の ToDo（holiday.ts）・休みにする・戻す流れの1か所（holidayFlow.ts。月のカレンダーの「休みを決める」と休みの日の一覧が使う。休みにできる範囲は今日を含む aheadDays 日で、台帳で見られる範囲とは別）
 src/lib/karte/     カルテ：見出しに分ける・整える（tidy.ts。重ねない・次回の希望は次回提案にも）・言葉の門・保存と ToDo・Claude（Haiku）と決まった返事・人が直す（edit.ts。案も保存したカルテも最初の状態のカルテも。人の行は門を通さない）・お客様一覧（customers.ts）
 src/lib/recording/ カルテの「録音からメモを作る」（PC だけ）：区切る・黙っている所を飛ばす・Whisper（Web Worker）・要点（Haiku）・フォルダ・画面の録音（IndexedDB に残す）
 src/lib/ads/       広告の数・門・道具・流れ・決まった返事・広告の承認の箱（ブラウザの中に残す形）

@@ -243,21 +243,22 @@ describe("2. 時間割の出し方（TimetableGrid）", () => {
   });
 });
 
-describe("3. 予約タブの並び（PC は真ん中の列の一番上・右の列の予約チャットと横に並ぶ・スマホはカードのまま）", () => {
+describe("3. 予約タブの並び（PC は真ん中の列の一番上・右の列の予約チャットと横に並ぶ。スマホも時間割を上に（直しL））", () => {
   const page = read("src/app/reservations/page.tsx");
   const frame = read("src/components/TabFrame.tsx");
   const css = read("src/app/globals.css");
 
-  test("予約タブは top を使わず、時間割を真ん中の列の一番上（承認待ちの予約より前）に置く。スマホ用の日ごとのカードと予約サイトも残す", () => {
+  test("予約タブは top を使わず、時間割を真ん中の列の一番上（承認待ちの予約より前）に置く。日ごとのカード（時間割の中に畳む）と予約サイトも残す", () => {
     assert.doesNotMatch(page, /\btop=/);
     const tt = page.indexOf("<WeekTimetable data={data} />");
     assert.ok(tt > page.indexOf("right={"), "右の列（予約チャット）は right のまま");
     assert.ok(tt > 0 && tt < page.indexOf('aria-labelledby="res-approvals"'), "台帳 → 承認待ちの予約");
     assert.ok(page.indexOf('aria-labelledby="res-approvals"') < page.indexOf('aria-labelledby="res-steps"'), "承認待ちの予約 → AI の手順");
     assert.ok(page.indexOf('aria-labelledby="res-steps"') < page.indexOf("<BookingSite data={data} />"), "AI の手順 → 予約サイト");
-    assert.match(page, /<Ledger data=\{data\} className="ledger-cards" \/>/);
+    assert.match(read("src/app/reservations/WeekTimetable.tsx"), /<LedgerDays data=\{data\} \/>/);
     assert.match(page, /<BookingSite data=\{data\} \/>/);
-    assert.match(page, /rightFirstOnPhone/);
+    assert.match(page, /rightMidOnPhone/);
+    assert.doesNotMatch(page, /rightFirstOnPhone/);
   });
 
   test("TabFrame の top の口は残す（渡したタブだけ横いっぱい。渡さないタブは今までどおり main の中に承認待ち・見出しを1つずつ）", () => {
@@ -266,12 +267,11 @@ describe("3. 予約タブの並び（PC は真ん中の列の一番上・右の�
     assert.match(css, /\.page\.has-top > \.page-top \{ grid-column: 1 \/ -1;/);
   });
 
-  test("PC（1024px 以上）は時間割を出してカードを隠す。スマホは時間割を隠し、予約チャットが上の並び（承認待ち・見出し → 右の列）", () => {
-    assert.match(css, /\.ledger-timetable \{ display: none; \}/);
-    const pc = css.slice(css.indexOf("/* 時間割（PC）と日ごとのカード（スマホ）の出し分け */"));
-    assert.match(pc, /@media \(min-width: 1024px\) \{\s*\.ledger-timetable \{ display: block;/);
-    assert.match(pc, /\.ledger\.ledger-cards \{ display: none; \}/);
-    assert.match(css, /\.page\.right-first-sp > \.page-right \{ order: -1; \}/);
+  test("時間割は PC もスマホも出す。日ごとのカードはスマホだけ（PC は隠す）", () => {
+    assert.match(css, /\.ledger-timetable \{ display: block;/);
+    assert.doesNotMatch(css, /\.ledger-timetable \{ display: none; \}/);
+    const pc = css.slice(css.indexOf("/* 時間割は PC もスマホも出す。"));
+    assert.match(pc, /@media \(min-width: 1024px\) \{\s*\.ledger-cards-fold \{ display: none; \}/);
     // PC は日ごとのカードを出さないので、予約サイトの横に空いた列を作らない（has-top の時だけの決まりも外した）
     assert.doesNotMatch(css, /\.book-pair \{ grid-template-columns: minmax\(0, 1fr\) minmax\(0, 280px\); \}/);
     assert.doesNotMatch(css, /\.page\.has-top \.book-pair/);

@@ -43,19 +43,18 @@ const headings = getKarteHeadings();
 
 // ---------------------------------------------------------------- A. 見る人が困る所
 
-describe("A1. スマホで予約タブを開くと、予約チャットがページの上（承認待ちと見出しのすぐ下）", () => {
-  test("予約タブは rightFirstOnPhone で包み、TabFrame はその時だけ right-first-sp の札を付ける", () => {
-    assert.match(read("src/app/reservations/page.tsx"), /<TabPage[\s\S]*?rightFirstOnPhone[\s\S]*?right=\{/);
+describe("A1. スマホで右の列をページの上に出す口（rightFirstOnPhone）は経理タブだけ（予約タブは直しL で台帳を上に。rightMidOnPhone）", () => {
+  test("経理タブは rightFirstOnPhone で包み、TabFrame はその時だけ right-first-sp の札を付ける。予約タブは使わない", () => {
     const frame = read("src/components/TabFrame.tsx");
     assert.match(frame, /rightFirstOnPhone \? "page right-first-sp" : "page"/);
-    // 経理タブも、スマホで freee の欄（右の列）をページの上に出すので同じ口を使う（UI4）
+    // 経理タブは、スマホで freee の欄（右の列）をページの上に出すので同じ口を使う（UI4）
     assert.match(read("src/app/accounting/page.tsx"), /<TabPage tab="accounting"[\s\S]*?rightFirstOnPhone>/);
-    // ほかのタブは今のまま（札を付けない）
-    for (const tab of ["home", "karte", "ads", "posts", "rules", "todo"])
+    // ほかのタブは今のまま（札を付けない）。予約タブはスマホで台帳を先に出すので使わない（直しL）
+    for (const tab of ["home", "karte", "ads", "posts", "rules", "todo", "reservations"])
       assert.doesNotMatch(read(`src/app/${tab}/page.tsx`), /rightFirstOnPhone/, tab);
   });
 
-  test("CSS：スマホ（1024px より狭い）だけ、承認待ち → 見出し → 右の列（予約チャット）→ ページの中身 の順", () => {
+  test("CSS：スマホ（1024px より狭い）だけ、承認待ち → 見出し → 右の列 → ページの中身 の順（経理タブ）", () => {
     const css = read("src/app/globals.css");
     const block = css.match(/@media \(max-width: 1023\.98px\) \{([\s\S]*?)\n\}/)?.[1] ?? "";
     assert.match(block, /\.page\.right-first-sp > \.page-main \{ display: contents; \}/);

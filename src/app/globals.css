@@ -145,6 +145,17 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
   .page.right-after-sp > .page-main > .tab-switch-fold { order: 1; }
 }
 
+/* スマホ（1列）で右の列を真ん中の列の途中に出すタブ（予約タブ。TabFrame の rightMidOnPhone）：
+   承認待ち → 見出し → 札の無い欄（DOM の順）→ 右の列 → 札 after-right-sp の欄（DOM の順）→ 表示スイッチ。包まないので、PC の並びは今までどおり */
+@media (max-width: 1023.98px) {
+  .page.right-mid-sp > .page-main { display: contents; }
+  .page.right-mid-sp > .page-main > * { order: -1; }
+  .page.right-mid-sp > .page-main > .page-head { margin: 0; }
+  .page.right-mid-sp > .page-right { order: 0; }
+  .page.right-mid-sp > .page-main > .after-right-sp { order: 1; }
+  .page.right-mid-sp > .page-main > .tab-switch-fold { order: 1; }
+}
+
 
 /* ---- 左のタブ ---- */
 
@@ -1201,11 +1212,11 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
   .page.right-first-sp > .page-top { order: -2; }
 }
 
-/* 時間割（PC）と日ごとのカード（スマホ）の出し分け */
-.ledger-timetable { display: none; }
+/* 時間割は PC もスマホも出す。日ごとのカードは、スマホだけ時間割の下に畳んで出す（PC は隠す） */
+.ledger-timetable { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px; min-width: 0; }
+.ledger-cards-fold { margin-top: 12px; }
 @media (min-width: 1024px) {
-  .ledger-timetable { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px; min-width: 0; }
-  .ledger.ledger-cards { display: none; }
+  .ledger-cards-fold { display: none; }
   .ledger-timetable { margin-bottom: 16px; }
 }
 
@@ -1336,6 +1347,49 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .tt-band.short .customer { flex-wrap: nowrap; }
 .tt-band.short .tt-band-top { flex: none; }
 .tt-band.short .tt-band-menu { overflow: hidden; text-overflow: ellipsis; display: block; }
+
+/* スマホの列の頭・30分の点線・週の動かし方の短い文字は、PC では出さない */
+.tt-day-sp, .tt-half, .wk-sp { display: none; }
+.tt-head.holiday { background: color-mix(in srgb, var(--warn) 16%, var(--line)); }
+
+/* スマホ（1024 より狭い時）の時間割：同じ部品を画面の幅に詰める（390 の幅で7列が収まり、ページも台帳の箱も横に動かない）。
+   縦は営業時間だけ（30分 = 44px。押せる大きさ）。縦はページと一緒に動く。列の頭は曜日と日にち（今日は丸）・件数と棒ははぶく。
+   帯の中は名字（＋様）だけ。入らなければ折り返して切る（時刻・メニュー名・札ははぶく。帯を押すと予約の1枚で分かる）。
+   確定（実線）と仮押さえ（点線のしま）の違いは残す。押せる所は 30分のマスそのもの（列の幅いっぱい・マスの高さ） */
+@media (max-width: 1023.98px) {
+  .ledger-timetable { padding: 10px 8px; }
+  .tt-wrap { overflow-x: hidden; }
+  .tt {
+    --tt-hour: 88px;
+    grid-template-columns: 30px repeat(7, minmax(0, 1fr));
+    column-gap: 2px;
+    min-width: 0;
+  }
+  .tt-head { padding: 4px 0 6px; align-items: center; border-radius: var(--radius-xs) var(--radius-xs) 0 0; }
+  .tt-head .tt-date, .tt-head .tt-count, .tt-head .minibar, .tt-head .tt-off-label { display: none; }
+  .tt-day-sp { display: flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1; }
+  .tt-dow { font-size: 0.72rem; color: var(--muted); }
+  .tt-dnum { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; font-weight: 700; font-size: 0.9rem; }
+  .tt-head.today { background: transparent; box-shadow: none; }
+  .tt-head.today .tt-dnum { background: var(--accent); color: var(--on-accent); }
+  .tt-head.today .tt-dow { color: var(--accent); font-weight: 700; }
+  .tt-head.closed .tt-dow, .tt-head.closed .tt-dnum { color: var(--muted); }
+  .tt-tick { right: 3px; font-size: 0.62rem; }
+  /* 1時間ごとに実線、30分に点線（tt-half） */
+  .tt-col {
+    border-radius: 0;
+    background: repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px var(--tt-hour)), var(--surface);
+  }
+  .tt-col.closed { background: repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px var(--tt-hour)), color-mix(in srgb, var(--line) 70%, var(--bg)); }
+  .tt-col.today { border-width: 1px; border-top-width: 0; border-color: var(--accent); }
+  .tt-half { display: block; position: absolute; left: 0; right: 0; height: 0; border-top: 1px dotted var(--line); pointer-events: none; }
+  .tt-closed-label { top: 8px; font-size: 0.68rem; line-height: 1.2; padding: 0 1px; }
+  .tt-band { padding: 1px 1px 1px 2px; border-left-width: 3px; font-size: 0.66rem; line-height: 1.15; margin-top: 0; }
+  .tt-band.hold { border-left-width: 3px; }
+  .tt-band .tt-band-top, .tt-band .tt-band-menu, .tt-band.short .tt-band-menu { display: none; }
+  .tt-band.short { flex-direction: column; align-items: flex-start; white-space: normal; }
+  .tt-band .customer, .tt-band.short .customer { display: block; flex-wrap: wrap; font-weight: 600; overflow-wrap: anywhere; }
+}
 
 /* ---- AI の手順の印（✓ 通った／! 断った・気をつける／→ 次にしたこと） ---- */
 
@@ -1966,6 +2020,69 @@ h3.section-title { font-size: 1rem; }
 }
 .sheet-foot p { margin: 0; }
 
+/* 「予約を入れる」の3つの段（OwnerBookSheet.tsx）。スマホは画面いっぱいの1枚、PC は今の小さな窓の中で段が変わる */
+@media (max-width: 1023.98px) {
+  .sheet.owner-sheet { height: 100vh; height: 100dvh; max-height: none; border-radius: 0; border: 0; padding-top: calc(12px + env(safe-area-inset-top)); }
+}
+@media (min-width: 1024px) {
+  .sheet.owner-sheet { height: min(720px, 88vh); }
+}
+.sheet.owner-sheet { display: flex; flex-direction: column; }
+.owner-sheet .sheet-body { flex: 1 0 auto; }
+.owner-sheet .sheet-foot { margin-top: auto; }
+.owner-sheet .sheet-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }
+.owner-sheet .sheet-title { justify-content: center; text-align: center; }
+.obs-steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; font-size: 0.8rem; color: var(--muted); }
+.obs-steps li { flex: 1 1 0; min-width: 0; padding: 4px 2px; border-bottom: 3px solid var(--line); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.obs-steps li.past { border-bottom-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.obs-steps li.on { border-bottom-color: var(--accent); color: var(--accent); font-weight: 700; }
+.obs-when { margin: 0; font-size: 1.02rem; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.obs-order { display: flex; flex-wrap: wrap; gap: 6px; }
+.obs-order .btn { min-height: 44px; }
+.obs-order .btn.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.obs-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.obs-row, .obs-menu {
+  font: inherit;
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 6px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+.obs-row:focus-visible, .obs-menu:focus-visible { background: var(--accent-soft); outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (hover: hover) { .obs-row:hover, .obs-menu:hover { background: var(--accent-soft); } }
+.obs-row.on, .obs-menu.on { background: var(--accent-soft); font-weight: 700; box-shadow: inset 3px 0 0 var(--accent); }
+.obs-row .customer { flex: 0 1 auto; min-width: 0; }
+.obs-since { margin-left: auto; color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+.obs-since.first { color: var(--text); border: 1px solid var(--muted); border-radius: var(--radius-pill); padding: 0 8px; font-size: 0.78rem; }
+.obs-kana-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 32px; gap: 4px; align-items: start; }
+.obs-kana-group { scroll-margin-top: 64px; }
+.obs-kana-head { margin: 8px 0 0; padding: 2px 8px; font-size: 0.85rem; background: var(--bg); color: var(--muted); border-radius: var(--radius-xs); scroll-margin-top: 64px; }
+.obs-kana-index { position: sticky; top: 56px; display: flex; flex-direction: column; gap: 2px; }
+.obs-kana-btn { font: inherit; font-size: 0.85rem; font-weight: 700; min-height: 30px; padding: 0; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--accent); cursor: pointer; }
+.obs-kana-btn:hover:not(:disabled), .obs-kana-btn:focus-visible { background: var(--accent-soft); }
+.obs-kana-btn:disabled { color: var(--muted); opacity: 0.4; cursor: default; }
+/* スマホ：右の索引は1つ 44×44px 以上（指で押せる大きさ。10個で 440px） */
+@media (max-width: 1023.98px) {
+  .obs-kana-wrap { grid-template-columns: minmax(0, 1fr) 44px; }
+  .obs-kana-index { gap: 0; }
+  .obs-kana-btn { min-width: 44px; min-height: 44px; font-size: 0.95rem; }
+}
+.obs-menu-head { margin: 6px 0 0; font-size: 0.9rem; color: var(--muted); }
+.obs-swatch { flex: none; width: 14px; height: 14px; border-radius: var(--radius-3xs); background: var(--menu, var(--menu-none)); }
+.obs-menu-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.obs-menu-nums { flex: none; display: flex; flex-direction: column; align-items: flex-end; font-size: 0.85rem; line-height: 1.3; }
+.obs-decide-what { font-weight: 700; overflow-wrap: anywhere; }
+.obs-nowrap { white-space: nowrap; }
+
 /* 台帳の予約を押して開く1枚（ReservationSheet.tsx）。形は「予約を入れる」の1枚と同じ */
 .sheet-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 0; align-items: center; }
 .sheet-facts dt { color: var(--muted); font-size: 0.9rem; }
@@ -2039,6 +2156,18 @@ h3.section-title { font-size: 1rem; }
 .week-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0; }
 .btn.week-nav-btn { min-height: 44px; padding: 6px 14px; }
 .week-nav-label { font-size: 1.05rem; margin-left: 4px; }
+/* スマホ：1行に「< 先週」「11月2日〜8日」「来週 >」。「今日」は今日の週でない時だけ下の行に（同じボタン・同じ動き） */
+@media (max-width: 1023.98px) {
+  .wk-pc { display: none; }
+  .wk-sp { display: inline; }
+  .week-nav { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "prev label next" "today today today"; align-items: center; gap: 6px; }
+  .week-nav-prev { grid-area: prev; }
+  .week-nav-next { grid-area: next; }
+  .week-nav-today { grid-area: today; justify-self: center; }
+  .week-nav-today:disabled { display: none; }
+  .week-nav-label { grid-area: label; text-align: center; margin: 0; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btn.week-nav-btn { padding: 6px 10px; }
+}
 .tt-head.outside, .tt-col.outside, .day.outside { opacity: 0.45; }
 .month-cal { min-width: 0; }
 .month-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
