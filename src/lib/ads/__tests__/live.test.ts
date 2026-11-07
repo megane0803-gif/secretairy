@@ -2184,10 +2184,11 @@ describe("README", () => {
     const sec = readme.slice(readme.indexOf("#### だれでも試せる道（直しU。合言葉なし）"), readme.indexOf("- **何を**（オーナーの操作）"));
     for (const w of ["元の形に戻してから", "承認した1件だけ", "テスト用アカウントの中だけ・店の広告には届かない理由", "オーナーの「送る」との違い", "種類（止める・外す・足す）と番号", "付けない（次の人が元に戻すため）", "人を確かめる物ではありません", "x-real-ip", "生の IP は Redis にもログにも残しません"])
       assert.ok(sec.includes(w), w);
-    // 直しW：直しU の後の本番で 503 だったこと・直した所・Merge の後に確かめること（まだ確かめていない・次の日の最初の1回）
+    // 直しW：直しU の後の本番で 503 だったこと・直した所・Merge の後の本番の結果（承認BOXからの1件は 200・日付が変わった後の最初の1回はまだ）
     assert.doesNotMatch(sec, /LINE・試験10問・広告の[^。]*にも効きます/, "全部に効くとは書かない");
-    for (const w of ["503 no-store", "置けた時は作った値をそのまま使い", "`upstash-sync-token`", "同じ置き場の中で、書いた直後に読む時だけ", "別々に作った置き場の間では引き継ぎません", "省いていません", "INCR と EXPIRE", "承認BOXから1件承認して、try が通った", "**まだ確かめていません**", "次の日に確かめます"])
+    for (const w of ["503 no-store", "置けた時は作った値をそのまま使い", "`upstash-sync-token`", "同じ置き場の中で、書いた直後に読む時だけ", "別々に作った置き場の間では引き継ぎません", "省いていません", "INCR と EXPIRE", "直しW を Merge した後の本番（2026-11-08 01:26・日本時間）", "`/api/ads/live/try` は 200", "元の8語にその1語を足した形・除外0件", "本番では次の日にならないと見られないので、**まだ確かめていません**"])
       assert.ok(sec.includes(w), w);
+    assert.doesNotMatch(sec, /ここに書きます/, "確かめた後は「これから書く」と書かない");
     assert.doesNotMatch(sec, /100%|必ず|すぐ反映/);
     const guard = readme.slice(readme.indexOf("### だれでも呼べる窓口の守り（今の作り）"), readme.indexOf("### 動かし方の手順"));
     assert.match(guard, /だれでも試す（`\/api\/ads\/live\/try`。直しU）/);
