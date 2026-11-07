@@ -15,7 +15,7 @@ import { loadSyncResult } from "../connectLoad";
 import { featuredWords } from "../featured";
 import { gaqlString, VERIFY_QUERY } from "../live/api";
 import { customerIdFrom, liveEnvFrom, LIVE_ENV, serviceKeyFrom } from "../live/env";
-import { handleLiveRead, handleLiveSend, handleLiveSetup, handleLiveStatus, handleLiveTry, keywordProblem, LIVE_KEY, planTry, scrub, sourceHash, sourceIp, type LiveDeps } from "../live/server";
+import { handleLiveRead, handleLiveSend, handleLiveSetup, handleLiveStatus, handleLiveTry, keywordProblem, LIVE_KEY, planTry, scrub, sourceBucket, sourceHash, sourceIp, type LiveDeps } from "../live/server";
 import { accessToken, clearTokenCache, signedJwt } from "../live/token";
 import { driftOf, LOST_MESSAGE, outcomeText, RESET_BY_TRY_NOTE } from "../live/client";
 import { approvedNotice } from "../live/notice";
@@ -1837,6 +1837,65 @@ describe("直しU：だれでも承認したら試す（元の形に戻す → 1
     clock += 2 * 86_400_000 + 1000;
     assert.equal(await mem.get(LIVE_KEY.trySalt(DAY)), null, "前の日の塩は消える");
     assert.equal(mem.keys().filter((k) => k.includes(`:${DAY}`)).length, 0, "前の日の数の鍵も消える");
+  });
+
+  test("上限は同時に1回の印を取る前に確かめる：こえた呼び出しは印を取らない・続いてもオーナーの送るは 409 にならない・409 でも数は戻さない", async () => {
+    const w = await prepared();
+    const base = w.store!;
+    const lockSets: string[] = [];
+    w.deps.store = { ...base, set: async (k, v, o) => (k === LIVE_KEY.lock && lockSets.push(v), base.set(k, v, o)) };
+    await base.set(LIVE_KEY.tryDay(DAY), String(T.day), { ex: 86_400 });
+    const n = w.google.mutateCalls.length;
+    const r = await tryBody(w, { kind: "stop", no: 7 });
+    assert.equal(r.status, 429);
+    assert.deepEqual(lockSets, [], "上限をこえた呼び出しは印の set を呼ばない");
+    // 上限をこえた呼び出しが続いても（オーナーの送ると同時に来ても）、オーナーの送るは 409 にならない
+    const results = await Promise.all([
+      ...Array.from({ length: 12 }, (_, i) => handleLiveTry(tryReq({ kind: "stop", no: 7 }, { "x-real-ip": `198.51.100.${i}` }), w.deps).then((x) => x.status)),
+      handleLiveSend(sendReq(payloadOf([STOP])), w.deps).then((x) => x.status),
+      ...Array.from({ length: 12 }, (_, i) => handleLiveTry(tryReq({ kind: "stop", no: 3 }, { "x-real-ip": `198.51.100.${50 + i}` }), w.deps).then((x) => x.status)),
+    ]);
+    const send = results[12];
+    assert.equal(send, 200, "オーナーの送るは動く");
+    assert.ok(results.filter((_, i) => i !== 12).every((x) => x === 429));
+    assert.equal(lockSets.length, 1, "印を取ったのはオーナーの送るの1回だけ");
+    assert.equal(w.google.mutateCalls.filter((m) => m.ops.some((o) => JSON.stringify(o).includes("remove"))).length, 0, "試しは書いていない");
+    assert.ok(w.google.mutateCalls.length > n);
+    // 印が取れずに 409 になった時も、数は戻さない（呼んだ回数として数える）
+    const w2 = await prepared();
+    await w2.store!.set(LIVE_KEY.lock, "owner-is-sending", { ex: live.lockSeconds });
+    assert.equal((await tryBody(w2, { kind: "stop", no: 7 })).status, 409);
+    const mem = w2.store as Mem;
+    const src = mem.keys().filter((k) => k.startsWith("ads:live:try:src:"));
+    assert.equal(src.length, 1);
+    assert.equal(await mem.get(src[0]), "1");
+    assert.equal(await mem.get(LIVE_KEY.tryDay(DAY)), "1");
+  });
+
+  test("同じ送り元：IPv6 は前の半分（/64）でまとめ、IPv4 は1つの番地で数える", async () => {
+    assert.equal(sourceBucket("2001:db8:1:2::1"), sourceBucket("2001:db8:1:2:aaaa:bbbb:cccc:dddd"));
+    assert.equal(sourceBucket("2001:0DB8:0001:0002::ffff"), "2001:db8:1:2::/64");
+    assert.equal(sourceBucket("[2001:db8:1:2::9]"), "2001:db8:1:2::/64");
+    assert.notEqual(sourceBucket("2001:db8:1:2::1"), sourceBucket("2001:db8:1:3::1"));
+    assert.equal(sourceBucket("::ffff:198.51.100.4"), "198.51.100.4", "IPv4 を写した IPv6 は IPv4 として");
+    assert.equal(sourceBucket("203.0.113.7"), "203.0.113.7");
+    assert.notEqual(sourceBucket("203.0.113.7"), sourceBucket("203.0.113.8"));
+    // 窓口で：同じ /64 の違う IPv6 は同じ送り元の数になり、上限で止まる
+    const w = await prepared();
+    const mem = w.store as Mem;
+    for (let i = 0; i < T.perSourceDay; i++) {
+      clock += 61_000;
+      assert.equal((await tryBody(w, { kind: "stop", no: 7 }, { "x-real-ip": `2001:db8:1:2:${(i + 1).toString(16)}::${i + 7}` })).status, 200, `${i}`);
+    }
+    assert.equal(mem.keys().filter((k) => k.startsWith("ads:live:try:src:")).length, 1);
+    clock += 61_000;
+    const over = await tryBody(w, { kind: "stop", no: 7 }, { "x-real-ip": "2001:db8:1:2:ffff:ffff:ffff:fffe" });
+    assert.equal(over.status, 429);
+    assert.match(over.b.message, /同じ送り元/);
+    // 違う /64 は別の送り元
+    clock += 61_000;
+    assert.equal((await tryBody(w, { kind: "stop", no: 7 }, { "x-real-ip": "2001:db8:1:3::1" })).status, 200);
+    for (const k of mem.keys()) assert.ok(!k.includes("2001:db8"), k);
   });
 
   test("KV が使えない時は書かない（置き場が無い・塩を置けない・戻した時刻を置けない）", async () => {

@@ -802,6 +802,36 @@ export function sourceIp(request: Request): string {
   return vf ? vf.slice(0, 64) : "unknown";
 }
 
+/**
+ * 数える単位（送り元の束）。IPv4 は1つの番地のまま。IPv6 は前の半分（/64）でまとめる
+ * （1人が手元で後ろの半分を変えて、同じ送り元の上限をすり抜けられないように）。IPv4 を写した IPv6（::ffff:a.b.c.d）は IPv4 として数える。
+ * 読めない形は、そのままの文字を1つの束にする（ハッシュにするので置き場には生の文字は残らない）。
+ */
+export function sourceBucket(ip: string): string {
+  const s = ip.trim().replace(/^\[|\]$/g, "").split("%")[0].toLowerCase();
+  if (!s.includes(":")) return s;
+  const v4tail = s.match(/^(.*:)(\d{1,3}(?:\.\d{1,3}){3})$/);
+  let text = s;
+  if (v4tail) {
+    const oct = v4tail[2].split(".").map(Number);
+    if (oct.some((n) => n > 255)) return s;
+    if (/^(0{0,4}:){0,5}:?ffff:$/.test(v4tail[1]) || v4tail[1] === "::ffff:") return v4tail[2];
+    text = `${v4tail[1]}${((oct[0] << 8) | oct[1]).toString(16)}:${((oct[2] << 8) | oct[3]).toString(16)}`;
+  }
+  const halves = text.split("::");
+  if (halves.length > 2) return s;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const fill = 8 - head.length - tail.length;
+  if (halves.length === 1 ? fill !== 0 : fill < 1) return s;
+  const all = [...head, ...Array<string>(halves.length === 2 ? fill : 0).fill("0"), ...tail];
+  if (all.length !== 8 || all.some((h) => !/^[0-9a-f]{1,4}$/.test(h))) return s;
+  return `${all
+    .slice(0, 4)
+    .map((h) => parseInt(h, 16).toString(16))
+    .join(":")}::/64`;
+}
+
 /** 日ごとの塩（サーバーが作って KV に置く。2日で消える）。置けない・読めない時は StoreDown */
 async function saltOf(d: LiveDeps, date: string): Promise<string> {
   const store = d.store!;
@@ -817,12 +847,16 @@ export function sourceHash(salt: string, ip: string): string {
   return createHash("sha256").update(`${salt}\n${ip}`).digest("hex").slice(0, 32);
 }
 
-/** 試す窓口の上限（先に足してから比べる）。同じ送り元 → 1分 → 1日の順で、こえたらそこで止める */
+/**
+ * 試す窓口の上限（先に足してから比べる）。同じ送り元 → 1分 → 1日の順で、こえたらそこで止める。
+ * 同時に1回の印を取る前に数える（上限をこえた呼び出しは印を取らない＝連打でオーナーの「用意」「送る」やほかの人の試しを 409 で止めない）。
+ * 印が取れずに 409 になった時も、数は戻さない（呼んだ回数として数える）。
+ */
 async function underTryLimits(d: LiveDeps, request: Request): Promise<Response | null> {
   const store = d.store!;
   const t = d.settings.try;
   const date = today(d);
-  const hash = sourceHash(await saltOf(d, date), sourceIp(request));
+  const hash = sourceHash(await saltOf(d, date), sourceBucket(sourceIp(request)));
   if ((await kv(() => store.incr(LIVE_KEY.trySource(date, hash), DAY_SECONDS))) > t.perSourceDay)
     return fail("limit", `今日の試しは、同じ送り元から${t.perSourceDay}回までです。明日また試せます`, 429);
   if ((await kv(() => store.incr(LIVE_KEY.tryMinute(Math.floor(d.now() / 60_000)), 120))) > t.minute)
@@ -841,15 +875,10 @@ export async function handleLiveTry(request: Request, d: LiveDeps): Promise<Resp
     const it = readTryItem(body, d);
     if (!it.ok) return fail("bad-request", it.message, 400);
     if (!d.store) return fail("no-store", NO_STORE_MESSAGE, 503);
-    return withLock(
-      d,
-      async () => {
-        const over = await underTryLimits(d, request);
-        if (over) return over;
-        return tryOne(d, it.item);
-      },
-      TRY_BUSY_MESSAGE,
-    );
+    // 上限は印を取る前に（こえていたら印を取らずに 429）
+    const over = await underTryLimits(d, request);
+    if (over) return over;
+    return withLock(d, () => tryOne(d, it.item), TRY_BUSY_MESSAGE);
   });
 }
 
