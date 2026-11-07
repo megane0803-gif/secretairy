@@ -43,9 +43,10 @@ export type ShopSettings = {
   holidayLimits?: { max: number; aheadDays: number };
   /**
    * ルールのタブの「メニュー」でオーナーが直せる幅（時間の下限と上限（分）・値段の上限（円））。
-   * 時間と最終受付のきざみは slotMinutes（予約の枠のきざみ）。直した分はブラウザの中（menuEdits.ts）
+   * 時間と最終受付のきざみは slotMinutes（予約の枠のきざみ）。直した分はブラウザの中（menuEdits.ts）。
+   * maxAdded = オーナーが足せるメニューの数の上限・maxNameChars = 足すメニューの名前の字数の上限
    */
-  menuLimits?: { minMinutes: number; maxMinutes: number; maxPrice: number };
+  menuLimits?: { minMinutes: number; maxMinutes: number; maxPrice: number; maxAdded?: number; maxNameChars?: number };
 };
 
 export type Menu = {

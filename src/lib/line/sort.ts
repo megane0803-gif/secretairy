@@ -7,7 +7,7 @@
 import { readRequest } from "../ai/script";
 import { comboIdOf } from "../combo";
 import type { CalDay } from "../calendar";
-import { lastStartOf } from "../calendar";
+import { menuDataLines } from "../ai/menuData";
 import { instructionsFor } from "../rules/prompt";
 import type { Rule } from "../rules/types";
 import type { Menu, ShopSettings } from "../settings";
@@ -113,8 +113,8 @@ export function sortSystem(ctx: SortContext): string {
     "",
     "# いまの様子",
     `- 今日：${ctx.today.date}（${ctx.today.label}）。いまの時刻：${ctx.now.time}（店の時間帯）。「明日」は今日の次の日。`,
-    "- メニュー（id・名前・時間・最終受付）：",
-    ...ctx.menus.map((m) => `  - ${m.id}：${m.name}・${m.minutes}分・最終受付 ${lastStartOf(m, close)}`),
+    // メニューの名前（オーナーが足した物も）は、お店のデータとして渡す（menuData.ts）
+    ...menuDataLines(ctx.menus, close),
   ].join("\n");
 }
 
