@@ -91,7 +91,8 @@ describe("3. どの画面も同じ1つの数を使う", () => {
     const useBook = read("src/lib/book/useBook.ts");
     assert.match(useBook, /const \{ seats \} = useCapacity\(\);/);
     assert.match(useBook, /withSeats\(data\.shop, seats\)/);
-    assert.match(useBook, /assembleBook\(\{ shop, menus: data\.menus/);
+    // メニューも重ねた物（ルールのタブで直した時間・値段・最終受付。menuEdits.ts）を渡す
+    assert.match(useBook, /assembleBook\(\{ shop, menus, customers: data\.customers/);
     const files = [
       "src/app/reservations/BookingSite.tsx",
       "src/app/reservations/Ledger.tsx",

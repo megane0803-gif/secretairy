@@ -3,6 +3,7 @@
 //   （画面は「返事が途中で切れました。もう一度送ってください。」と出す。受け取った仮押さえがあれば、それも書く）
 // - 止めた返事（お客様を切り替えた・最初に戻した）→ "stopped"（何も出さない）
 // - 仮押さえは、返事を始めた時の台帳の印（epoch）と今の印が同じ時だけ入れる（あいだに「最初に戻す」があれば捨てる）。
+//   メニューの設定の印（menuEdits.ts の menusMark）も同じ：あいだにメニューを直したら捨てる（sameMenus が false）。
 //   同じお客様・同じメニュー・同じ日時の承認待ちがもうあれば入れない（送り直しで2つにしない。book/state.ts の sameHold）。
 
 import type { BrowserWrite } from "../browser";
@@ -66,12 +67,17 @@ export async function readReserveStream(body: ReadableStream<Uint8Array>, onEven
 
 /**
  * 受け取った仮押さえを台帳に入れる。入れたら true。
- * 入れないのは：返事を始めた後に「最初に戻す」があった（印が違う）・同じ仮押さえがもうある・書けなかった。
+ * 入れないのは：返事を始めた後に「最初に戻す」があった（印が違う）・メニューを直した（sameMenus が false）・同じ仮押さえがもうある・書けなかった。
  */
-export function holdInto(update: (f: (s: BookState) => BookState) => BrowserWrite | void, h: HoldOffer, epoch: string | undefined): boolean {
+export function holdInto(
+  update: (f: (s: BookState) => BookState) => BrowserWrite | void,
+  h: HoldOffer,
+  epoch: string | undefined,
+  sameMenus: () => boolean = () => true,
+): boolean {
   let added = false;
   const w = update((s) => {
-    if (!sameEpoch(s, epoch) || sameHold(s, h)) return s;
+    if (!sameEpoch(s, epoch) || !sameMenus() || sameHold(s, h)) return s;
     const next = withHold(s, h);
     added = next !== s;
     return next;

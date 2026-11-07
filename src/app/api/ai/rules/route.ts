@@ -8,7 +8,8 @@ import { NoAiError } from "@/lib/ai/model";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
 import { claudeRuleReader } from "@/lib/rules/wordsClaude";
 import { parseRuleWordsRequest, RuleWordsRefusedError, runRuleWords, scriptRuleReader, type RuleReader, type RuleWordsResponse } from "@/lib/rules/words";
-import { getMenus, getRuleWordsAiSettings } from "@/lib/settings";
+import { readMenus } from "@/lib/menuEdits";
+import { getMenus, getRuleWordsAiSettings, getShop } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,10 @@ export async function POST(request: Request): Promise<Response> {
   }
   const parsed = parseRuleWordsRequest(body, ai.maxTextChars);
   if (!parsed.ok) return reply({ ok: false, code: "bad-request", message: parsed.reason }, 400);
-  const menus = getMenus().map((m) => ({ id: m.id, name: m.name }));
+  // 直したメニュー（ルールのタブ）：予約チャットと同じ確かめ方（id がそろっている・名前と色と includes は設定と同じ・数は幅の中）
+  const own = readMenus((body as Record<string, unknown>).menus, getMenus(), getShop());
+  if (!own.ok) return reply({ ok: false, code: "bad-request", message: own.reason }, 400);
+  const menus = own.value.map((m) => ({ id: m.id, name: m.name, minutes: m.minutes, ...(m.lastStart ? { lastStart: m.lastStart } : {}) }));
   try {
     // Claude は文を読むときに作る（🔒 の文は AI に送らずに断るので、鍵が無くても断れる）
     const reader: RuleReader = parsed.value.mode === "script" ? scriptRuleReader(menus) : { read: (req) => claudeRuleReader(ai.model).read(req) };

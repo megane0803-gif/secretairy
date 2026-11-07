@@ -13,6 +13,7 @@ import { withHolidays } from "../holidays";
 import { getShop, type ShopSettings } from "../settings";
 import { useCapacity } from "../useCapacity";
 import { useHolidays } from "../useHolidays";
+import { useMenus } from "../useMenus";
 import type { BookData } from "./data";
 import { updateBook } from "./store";
 import { assembleBook } from "./assemble";
@@ -55,11 +56,13 @@ export function useBookState() {
  * 画面で使う形：今日・起点・全部の予約・7日分・承認待ち・AI に送る台帳・カルテ。
  * shop は、店の設定に「同じ時間に受ける人数」（ルールのタブで変えた分）と「休みの日」（予約のページで決めた分）を重ねた物。
  * 数・受け付けるかの判定を使う所はみなこれを使う（最初の状態の予約の日付は休みの日を見ないので動かない。reservations.ts の seedAnchor）。
+ * data.menus は、設定のメニューに「メニュー」の欄（ルールのタブ）で直した時間・値段・最終受付を重ねた物。メニューを読む所はみなこれを通す（menuEdits.ts）。
  */
 export function useBook(data: BookData) {
   const minute = useMinute();
   const { seats } = useCapacity();
   const { dates: holidays } = useHolidays();
+  const { menus, mark: menusMark } = useMenus();
   const shop: ShopSettings = useMemo(() => withHolidays(withSeats(data.shop, seats), holidays), [data.shop, seats, holidays]);
   const now = useMemo(() => new Date(minute * 60_000), [minute]);
   const { state, update } = useBookState();
@@ -72,16 +75,19 @@ export function useBook(data: BookData) {
 
   const view = useMemo(() => {
     // 台帳を組み立てる1か所（book/assemble.ts。予約サイト・台帳から入れる・AI の仕事と同じ）
-    const { anchor, book, all, booked } = assembleBook({ shop, menus: data.menus, customers: data.customers }, state, today, nowIso);
+    const { anchor, book, all, booked } = assembleBook({ shop, menus, customers: data.customers }, state, today, nowIso);
     const kartes = allKartes(withSeedKarteEdits(resolveSeedKartes(data.seedKartes, all), state.seedKarteEdits), state.kartes);
     return { anchor, book, all, booked, kartes, visits: toVisits(kartes), pending: pendingApprovals(state, nowIso) };
-  }, [data, shop, state, today, nowIso]);
+  }, [data, shop, menus, state, today, nowIso]);
+  const bookData: BookData = useMemo(() => (shop === data.shop && menus === data.menus ? data : { ...data, shop, menus }), [data, shop, menus]);
 
   return {
     ...view,
     shop,
-    /** 店の設定に、同じ時間に受ける人数と休みの日を重ねた BookData（AI の仕事・LINE などにそのまま渡す） */
-    data: shop === data.shop ? data : { ...data, shop },
+    /** 店の設定に、同じ時間に受ける人数と休みの日を重ね、メニューに直した時間・値段・最終受付を重ねた BookData（AI の仕事・LINE などにそのまま渡す） */
+    data: bookData,
+    /** メニューの設定の印（直していなければ ""。予約チャットの返事を始めた時と比べる） */
+    menusMark,
     state,
     update,
     today,

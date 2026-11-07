@@ -4,6 +4,7 @@
 import { HOLIDAYS_KEY } from "../holidays";
 import { SITE_STOPS_KEY } from "../book/siteStops";
 import { CAPACITY_KEY } from "../capacity";
+import { MENUS_KEY } from "../menuEdits";
 import assert from "node:assert/strict";
 import { after, before, describe, test } from "node:test";
 import { register, parseAccounting, EMPTY_ACCOUNTING, withChoice, withAutoNext, sortCurrent, effectiveRules } from "../accounting/state";
@@ -85,10 +86,11 @@ describe("最初に戻す", () => {
     // 経理の freee（テスト事業所）の画面の記録（FREEE_KEY）も戻す。freee の中の記録は残る（§1.8.1）
     assert.deepEqual(
       w.map((x) => x.key).sort(),
-      [ACCOUNTING_KEY, DAILY_KEY, ADS_KEY, BOOK_KEY, JOBS_KEY, POSTS_KEY, CAPACITY_KEY, FREEE_KEY, HOLIDAYS_KEY, SITE_STOPS_KEY].sort(),
+      [ACCOUNTING_KEY, DAILY_KEY, ADS_KEY, BOOK_KEY, JOBS_KEY, POSTS_KEY, CAPACITY_KEY, FREEE_KEY, HOLIDAYS_KEY, SITE_STOPS_KEY, MENUS_KEY].sort(),
     );
     assert.equal(w.find((x) => x.key === HOLIDAYS_KEY)!.value, null, "休みの日は最初の状態（無し）に戻る");
     assert.equal(w.find((x) => x.key === SITE_STOPS_KEY)!.value, null, "予約サイトで止めた時間は最初の状態（無し）に戻る");
+    assert.equal(w.find((x) => x.key === MENUS_KEY)!.value, null, "直したメニュー（時間・値段・最終受付）は設定の値に戻る");
     assert.equal(w.find((x) => x.key === FREEE_KEY)!.value, null);
     assert.equal(w.find((x) => x.key === CAPACITY_KEY)!.value, null, "同じ時間に受ける人数は設定の数に戻る");
     assert.equal(w.find((x) => x.key === POSTS_KEY)!.value, null);

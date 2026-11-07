@@ -41,6 +41,11 @@ export type ShopSettings = {
   ownerHolidays?: string[];
   /** 休みの日の上限（決められる数・何日先まで出すか） */
   holidayLimits?: { max: number; aheadDays: number };
+  /**
+   * ルールのタブの「メニュー」でオーナーが直せる幅（時間の下限と上限（分）・値段の上限（円））。
+   * 時間と最終受付のきざみは slotMinutes（予約の枠のきざみ）。直した分はブラウザの中（menuEdits.ts）
+   */
+  menuLimits?: { minMinutes: number; maxMinutes: number; maxPrice: number };
 };
 
 export type Menu = {

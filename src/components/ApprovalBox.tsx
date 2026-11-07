@@ -74,7 +74,7 @@ export function ApprovalBox({
     const r = row.reservation;
     const customer = data.customers.find((c) => c.id === r.customerId);
     const surname = customer?.surname ?? "お客";
-    const what = `${surname}様 ${candidateLabel(data, r)}`;
+    const what = `${surname}様 ${candidateLabel(book.data, r)}`;
     if (how === "approve") {
       // 休みの日の仮押さえと、開始の時刻をもう過ぎた仮押さえは確定しない（LINE の承認のボタンも同じ。book/approve.ts）
       const blocked = approveBlocker(book.shop, book.now, r);
@@ -105,12 +105,12 @@ export function ApprovalBox({
         {approvalRowsView(queue.reservations, { nowMs, booked: book.booked }).map(({ row, notes, soon }) => {
           const r = row.reservation;
           const customer = data.customers.find((c) => c.id === r.customerId);
-          const menu = resolveMenu(data.menus, r.menuId);
+          const menu = resolveMenu(book.data.menus, r.menuId);
           // いまの台帳とルールで、もう一度確かめる（自分の仮押さえは数えない）
           const v = judgeSlot(
             {
               shop: book.shop,
-              menus: data.menus,
+              menus: book.data.menus,
               rules,
               booked: book.booked.filter((b) => b.id !== r.id),
               customer: { id: r.customerId, surname: customer?.surname ?? "", firstVisit: customer?.firstVisit ?? false },
@@ -127,7 +127,7 @@ export function ApprovalBox({
                 {customer && <CustomerName surname={customer.surname} />}
                 <strong>{menu?.name ?? r.menuId}</strong>
               </div>
-              <div className="approval-when num">{candidateLabel(data, r).replace(` ${menu?.name ?? r.menuId}`, "")}</div>
+              <div className="approval-when num">{candidateLabel(book.data, r).replace(` ${menu?.name ?? r.menuId}`, "")}</div>
               <p className="approval-why">{row.approval.reason}</p>
               <ApprovalRowNotes notes={notes} />
               {blocked ? (

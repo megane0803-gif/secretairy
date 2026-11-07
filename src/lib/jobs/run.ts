@@ -225,6 +225,8 @@ async function reserveJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
       seats: env.data.shop.seats,
       // 休みの日（予約のページで決めた分。画面の台帳と同じ）
       holidays: env.data.shop.ownerHolidays ?? [],
+      // 直したメニュー（ルールのタブ。画面の台帳と同じ data.menus）
+      menus: env.data.menus,
     };
     const events = await env.ask.reserve(body);
     const r: ReserveRound = { reply: "", candidates: [], hold: null, todo: false, noAi: false, busy: false, bad: null };

@@ -28,6 +28,8 @@ export type LineAskRequest = {
   seats?: number;
   /** オーナーが決めた休みの日（画面が予約のページの物を送る。予約チャットと同じ確かめ方） */
   holidays?: string[];
+  /** 直したメニュー（画面がルールのタブの物を送る。予約チャットと同じ確かめ方。無ければ設定のまま） */
+  menus?: Menu[];
 };
 
 export type LineAskResponse =
@@ -89,6 +91,7 @@ export function parseLineAskRequest(
       dayOffset: b.dayOffset,
       seats: b.seats,
       holidays: b.holidays,
+      menus: b.menus,
     },
     menus,
     { ...ai, maxMessageChars: maxChars },
@@ -106,6 +109,7 @@ export function parseLineAskRequest(
       dayOffset: r.value.dayOffset,
       ...(r.value.seats ? { seats: r.value.seats } : {}),
       ...(r.value.holidays?.length ? { holidays: r.value.holidays } : {}),
+      ...(r.value.menus ? { menus: r.value.menus } : {}),
     },
   };
 }
@@ -132,12 +136,14 @@ export async function runLineAsk(opts: {
       holds: [],
       seats: req.seats,
       holidays: req.holidays,
+      menus: req.menus,
     },
     shop,
     menus,
     opts.now,
   );
-  const sorted = await runSort(model, { shop: ctx.shop, menus, rules: req.rules, today: ctx.today, now: ctx.now }, req.text, opts.maxTokens);
+  // 振り分けも、直したメニュー（ctx.menus。確かめ済み）の時間と最終受付で
+  const sorted = await runSort(model, { shop: ctx.shop, menus: ctx.menus, rules: req.rules, today: ctx.today, now: ctx.now }, req.text, opts.maxTokens);
   const via = req.mode;
   if (sorted.kind !== "hold") return { ok: true, via, kind: sorted.kind };
 

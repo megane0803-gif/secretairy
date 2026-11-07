@@ -15,5 +15,6 @@
     "sun": { "open": "10:00", "close": "20:00" }
   },
   "closedDates": [],
-  "holidayLimits": { "max": 60, "aheadDays": 56 }
+  "holidayLimits": { "max": 60, "aheadDays": 56 },
+  "menuLimits": { "minMinutes": 30, "maxMinutes": 300, "maxPrice": 100000 }
 }

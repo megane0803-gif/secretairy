@@ -25,7 +25,7 @@ export function CustomerList({ data, headings, editLimits }: { data: BookData; h
   const [row, setRow] = useState<KanaRowId | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
-  const menuName = (id: string) => resolveMenu(data.menus, id)?.name ?? id;
+  const menuName = (id: string) => resolveMenu(book.data.menus, id)?.name ?? id;
   const list = filterCustomers(data.customers, query, row);
   const counts = new Map(KANA_ROWS.map((r) => [r.id, data.customers.filter((c) => kanaRowOf(c.kana) === r.id).length]));
   const person = data.customers.find((c) => c.id === open) ?? null;

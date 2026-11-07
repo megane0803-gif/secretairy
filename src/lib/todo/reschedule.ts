@@ -22,6 +22,7 @@ export type RescheduleFrom = { id: string; customerId: string; menuId: string; d
 export function rescheduleTitle(surname: string, from?: Pick<RescheduleFrom, "date" | "start" | "menuId"> | null): string {
   const base = `${guestName(surname)}に別の日時を案内`;
   if (!from) return base;
+  // メニューの名前だけ読む（名前はルールのタブで直せないので、直したメニューでも同じ文。時間は文に入れない）
   const menu = resolveMenu(getMenus(), from.menuId)?.name ?? from.menuId;
   return `${base}（${calDay(getShop(), from.date).label} ${from.start} ${menu}の代わり）`;
 }
