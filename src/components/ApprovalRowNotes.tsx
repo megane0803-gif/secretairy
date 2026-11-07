@@ -1,4 +1,4 @@
-// 承認の箱の予約の行に足す1行ずつ（外れるまでの残り・同じ日のほかの予約）。中身は src/lib/approvals.ts の approvalRowNotes の1か所で決め、
+// 承認BOXの予約の行に足す1行ずつ（外れるまでの残り・同じ日のほかの予約）。中身は src/lib/approvals.ts の approvalRowNotes の1か所で決め、
 // ここは種類ごとの見た目だけ。行に足す物を増やす時も、ここと approvals.ts だけを触る。
 
 import type { ApprovalRowNote } from "@/lib/approvals";

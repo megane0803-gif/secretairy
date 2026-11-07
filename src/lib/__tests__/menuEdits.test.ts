@@ -1,6 +1,6 @@
 // オーナーがメニューの時間・値段・最終受付を直す（ルールのタブの「メニュー」。menuEdits.ts）のテスト。Claude と LINE は呼ばず、決まった返事に置きかえる。
 // - おかしい値（時間・値段・最終受付）を断る。サーバーは id の足りない・重なる・知らない物と、名前・色・includes の違いを断る
-// - 直したメニューで、予約チャット・LINE の一言・AI の仕事・台帳から入れる・予約を直す・予約サイト・承認の箱の判定が変わる（画面とサーバー）
+// - 直したメニューで、予約チャット・LINE の一言・AI の仕事・台帳から入れる・予約を直す・予約サイト・承認BOXの判定が変わる（画面とサーバー）
 // - 設定にある組み合わせ（cut_color）は自分の時間のまま、設定に無い組み合わせ（cut+headspa）は中を足す
 // - 保存の前の一覧（重なり・閉店越え・最終受付）・もう一度押す・その間に予約が変わった時
 // - 保存できなかった時（日誌を書かない・もう一度押せば書ける）・直す前に始まった予約チャットの返事を入れない・「最初に戻す」で戻る・日誌
@@ -408,7 +408,7 @@ describe("4. 直したメニューで判定が変わる（カラー 90分 → 60
     assert.ok(others.every((o) => o.endMin <= placed.startMin || placed.endMin <= o.startMin), "重ならない枠に入る（同じ時間に受けるのは1人）");
   });
 
-  test("承認の箱（画面の judgeSlot）：60分の仮押さえは、90分に戻すと重なりで確定の前に止まる", () => {
+  test("承認BOX（画面の judgeSlot）：60分の仮押さえは、90分に戻すと重なりで確定の前に止まる", () => {
     const hold = { id: "h-ap", customerId: "c04", menuId: "color", date: SLOT.date, start: SLOT.start, heldAt: NOW.toISOString(), expiresAt: "2026-12-31T00:00:00.000Z", reason: "テスト" };
     const s = withHold(start, hold);
     const view = (menus: Menu[]) => ledgerView(dataWith(menus), s, NOW);

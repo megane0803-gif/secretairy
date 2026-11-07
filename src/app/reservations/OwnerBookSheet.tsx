@@ -7,8 +7,8 @@
 //      いくつか選ぶと組み合わせ。下に止めた「メニューを決める」（何も選んでいない時は押せない）
 //   ③ 確かめて入れる：日時（始まる時刻はここで変えられる）・お客様・メニュー・終わる時刻・確かめの結果・「入れる」
 // どの段でも上に「戻る」（①では閉じる）。②③の上に選んだ日時を1行。戻って選び直した時は、選び直した所から先を消す。
-// 確かめは予約チャット・承認の箱と同じ判定（judgeSlot）で、入れる前と、保存する直前（その時の台帳で）の2回（src/lib/book/owner.ts）。
-// 🔒 確定は人：オーナーが「入れる」を押した時だけ確定で台帳へ（承認の箱は通さない）。AI は使わない。
+// 確かめは予約チャット・承認BOXと同じ判定（judgeSlot）で、入れる前と、保存する直前（その時の台帳で）の2回（src/lib/book/owner.ts）。
+// 🔒 確定は人：オーナーが「入れる」を押した時だけ確定で台帳へ（承認BOXは通さない）。AI は使わない。
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Checked, CustomerName } from "@/components/parts";
@@ -250,10 +250,10 @@ export function OwnerBookSheet({ data, target, onClose }: { data: BookData; targ
 
                 <section className="sheet-step" aria-label="確かめの結果">
                   <span className="sheet-label">確かめの結果（プログラム）</span>
-                  {!check ? <p className="hint">予約チャット・承認の箱と同じ判定で確かめます。</p> : <CheckLines check={check} />}
+                  {!check ? <p className="hint">予約チャット・承認BOXと同じ判定で確かめます。</p> : <CheckLines check={check} />}
                 </section>
 
-                <p className="hint">入れた予約は確定で台帳に入ります（承認の箱は通りません）。札は「{OWNER_TAG}」。</p>
+                <p className="hint">入れた予約は確定で台帳に入ります（承認BOXは通りません）。札は「{OWNER_TAG}」。</p>
                 {/* 「入れる」は1枚の下に止めておく */}
                 <div className="sheet-foot">
                   {note && (

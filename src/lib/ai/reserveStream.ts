@@ -17,7 +17,7 @@ export const CUT_MESSAGE = "返事が途中で切れました。もう一度送�
 /** 途中で切れた時の1文。held = この返事で受け取って入れた仮押さえの札（「11/7（土）15:00 カット」など） */
 export function cutNotice(held: string[]): string {
   if (held.length === 0) return CUT_MESSAGE;
-  return `${CUT_MESSAGE}（${held.join("・")}の仮押さえは、もう承認の箱に入っています。送り直しても、同じ仮押さえは2つになりません）`;
+  return `${CUT_MESSAGE}（${held.join("・")}の仮押さえは、もう承認BOXに入っています。送り直しても、同じ仮押さえは2つになりません）`;
 }
 
 /**

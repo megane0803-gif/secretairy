@@ -59,7 +59,7 @@ function JudgementCard({ j, shop }: { j: AdJudgement; shop: ShopSettings }) {
           <span className="tag who-ai">AI の一言</span> {j.note}
         </p>
       )}
-      {j.revert?.state === "pending" && <p className="problems small">戻す案は承認の箱にあります（決めるのはオーナーです）。</p>}
+      {j.revert?.state === "pending" && <p className="problems small">戻す案は承認BOXにあります（決めるのはオーナーです）。</p>}
       {j.revert?.state === "approved" && <Checked>戻す案を承認して、元に戻しました</Checked>}
       {j.revert?.state === "skipped" && <p className="hint small">戻す案は見送りました（{actionPast(j.action)}ままです）。</p>}
       <Fold summary="くわしく（比べた数と決まり）">

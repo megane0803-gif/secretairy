@@ -1,6 +1,6 @@
 "use client";
 
-// 画面で使う広告。最初の状態（seed/ads.json）に、このブラウザで止めた・外した・足した分と承認の箱を重ねる。
+// 画面で使う広告。最初の状態（seed/ads.json）に、このブラウザで止めた・外した・足した分と承認BOXを重ねる。
 // 書くのはこのブラウザの中だけ（サーバーには送らない）。
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";

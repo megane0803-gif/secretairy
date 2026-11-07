@@ -1,5 +1,5 @@
 // 広告の「効いたかの判定」と「毎週の見直しの報告」：判定の3つの分かれ方・数はプログラムが入れる・報告の4行・
-// 戻す案は承認の箱に入る・最初に戻すで戻る。Claude は呼ばない（決まった返事・決まった文を返す物に置きかえる）。
+// 戻す案は承認BOXに入る・最初に戻すで戻る。Claude は呼ばない（決まった返事・決まった文を返す物に置きかえる）。
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
@@ -56,7 +56,7 @@ const NOW = `${TODAY}T01:00:00.000Z`;
 
 const find = (no: number) => [...table.keywords, ...table.searchTerms].find((r) => r.no === no)!;
 
-/** 番号 no の案を承認の箱に入れて、人が承認した所まで（approveAd は画面の承認ボタンと同じ変え方） */
+/** 番号 no の案を承認BOXに入れて、人が承認した所まで（approveAd は画面の承認ボタンと同じ変え方） */
 function approved(no: number, ads: AdsState = EMPTY_ADS, book: BookState = emptyBook(TODAY), id = `ad-${no}`, t: AdTable = table) {
   const row = find(no);
   const p = { action: row.kind === "keyword" ? ("stop" as const) : ("exclude" as const), no, text: row.text, reason: "押されてお金はかかっていますが、予約につながっていません。" };
@@ -277,7 +277,7 @@ describe("毎週の見直しの報告：4行", () => {
 });
 
 describe("AI の仕事の「広告の見直し」も報告を1枚残す", () => {
-  test("決まった返事で動かすと、承認の箱に1行・報告に1枚（AI の仕事からの札）", async () => {
+  test("決まった返事で動かすと、承認BOXに1行・報告に1枚（AI の仕事からの札）", async () => {
     let ads: AdsState = EMPTY_ADS;
     let book = emptyBook(TODAY);
     const env: JobEnv = {
@@ -316,8 +316,8 @@ describe("AI の仕事の「広告の見直し」も報告を1枚残す", () => 
   });
 });
 
-describe("戻す案は承認の箱に入る", () => {
-  test("戻す案は承認の箱の行（上の帯・朝の要点の数にも入る）。予約タブには出さない。広告の新しい案は止めない", () => {
+describe("戻す案は承認BOXに入る", () => {
+  test("戻す案は承認BOXの行（上の帯・朝の要点の数にも入る）。予約タブには出さない。広告の新しい案は止めない", () => {
     const a = approved(5);
     const out = judgeAll(a.ads, a.book);
     const q = approvalQueue(out.book, out.ads, NOW);

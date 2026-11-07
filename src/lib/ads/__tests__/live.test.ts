@@ -1401,7 +1401,7 @@ describe("画面の印（直しR の読み込みと同じ道）", () => {
     assert.match(approvedNotice(a("add", 11, "縮毛矯正 くせ毛 ひどい"), tried(a("add", 11, "縮毛矯正 くせ毛 ひどい"), "done"), "ads"), /足されたのを確かめました（広告は出ず、お金は動きません）/);
   });
 
-  test("直しU：承認の箱の広告の「承認」は試している間は押せない・試すのは広告のタブとホームの承認だけ（LINE のボタン・戻す案からは呼ばない）", () => {
+  test("直しU：承認BOXの広告の「承認」は試している間は押せない・試すのは広告のタブとホームの承認だけ（LINE のボタン・戻す案からは呼ばない）", () => {
     const rows = readFileSync("src/components/AdApprovalRows.tsx", "utf8");
     const add = readFileSync("src/components/AdAddRow.tsx", "utf8");
     assert.match(rows, /onClick=\{\(e\) => approve\(e, p\)\} disabled=\{busy \|\| liveBusy\}/);
@@ -1413,7 +1413,7 @@ describe("画面の印（直しR の読み込みと同じ道）", () => {
     // 作品の中の承認（approveAd・approveAdd）は窓口より先に・窓口に依らずに効く
     assert.ok(rows.indexOf("approveAd(a, b, x.id") < rows.indexOf("startTry({ kind: x.action"));
     assert.ok(add.indexOf("approveAdd(a, p.id") < add.indexOf('startTry({ kind: "add"'));
-    // ホームの承認の箱（standalone でない時）も知らせの1行を出す
+    // ホームの承認BOX（standalone でない時）も知らせの1行を出す
     assert.match(rows, /<AdRevertRow onDone=\{setDone\} \/>\n        \{done && \(/);
     for (const f of ["src/components/AdRevertRow.tsx", "src/lib/line/apply.ts", "src/components/LineBridge.tsx", "src/lib/ads/verdict.ts"]) {
       const s = readFileSync(f, "utf8");
@@ -2186,7 +2186,7 @@ describe("README", () => {
       assert.ok(sec.includes(w), w);
     // 直しW：直しU の後の本番で 503 だったこと・直した所・Merge の後に確かめること（まだ確かめていない・次の日の最初の1回）
     assert.doesNotMatch(sec, /LINE・試験10問・広告の[^。]*にも効きます/, "全部に効くとは書かない");
-    for (const w of ["503 no-store", "置けた時は作った値をそのまま使い", "`upstash-sync-token`", "同じ置き場の中で、書いた直後に読む時だけ", "別々に作った置き場の間では引き継ぎません", "省いていません", "INCR と EXPIRE", "承認の箱から1件承認して、try が通った", "**まだ確かめていません**", "次の日に確かめます"])
+    for (const w of ["503 no-store", "置けた時は作った値をそのまま使い", "`upstash-sync-token`", "同じ置き場の中で、書いた直後に読む時だけ", "別々に作った置き場の間では引き継ぎません", "省いていません", "INCR と EXPIRE", "承認BOXから1件承認して、try が通った", "**まだ確かめていません**", "次の日に確かめます"])
       assert.ok(sec.includes(w), w);
     assert.doesNotMatch(sec, /100%|必ず|すぐ反映/);
     const guard = readme.slice(readme.indexOf("### だれでも呼べる窓口の守り（今の作り）"), readme.indexOf("### 動かし方の手順"));

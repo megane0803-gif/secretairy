@@ -76,7 +76,7 @@ export function linkExpired(s: LineState, nowIso: string): boolean {
 }
 
 /**
- * 「最初に戻す」：つなぎ（印・期限・振り分けの切りかえ）は残し、届けた承認待ちの行の印を消す（承認の箱が空に戻るため）。
+ * 「最初に戻す」：つなぎ（印・期限・振り分けの切りかえ）は残し、届けた承認待ちの行の印を消す（承認BOXが空に戻るため）。
  * 受け取って済ませた知らせの id は残す（同じ知らせを2回使わないため）。サーバーの預かり物は clearInbox で消す。
  */
 export function withReset(s: LineState): LineState {

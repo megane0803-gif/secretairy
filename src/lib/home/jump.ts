@@ -9,5 +9,5 @@ export type HomeJumpId = "customers" | "approvals";
 /** target = 飛ぶ先の要素の id。fold = 畳める欄なら、その欄（開いてから飛ぶ） */
 export const HOME_JUMPS: Record<HomeJumpId, { target: string; fold?: HomeFoldId; label: string }> = {
   customers: { target: "customers", fold: "customers", label: "今日のお客様" },
-  approvals: { target: "approvals", label: "承認の箱" },
+  approvals: { target: "approvals", label: "承認BOX" },
 };

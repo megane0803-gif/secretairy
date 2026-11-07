@@ -103,7 +103,7 @@ export const TOOL_DEFS: ToolDef[] = [
   {
     name: "place_hold",
     description:
-      "仮押さえ。お客様が、直前に出した候補から選んだときだけ使う（例：「1つ目で」）。確定ではない。プログラムがもう一度判定し、受けられれば仮押さえして承認の箱に入れる。",
+      "仮押さえ。お客様が、直前に出した候補から選んだときだけ使う（例：「1つ目で」）。確定ではない。プログラムがもう一度判定し、受けられれば仮押さえして承認BOXに入れる。",
     input_schema: {
       type: "object",
       properties: { menu_ids: MENUS, menu_id: MENU, date: DATE, start: TIME },
@@ -466,7 +466,7 @@ export function runTool(ctx: ToolContext, name: string, raw: unknown): ToolOutco
           hold_id: hold.id,
           note: "仮押さえです。確定ではありません。お客様には「仮でお取りしました。お店から確定のご連絡をします」と伝える",
         }),
-        steps: [{ kind: "hold", text: `${label}：${what}（承認の箱へ。期限は${hours}時間）` }],
+        steps: [{ kind: "hold", text: `${label}：${what}（承認BOXへ。期限は${hours}時間）` }],
         hold,
       };
     }

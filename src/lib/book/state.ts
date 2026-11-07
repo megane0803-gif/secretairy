@@ -1,4 +1,4 @@
-// 予約チャットから入った予約・承認の箱・足した ToDo を、見ている人のブラウザの中だけに残す形（docs/SPEC.md §5.1）。
+// 予約チャットから入った予約・承認BOX・足した ToDo を、見ている人のブラウザの中だけに残す形（docs/SPEC.md §5.1）。
 // ここは形と変え方だけ（どこにも書かない）。書くのは useBook.ts。
 //
 // 起点（anchor）：そのブラウザで初めて開いた日。最初の状態の予約（何番目の営業日）はこの日から数える。
@@ -24,7 +24,7 @@ import { readMemoKind, type MemoKind } from "../todo/kinds";
  */
 export type ApprovalState = "pending" | "approved" | "fixed" | "skipped" | "withdrawn" | "taken";
 
-/** 承認の箱の1行（予約の仮押さえ） */
+/** 承認BOXの1行（予約の仮押さえ） */
 export type ReservationApproval = {
   id: string;
   reservationId: string;
@@ -35,7 +35,7 @@ export type ReservationApproval = {
   decidedAt?: string;
 };
 
-/** 承認の箱・カルテの保存から足した ToDo。next-talk = カルテの「次回話すこと」 */
+/** 承認BOX・カルテの保存から足した ToDo。next-talk = カルテの「次回話すこと」 */
 export type AddedTodo = {
   id: string;
   title: string;
@@ -101,7 +101,7 @@ export function emptyBook(anchor: string, epoch?: string): BookState {
 }
 
 /**
- * 台帳が「最初の状態のまま」か：予約チャット・予約サイト・台帳から入れた予約（chat）・承認の箱・足した ToDo・保存したカルテ・
+ * 台帳が「最初の状態のまま」か：予約チャット・予約サイト・台帳から入れた予約（chat）・承認BOX・足した ToDo・保存したカルテ・
  * 最初の状態の ToDo の印・最初のカルテや ToDo の文の直し・最初の予約を人が直した分・予約サイトの番号が1つも無く、「翌日へ」の日数が 0。
  * ブラウザに残っていた形のまま（読む前の物）でも確かめられるように、ゆるい形で受け取る（形のおかしい物が入っていても「触った」と見る）。
  * 休みの日・止めた時間・日報・メニュー・人数・日誌は本当の日付や設定で持つ別の置き場所なので、ここでは見ない。
@@ -346,7 +346,7 @@ export function sameHold(s: BookState, h: Pick<HoldOffer, "customerId" | "menuId
   );
 }
 
-/** 仮押さえを足して、承認の箱に1行入れる（同じ仮押さえは2回入れない） */
+/** 仮押さえを足して、承認BOXに1行入れる（同じ仮押さえは2回入れない） */
 export function withHold(s: BookState, h: HoldOffer): BookState {
   if (s.chat.some((r) => r.id === h.id)) return s;
   return {

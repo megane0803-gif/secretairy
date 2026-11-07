@@ -1,4 +1,4 @@
-// 広告の見直し：AI の案 → プログラムの門 → 承認の箱 → 承認で広告・ToDo・日誌が変わる。
+// 広告の見直し：AI の案 → プログラムの門 → 承認BOX → 承認で広告・ToDo・日誌が変わる。
 // Claude は呼ばず、決まった返事（script.ts）か、決まった案を返す物に置きかえる。
 
 import assert from "node:assert/strict";
@@ -183,7 +183,7 @@ async function withOne(): Promise<AdsState> {
   return withProposal(EMPTY_ADS, r.proposal, table, { id: "ad1", checks: r.checks, nowIso: now, mode: "script" }, settings);
 }
 
-describe("承認の箱（広告）", () => {
+describe("承認BOX（広告）", () => {
   test("案が1行入る。数は表から入る", async () => {
     const s = await withOne();
     const p = pendingAd(s)!;

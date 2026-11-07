@@ -3,8 +3,8 @@
 // LINE のつなぎ（オーナー側）の、画面の側の働き手。どのタブを開いていても動く（layout.tsx に置く）。何も描かない。
 // - つながっている（かつなぐ番号を出している）間だけ、数秒ごとに /api/line/poll へ受け取りに行く（画面が開いている印にもなる）。
 // - オーナーの一言 → /api/ai/line で振り分け（予約は仮押さえまで）→ 台帳・ToDo・カルテのメモに入れる → LINE に1行で返事。
-// - 承認のボタン（合言葉でつないだ LINE から押した物だけ。サーバーが確かめ済み）→ 承認の箱の画面のボタンと同じ変え方。
-// - 承認の箱に新しい行が入ったら、LINE に「何を・いつ・理由」とボタンを届ける（1行1回。1日の上限まで）。
+// - 承認のボタン（合言葉でつないだ LINE から押した物だけ。サーバーが確かめ済み）→ 承認BOXの画面のボタンと同じ変え方。
+// - 承認BOXに新しい行が入ったら、LINE に「何を・いつ・理由」とボタンを届ける（1行1回。1日の上限まで）。
 // 🔒 確定は人：確定するのは press の知らせ（LINE のボタン）だけ。一言（text）や AI の答えからは確定しない。
 
 import { useEffect, useRef } from "react";
@@ -101,7 +101,7 @@ export function LineBridge({ data }: { data: BookData }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, token, settings.pollSeconds]);
 
-  // 承認の箱に新しい行が入ったら、LINE に届ける（1行1回。サーバーでも once で1回だけ通す）
+  // 承認BOXに新しい行が入ったら、LINE に届ける（1行1回。サーバーでも once で1回だけ通す）
   // 足す案・戻す案は LINE に届けない（line/apply.ts の lineApprovalIds）
   const pendingIds = lineApprovalIds(book.pending.map((p) => p.approval.id), ads.state).join(",");
   useEffect(() => {
@@ -124,12 +124,12 @@ export function LineBridge({ data }: { data: BookData }) {
           const res = await lineApi.send({ token: s.token, messages: [{ type: "approval", card }], once: id });
           if (res.ok && res.via !== "skipped") writeJournal({ who: "プログラム", text: `LINE に承認待ちを届けた：${card.what} ${card.when}` });
           else if (!res.ok) {
-            writeJournal({ who: "プログラム", text: `LINE に承認待ちを届けなかった（${res.code === "limit" ? "送る上限" : "送れなかった"}）：${card.what}。画面の承認の箱で押せます` });
+            writeJournal({ who: "プログラム", text: `LINE に承認待ちを届けなかった（${res.code === "limit" ? "送る上限" : "送れなかった"}）：${card.what}。画面の承認BOXで押せます` });
             if (res.code !== "limit") setLineStatus({ problem: problemText(res.code, res.message) });
           }
         }
         if (fresh.length > pick.length)
-          writeJournal({ who: "プログラム", text: `ほかに承認待ちが ${fresh.length - pick.length} 件（送る通数を減らすため LINE には届けない。画面の承認の箱で）` });
+          writeJournal({ who: "プログラム", text: `ほかに承認待ちが ${fresh.length - pick.length} 件（送る通数を減らすため LINE には届けない。画面の承認BOXで）` });
       } finally {
         notifying.current = false;
       }

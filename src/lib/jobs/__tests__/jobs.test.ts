@@ -108,7 +108,7 @@ function setup(over: { down?: boolean; ads?: AdsState } = {}) {
 const budget = () => ({ left: getJobsSettings().maxAiCallsPerPress });
 
 describe("AI の仕事：1行ずつ動く", () => {
-  test("予約の相談：決まった返事で返事をして仮押さえ → 承認の箱へ（確定はしない）", async () => {
+  test("予約の相談：決まった返事で返事をして仮押さえ → 承認BOXへ（確定はしない）", async () => {
     const { w, env, calls } = setup();
     const r = await runJob("reserve", env, budget());
     assert.deepEqual(r, { kind: "done", result: "承認待ち1件", tab: "reservations" });
@@ -133,13 +133,13 @@ describe("AI の仕事：1行ずつ動く", () => {
     assert.equal(w.jobs.done.card?.tab, "accounting");
   });
 
-  test("広告の見直し：門を通った案を承認の箱へ（足す案も広告タブと同じ決まりで）。今週の案がもうある時は動かさない", async () => {
+  test("広告の見直し：門を通った案を承認BOXへ（足す案も広告タブと同じ決まりで）。今週の案がもうある時は動かさない", async () => {
     const { w, env, calls } = setup();
     const r = await runJob("ads", env, budget());
     assert.deepEqual(r, { kind: "done", result: "承認待ち3件", tab: "ads" });
     assert.equal(calls.length, 1);
     const p = pendingAd(w.ads);
-    assert.ok(p, "承認の箱に1行");
+    assert.ok(p, "承認BOXに1行");
     assert.notEqual(p!.no, 9, "決まった返事の1回目（町の名前の9番）は門で弾かれ、作り直した案");
     assert.deepEqual(pendingAdds(w.ads).map((x) => x.no), [11, 14], "足す案は予約の多い順に2件（広告タブと同じ）");
     assert.ok(pendingAdds(w.ads).every((x) => x.createdAt === p!.createdAt), "同じ見直しの行は同じ時刻（1回と数える）");

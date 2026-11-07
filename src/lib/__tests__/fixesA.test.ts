@@ -288,7 +288,7 @@ describe("直しA 9：予約チャットの返事が途中で切れたら知ら�
     assert.equal(await r3, "done");
   });
 
-  test("仮押さえを受け取った後に切れて送り直しても、仮押さえは1つのまま（承認の箱も1行）", async () => {
+  test("仮押さえを受け取った後に切れて送り直しても、仮押さえは1つのまま（承認BOXも1行）", async () => {
     const runs = createChatRuns();
     const first = manualStream();
     const c1 = chatRun(runs);
@@ -298,7 +298,7 @@ describe("直しA 9：予約チャットの返事が途中で切れたら知ら�
     assert.equal(await r1, "cut");
     runs.finish(1);
     assert.deepEqual(c1.held, ["h-1"]);
-    assert.ok(cutNotice(["11/7（土）15:00 カット"]).includes("仮押さえは、もう承認の箱に入っています"));
+    assert.ok(cutNotice(["11/7（土）15:00 カット"]).includes("仮押さえは、もう承認BOXに入っています"));
 
     // 送り直し：AI がもう一度同じ枠を仮押さえしようとする（別の id）
     const second = manualStream();
@@ -512,7 +512,7 @@ describe("直しA 8：広告の「7日に1つ」は「翌日へ」で進めた�
     assert.ok(opened > 0, "どこかで頼めるようになる");
   });
 
-  test("AI の仕事から広告を見直す時も同じ時計（7日に満たない間は動かさず、過ぎたら承認の箱に入る）", async () => {
+  test("AI の仕事から広告を見直す時も同じ時計（7日に満たない間は動かさず、過ぎたら承認BOXに入る）", async () => {
     const data = getBookData();
     const first = skipAll(await add(EMPTY_ADS, clockAt(0), "ad-1"));
     const w = { book: { ...emptyBook(shopToday(shop, now).today.date), dayOffset: 2 }, ads: first, jobs: EMPTY_JOBS };

@@ -1,6 +1,6 @@
 // 台帳の予約を押して開く1枚・取り消す・日時とメニューを変える（docs/SPEC.md §1.4.2）のテスト。Claude は呼ばない（AI を使わない流れ）。
-// - 押して開く：確定で開始前 = 直せる / 仮押さえ = 承認の箱へ / 開始を過ぎた・カルテがある = 見るだけ
-// - 取り消す：台帳・空き表・ホームの今日・前日のお知らせ・サーバーへ送る台帳から消える。承認の箱の履歴・カルテは残る。日誌
+// - 押して開く：確定で開始前 = 直せる / 仮押さえ = 承認BOXへ / 開始を過ぎた・カルテがある = 見るだけ
+// - 取り消す：台帳・空き表・ホームの今日・前日のお知らせ・サーバーへ送る台帳から消える。承認BOXの履歴・カルテは残る。日誌
 // - 予約サイトの番号は、取り消しても重ならない
 // - 変える：自分とはぶつからない・同じお客様のほかの予約は残して判定・入れられない物と鍵つきのルールは変えられない・
 //   ほかのルールはもう一度押せば変えられる・今日の中でずらせる・保存の直前の確かめ・終わる時刻・変えた先の週へ・日誌
@@ -72,11 +72,11 @@ describe("1. 押して開く：出る物が違う", () => {
     assert.equal(SOURCE_LABEL.owner, "台帳から（オーナー）");
   });
 
-  test("仮押さえ = 直さず「承認の箱で、承認か見送り」", () => {
+  test("仮押さえ = 直さず「承認BOXで、承認か見送り」", () => {
     const s = withHold(base, { id: "h1", customerId: "c05", menuId: "cut", date: "2026-11-06", start: "13:00", heldAt: NOW.toISOString(), expiresAt: "2026-11-05T08:30:00+09:00", reason: "r" } as never);
     const r = resOf(s, "h1")!;
     assert.equal(sheetMode(r, view(s).clock.now, []), "hold");
-    assert.equal(HOLD_NOTE, "仮押さえは承認の箱で、承認か見送りを決めます");
+    assert.equal(HOLD_NOTE, "仮押さえは承認BOXで、承認か見送りを決めます");
     // 仮押さえは取り消し・変えるの関数でも直さない
     const out = cancelReservation(s, ctx, markOf(s, "h1"));
     assert.equal(out.ok, false);
@@ -111,7 +111,7 @@ describe("1. 押して開く：出る物が違う", () => {
     const ledger = read("src/app/reservations/Ledger.tsx");
     assert.match(ledger, /menuColorClass\(r\.menu\)\} openable`/);
     const sheet = read("src/app/reservations/ReservationSheet.tsx");
-    assert.match(sheet, /承認の箱へ/);
+    assert.match(sheet, /承認BOXへ/);
     assert.match(sheet, /className="sheet-foot"/);
     // 取り消しはもう一度押した時だけ
     assert.match(sheet, /if \(!confirmCancel\) \{/);
@@ -183,7 +183,7 @@ describe("2. 取り消す", () => {
     assert.match(home, /remindersNow\(remind, book\.all/);
   });
 
-  test("承認で確定した予約を取り消す：台帳から外れ、承認の箱の履歴・カルテ・ToDo は残る", () => {
+  test("承認で確定した予約を取り消す：台帳から外れ、承認BOXの履歴・カルテ・ToDo は残る", () => {
     let s = withHold(base, { id: "h1", customerId: "c05", menuId: "cut", date: "2026-11-06", start: "13:00", heldAt: NOW.toISOString(), expiresAt: "2026-11-05T08:30:00+09:00", reason: "r" } as never);
     s = withApproved(s, "ap-h1", NOW.toISOString());
     s = {

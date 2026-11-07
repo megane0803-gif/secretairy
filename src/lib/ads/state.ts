@@ -1,4 +1,4 @@
-// 広告の承認の箱と、「広告の管理画面」で止めた・外した言葉を、見ている人のブラウザの中だけに残す形（docs/SPEC.md §5.1）。
+// 広告の承認BOXと、「広告の管理画面」で止めた・外した言葉を、見ている人のブラウザの中だけに残す形（docs/SPEC.md §5.1）。
 // ここは形と変え方だけ（どこにも書かない）。書くのは useAds.ts と画面の部品。
 //
 // 🔒 確定は人：止める・外す（withAdApproved / approveAd）と足す（approveAdd）を呼ぶのは、人が画面の「承認」ボタンを押したときだけ
@@ -27,7 +27,7 @@ import type { TeamRecord } from "./team/types";
 
 export type AdProposalState = "pending" | "approved" | "skipped";
 
-/** 承認の箱の1行（広告の案） */
+/** 承認BOXの1行（広告の案） */
 export type AdProposal = {
   id: string;
   action: AdAction;
@@ -54,7 +54,7 @@ export type AdProposal = {
   realAt?: string;
 };
 
-/** 承認の箱の1行（足す案）。お客さんが調べた言葉を、広告を出す言葉に足す（フレーズ一致） */
+/** 承認BOXの1行（足す案）。お客さんが調べた言葉を、広告を出す言葉に足す（フレーズ一致） */
 export type AdAddProposal = {
   id: string;
   /** 調べた言葉の番号 */
@@ -258,7 +258,7 @@ export function canPropose(
   nowIso: string,
   settings: Pick<AdSettings, "oncePerDays">,
 ): { ok: true } | { ok: false; reason: string; nextAt?: string } {
-  if (pendingAd(s) || pendingAdds(s).length) return { ok: false, reason: "もう案があります。承認の箱で決めてから頼んでください。" };
+  if (pendingAd(s) || pendingAdds(s).length) return { ok: false, reason: "もう案があります。承認BOXで決めてから頼んでください。" };
   const span = settings.oncePerDays * 86_400_000;
   // 見直しの回ごとの時刻（同じ回の行は同じ時刻なので、1回と数える）
   const reviews = [...new Set([...s.proposals, ...(s.adds ?? [])].map((p) => p.createdAt))];
@@ -270,7 +270,7 @@ export function canPropose(
   return { ok: true };
 }
 
-/** 門を通った案を、承認の箱に1行入れる（数は表から入れる）。承認待ちがあるとき・1週間の上限のときは入れない */
+/** 門を通った案を、承認BOXに1行入れる（数は表から入れる）。承認待ちがあるとき・1週間の上限のときは入れない */
 export function withProposal(
   s: AdsState,
   p: GatedProposal,
@@ -282,7 +282,7 @@ export function withProposal(
 }
 
 /**
- * 1回の見直しで出た行（止める・外すの案は0か1つ・足す案は0〜上限）を、まとめて承認の箱に入れる（同じ作った時刻＝1回と数える）。
+ * 1回の見直しで出た行（止める・外すの案は0か1つ・足す案は0〜上限）を、まとめて承認BOXに入れる（同じ作った時刻＝1回と数える）。
  * 承認待ちがあるとき・1週間の上限のときは、どれも入れない。数は表から入れる。足す案は画面で確かめ直した物（add.ts の addRowsFrom）。
  */
 export function withReview(

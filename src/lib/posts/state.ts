@@ -1,6 +1,6 @@
 // 発信：保存した下書きを、見ている人のブラウザの中だけに残す形（secretairy:posts。docs/SPEC.md §5.1）。
 // ここは形と変え方だけ（どこにも書かない）。書くのは usePosts.ts と画面の部品。
-// 保存はオーナーのボタンだけ（承認の箱は通さない）。送信・公開はしない。
+// 保存はオーナーのボタンだけ（承認BOXは通さない）。送信・公開はしない。
 
 import { gateWordsIn } from "./gate";
 import type { PostsMode } from "./wire";

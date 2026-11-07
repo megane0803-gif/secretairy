@@ -2,7 +2,7 @@
 // リサーチャー（プログラム）が材料を作り、分身と野党（Claude）を別々に呼び、補佐（Claude）が門を通った2つだけをまとめる。
 // Claude を呼ぶのは1回の会議で config/ai.json の adsTeam.maxCalls（3）まで。作り直しはしない。
 // 表・案・ルールは画面から毎回受け取り、答えを返すだけ。受け取った物はどこにも残さない（docs/SPEC.md §5.1）。
-// 🔒 ここでは広告も承認の箱も変えない。会議には確定・承認の道具を渡さない。決めるのはオーナーのボタンだけ。
+// 🔒 ここでは広告も承認BOXも変えない。会議には確定・承認の道具を渡さない。決めるのはオーナーのボタンだけ。
 
 import { claudeTeamWriter } from "@/lib/ads/team/claude";
 import { meet } from "@/lib/ads/team/meet";

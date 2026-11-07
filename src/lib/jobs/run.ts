@@ -1,12 +1,12 @@
 // ホームの「AI の仕事」の流れ（docs/SPEC.md §1.12）。押した時に、これから来る物を1行ずつ動かし、結果をそれぞれの場所に届ける。
-//   予約の相談 … 架空のお客様の文1件を、予約チャットと同じ /api/ai/reserve へ → 返事をして仮押さえ → 承認の箱へ
+//   予約の相談 … 架空のお客様の文1件を、予約チャットと同じ /api/ai/reserve へ → 返事をして仮押さえ → 承認BOXへ
 //   新しい明細 … 経理の「次の明細（試し）」の架空の明細を、いま効く自動のルールで仕分け（AI なし）→ 迷う物は経理タブへ
-//   広告の見直し … 広告タブと同じ /api/ai/ads → 画面でももう一度門 → 承認の箱へ（足す案も同じ決まりで。今週の案がもうある時は動かさない）
+//   広告の見直し … 広告タブと同じ /api/ai/ads → 画面でももう一度門 → 承認BOXへ（足す案も同じ決まりで。今週の案がもうある時は動かさない）
 //   メモ … 架空のメモ1件を、メモを投げると同じ /api/ai/todo → ToDo へ
-//   予約サイトから予約が入る … 予約サイトの「ここで予約が入る（デモ）」と同じ（AI なし。book/site.ts）→ 台帳へ（承認の箱は通さない）
+//   予約サイトから予約が入る … 予約サイトの「ここで予約が入る（デモ）」と同じ（AI なし。book/site.ts）→ 台帳へ（承認BOXは通さない）
 //
 // 置き場所（JobStore）と AI の窓口（JobAsk）は外から渡す：画面はブラウザの中と fetch、テストはメモリと決まった返事。
-// 🔒 確定は人：ここから呼ぶのは仮押さえ（withHold）・承認の箱に入れる（withProposal）・ToDo に足すだけ。確定の変え方は呼ばない。
+// 🔒 確定は人：ここから呼ぶのは仮押さえ（withHold）・承認BOXに入れる（withProposal）・ToDo に足すだけ。確定の変え方は呼ばない。
 // 🔒 AI を呼ぶ回数は、1回押した時に config/ai.json の jobs.maxAiCallsPerPress まで（足りない行は動かさない）。
 
 import { getAccounting, getAds, getJobSeeds, getTodos } from "../data/seed";
@@ -244,7 +244,7 @@ async function reserveJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
         if (!h || h.customerId !== customer.id || r.hold) continue;
         env.store.setBook((s) => withHold(s, h));
         r.hold = h;
-        env.journal({ who: "AI", text: `仮押さえした：${who} ${candidateLabel(env.data, h)}（承認の箱へ）` });
+        env.journal({ who: "AI", text: `仮押さえした：${who} ${candidateLabel(env.data, h)}（承認BOXへ）` });
       } else if (e.t === "todo") {
         let line: string | null = null;
         const today = bookView(env.data, env.store.book(), env.now()).clock.today.date;
@@ -345,7 +345,7 @@ async function adsJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
     if (res.code === "bad-request") return { kind: "failed", note: reasonOf(res) ?? AI_FAILED_MESSAGE };
   }
   const id = env.newId?.() ?? `ad-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-  // 受け取った案を、画面でももう一度門で確かめてから承認の箱に入れる（広告タブと同じ）
+  // 受け取った案を、画面でももう一度門で確かめてから承認BOXに入れる（広告タブと同じ）
   const again = res.ok
     ? checkDraft(table, env.adSettings.towns, {
         tool: res.proposal.action === "stop" ? "stop_keyword" : "exclude_term",
@@ -364,7 +364,7 @@ async function adsJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
   });
   const addSteps = [...(res.adds?.steps ?? []), ...addPart.refused];
   const addLabels = addPart.rows.map((r) => addLabel({ no: r.no, text: table.searchTerms.find((t) => t.no === r.no)?.text ?? "" }));
-  const addLine = addLabels.length ? [{ who: "プログラム" as const, text: `承認の箱に入れた：足す案 ${addLabels.map((l) => `「${l}」`).join("・")}` }] : [];
+  const addLine = addLabels.length ? [{ who: "プログラム" as const, text: `承認BOXに入れた：足す案 ${addLabels.map((l) => `「${l}」`).join("・")}` }] : [];
 
   if (!res.ok || !stop) {
     const problems = !res.ok ? res.problems : again && !again.ok ? again.problems : [];
@@ -391,7 +391,7 @@ async function adsJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
     return added ? withReport(next, weekly({ proposal: { ...stop.proposal, id } }), env.adSettings) : next;
   });
   if (!added) return { kind: "skip", note: ALREADY_THIS_WEEK };
-  env.journal(...res.steps, { who: "プログラム", text: `承認の箱に入れた：広告の案「${proposalLabel(stop.proposal)}」` }, ...addSteps, ...addLine);
+  env.journal(...res.steps, { who: "プログラム", text: `承認BOXに入れた：広告の案「${proposalLabel(stop.proposal)}」` }, ...addSteps, ...addLine);
   return { kind: "done", result: jobApprovalResult(1 + addPart.rows.length), tab: "ads" };
 }
 
@@ -434,7 +434,7 @@ async function memoJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
 async function siteJob(env: JobEnv): Promise<JobOutcome> {
   env.journal({ who: "オーナー", text: `AI の仕事を動かした：${JOB_NAME.site}（AI なし）` });
   let out: SiteOutcome | null = null;
-  // 予約サイトの「ここで予約が入る（デモ）」と同じ変え方（空いている枠に1件。承認の箱は通さない）
+  // 予約サイトの「ここで予約が入る（デモ）」と同じ変え方（空いている枠に1件。承認BOXは通さない）
   env.store.setBook((s) => {
     out = siteBook(s, { data: env.data, rules: env.rules, now: env.now(), stops: env.siteStops ?? [] }, "free");
     return out.state;

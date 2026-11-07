@@ -164,7 +164,7 @@ describe("3. ブラウザに残った前の書き方でも同じように動く�
     assert.equal(withChatTodo(s, { id: "td-chat-1", title: "江口様：傘" }, "江口", "2026-11-04T02:00:00.000Z").journal, null);
   });
 
-  test("前の書き方の題のまま残っていても、承認の箱の「直す」は今の書き方の ToDo を足す", () => {
+  test("前の書き方の題のまま残っていても、承認BOXの「直す」は今の書き方の ToDo を足す", () => {
     const next = withReleased(s, "a1", "fixed", "江口", "2026-11-04T02:00:00.000Z");
     assert.ok(next.todos.some((t) => t.title.startsWith("江口様に別の日時を案内（")), next.todos.map((t) => t.title).join("／"));
     assert.equal(next.todos.length, s.todos.length + 1);
@@ -195,7 +195,7 @@ describe("3. ブラウザに残った前の書き方でも同じように動く�
     assert.deepEqual(j.done.site, { at: "2026-11-04T00:00:00.000Z", result: "台帳に1件（江口様）", tab: "reservations" });
   });
 
-  test("広告の承認の箱の理由も、今の書き方で読む", () => {
+  test("広告の承認BOXの理由も、今の書き方で読む", () => {
     const a = parseAds(
       JSON.stringify({
         v: 1,

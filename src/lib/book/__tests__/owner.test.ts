@@ -1,9 +1,9 @@
 // 台帳から予約を入れる（オーナーが入れる＝確定。docs/SPEC.md §1.4.1）のテスト。Claude は呼ばない（AI を使わない流れ）。
-// - 予約チャット・承認の箱と同じ判定（judgeSlot）で確かめる
+// - 予約チャット・承認BOXと同じ判定（judgeSlot）で確かめる
 // - 入れられない：過ぎた日時・営業時間の外・最終受付・定休日と休みの日・同じ時間に受ける人数（重なり）
 // - もう一度押せば入れられる：オーナーが足したルールに当たる時だけ（どのルールかを出し、日誌にも名前を残す）
 // - 保存する直前に、その時の台帳でもう一度確かめる
-// - 入れた予約は確定で台帳へ（承認の箱は通さない）。札は「台帳から（オーナー）」。前日のお知らせ・空き表にも入る
+// - 入れた予約は確定で台帳へ（承認BOXは通さない）。札は「台帳から（オーナー）」。前日のお知らせ・空き表にも入る
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -121,12 +121,12 @@ describe("3. 保存する直前に、その時の台帳でもう一度確かめ�
   });
 });
 
-describe("4. 入れた後：確定・札・承認の箱は通らない・ほかの所にも入る", () => {
+describe("4. 入れた後：確定・札・承認BOXは通らない・ほかの所にも入る", () => {
   const out = ownerBook(start, ctx, { customerId: "c04", menuId: comboIdOf(data.menus, ["cut", "headspa"])!, date: "2026-11-05", start: "10:00" });
   assert.ok(out.ok);
   const s = out.ok ? out.state : start;
 
-  test("確定で台帳に入る（承認の箱の行は増えない）。組み合わせは時間を足す", () => {
+  test("確定で台帳に入る（承認BOXの行は増えない）。組み合わせは時間を足す", () => {
     assert.equal(s.chat.length, 1);
     assert.equal(s.chat[0].status, "confirmed");
     assert.equal(s.chat[0].via, "owner");

@@ -323,7 +323,7 @@ describe("7. 共通の流れを、カレンダーと一覧の両方が使う（�
     assert.match(read("src/app/reservations/LedgerView.tsx"), /<HolidayFlowProvider data=\{data\}>\{children\}<\/HolidayFlowProvider>/);
   });
 
-  test("ページ：月のカレンダーの下に休みの日の一覧（予約チャットと承認の箱の場所は今のまま）", () => {
+  test("ページ：月のカレンダーの下に休みの日の一覧（予約チャットと承認BOXの場所は今のまま）", () => {
     const p = read("src/app/reservations/page.tsx");
     const order = ["<WeekTimetable", 'id="res-approvals"', 'id="res-steps"', 'id="res-month"', 'id="res-holidays"', 'className="book-pair"'].map((x) => p.indexOf(x));
     assert.ok(order.every((n) => n >= 0), JSON.stringify(order));

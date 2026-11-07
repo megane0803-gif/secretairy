@@ -1,7 +1,7 @@
 // 台帳の予約を押して開く1枚の中身と、取り消す・日時とメニューを変える（docs/SPEC.md §1.4.2）。形と変え方だけ（どこにも書かない）。
 // 書くのは台帳の1枚（ReservationSheet.tsx）。人のボタン（オーナーが押した「取り消す」「この内容に変える」）だけが呼ぶ。
 //
-// 🔒 確定は人：直せるのは「確定」で「開始前」の予約だけ。仮押さえは承認の箱で承認か見送りを決める（ここでは直さない）。
+// 🔒 確定は人：直せるのは「確定」で「開始前」の予約だけ。仮押さえは承認BOXで承認か見送りを決める（ここでは直さない）。
 // AI・自動の処理・LINE の一言からは呼ばない。AI は使わない。
 //
 // 見るだけ（取り消す・変えるを出さない）：仮押さえ・開始の時刻を過ぎた予約・保存したカルテ（最初の状態のカルテも）がある予約。
@@ -11,7 +11,7 @@
 //
 // 保存の形：最初の状態の予約は state.seedResEdits（取り消した印か、直した後の日付・開始・menuId）。
 // 予約チャット・予約サイト・台帳から入った予約は、今ある記録（state.chat）の中を直す（取り消しは外す）。
-// 承認の箱の履歴・保存したカルテ・送った LINE・ToDo はそのまま（withReleased は承認待ち専用で ToDo も足すので使わない）。
+// 承認BOXの履歴・保存したカルテ・送った LINE・ToDo はそのまま（withReleased は承認待ち専用で ToDo も足すので使わない）。
 
 import { menuName, type SlotContext } from "../ai/slots";
 import type { Candidate } from "../ai/wire";
@@ -34,10 +34,10 @@ export const SOURCE_LABEL: Record<Reservation["source"], string> = {
   owner: OWNER_TAG,
 };
 
-/** 1枚で出す物の分け方。hold = 仮押さえ（承認の箱へ）/ past = 開始を過ぎた / karte = カルテがある / edit = 取り消す・変えるを出す */
+/** 1枚で出す物の分け方。hold = 仮押さえ（承認BOXへ）/ past = 開始を過ぎた / karte = カルテがある / edit = 取り消す・変えるを出す */
 export type SheetMode = "hold" | "past" | "karte" | "edit";
 
-export const HOLD_NOTE = "仮押さえは承認の箱で、承認か見送りを決めます";
+export const HOLD_NOTE = "仮押さえは承認BOXで、承認か見送りを決めます";
 export const PAST_NOTE = "開始の時刻を過ぎた予約なので、見るだけです（取り消す・変えるはできません）";
 export const KARTE_NOTE = "保存したカルテがある予約なので、見るだけです（取り消す・変えるはできません）";
 

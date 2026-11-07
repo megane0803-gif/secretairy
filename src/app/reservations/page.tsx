@@ -35,7 +35,7 @@ export default function ReservationsPage() {
         <WeekTimetable data={data} />
 
         <section className="inline-box after-right-sp" aria-labelledby="res-approvals">
-          <h2 id="res-approvals">承認待ちの予約（ホームの承認の箱と同じ行）</h2>
+          <h2 id="res-approvals">承認待ちの予約（ホームの承認BOXと同じ行）</h2>
           <ApprovalBox data={data} compact only="reservations" />
         </section>
 
@@ -45,7 +45,7 @@ export default function ReservationsPage() {
           <AiSteps />
         </section>
 
-        {/* 月のカレンダー（「休みを決める」を入れると、日を押して休みにする・戻す）。PC は承認の箱・AI の手順の場所を動かさないよう、時間割の箱の外のここに。スマホは台帳のすぐ下 */}
+        {/* 月のカレンダー（「休みを決める」を入れると、日を押して休みにする・戻す）。PC は承認BOX・AI の手順の場所を動かさないよう、時間割の箱の外のここに。スマホは台帳のすぐ下 */}
         <section className="inline-box" aria-labelledby="res-month">
           <h2 id="res-month">月のカレンダー</h2>
           <MonthCalendar data={data} />

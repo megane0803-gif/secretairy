@@ -1,7 +1,7 @@
 // 広告の案の「AI のチーム」の会議の形（docs/SPEC.md §1.7.4）。
 // SecretAIry はオーナーの側近。案をチームで話し合ってからオーナーに出す。決めるのは、いつもオーナーのボタンだけ。
 //   リサーチャー（プログラム）・分身（Claude）・野党（Claude）・補佐（Claude）の4つの声。
-// 🔒 会議には確定・承認の道具を渡さない。会議の答えは、承認の箱の行に「読む物」として添えるだけ。
+// 🔒 会議には確定・承認の道具を渡さない。会議の答えは、承認BOXの行に「読む物」として添えるだけ。
 
 import type { AdWeek } from "../../data/types";
 import type { AdAction } from "../report";
@@ -86,7 +86,7 @@ export type TeamResult = {
   calls: number;
 };
 
-/** 承認の箱の行（広告の案）に残す会議の印 */
+/** 承認BOXの行（広告の案）に残す会議の印 */
 export type TeamRecord = {
   snapshot: TeamSnapshot;
   startedAt: string;

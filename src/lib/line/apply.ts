@@ -1,8 +1,8 @@
-// LINE から来た物を、画面（ブラウザ）の側で台帳・ToDo・カルテのメモ・承認の箱に入れる所。形と変え方だけ（どこにも書かない）。
+// LINE から来た物を、画面（ブラウザ）の側で台帳・ToDo・カルテのメモ・承認BOXに入れる所。形と変え方だけ（どこにも書かない）。
 // 書くのは LineBridge.tsx。ここは同じ入力なら同じ答え（テストで確かめる）。
 //
 // 🔒 確定は人：applyPress を呼んでよいのは、合言葉でつないだ LINE のボタン（サーバーが署名・つなぎ・1回だけの印を
-// 確かめて画面に渡した press の知らせ）のときだけ。承認の箱の画面のボタンと同じ変え方（withApproved など）を使う。
+// 確かめて画面に渡した press の知らせ）のときだけ。承認BOXの画面のボタンと同じ変え方（withApproved など）を使う。
 // LINE の一言（text）からは確定しない。AI が振り分けた予約も仮押さえまで。
 
 import { approveAd, pendingAd, withAdSkipped, type AdProposal, type AdsState } from "../ads/state";
@@ -88,7 +88,7 @@ export function reservationCard(
 
 /**
  * LINE に届ける承認待ちの行の番号（予約の仮押さえと、止める・外すの広告の案だけ）。
- * 足す案（ads.adds）と戻す案は届けない（画面の承認の箱で押す）。LINE のボタンも、止める・外すの行だけを受ける（applyPress）。
+ * 足す案（ads.adds）と戻す案は届けない（画面の承認BOXで押す）。LINE のボタンも、止める・外すの行だけを受ける（applyPress）。
  */
 export function lineApprovalIds(bookPendingIds: readonly string[], ads: AdsState): string[] {
   const ad = pendingAd(ads);
@@ -107,14 +107,14 @@ export function adCard(p: AdProposal, channel: string): ApprovalCard {
   };
 }
 
-/** いまの台帳とルールで、その仮押さえを受けられるか（承認の箱と同じ確かめ方。自分の仮押さえは数えない） */
+/** いまの台帳とルールで、その仮押さえを受けられるか（承認BOXと同じ確かめ方。自分の仮押さえは数えない） */
 export function stillOk(ctx: SlotContext, row: PendingRow): boolean {
   const r = row.reservation;
   return judgeSlot({ ...ctx, booked: ctx.booked.filter((b) => b.id !== r.id) }, r).ok;
 }
 
 /**
- * 🔒 LINE の「承認」「見送り」ボタン。承認の箱の画面のボタンと同じ変え方を使う（人が押した扱い）。
+ * 🔒 LINE の「承認」「見送り」ボタン。承認BOXの画面のボタンと同じ変え方を使う（人が押した扱い）。
  * もう決まった行（画面で押した・期限が切れた・前に LINE で押した）には何もしない。
  */
 export function applyPress(ev: Extract<ScreenEvent, { kind: "press" }>, book: BookState, ads: AdsState, ctx: ApplyContext): ApplyOutcome {
@@ -126,7 +126,7 @@ export function applyPress(ev: Extract<ScreenEvent, { kind: "press" }>, book: Bo
     const surname = ctx.customers.find((c) => c.id === r.customerId)?.surname ?? "お客";
     const what = `${surname}様 ${candidateLabel(ctx, r)}`;
     if (ev.how === "approve") {
-      // 休みの日の仮押さえと、開始の時刻をもう過ぎた仮押さえは確定しない（画面の承認の箱と同じ。book/approve.ts）
+      // 休みの日の仮押さえと、開始の時刻をもう過ぎた仮押さえは確定しない（画面の承認BOXと同じ。book/approve.ts）
       const blocked = approveBlocker(ctx.shop, ctx.now ?? shopNow(ctx.shop, new Date(ctx.nowIso)), r);
       if (blocked)
         return {
@@ -249,9 +249,9 @@ export function applyAsk(
           ...res.steps
             .filter((s) => s.kind !== "hold")
             .map((s) => ({ who: s.kind === "tool" ? ("AI" as const) : ("プログラム" as const), text: `LINE の予約：${s.text}` })),
-          { who: "AI", text: `仮押さえした（LINE から）：${label}（承認の箱へ）` },
+          { who: "AI", text: `仮押さえした（LINE から）：${label}（承認BOXへ）` },
         ],
-        reply: `仮押さえしました：${label}。確定はまだです。下のボタンか、画面の承認の箱で決めてください。`,
+        reply: `仮押さえしました：${label}。確定はまだです。下のボタンか、画面の承認BOXで決めてください。`,
         // 作った直後なので「でも」は付けない（後から画面が届けるカードは「いまの台帳とルールでも」のまま）
         ...(row ? { card: reservationCard(row, ctx, true, { justHeld: true }) } : {}),
       };
