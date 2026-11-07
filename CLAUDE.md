@@ -88,7 +88,7 @@ src/lib/home/      ホームの欄の開け閉め：最初の状態（PC／ス�
 src/lib/jobs/      ホームの「AI に頼める仕事」：これから来る物4行の流れ（run.ts。今の /api/ai/ の窓口をそのまま使う）・済みの印（ブラウザの中に残す形）
 src/lib/brief/     朝の要点の「AI の一言」：材料と印（items.ts。名前は送らない・印を日時とお名前に置きかえる）・門・指示文・流れ・決まった返事（scriptBriefWriter）
 src/lib/eval/      試験10問（/eval。左のタブには出さない）：問い（config と seed から作る。ふつうの予約3問）・判定（checks.ts。文と結果。AI は使わない）・流し方（同時に1回・1問ごとに eval.minIntervalSeconds 秒・eval.maxCallsPerRun 回まで・流せなかった物は数えない）・合言葉（EVAL_PASSCODE。窓口は src/app/api/eval/。AI は呼ばない）・サーバーの見張り（guard.ts。KV の印は SET NX＋期限・回数は INCR。/api/ai/ の窓口が試験の札の見出しを見て数える）・仮押さえの問いは「選んだ枠にちょうど1件・確定0件」の時だけ合格・「確定しました」と言わない、は確定したと伝える文だけ落とす（かぎかっこの中・「〜とお伝えできません」の打ち消しは数えない）・README に写す形は文の条件で落ちた所の前後も出す。今の /api/ai/ の窓口を使い、結果は画面の表だけ
-connect/          本物の検索広告（Google 広告）の中で動かす見本のスクリプト（google-ads/secretairy-sync.js）。アプリの動きとビルドには入れない・本物のアカウントでは動かしていない。広告の部品を直に読むのは main だけ（テストは作り物の部品を差し込む）。サービスの名前を書いてよいのはここと README の「本物の検索広告につなぐ道」だけ
+connect/          本物の検索広告（Google 広告）の中で動かす見本のスクリプト（google-ads/secretairy-sync.js）。アプリの動きとビルドには入れない・本物のアカウントでは動かしていない。広告の部品を直に読むのは main だけ（テストは作り物の部品を差し込む）。サービスの名前を書いてよいのはここ（とそのテスト）と README の「本物の検索広告につなぐ道」・「使った物と権利」だけ（画面とアプリのコードには出さない）
 .claude/agents/   サブエージェント「意地悪なお客さん役」（mean-customer.md）：試験の問いの案を出す。材料は seed と config だけ
 src/lib/menuEdits.ts メニューを直す（時間・値段・最終受付。ルールのタブの「メニュー」・画面は src/app/rules/MenuPanel.tsx。メニューごとに1行に畳む）・足す（単品・own-N・名前の確かめ menuNameProblem・色 menuColorChoices）・足したメニューを消す（使っている所 menuUses）：幅の確かめ・ブラウザに残す形・サーバーで受け取る確かめ（readMenus）・保存の前の一覧（menuConflicts。重なり・閉店越え・最終受付）ともう一度押す（saveStep）・保存と日誌（commitMenus）・メニューの設定の印（menusMark。直す前に始まった予約チャットの返事を入れない）。読むのは useMenus.ts → useBook の data.menus
 src/lib/holidays.ts 休みの日（オーナーが予約のページで決める。ブラウザの中・seats と同じ扱い）：判定（calDay）にだけ効かせ、最初の状態の日付は baseShop・seedAnchor で数える（今ある予約の日付を動かさない）。サーバーは readHolidays で確かめる
