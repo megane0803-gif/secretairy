@@ -17,13 +17,23 @@ export function AdsConnect() {
   const ads = useAds();
   const words = useMemo(() => featuredWords(ads.settings, getMenus()), [ads.settings]);
   const c = ads.settings.connect;
-  // 作った日時は開いた時の時計（写すたびに変わらないように、状態が変わった時だけ作りなおす）
-  const { payload, notes } = useMemo(() => syncPayload(ads.state, words, c, new Date().toISOString()), [ads.state, words, c]);
-  const json = JSON.stringify(payload, null, 2);
+  // 中身は折りたたみを開いた時だけ作る（作った日時はブラウザの時計。サーバーの描画とずれないように、閉じている間は作らない）
+  const [open, setOpen] = useState(false);
+  const { payload, notes } = useMemo(
+    () => (open ? syncPayload(ads.state, words, c, new Date().toISOString()) : { payload: null, notes: [] as string[] }),
+    [open, ads.state, words, c],
+  );
+  const json = payload ? JSON.stringify(payload, null, 2) : "";
   const [paste, setPaste] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
   const [read, setRead] = useState<{ head: string; lines: string[] } | null>(null);
   const marked = [...ads.state.proposals, ...(ads.state.adds ?? [])].filter((p) => p.realAt);
+  if (!open)
+    return (
+      <details className="fold ad-connect" onToggle={(e) => setOpen(e.currentTarget.open)}>
+        <summary>本物の広告に渡す形を見る（今はつないでいません）</summary>
+      </details>
+    );
 
   const copy = async () => {
     try {
@@ -52,7 +62,7 @@ export function AdsConnect() {
   };
 
   return (
-    <details className="fold ad-connect">
+    <details className="fold ad-connect" open onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary>本物の広告に渡す形を見る（今はつないでいません）</summary>
       <div>
         <p className="hint small">
@@ -88,8 +98,8 @@ export function AdsConnect() {
           <button
             type="button"
             className="btn small"
-            onClick={() => setPaste(JSON.stringify(sampleResult(payload), null, 2))}
-            disabled={payload.items.length === 0}
+            onClick={() => payload && setPaste(JSON.stringify(sampleResult(payload), null, 2))}
+            disabled={!payload || payload.items.length === 0}
             title="本物の側の代わりに、渡す中身の全部を「反映した」とした結果を欄に入れます"
           >
             見本の結果を入れる
