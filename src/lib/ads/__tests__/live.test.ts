@@ -17,7 +17,9 @@ import { gaqlString, VERIFY_QUERY } from "../live/api";
 import { customerIdFrom, liveEnvFrom, LIVE_ENV, serviceKeyFrom } from "../live/env";
 import { handleLiveRead, handleLiveSend, handleLiveSetup, handleLiveStatus, keywordProblem, LIVE_KEY, scrub, type LiveDeps } from "../live/server";
 import { accessToken, clearTokenCache, signedJwt } from "../live/token";
-import { driftOf, outcomeText } from "../live/client";
+import { driftOf, LOST_MESSAGE, outcomeText } from "../live/client";
+import { driftShown, livePanel, READ_LATER_NOTE, READ_LIMIT_NOTE, readFailedAfter, RESET_WHILE_SENDING, visibleRead, type LivePanelDeps, type LivePanelView } from "../live/panel";
+import type { LiveReadResponse } from "../live/wire";
 import { approveAd, approveAdd, EMPTY_ADS, tableOf, withReview, type AdsState } from "../state";
 import { buildTable } from "../report";
 import { fakeGoogle, type FakeGoogle } from "./fakeGoogle";
@@ -259,10 +261,12 @@ describe("つながっているか・止まる時", () => {
     assert.match(ui, /テスト用アカウントから読み直す/);
     assert.match(ui, /（つなぐ手順は README）/);
     assert.match(ui, /type="password"/);
-    assert.match(ui, /sameEpoch\(\{ epoch: currentEpoch\(\) \}, epoch\)/, "「最初に戻す」が途中で押されたら印を付けない");
-    assert.match(ui, /if \(r\.created\) writeJournal/);
+    const flow = readFileSync("src/lib/ads/live/panel.ts", "utf8");
+    assert.match(flow, /sameEpoch\(\{ epoch: d\.epoch\(\) \}, epoch\)/, "「最初に戻す」が途中で押されたら印を付けない");
+    assert.match(flow, /if \(r\.created\) d\.journal/);
+    assert.match(ui, /epoch: currentEpoch/);
     assert.doesNotMatch(ui, /localStorage|sessionStorage|writeBrowser/, "合言葉をブラウザに残さない");
-    for (const f of ["src/app/ads/AdsLive.tsx", "src/lib/ads/live/client.ts", "src/lib/ads/live/wire.ts", "src/lib/ads/connectLoad.ts"]) {
+    for (const f of ["src/app/ads/AdsLive.tsx", "src/lib/ads/live/client.ts", "src/lib/ads/live/panel.ts", "src/lib/ads/live/wire.ts", "src/lib/ads/connectLoad.ts"]) {
       const s = readFileSync(f, "utf8");
       assert.doesNotMatch(s, /process\.env|GOOGLE_ADS_|NEXT_PUBLIC_/, f);
       assert.doesNotMatch(s, /from "\.\/(env|token|api|server|deps)"|live\/(env|token|api|server|deps)"/, `${f} はサーバーの部品を読まない`);
@@ -1013,6 +1017,251 @@ describe("画面の印（直しR の読み込みと同じ道）", () => {
     assert.match(driftOf(s, read2 as any, c.adGroup).join(), /止まっていません/);
   });
 
+  // ── 直しT：送った後・用意した後に、送る前に読んだ古い一覧を残さない（画面の流れは live/panel.ts） ──
+  const READ_DAY = LIVE_KEY.day(TODAY, "read");
+  const readCount = async (w: Awaited<ReturnType<typeof prepared>>) => Number((await w.store!.get(READ_DAY)) ?? 0);
+
+  /** 画面の流れを、作り物の Google の窓口につなぐ（合言葉は押した時に渡す） */
+  function panelOf(w: ReturnType<typeof world>, o: { read?: () => Promise<LiveReadResponse>; send?: LivePanelDeps["send"]; epoch?: () => string | undefined } = {}) {
+    let s = state();
+    const store = { read: () => s, update: (f: (x: AdsState) => AdsState) => ((s = f(s)), { ok: true as const }), words, settings: c, journal: "テスト用の広告アカウントに送った" };
+    const views: LivePanelView[] = [];
+    const journal: string[] = [];
+    let reads = 0;
+    const serverRead = async () => (await bodyOf(await handleLiveRead(readReq(), w.deps))) as LiveReadResponse;
+    const panel = livePanel({
+      setup: async (code) => (await bodyOf(await handleLiveSetup(setupReq(code), w.deps))) as any,
+      send: o.send ?? (async (code, payload) => (await bodyOf(await handleLiveSend(sendReq(payload, code), w.deps))) as any),
+      read: () => {
+        reads += 1;
+        return (o.read ?? serverRead)();
+      },
+      epoch: o.epoch ?? (() => "e1"),
+      payload: () => syncPayload(s, words, c, NOW).payload,
+      mark: (result) => loadSyncResult(JSON.stringify(result), store) as any,
+      journal: (t) => void journal.push(t),
+      onChange: (v) => void views.push(v),
+    });
+    return { panel, views, journal, reads: () => reads, ads: () => s, drift: (epoch: string | undefined = "e1") => driftShown(s, panel.view(), epoch, c.adGroup) };
+  }
+  /** 送る前の一覧を読んでおく（「美容院 安い」はまだ出す設定） */
+  async function readBefore(p: ReturnType<typeof panelOf>) {
+    await p.panel.reread();
+    const before = p.panel.view().read!.list;
+    assert.equal(before.keywords.find((k) => k.text === "美容院 安い")!.status, "出す設定");
+    return before;
+  }
+  /** 一度読んだ後、送るの返事が来るまで止めておける送る */
+  function deferred<T>() {
+    let resolve!: (x: T) => void;
+    const promise = new Promise<T>((r) => (resolve = r));
+    return { promise, resolve };
+  }
+
+  test("直しT：送った後に、送る前の一覧で「印がありますが〜」が出ない・送った後に1回だけ読み直し、新しい一覧で「止めている」", async () => {
+    const w = await prepared();
+    const p = panelOf(w);
+    const before = await readBefore(p);
+    // 直しS の時のまま（送る前の一覧と比べる）なら、出てしまう1行
+    const n0 = await readCount(w);
+    await p.panel.send(PASS);
+    const v = p.panel.view();
+    assert.match(v.shown!.head, /本物に反映済みの印を 3件 付けました/);
+    assert.ok(v.shown!.lines.some((l) => /「美容院 安い」：反映した/.test(l)));
+    assert.match(driftOf(p.ads(), before, c.adGroup).join(), /止まっていません/, "古い一覧と比べると出る1行");
+    assert.deepEqual(p.drift(), [], "送った後の一覧とだけ比べる");
+    assert.equal(v.read!.list.keywords.find((k) => k.text === "美容院 安い")!.status, "止めている");
+    assert.deepEqual(v.read!.list.negatives, [{ text: "美容院 安い 学生", match: "完全一致" }]);
+    assert.equal(p.reads(), 2, "読み直しを押した1回＋送った後の1回だけ");
+    assert.equal((await readCount(w)) - n0, 1, "1日の読み直しの数も1つだけ増える");
+    // 送っている間は古い一覧を出していない
+    const during = p.views.filter((x) => x.busy === "send");
+    assert.ok(during.length > 0);
+    assert.ok(during.every((x) => x.read === null || x.read.seq > x.wroteSeq), "送っている間に送る前の一覧を出さない");
+  });
+
+  test("直しT：自動の読み直しは押している間の印で止まらない・送っている間に「読み直す」を押しても2回目は呼ばない", async () => {
+    const w = await prepared();
+    const gate = deferred<void>();
+    const p = panelOf(w, {
+      send: async (code, payload) => {
+        await gate.promise;
+        return (await bodyOf(await handleLiveSend(sendReq(payload, code), w.deps))) as any;
+      },
+    });
+    const sending = p.panel.send(PASS);
+    assert.equal(p.panel.view().busy, "send");
+    await p.panel.reread(); // 押している間は受けない
+    assert.equal(p.reads(), 0);
+    gate.resolve();
+    await sending;
+    assert.equal(p.reads(), 1, "送った後の読み直しは1回だけ");
+    assert.equal(p.panel.view().busy, null);
+    assert.ok(p.panel.view().read, "送った後に読んだ一覧がある");
+  });
+
+  test("直しT：送った後の新しい一覧で本当に合わない時は今どおり「印がありますが〜」が出る（比べる働きは残す）", async () => {
+    const w = await prepared();
+    const p = panelOf(w);
+    await p.panel.send(PASS);
+    assert.deepEqual(p.drift(), []);
+    // Google の側で止めたのを戻すと、次の読み直しで印と違う1行
+    w.google.criteria.find((k) => k.text === "美容院 安い")!.status = "ENABLED";
+    await p.panel.reread();
+    assert.match(p.drift().join(), /「美容院 安い」は印がありますが、読み直すと止まっていません/);
+    // 送る前（最後の送るより前に頼んだ）一覧とは比べない
+    const stale: LivePanelView = { ...p.panel.view(), wroteSeq: p.panel.view().read!.seq };
+    assert.deepEqual(driftShown(p.ads(), stale, "e1", c.adGroup), []);
+  });
+
+  test("直しT：読み直しの1日の上限に届いている時は、古い一覧を消して「今日の読み直しは上限です」の1行（送った結果は残す）", async () => {
+    const w = await prepared();
+    const p = panelOf(w);
+    await readBefore(p);
+    for (let n = await readCount(w); n < live.daily.read; n++) await w.store!.incr(READ_DAY, 86400);
+    await p.panel.send(PASS);
+    const v = p.panel.view();
+    assert.equal(v.read, null, "古い一覧は消す");
+    assert.match(v.shown!.head, /本物に反映済みの印を 3件/, "送った結果は残す");
+    assert.equal(v.readNote, "送った結果は上のとおりです。今日の読み直しは上限です。明日また読み直せます");
+    assert.equal(READ_LIMIT_NOTE, "今日の読み直しは上限です。明日また読み直せます");
+    assert.deepEqual(p.drift(), []);
+  });
+
+  test("直しT：送るはうまくいって読み直しだけ断られた時は「送った結果は上のとおりです。いまは読み直せませんでした（理由）」（送れなかったと読めない）", async () => {
+    const w = await prepared();
+    let lose = false;
+    const p = panelOf(w, { read: async () => (lose ? { ok: false, code: "lost", message: LOST_MESSAGE } : ((await bodyOf(await handleLiveRead(readReq(), w.deps))) as LiveReadResponse)) });
+    await readBefore(p);
+    lose = true;
+    await p.panel.send(PASS);
+    const v = p.panel.view();
+    assert.equal(v.read, null);
+    assert.match(v.shown!.head, /本物に反映済みの印を 3件/);
+    assert.equal(v.readNote, "送った結果は上のとおりです。いまは読み直せませんでした（返事が届きませんでした）");
+    assert.doesNotMatch(v.readNote!, /送れ(な|ませ|たか)/);
+    assert.equal(readFailedAfter("send", { ok: false, code: "no-store", message: "置き場につながりません。" }), "送った結果は上のとおりです。いまは読み直せませんでした（置き場につながりません）");
+  });
+
+  test("直しT：「用意」の後も同じ（用意の前の「キャンペーンがまだありません」を残さない・用意した後に1回だけ読み直す）", async () => {
+    const w = world();
+    const p = panelOf(w);
+    await p.panel.reread();
+    assert.match(p.panel.view().readNote!, /キャンペーンがまだありません/);
+    await p.panel.setup(PASS);
+    const v = p.panel.view();
+    assert.equal(v.shown!.head, "✓ 用意しました");
+    assert.equal(v.readNote, null, "用意の前の1行は残さない");
+    assert.equal(v.read!.list.campaign.found, true);
+    assert.equal(v.read!.list.keywords.length, 8);
+    assert.equal(p.reads(), 2);
+    assert.deepEqual(p.journal, ["テスト用の広告アカウントに店の広告を用意した"]);
+    // もう用意してある時も、読み直しは新しい物
+    await p.panel.setup(PASS);
+    assert.equal(p.panel.view().shown!.head, "もう用意してあります");
+    assert.equal(p.reads(), 3);
+    assert.equal(p.journal.length, 1, "何も作らなかった時は日誌を書かない");
+  });
+
+  test("直しT：送るが断られた・分からない・「最初に戻す」が押された時も古い一覧は消え、送った結果の知らせは残る", async () => {
+    // 断られた（合言葉がちがう）：何も変わっていないので読み直さず、「読み直す」で見られるの1行
+    {
+      const w = await prepared();
+      const p = panelOf(w);
+      await readBefore(p);
+      await p.panel.send("owner-passcode-wrong-0000");
+      const v = p.panel.view();
+      assert.equal(v.read, null);
+      assert.equal(v.shown!.head, "オーナー用の合言葉がちがいます");
+      assert.equal(v.readNote, READ_LATER_NOTE);
+      assert.equal(p.reads(), 1, "断られた時は読み直さない");
+      assert.deepEqual(p.drift(), []);
+    }
+    // 分からない（返事が届かなかった）：古い一覧を消し、知らせは残して1回だけ読み直す
+    {
+      const w = await prepared();
+      const p = panelOf(w, { send: async () => ({ ok: false, code: "lost", message: LOST_MESSAGE }) });
+      await readBefore(p);
+      await p.panel.send(PASS);
+      const v = p.panel.view();
+      assert.equal(v.shown!.head, LOST_MESSAGE);
+      assert.equal(p.reads(), 2);
+      assert.ok(v.read && v.read.seq > v.wroteSeq, "送った後に読んだ一覧");
+    }
+    // 送っている間に「最初に戻す」：印は付けず、古い一覧は消え、戻した後の印で読み直す
+    {
+      const w = await prepared();
+      let epoch = "e1";
+      const p = panelOf(w, {
+        epoch: () => epoch,
+        send: async (code, payload) => {
+          const r = (await bodyOf(await handleLiveSend(sendReq(payload, code), w.deps))) as any;
+          epoch = "e2";
+          return r;
+        },
+      });
+      await readBefore(p);
+      await p.panel.send(PASS);
+      const v = p.panel.view();
+      assert.equal(v.shown!.head, RESET_WHILE_SENDING);
+      assert.ok(v.shown!.lines.some((l) => /反映した/.test(l)), "送った結果の行は残す");
+      assert.ok(p.ads().proposals.every((x) => !x.realAt), "印は付けない");
+      assert.equal(v.read!.epoch, "e2");
+      assert.ok(visibleRead(v, "e2"));
+      assert.equal(visibleRead(v, "e1"), null);
+    }
+  });
+
+  test("直しT：読み直しの返事が遅れて届き、その間に「最初に戻す」かもっと新しい頼みがあった時は出さない", async () => {
+    const w = await prepared();
+    let epoch = "e1";
+    let hold: ReturnType<typeof deferred<LiveReadResponse>> | null = null;
+    const p = panelOf(w, {
+      epoch: () => epoch,
+      read: async () => {
+        const r = (await bodyOf(await handleLiveRead(readReq(), w.deps))) as LiveReadResponse;
+        if (!hold) return r;
+        const h = hold;
+        hold = null;
+        return h.promise;
+      },
+    });
+    await p.panel.reread();
+    const first = p.panel.view().read!;
+    // ① 返事を待っている間に「最初に戻す」
+    hold = deferred<LiveReadResponse>();
+    const h1 = hold;
+    const late1 = p.panel.reread();
+    epoch = "e2";
+    h1.resolve({ ok: true, campaign: { found: true, status: "古い返事" }, keywords: [], negatives: [] });
+    await late1;
+    assert.notEqual(p.panel.view().read?.list.campaign.status, "古い返事");
+    assert.equal(p.panel.view().read, first, "遅れた返事で書きかえない");
+    assert.equal(visibleRead(p.panel.view(), "e2"), null, "戻す前の一覧も出さない");
+    // ② 返事を待っている間に、もっと新しい頼み（画面が「最初に戻す」を見て forget する）
+    hold = deferred<LiveReadResponse>();
+    const h2 = hold;
+    const late2 = p.panel.reread();
+    p.panel.forget();
+    h2.resolve({ ok: true, campaign: { found: true, status: "古い返事" }, keywords: [], negatives: [] });
+    await late2;
+    assert.equal(p.panel.view().read, null);
+    // ③ 次の読み直しはふつうに出る
+    await p.panel.reread();
+    assert.equal(p.panel.view().read!.epoch, "e2");
+    assert.equal(p.panel.view().read!.list.campaign.found, true);
+  });
+
+  test("直しT：画面は live/panel.ts を通す（送る前の一覧と比べない・自分で読み直しの番号を数えない）", () => {
+    const ui = readFileSync("src/app/ads/AdsLive.tsx", "utf8");
+    assert.match(ui, /livePanel\(/);
+    assert.match(ui, /driftShown\(/);
+    assert.match(ui, /visibleRead\(/);
+    assert.match(ui, /panel\.forget\(\)/, "「最初に戻す」を見て流れている読み直しを捨てる");
+    assert.doesNotMatch(ui, /driftOf\(/, "古い一覧と比べる形を画面に残さない");
+    assert.doesNotMatch(ui, /setRead\(|setReadNote\(/);
+  });
+
   test("分からない物は印を付けない・結果の1行の言い方", () => {
     assert.equal(outcomeText({ outcome: "done", text: "a" }), "「a」：反映した");
     assert.equal(outcomeText({ outcome: "already", reason: "もう止まっていた", text: "a" }), "「a」：もう止まっていた");
@@ -1037,11 +1286,25 @@ describe("鍵の扱い（リポジトリ・設定）", () => {
 });
 
 describe("README", () => {
-  test("テスト用アカウントの節：何を・どの守りで・確かめていないこと・本番で確かめる前・言いすぎない", () => {
+  test("テスト用アカウントの節：何を・どの守りで・確かめていないこと・本番の確かめの結果・言いすぎない", () => {
     const readme = readFileSync("README.md", "utf8");
     const sec = readme.slice(readme.indexOf("### Google 広告のテスト用アカウントに本当に送る"), readme.indexOf("### 道1"));
     for (const w of ["止める", "外す", "足す", "読み直す", "validateOnly", "テスト用アカウントかを新しく確かめ", "確かめていないこと", "Explorer", "広告文の無い、止めたキャンペーン"]) assert.ok(sec.includes(w), w);
-    assert.match(sec, /本番で確かめる前です/);
+    // 直しT：本番の確かめの結果（番号・メールは書かない）
+    assert.doesNotMatch(sec, /本番で確かめる前です/);
+    assert.match(sec, /本番の確かめの結果\*\*（2026-11-07/);
+    for (const w of ["予算・止めたキャンペーン・広告グループ・言葉8つ", "広告文は作っていません", "止める1件・足す1件・外す1件の3つとも「反映した」", "「一時停止」", "フレーズ一致で増え", "完全一致の除外にキャンペーンの単位で", "validateOnly と仮の番号", "本番で通りました"])
+      assert.ok(sec.includes(w), w);
+    assert.doesNotMatch(sec, /\d{3}-?\d{3}-?\d{4}|@[a-z]/i, "番号・メールを書かない");
+    // 本番で呼んだ広告の窓口の行（だれでも呼べる窓口の表）
+    const proof = readme.slice(readme.indexOf("### 動かして確かめる（知らない人の状態）"), readme.indexOf("### 動かし方の手順"));
+    assert.match(proof, /\| `\/api\/ads\/live\/send` \| POST・Origin は本番（合言葉なし） \| 401「オーナー用の合言葉がちがいます」 \|/);
+    assert.match(proof, /\| `\/api\/ads\/live\/send` \| POST・Origin なし \| 403 \|/);
+    assert.match(proof, /cross-site.*\| 403 \|/);
+    assert.match(proof, /\| `\/api\/ads\/live\/send` \| GET \| 405 \|/);
+    assert.match(proof, /「書けるか」は、環境変数とオーナー用の合言葉の設定があるかから決めた札で、Google に書けたことの確かめではありません/);
+    assert.match(proof, /合言葉なしで送った時も、間違いの数に1つ足す作り/);
+    assert.doesNotMatch(proof, /100%|必ず|すぐ反映|数を使わない/);
     assert.doesNotMatch(sec, /100%|必ず|すぐ反映/);
     assert.doesNotMatch(sec, /出せる広告です/);
     // 「最初に戻す」で戻らない・残る物（データの置き場所の節）
