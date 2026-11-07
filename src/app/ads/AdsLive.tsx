@@ -11,17 +11,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { syncPayload } from "@/lib/ads/connect";
 import { loadSyncResult } from "@/lib/ads/connectLoad";
 import { featuredWords } from "@/lib/ads/featured";
-import { driftOf, liveRead, liveSend, liveSetup, liveStatus, outcomeText } from "@/lib/ads/live/client";
-import { NOT_CONNECTED_MESSAGE, type LiveReadResponse } from "@/lib/ads/live/wire";
+import { liveRead, liveSend, liveSetup, liveStatus } from "@/lib/ads/live/client";
+import { driftShown, EMPTY_LIVE_PANEL, livePanel, visibleRead, type LivePanelView } from "@/lib/ads/live/panel";
+import { NOT_CONNECTED_MESSAGE } from "@/lib/ads/live/wire";
 import { readAdsState, useAds } from "@/lib/ads/useAds";
-import { sameEpoch } from "@/lib/book/state";
 import { currentEpoch } from "@/lib/book/store";
 import { writeJournal } from "@/lib/journal";
 import { getMenus } from "@/lib/settings";
 
 type Status = { connected: boolean; canWrite: boolean } | null;
-type Shown = { head: string; lines: string[] } | null;
-type Read = Extract<LiveReadResponse, { ok: true }>;
 
 export function AdsLive() {
   const ads = useAds();
@@ -30,11 +28,33 @@ export function AdsLive() {
   const live = ads.settings.live;
   const [status, setStatus] = useState<Status>(null);
   const [pass, setPass] = useState("");
-  const [busy, setBusy] = useState<null | "setup" | "send" | "read">(null);
-  const [shown, setShown] = useState<Shown>(null);
-  const [read, setRead] = useState<Read | null>(null);
-  const [readNote, setReadNote] = useState<string | null>(null);
-  const running = useRef(false);
+  const [view, setView] = useState<LivePanelView>(EMPTY_LIVE_PANEL);
+  // 押した時の物を読む（作り直さない）
+  const latest = useRef({ ads, words, c });
+  latest.current = { ads, words, c };
+  // 押した後の流れ（古い一覧を消す・送った後に1回だけ読み直す・遅れた返事を出さない）は src/lib/ads/live/panel.ts
+  const [panel] = useState(() =>
+    livePanel({
+      setup: liveSetup,
+      send: liveSend,
+      read: liveRead,
+      epoch: currentEpoch,
+      // 送る直前の状態で作る（作った日時はブラウザの時計）
+      payload: () => syncPayload(readAdsState(), latest.current.words, latest.current.c, new Date().toISOString()).payload,
+      mark: (result) =>
+        loadSyncResult(JSON.stringify(result), { read: readAdsState, update: latest.current.ads.update, words: latest.current.words, settings: latest.current.c, journal: "テスト用の広告アカウントに送った" }),
+      journal: (text) => writeJournal({ who: "オーナー", text }),
+      onChange: setView,
+    }),
+  );
+  // 「最初に戻す」が押されたら、流れている読み直しの返事を捨てて一覧を消す
+  const epochNow = currentEpoch();
+  const seenEpoch = useRef(epochNow);
+  useEffect(() => {
+    if (seenEpoch.current === epochNow) return;
+    seenEpoch.current = epochNow;
+    panel.forget();
+  }, [epochNow, panel]);
 
   useEffect(() => {
     let alive = true;
@@ -51,68 +71,29 @@ export function AdsLive() {
   if (!status.connected) return <p className="hint small ad-live-off">{NOT_CONNECTED_MESSAGE}（つなぐ手順は README）</p>;
 
   const pending = syncPayload(ads.state, words, c, "").payload.items.length;
-
-  /** 同時に2回押さない（押している間はどのボタンも押せない） */
-  const run = async (kind: "setup" | "send" | "read", f: () => Promise<void>) => {
-    if (running.current) return;
-    running.current = true;
-    setBusy(kind);
-    try {
-      await f();
-    } finally {
-      running.current = false;
-      setBusy(null);
-    }
-  };
+  const { busy, shown, readNote } = view;
+  const read = visibleRead(view, epochNow);
 
   const setup = (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted) return;
     const code = pass;
     setPass("");
-    void run("setup", async () => {
-      const r = await liveSetup(code);
-      if (!r.ok) return void setShown({ head: r.message, lines: [] });
-      if (r.created) writeJournal({ who: "オーナー", text: "テスト用の広告アカウントに店の広告を用意した" });
-      setShown({ head: r.created ? "✓ 用意しました" : "もう用意してあります", lines: r.lines });
-    });
+    void panel.setup(code);
   };
 
   const send = (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted) return;
     const code = pass;
     setPass("");
-    void run("send", async () => {
-      // 送る直前の状態で作る（作った日時はブラウザの時計）
-      const { payload } = syncPayload(readAdsState(), words, c, new Date().toISOString());
-      // 「最初に戻す」が途中で押されたら、返事が来ても印を付けない（始めた時の印を持つ）
-      const epoch = currentEpoch();
-      if (payload.items.length === 0) return void setShown({ head: "送る案がありません（承認済みで、まだ反映していない案だけを送ります）", lines: [] });
-      const r = await liveSend(code, payload);
-      if (!r.ok) return void setShown({ head: r.message, lines: [] });
-      const lines = r.lines.map(outcomeText);
-      if (!sameEpoch({ epoch: currentEpoch() }, epoch))
-        return void setShown({ head: "送っている間に「最初に戻す」が押されたので、印は付けませんでした（テスト用アカウントの中は変わっています。読み直してください）", lines });
-      // 直しR の結果の読み込みと同じ道で印を付ける（「もう〜だった」も印。2回でも1回）
-      const m = loadSyncResult(JSON.stringify(r.result), { read: readAdsState, update: ads.update, words, settings: c, journal: "テスト用の広告アカウントに送った" });
-      if (!m.ok) return void setShown({ head: m.note, lines });
-      setShown({ head: m.marked ? `✓ 本物に反映済みの印を ${m.marked}件 付けました` : "印を付けた案はありません", lines });
-    });
+    void panel.send(code);
   };
 
   const reread = (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted) return;
-    void run("read", async () => {
-      const r = await liveRead();
-      if (!r.ok) {
-        setRead(null);
-        return void setReadNote(r.message);
-      }
-      setRead(r);
-      setReadNote(r.note ?? null);
-    });
+    void panel.reread();
   };
 
-  const drift = read ? driftOf(ads.state, read, c.adGroup) : [];
+  const drift = driftShown(ads.state, view, epochNow, c.adGroup);
 
   return (
     <div className="ad-live" aria-label="テスト用の広告アカウント">
