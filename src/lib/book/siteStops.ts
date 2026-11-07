@@ -5,7 +5,7 @@
 // 予約チャットと、オーナーが台帳から入れる予約には効かせない（1日まるごと止めたい時は、休みの日を使う。holidays.ts）。
 // 止めた時間に施術がかかる予約は入れない（その時刻に始まる予約だけでなく、止めた時間に重なる予約も）。
 
-import { toHHMM, toMinutes } from "../calendar";
+import { isRealDate, toHHMM, toMinutes } from "../calendar";
 import type { ShopSettings } from "../settings";
 
 /** ブラウザの中の置き場所（browser.ts の PREFIX の後ろ） */
@@ -15,6 +15,11 @@ export const SITE_STOPS_KEY = "siteStops";
 export const MAX_SITE_STOPS = 400;
 
 const SLOT = /^(\d{4}-\d{2}-\d{2}) ([01]\d|2[0-3]):([0-5]\d)$/;
+/** 1マスの印の形で、日付が暦にある物（11/32 などは落とす） */
+const isSlot = (x: string) => {
+  const m = SLOT.exec(x);
+  return !!m && isRealDate(m[1]);
+};
 
 /** 空き表の1マスの長さ（分）。予約サイトの空き表（BookingSite.tsx）と同じ */
 export function siteStep(shop: Pick<ShopSettings, "slotMinutes">): number {
@@ -32,7 +37,7 @@ export function parseSiteStops(raw: string | null): string[] {
   try {
     const v = (JSON.parse(raw) as { slots?: unknown })?.slots;
     if (!Array.isArray(v)) return [];
-    return [...new Set(v.filter((x): x is string => typeof x === "string" && SLOT.test(x)))].sort().slice(-MAX_SITE_STOPS);
+    return [...new Set(v.filter((x): x is string => typeof x === "string" && isSlot(x)))].sort().slice(-MAX_SITE_STOPS);
   } catch {
     return [];
   }
@@ -40,7 +45,7 @@ export function parseSiteStops(raw: string | null): string[] {
 
 /** ブラウザに書く形。1マスも無ければ消す（null） */
 export function siteStopsRaw(slots: string[]): string | null {
-  const list = [...new Set(slots.filter((x) => SLOT.test(x)))].sort().slice(-MAX_SITE_STOPS);
+  const list = [...new Set(slots.filter((x) => isSlot(x)))].sort().slice(-MAX_SITE_STOPS);
   return list.length ? JSON.stringify({ slots: list }) : null;
 }
 

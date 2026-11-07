@@ -2,7 +2,7 @@
 // ルールはかならず strictest.ts を通して「その場面で効く、厳しい方の1つ」にしてから使う。
 // 文のルールはここでは判定しない（Claude への指示に入れる。prompt.ts）。
 
-import { dayDiff, lastStartOf, toHHMM, toMinutes } from "../calendar";
+import { dayDiff, isRealDate, lastStartOf, toHHMM, toMinutes } from "../calendar";
 import type { Hours } from "../settings";
 import type { TabId } from "../tabs";
 import { formatMinutes } from "./describe";
@@ -81,6 +81,9 @@ function peakOverlap(target: Span, others: Span[]): number {
   return peak;
 }
 
+/** 暦に無い日付（11/32 など）で断った時の理由（tellable.ts の baseSay は知らない id なのでお客様には伝えない） */
+export const UNREAL_DATE_REASON = "暦にない日付です";
+
 export function judge(input: JudgeInput): Verdict {
   const { booking, now, hours, seats, menus, existing } = input;
   const tab = input.tab ?? "reservations";
@@ -88,6 +91,11 @@ export function judge(input: JudgeInput): Verdict {
   const situation: Situation = { tab, menuIds: expandMenuIds(booking.menuIds, menus) };
   const effective = strictest(rulesFor(input.rules, situation));
   const texts = effective.filter((r) => r.check.kind === "text");
+
+  // 入口：予約・いまの日付・入っている予約のどれかの日付が暦に無ければ受けない。
+  // 下の確かめは日付を文字のまま比べる（同じ日の予約・当日か）ので、無い日付が来ると人数・間・当日不可をすり抜けるため
+  if (!isRealDate(booking.date) || !isRealDate(now.date) || existing.some((b) => !isRealDate(b.date)))
+    return { ok: false, base: [{ id: "real-date", label: "暦にある日付", ok: false, reason: UNREAL_DATE_REASON }], results: [], texts, situation };
 
   const start = toMinutes(booking.start);
   const minutes = minutesOf(booking.menuIds, menus);

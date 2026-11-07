@@ -33,6 +33,7 @@ npm run build      # 本番ビルド（push の前に通す）
 - メニュー・営業時間・同じ時間に受ける人数（前は席数。`shop.seats`）・カルテの見出し・タブの表示・ルールは `config/` に置き、`src/lib/settings.ts`（ルールは `src/lib/rules/store.ts`）を通して読む。
 - メニューの時間・値段・最終受付はオーナーがルールのタブで直せ、単品のメニューを足せる（`src/lib/menuEdits.ts`。ブラウザの中・seats と休みの日と同じ扱い・「最初に戻す」で設定の値に・足したメニューは消える）。足したメニューの id は `own-1` …（プログラムが付け、使い回さない）・名前の確かめは `menuNameProblem` の1か所・台帳やルールで使っている間は消せない（`menuUses`）。サーバーの `readMenus` は「設定の id は全部そろっている＋`own-` の id は形を確かめてから受ける」。メニューの名前を AI に渡す時は `src/lib/ai/menuData.ts`（お店のデータとして・指示として読ませない）。画面でメニューを読む所は台帳の `useBook` の `data.menus`（直した分を重ねた1つの入口）を通し、元の `data.menus` を直に読まない。サーバーの窓口には画面が `menus` を送り、`readMenus` で確かめてから使う（id がそろう・名前と色と includes は設定と同じ・数は幅の中）。
 - 画面のコードで `config/*.json` を直接 import しない。
+- 日付を受け取る所は、暦にある日付だけを受ける（`src/lib/calendar.ts` の `isRealDate` の1か所。形の確かめだけで済ませない・2つ作らない。台帳の行に暦に無い日付があれば相談全体を断る）。
 - 架空のデータ（`seed/`）は `src/lib/data/seed.ts` を通して読む。日付は「何番目の営業日（0 = 今日）＋時刻」で持ち、定休日には置かない。お客様は名字だけで「○○様」と書き、画面・日誌・ToDo・お知らせ・AI への指示で名前ごとに「（架空）」「架空」の札は付けない（架空であることは入力欄の近くの注意の1行 `NO_REAL_NAMES_NOTE` と README で伝える。仕様書 §3.3）。名前の作り方・照らし方は `src/lib/guestName.ts` の1か所（前の書き方「○○（架空）様」で残った保存は `withoutOldMark` で読みかえ、消さない）。
 - 例のルールは `config/rules.seed.json` だけ。作り手の考えで店の決まりを足さない。
 - 鍵つきの2つだけは仕組みの約束なのでコードに書く。
@@ -79,7 +80,7 @@ src/lib/todo/      ToDo：入口ごとの鍵・並べ方（items.ts。Claude は
 src/lib/todo/kinds.ts ToDo の種類の箱（お客様・仕入れと材料・お店のこと・お金と事務・広告・その他）：出どころからプログラムが決める（todoKind。画面に依らない）。投げたメモだけ送る時に選んだ種類（選ばなければ その他）。AI には決めさせない・送らない
 src/lib/posts/     発信：「下書きを保存」の1回（save.ts。書けた時だけ日誌・保存できた時だけ③と②の欄を空にする）・言葉の門・日時を入れる（台帳と設定から。本当に空いている時間・材料の時期）・お休みの日付は材料から読む（closed.ts。全部読み切れなければ読めないと出す）・ぶつかったら確かめての注意・発信だけの数の見方（postNumbersWritten）・指示文・流れ（作り直し1回）・決まった返事・保存した下書き（ブラウザの中に残す形）
 src/lib/posts/team/ 発信の下書きの「AI のチーム」：候補にしてよいかの確かめ（gate.ts。1回だけ出てくる1文まるごと・数字・日付・印・URL なし・置きかえた後の全文）・リサーチャー（research.ts。プログラム。画面で今の台帳と設定から毎回）・指示（prompt.ts）・流れ（run.ts）・決まった返事（script.ts）・下書きの番号・版・会議の番号と「入れる」（state.ts）
-src/lib/line/      LINE のつなぎ（オーナー側）：署名・Redis・つなぎと預かり（bridge）・一言の振り分け（sort）・画面での入れ方（apply）
+src/lib/line/      LINE のつなぎ（オーナー側）：署名・Redis・つなぎと預かり（bridge）・一言の振り分け（sort）・画面での入れ方（apply）・ボタンの分を書く（press。書けた時だけ日誌と確定の返事・「最初に戻す」の印が違えば書かない）
 src/app/api/line/  LINE の窓口（Webhook・つなぐ・受け取り・送る）。画面の処理と混ぜない
 src/lib/freee/     経理の freee（テスト事業所）：暗号化した cookie（seal.ts）・API（api.ts。公式の定義で確かめた形だけ）・照らし合わせと状態の分け方（match.ts）・窓口の中身と守り（server.ts）・画面の記録（state.ts）・1件ずつ送る流れ（run.ts）。AI は呼ばない
 src/app/api/freee/ freee の窓口（つなぐ・戻り先・つながっているか・外す・明細を入れる・登録・読み直す）。中身は src/lib/freee/server.ts

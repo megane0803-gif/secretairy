@@ -9,7 +9,7 @@
 // AI・サーバー・自動の処理からは呼ばない。サーバーが出せるのは仮押さえ（HoldOffer）まで。
 
 import type { HoldOffer, TodoOffer } from "../ai/wire";
-import { MAX_DAY_OFFSET } from "../calendar";
+import { isRealDate, MAX_DAY_OFFSET } from "../calendar";
 import type { SavedKarte } from "../karte/record";
 import type { ChatReservation, SeedResEdit } from "../reservations";
 import { getSavedMemoMaxChars } from "../settings";
@@ -134,9 +134,10 @@ export function sameEpoch(s: Pick<BookState, "epoch">, epoch: string | undefined
   return (s.epoch ?? "") === (epoch ?? "");
 }
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^\d{2}:\d{2}$/;
 const isStr = (x: unknown): x is string => typeof x === "string";
+/** 起点の日の形（起点は読めなければ台帳を最初から作り直すので、ここは形だけ見る。予約・ToDo・カルテの日付は isRealDate） */
+const ANCHOR = /^\d{4}-\d{2}-\d{2}$/;
 
 /** ブラウザに残っていた文字を読む。形のおかしい物は落とす。無ければ null（まだ一度も開いていない） */
 export function parseBook(raw: string | null): BookState | null {
@@ -147,7 +148,7 @@ export function parseBook(raw: string | null): BookState | null {
   } catch {
     return null;
   }
-  if (!d || typeof d !== "object" || !isStr(d.anchor) || !DATE.test(d.anchor)) return null;
+  if (!d || typeof d !== "object" || !isStr(d.anchor) || !ANCHOR.test(d.anchor)) return null;
   const arr = (x: unknown) => (Array.isArray(x) ? (x as Record<string, unknown>[]) : []);
   const chat: ChatReservation[] = arr(d.chat)
     .filter(
@@ -157,7 +158,7 @@ export function parseBook(raw: string | null): BookState | null {
         isStr(r.customerId) &&
         isStr(r.menuId) &&
         isStr(r.date) &&
-        DATE.test(r.date) &&
+        isRealDate(r.date) &&
         isStr(r.start) &&
         TIME.test(r.start) &&
         (r.status === "hold" || r.status === "confirmed") &&
@@ -196,7 +197,7 @@ export function parseBook(raw: string | null): BookState | null {
       title: withoutOldMark(t.title as string),
       createdAt: t.createdAt as string,
       done: t.done === true,
-      ...(isStr(t.due) && DATE.test(t.due) ? { due: t.due } : {}),
+      ...(isStr(t.due) && isRealDate(t.due) ? { due: t.due } : {}),
       ...(t.kind === "next-talk" ? { kind: "next-talk" as const } : {}),
       ...(isStr(t.key) && t.key.length <= 120 ? { key: t.key } : {}),
       ...(TODO_SOURCES.includes(t.source as TodoSource) ? { source: t.source as TodoSource } : {}),
@@ -217,7 +218,7 @@ export function parseBook(raw: string | null): BookState | null {
         isStr(k.id) &&
         isStr(k.customerId) &&
         isStr(k.date) &&
-        DATE.test(k.date) &&
+        isRealDate(k.date) &&
         isStr(k.menuId) &&
         isStr(k.memo) &&
         isStr(k.savedAt) &&
@@ -259,7 +260,7 @@ export function parseBook(raw: string | null): BookState | null {
       const e = x as Record<string, unknown> | null;
       if (!e || typeof e !== "object" || !isStr(e.at)) continue;
       if (e.cancelled === true) seedResEdits[id.slice(0, 60)] = { cancelled: true, at: e.at };
-      else if (isStr(e.date) && DATE.test(e.date) && isStr(e.start) && TIME.test(e.start) && isStr(e.menuId) && e.menuId.length <= 80)
+      else if (isStr(e.date) && isRealDate(e.date) && isStr(e.start) && TIME.test(e.start) && isStr(e.menuId) && e.menuId.length <= 80)
         seedResEdits[id.slice(0, 60)] = { date: e.date, start: e.start, menuId: e.menuId, at: e.at };
     }
   const seq = d.siteSeq;
@@ -448,7 +449,7 @@ export function withChatTodo(
     done: false,
     source: "chat",
     key: chatKey(id.replace(/^td-chat-/, "")),
-    ...(today && DATE.test(today) ? { due: today } : {}),
+    ...(today && isRealDate(today) ? { due: today } : {}),
   };
   if (hasTodoKey(s, todoKey(added))) return { state: s, journal: null };
   return {

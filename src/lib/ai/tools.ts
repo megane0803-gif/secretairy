@@ -3,7 +3,7 @@
 // どの道具も、答えはプログラム（slots.ts → judge.ts）が出す。仮押さえも、ここでもう一度判定してから出す。
 // 仮押さえを外せるのは、この会話で作った、まだ承認されていない仮押さえだけ（プログラムで確かめる）。
 
-import { calDay } from "../calendar";
+import { calDay, isRealDate } from "../calendar";
 import { comboIdOf } from "../combo";
 import { scopeTag } from "../rules/describe";
 import type { Step, Candidate, HoldOffer, Visit } from "./wire";
@@ -203,6 +203,9 @@ function readInput(ctx: ToolContext, name: ToolName, raw: unknown): ({ ok: true 
   const weekday = str("weekday");
   if (date !== undefined && !DATE_RE.test(date)) return { ok: false, reason: "date は YYYY-MM-DD で入れてください" };
   if (dates && (dates.length > MAX_DATES || dates.some((d) => !DATE_RE.test(d)))) return { ok: false, reason: "dates は YYYY-MM-DD の並びで入れてください" };
+  // 形が合っていても暦に無い日（11/32・2/29・4/31 など）は断る（暦の計算で次の月に回す前の文字のまま確かめる）
+  if (date !== undefined && !isRealDate(date)) return { ok: false, reason: "date は暦にある日付（YYYY-MM-DD）で入れてください" };
+  if (dates && dates.some((d) => !isRealDate(d))) return { ok: false, reason: "dates は暦にある日付（YYYY-MM-DD）の並びで入れてください" };
   if (month !== undefined && month !== "" && !MONTH_RE.test(month)) return { ok: false, reason: "month は YYYY-MM で入れてください" };
   if (weekday !== undefined && weekday !== "" && !WEEKDAYS.includes(weekday as WeekdayKey))
     return { ok: false, reason: "weekday は mon〜sun で入れてください" };

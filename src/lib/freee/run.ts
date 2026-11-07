@@ -9,6 +9,7 @@
 // - つなぎが切れた・結果が分からない時は、そこで止める（残りは「まだ」のまま。画面の中の会計には切り替えない）
 
 import { txnKey, type ListedTxn } from "../accounting/rows";
+import { isRealDate } from "../calendar";
 import type { CardUse, StatementAccount } from "../data/types";
 import {
   importHeld,
@@ -192,7 +193,7 @@ export function readList(b: unknown, nowIso: string): FreeeList | null {
   const rows: ListedTxn[] = [];
   for (const r of x.rows as Record<string, unknown>[]) {
     if (!r || !isInt(r.id) || (r.account !== "card" && r.account !== "bank") || (r.side !== "income" && r.side !== "expense")) continue;
-    if (typeof r.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(r.date) || !isInt(r.amount)) continue;
+    if (!isRealDate(r.date) || !isInt(r.amount)) continue;
     rows.push({ id: r.id, account: r.account, side: r.side, date: r.date, amount: r.amount, description: typeof r.description === "string" ? r.description.slice(0, 200) : "" });
   }
   return { range: { from: x.range.from, to: x.range.to }, rows, capped: x.capped === true, bank: typeof x.bank === "string" ? x.bank.slice(0, 200) : null, at: nowIso };

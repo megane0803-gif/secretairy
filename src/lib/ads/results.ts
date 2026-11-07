@@ -2,6 +2,7 @@
 // 置き場所は広告の承認の箱と同じ secretairy:ads（state.ts の AdsState の judgements・reports）。
 // なので「最初に戻す」「広告を最初に戻す」で、いっしょに消える。
 
+import { isRealDate } from "../calendar";
 import type { AdWeek } from "../data/types";
 import type { AdAction } from "./report";
 import type { AdsMode } from "./wire";
@@ -99,8 +100,7 @@ const isStr = (x: unknown): x is string => typeof x === "string";
 const isInt = (x: unknown): x is number => typeof x === "number" && Number.isInteger(x) && x >= 0;
 const isAction = (x: unknown): x is AdAction => x === "stop" || x === "exclude";
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object";
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const isDate = (x: unknown): x is string => isStr(x) && DATE.test(x);
+const isDate = isRealDate;
 const VERDICTS: AdVerdict[] = ["worked", "revert", "unknown"];
 const REVERTS: AdRevertState[] = ["pending", "approved", "skipped"];
 

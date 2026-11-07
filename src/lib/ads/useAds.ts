@@ -4,13 +4,23 @@
 // 書くのはこのブラウザの中だけ（サーバーには送らない）。
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import { ADS_KEY, readBrowser, subscribeBrowser, writeBrowser } from "../browser";
+import { ADS_KEY, readBrowser, subscribeBrowser, writeBrowser, type BrowserWrite } from "../browser";
 import { getAds } from "../data/seed";
 import { getAdSettings } from "../settings";
 import { buildTable } from "./report";
 import { offNos, parseAds, pendingAd, type AdsState } from "./state";
 
 const read = () => readBrowser(ADS_KEY);
+
+/** いまブラウザにある広告の状態（書く直前に読みなおす時に使う） */
+export function readAdsState(): AdsState {
+  return parseAds(read());
+}
+
+/** 広告の状態をブラウザに書く。書けたかを返す（例外は投げない。書けなければ前のまま） */
+export function writeAdsState(next: AdsState): BrowserWrite {
+  return writeBrowser(ADS_KEY, next.proposals.length === 0 && next.applied.length === 0 && !next.judgements?.length && !next.reports?.length ? null : JSON.stringify(next));
+}
 
 export function useAds() {
   const raw = useSyncExternalStore(subscribeBrowser, read, () => null);
@@ -19,11 +29,8 @@ export function useAds() {
   const report = getAds();
   const table = useMemo(() => buildTable(report, settings, offNos(state)), [report, settings, state]);
 
-  const update = useCallback((f: (s: AdsState) => AdsState) => {
-    // 書く直前に読みなおす（別の窓で変えた分を消さないように）
-    const next = f(parseAds(read()));
-    writeBrowser(ADS_KEY, next.proposals.length === 0 && next.applied.length === 0 && !next.judgements?.length && !next.reports?.length ? null : JSON.stringify(next));
-  }, []);
+  // 書く直前に読みなおす（別の窓で変えた分を消さないように）。書けたかを返す
+  const update = useCallback((f: (s: AdsState) => AdsState): BrowserWrite => writeAdsState(f(readAdsState())), []);
 
   return { state, update, table, settings, report, pending: pendingAd(state) };
 }

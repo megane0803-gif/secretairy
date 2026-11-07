@@ -11,7 +11,7 @@
 
 import type { AddedTodo, BookState } from "../book/state";
 import { withTodo, withTodoDone } from "../book/state";
-import { addDays, businessDayAt, calDay, openedDate, type CalDay } from "../calendar";
+import { addDays, businessDayAt, calDay, isRealDate, openedDate, type CalDay } from "../calendar";
 import type { Todo } from "../data/types";
 import { baseShop } from "../holidays";
 import type { ShopSettings } from "../settings";
@@ -233,7 +233,7 @@ export function withMemoTodo(
   // 最初の例のメモの鍵は「例:メモ:番号」なので数えない（本物のメモは 1 から）
   const no = nextMemoNo(todoItems(seedItems, s, shop));
   // 期限はメモの「金曜までに」などからプログラムが読んだ物だけ（todo/due.ts。読めなければ期限なし）
-  const due = input.due && /^\d{4}-\d{2}-\d{2}$/.test(input.due) ? input.due : undefined;
+  const due = input.due && isRealDate(input.due) ? input.due : undefined;
   const category = readMemoKind(input.category);
   const todo: AddedTodo = {
     id: `td-memo-${no}`,

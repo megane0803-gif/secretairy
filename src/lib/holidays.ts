@@ -6,14 +6,12 @@
 // 休みの日を足したまま数えると、今ある予約の日付がずれる（11/7 の予約が 11/8 に動く）。
 // なので休みの日は「受け付けるかの判定」（calendar.ts の calDay）にだけ効かせ、最初の状態の日付を作る所は baseShop（休みの日を外した店）で数える。
 
-import { addDays, calDay, type CalDay } from "./calendar";
+import { addDays, calDay, isRealDate, type CalDay } from "./calendar";
 import type { Reservation } from "./reservations";
 import type { ShopSettings } from "./settings";
 
 /** ブラウザの中の置き場所（browser.ts の PREFIX の後ろ） */
 export const HOLIDAYS_KEY = "holidays";
-
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** 決められる数・何日先まで出すか（config/shop.json の holidayLimits。無ければこの数） */
 export function holidayLimitsOf(shop: Pick<ShopSettings, "holidayLimits">): { max: number; aheadDays: number } {
@@ -22,12 +20,8 @@ export function holidayLimitsOf(shop: Pick<ShopSettings, "holidayLimits">): { ma
   return { max: ok(l?.max) ? l!.max : 60, aheadDays: ok(l?.aheadDays) ? l!.aheadDays : 56 };
 }
 
-/** 本当にある日（YYYY-MM-DD。2/30 のような無い日は false） */
-export function isRealDate(x: unknown): x is string {
-  if (typeof x !== "string" || !DATE.test(x)) return false;
-  const [y, m, d] = x.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d)).toISOString().slice(0, 10) === x;
-}
+/** 本当にある日（YYYY-MM-DD。2/30 のような無い日は false）。確かめ方は calendar.ts の1か所 */
+export { isRealDate };
 
 /** 重ねず・古い順に */
 const tidy = (list: string[]) => [...new Set(list)].sort();

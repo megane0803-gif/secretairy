@@ -10,6 +10,7 @@
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { accountOf, listRange, sideOf, type ListedTxn } from "../accounting/rows";
+import { isRealDate } from "../calendar";
 import type { AccountingSeed, CardItem, CardUse, StatementAccount } from "../data/types";
 import type { FreeeSettings } from "../settings";
 import {
@@ -491,7 +492,8 @@ export type RegisterAnswer =
   | { ok: true; id: number; result: "failed"; reason: string }
   | { ok: true; id: number; result: "unknown"; reason: string };
 
-const isDate = (x: unknown): x is string => typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x);
+/** 暦にある日付（YYYY-MM-DD。確かめ方は calendar.ts の1か所） */
+const isDate = isRealDate;
 const isId = (x: unknown): x is number => typeof x === "number" && Number.isSafeInteger(x) && x > 0;
 
 /** 登録で画面から来る物：freee の明細の番号・店用か私用か・口座・日付・金額（どれも freee から読み直して照らし合わせる） */

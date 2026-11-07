@@ -9,21 +9,24 @@
 
 import { useEffect, useRef } from "react";
 import { pendingAd } from "@/lib/ads/state";
-import { useAds } from "@/lib/ads/useAds";
+import { readAdsState, useAds, writeAdsState } from "@/lib/ads/useAds";
 import type { BookData } from "@/lib/book/data";
+import { currentEpoch, readBook, updateBook } from "@/lib/book/store";
 import { useBook, useBookState } from "@/lib/book/useBook";
+import { shopToday } from "@/lib/calendar";
 import { deskKey, setDesk } from "@/lib/karte/deskStore";
 import { writeJournal, type JournalWho } from "@/lib/journal";
 import { NO_AI_MESSAGE } from "@/lib/ai/wire";
-import { adCard, applyAsk, applyPress, karteTargetFor, reservationCard, stillOk, type ApplyOutcome } from "@/lib/line/apply";
+import { adCard, applyAsk, karteTargetFor, reservationCard, stillOk, type ApplyOutcome } from "@/lib/line/apply";
 import type { LineAskResponse } from "@/lib/line/ask";
 import { LINE_TEXT, sentStatus } from "@/lib/line/messages";
+import { commitPress, LINE_PRESS_FAILED_STATUS, type PressStore } from "@/lib/line/press";
 import { maskNames } from "@/lib/line/sort";
 import { codeExpired, linkExpired, withHandled, withLinked, withNotified } from "@/lib/line/state";
 import { lineApi, problemText, readLineState, setLineStatus, updateLineState, useLineState } from "@/lib/line/useLine";
 import type { OutMessage, ScreenEvent } from "@/lib/line/wire";
 import { useRules } from "@/lib/rules/useRules";
-import { getAdSettings, getLineSettings, getMemoMaxChars } from "@/lib/settings";
+import { getAdSettings, getLineSettings, getMemoMaxChars, getShop } from "@/lib/settings";
 
 /** 1回に届ける承認待ちの行の数（送る通数を減らすため） */
 const NOTIFY_PER_RUN = 2;
@@ -63,6 +66,8 @@ export function LineBridge({ data }: { data: BookData }) {
       if (busy.current || stopped) return;
       busy.current = true;
       try {
+        // 受け取りに行く前の「最初に戻す」の印。ボタンの知らせは、この印のままの時だけ書く（途中で戻したら確定しない）
+        const epoch = currentEpoch();
         const res = await lineApi.poll(token);
         if (stopped) return;
         if (!res.ok) {
@@ -82,7 +87,7 @@ export function LineBridge({ data }: { data: BookData }) {
           updateLineState((x) => (x && x.token === token ? withLinked(x, res.until, ids) : x));
           writeJournal({ who: "LINE", text: `つなぐ番号で LINE とつないだ（期限 ${when(res.until, data.shop.timezone)} まで。画面を開いている間だけ動く）` });
         }
-        for (const ev of res.events) await handle(ev, token);
+        for (const ev of res.events) await handle(ev, token, epoch);
       } finally {
         busy.current = false;
       }
@@ -180,15 +185,28 @@ export function LineBridge({ data }: { data: BookData }) {
     } else setLineStatus({ last: sentStatus(res.via === "push" ? "push" : "reply", text) });
   }
 
-  async function handle(ev: ScreenEvent, token: string) {
+  /** 台帳と広告を書く所（書く直前に読みなおす。書けたかを返す。book/store.ts・ads/useAds.ts と同じ） */
+  function pressStore(): PressStore {
+    const todayDate = shopToday(getShop()).today.date;
+    return {
+      readBook: () => readBook(todayDate),
+      writeBook: (next) => updateBook(() => next, todayDate),
+      readAds: readAdsState,
+      writeAds: writeAdsState,
+    };
+  }
+
+  async function handle(ev: ScreenEvent, token: string, epoch: string | undefined) {
     const cur = readLineState();
     if (!cur || cur.handled.includes(ev.id)) return;
     updateLineState((x) => (x ? withHandled(x, ev.id) : x));
 
     if (ev.kind === "press") {
-      // 🔒 合言葉でつないだ LINE のボタン（サーバーが署名・つなぎ・1回だけの印を確かめた物）。画面のボタンと同じ変え方
-      const out = commit((b, a) => applyPress(ev, b, a, applyCtx()));
-      writeJournal(...out.journal);
+      // 🔒 合言葉でつないだ LINE のボタン（サーバーが署名・つなぎ・1回だけの印を確かめた物）。画面のボタンと同じ変え方。
+      // 書けた時だけ日誌と確定の返事。書けなければ承認待ちのまま残し、日誌は書かない（line/press.ts）
+      const out = commitPress(ev, pressStore(), applyCtx(), epoch);
+      if (out.journal.length) writeJournal(...out.journal);
+      if (out.failed) setLineStatus({ problem: LINE_PRESS_FAILED_STATUS });
       await reply(token, ev, out.reply);
       return;
     }
