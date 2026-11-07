@@ -1630,3 +1630,44 @@ describe("freee：つないだ回の番号が戻らない", () => {
     assert.ok(await readKvToken(c), "鍵より番号の方が長く残る");
   });
 });
+
+describe("freee：送ったか分からない一歩の 404 の後は、明細が未処理に戻ったかで確かめる", () => {
+  test("一歩（deleting）を置いたまま送らずに落ちた形で、私用の取引が残っていて 404 が返る時、次の回は要復旧（明細を消さない・作らない）", async () => {
+    const f = new FakeFreee();
+    const mem = memoryStore(() => clock.now);
+    await connected(f, mem);
+    f.addAllSeed();
+    f.reopenOnDealDelete = false;
+    f.privateDeleteStatus = 404;
+    const t = f.txnOf(PRIVATE_ITEM.no)!;
+    assert.equal((await bodyOf(await reg(makeDeps(f, mem), t.id, "private"))).result, "registered");
+    // 一歩を記録に置いた直後、送る前にサーバーの処理ごと落ちた形（記録を直に置く）
+    const tr = await loadTrial(mem);
+    const deal = tr.items[0].dealIds![0];
+    await mem.set(FREEE_KV.trial, JSON.stringify({ ...tr, restoring: true, items: [{ ...tr.items[0], deleting: deal }] }), { ex: 600 });
+    assert.ok(!f.calls.some((c) => c.method === "DELETE"), "まだ送っていない");
+    at(clock.now + holdMs + 1);
+    const b = await bodyOf(await read(makeDeps(f, mem), "10.11.0.1"));
+    assert.equal(b.trial.phase, "repair");
+    assert.equal(f.calls.filter((c) => c.method === "DELETE" && c.path === `/api/1/deals/${deal}`).length, 1, "取引を消す呼び出しは1回（404）");
+    assert.ok(f.deals.has(deal), "私用の取引は残っている");
+    assert.ok(!f.calls.some((c) => c.method === "DELETE" && c.path.startsWith("/api/1/wallet_txns/")), "明細を消さない");
+    assert.ok(!f.calls.some((c) => c.method === "POST" && c.path === "/api/1/wallet_txns"), "作らない");
+    assert.ok(f.txns.includes(t));
+    const after = await loadTrial(mem);
+    assert.equal(after.repair, true);
+    assert.equal(after.items[0].assumedGone, true, "「もう無い」と受けた印を記録に置いた");
+  });
+
+  test("消して 204 が返った明細は今どおり（明細が戻らなければ作り直す）", async () => {
+    const f = new FakeFreee();
+    const mem = memoryStore(() => clock.now);
+    await connected(f, mem);
+    f.addAllSeed();
+    f.reopenOnDealDelete = false;
+    assert.equal((await bodyOf(await reg(makeDeps(f, mem), f.txnOf(SHOP_ITEM.no)!.id, "shop"))).result, "registered");
+    at(clock.now + holdMs + 1);
+    assert.equal((await bodyOf(await read(makeDeps(f, mem), "10.11.0.2"))).trial.phase, "free");
+    assert.equal(f.txnOf(SHOP_ITEM.no)!.status, 1);
+  });
+});

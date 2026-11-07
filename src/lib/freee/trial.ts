@@ -35,6 +35,11 @@ export type TrialItem = {
   dealIds: number[] | null;
   /** いま消している取引の番号（送る前に置く。前の回に送って返事が途切れた時だけ、404 を「もう無い」とみなす） */
   deleting: number | null;
+  /**
+   * 前の回の一歩が残っていて、404 を「もう無い」として受けた（本当に消えたかは分からない。送る前に処理ごと落ちて一歩だけ残った形かもしれない）。
+   * この印のある明細は、未処理に戻っていなければ（取引が残っている形）、消す・作り直すをせずに要復旧
+   */
+  assumedGone?: boolean;
   step: TrialStep;
 };
 
@@ -80,6 +85,7 @@ export function parseTrial(raw: string | null): Trial {
       (x.use === "shop" || x.use === "private") &&
       (x.dealIds === null || (Array.isArray(x.dealIds) && x.dealIds.every(isId))) &&
       (x.deleting === undefined || x.deleting === null || isId(x.deleting)) &&
+      (x.assumedGone === undefined || typeof x.assumedGone === "boolean") &&
       STEPS.has(x.step as TrialStep);
     if (!ok) {
       bad = true;
@@ -92,6 +98,7 @@ export function parseTrial(raw: string | null): Trial {
       use: x.use as CardUse,
       dealIds: (x.dealIds as number[] | null) ?? null,
       deleting: (x.deleting as number | null | undefined) ?? null,
+      ...(x.assumedGone === true ? { assumedGone: true } : {}),
       step: x.step as TrialStep,
     });
   }
@@ -276,6 +283,8 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
           if (!(e instanceof FreeeRejected)) throw e;
           // 1回目の 404・ほかの 400 台：消せない（元に戻せない）→ 要復旧。前の回に送った後の 404 だけ「もう無い」
           if (!(e.status === 404 && resumed)) return repair();
+          // 前の回の一歩が残っていた 404：本当に消えたかは、手順3で明細が未処理に戻ったかで確かめる
+          item.assumedGone = true;
         }
         item.dealIds = item.dealIds.slice(1);
         item.deleting = null;
@@ -325,6 +334,8 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
       }
       if (x && x.id !== item.id) return repair(); // 印が同じでも番号が違う明細（オーナーが入れ直した など）には触らない
       if (x && isOriginal(c.seed, prefix, s, x, w, c.companyId)) continue;
+      // 404 を「もう無い」として受けた明細が未処理に戻っていない：取引が残っているかもしれないので、消す・作り直すをしない
+      if (x && item.assumedGone) return repair();
       if (x) {
         // 作り直した明細が戻らない（自動登録のルールに当たった など）・見本と値が違う（手で変えた）→ 要復旧
         if (item.step === "recreated" || x.rule_matched === true || !matchesSeed(c.seed, prefix, s, x, w, c.companyId)) return repair();
