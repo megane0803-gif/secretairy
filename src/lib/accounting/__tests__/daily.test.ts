@@ -46,7 +46,12 @@ const methods = seed.methods;
 const TODAY = "2026-11-06"; // 金曜
 const ctx = { today: TODAY, methods, limits, shop };
 
-const draft = (date: string, visits: string, cash = "", card = "", code = ""): DailyDraft => ({ date, visits, pay: { cash, card, code } });
+const draft = (date: string, visits: string, cash = "", card = "", code = ""): DailyDraft => ({
+  date,
+  visits,
+  pay: { cash, card, code },
+  split: { total: "", tech: "", retail: "" },
+});
 const report = (date: string, visits: number, cash = 0, card = 0, code = 0): DailyReport => ({ date, visits, pay: { cash, card, code }, at: "2026-11-06T09:00:00.000Z" });
 const stateOf = (...r: DailyReport[]): DailyState => ({ v: 1, days: [...r].sort((a, b) => a.date.localeCompare(b.date)) });
 
@@ -232,11 +237,11 @@ describe("日報 3：入れる・直す・消す。10月の日を置き換え、
     const m = memDeps();
     const add = m.run({ kind: "save", draft: draft(TODAY, "4", "8000", "16400", "8000") });
     assert.ok(add.ok && add.kind === "add" && add.month === "2026-11");
-    assert.deepEqual(m.box.lines, ["オーナー：日報を入れた（11/6（金） 売上 32,400円・来店 4人）"]);
+    assert.deepEqual(m.box.lines, ["オーナー：日報を入れた（11/6（金） 売上 32,400円・来店 4人・内訳なし）"]);
     const edit = m.run({ kind: "save", draft: draft(TODAY, "5", "10000", "16400", "8000") });
     assert.ok(edit.ok && edit.kind === "edit");
     assert.equal(m.box.state.days.length, 1, "同じ日は1つのまま（書き換える）");
-    assert.equal(m.box.lines[1], "オーナー：日報を直した（11/6（金） 売上 34,400円・来店 5人）");
+    assert.equal(m.box.lines[1], "オーナー：日報を直した（11/6（金） 売上 34,400円・来店 5人・内訳なし）");
     const rm = m.run({ kind: "remove", date: TODAY });
     assert.ok(rm.ok && rm.kind === "remove");
     assert.equal(m.box.state.days.length, 0);
@@ -463,7 +468,7 @@ describe("日報 7：保存できなかった時は、画面の数も日誌も�
     const j = parseJournal(readBrowser(JOURNAL_KEY));
     assert.equal(j.length, 1);
     assert.equal(j[0].who, "オーナー");
-    assert.equal(j[0].text, "日報を入れた（11/6（金） 売上 32,400円・来店 4人）");
+    assert.equal(j[0].text, "日報を入れた（11/6（金） 売上 32,400円・来店 4人・内訳なし）");
   });
 
   test("決まりで断った時（数の確かめ）も書かない・日誌も書かない", () => {
@@ -551,7 +556,7 @@ describe("日報 10：予約のページで決めた休みの日（直しC）も
     const m = memDeps();
     const r = commitDaily(m.deps, { ...ctx, shop: hshop, epoch: "e1", action: { kind: "save", draft: draft(HOLIDAY, "2", "15000") } });
     assert.ok(r.ok && r.kind === "add");
-    assert.deepEqual(m.box.lines, ["オーナー：日報を入れた（11/5（木） 売上 15,000円・来店 2人）"]);
+    assert.deepEqual(m.box.lines, ["オーナー：日報を入れた（11/5（木） 売上 15,000円・来店 2人・内訳なし）"]);
   });
 
   test("休みの日の日報は棒と表に数を出す。日報の無い休みの日は点（休みの日の札）", () => {
