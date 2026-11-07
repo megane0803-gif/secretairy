@@ -106,7 +106,8 @@ export async function tryRegister(post: Post, p: { id: number; use: CardUse; lab
 export function phaseLine(info: TryInfo): string | null {
   if (info.phase === "repair") return "いまは試せません（オーナーが直します）";
   if (info.phase === "restoring") return "元に戻しています。少し待ってから「読み直す」を押してください";
-  if (info.phase === "holding") return info.mine ? `いま試した物があります（あと ${info.minutes}分たった後に、元に戻ります）` : `ほかの人が試しています（あと ${info.minutes}分たった後に、元に戻ります）`;
+  if (info.phase === "holding")
+    return `${info.mine ? "いま試した物があります" : "ほかの人が試しています"}（あと ${info.minutes}分たった後に、次にだれかが経理のタブを開いた時に元に戻ります）`;
   return null;
 }
 

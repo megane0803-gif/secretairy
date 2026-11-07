@@ -302,6 +302,9 @@ export function useFreeeTry(): FreeeTryState {
   return useSyncExternalStore(subscribeTry, () => tryState, () => tryState);
 }
 
+/** 「つなぎを外す」がうまくいかなかった時の1行（サーバーの文が無い時） */
+export const DISCONNECT_FAILED_NOTE = "サーバーの鍵を消せませんでした。少し待ってから、もう一度押してください";
+
 let opening: Promise<void> | null = null;
 
 /** 経理のタブを開いた時：つながっているかを聞き、つながっていれば1回だけ freee から読む */
@@ -400,16 +403,28 @@ export function useFreee() {
     return () => ids.forEach((id) => window.clearTimeout(id));
   }, [record.sendingAt, record.importHold, settings.sendingStaleSeconds]);
 
-  const disconnect = useCallback(async () => {
+  /**
+   * 「つなぎを外す」。サーバーが外せた（200）時だけ ok。置き場が使えない（503）・来た人が書いている（409）・つながらない時は、
+   * cookie も画面の印もそのまま（もう一度押せる）。
+   */
+  const disconnect = useCallback(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    let res: { status: number; body: unknown | null } | null = null;
     try {
-      await freeePost("/api/freee/disconnect");
+      res = await freeePost("/api/freee/disconnect");
     } catch {
-      // つながらなくても、次の status で分かる
+      res = null;
+    }
+    const b = res?.body as { ok?: unknown; message?: unknown } | null;
+    if (!res || res.status !== 200 || b?.ok !== true) {
+      const m = typeof b?.message === "string" && b.message ? b.message.slice(0, 200) : DISCONNECT_FAILED_NOTE;
+      await refresh();
+      return { ok: false, reason: m };
     }
     // オーナーが自分で外した：つながった印を外す（一覧は架空の明細に戻る。送り始めた記録があれば freee の欄のまま）
     writeBrowser(FREEE_KEY, JSON.stringify(withLinked(parseFreee(read()), false)));
     setList({ phase: "idle" });
     await refresh();
+    return { ok: true };
   }, [refresh]);
 
   /** 「freee に明細を入れる」（排他の中。結果が分からない時は待つ期限を残す）。一覧は読み直さない（「freee から読み直す」で） */

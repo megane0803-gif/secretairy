@@ -14,16 +14,16 @@
 // 窓口の頭で、5分をこえた試しを先に元に戻してから続ける（元に戻すは回数の上限とは別に数え、上限で止めない）。
 // 返事とログには決まった短い理由だけ（freee の生のエラー文・事業所の番号・鍵・IP・ハッシュは出さない）。結果が分からない時は送り直さない。
 
-import { createHash } from "node:crypto";
 import { accountOf } from "../accounting/rows";
 import type { CardUse, StatementAccount } from "../data/types";
 import { siteCheck } from "../server/site";
+import { sourceBucket, sourceHash, sourceIp } from "../server/source";
 import { freeeClient, FreeeExpired, FreeeOutOfTime, isOpen, type FreeeClient, type WalletTxn } from "./api";
-import { FREEE_KV, kv, kvAccess, markKvExpired, StoreDown, withWriteLock, type KvCtx, type KvToken } from "./kv";
+import { FREEE_KV, kv, kvAccess, markKvExpired, StoreDown, withWriteLock, type KvCtx, type KvToken, type StillHeld } from "./kv";
 import { lookupById, markIn, pickBankAccount, pickCardAccount } from "./match";
 import { envProblems, json, kvCtxOf, openRows, prepareOne, readRange, todayIn, writeOne, type FreeeDeps, type ReadAccount } from "./server";
 import type { TryInfo, TryPhase } from "./tryClient";
-import { loadTrial, matchesSeed, minutesLeft, restoreDue, restoreTrial, saveTrial, seedItemOfMark, type RestoreResult, type Trial } from "./trial";
+import { hasUnknownDeal, loadTrial, matchesSeed, minutesLeft, restoreDue, restoreTrial, saveTrial, seedItemOfMark, type RestoreResult, type Trial } from "./trial";
 
 export const TRY_MESSAGES = {
   notConnected: "いまは経理につながっていません（オーナーがつなぎ直します）",
@@ -41,37 +41,35 @@ type Kind = "register" | "read";
 
 // ---- 送り元と回数 ----
 
-/** Vercel が付ける送り元の IP（x-real-ip、無ければ x-vercel-forwarded-for の最初）。無ければ "none" */
-export function senderIp(request: Request): string {
-  const real = (request.headers.get("x-real-ip") ?? "").trim();
-  if (real) return real.slice(0, 100);
-  const fwd = (request.headers.get("x-vercel-forwarded-for") ?? "").split(",")[0].trim();
-  return fwd ? fwd.slice(0, 100) : "none";
-}
+/** 送り元（Vercel が付ける IP。共通の1か所 src/lib/server/source.ts） */
+export const senderIp = sourceIp;
 
-/** 日ごとの塩（サーバーが作って置き場に置き、2日で消える）と合わせたハッシュ。生の IP は置き場にも返事にも出さない */
+/**
+ * 日ごとの塩（サーバーが作って置き場に置き、2日で消える）と、送り元の束（IPv4 は1つの番地・IPv6 は /64）を合わせたハッシュ。
+ * 塩は、置けた（SET NX が true）時は作った値をそのまま使う（置いた直後の GET は、まだ写っていない写しから古い値で返ることがある）。
+ * 読むのは、ほかの呼び出しがもう置いていて置けなかった時だけ。生の IP は置き場にも返事にも出さない。
+ */
 async function senderHash(deps: FreeeDeps, request: Request, date: string): Promise<string> {
   const store = deps.store!;
   const key = FREEE_KV.salt(date);
-  let salt = await kv(() => store.get(key));
-  if (!salt) {
-    await kv(() => store.set(key, deps.random(32).toString("hex"), { ex: 2 * 86_400, nx: true }));
-    salt = await kv(() => store.get(key));
-  }
+  const fresh = deps.random(32).toString("hex");
+  if (await kv(() => store.set(key, fresh, { ex: 2 * 86_400, nx: true }))) return sourceHash(fresh, sourceBucket(sourceIp(request)));
+  const salt = await kv(() => store.get(key));
   if (!salt) throw new StoreDown("塩を置けません");
-  return createHash("sha256").update(`${salt}:${senderIp(request)}`).digest("hex").slice(0, 32);
+  return sourceHash(salt, sourceBucket(sourceIp(request)));
 }
 
-/** 先に足してから比べる（同時に来ても数えもれが無い）。全体の1日・全体の1分・同じ送り元の1日 */
+/**
+ * 先に足してから比べる（同時に来ても数えもれが無い）。同じ送り元 → 全体の1分 → 全体の1日の順で、こえたらそこで止め、
+ * 先の数は足さない（1つの送り元が送り続けても、全体の数はその送り元の上限までしか増えない。広告のだれでも試すと同じ数え方）。
+ */
 async function countUnder(deps: FreeeDeps, kind: Kind, date: string, sender: string): Promise<"ok" | "limit" | "sender"> {
   const store = deps.store!;
   const lim = deps.settings.try[kind];
   const minute = Math.floor(deps.now() / 60_000);
-  const day = await kv(() => store.incr(FREEE_KV.count(kind, `day:${date}`), 2 * 86_400));
-  const min = await kv(() => store.incr(FREEE_KV.count(kind, `min:${minute}`), 120));
-  const own = await kv(() => store.incr(FREEE_KV.count(kind, `sender:${date}:${sender}`), 2 * 86_400));
-  if (own > lim.perSenderDaily) return "sender";
-  if (day > lim.daily || min > lim.perMinute) return "limit";
+  if ((await kv(() => store.incr(FREEE_KV.count(kind, `sender:${date}:${sender}`), 2 * 86_400))) > lim.perSenderDaily) return "sender";
+  if ((await kv(() => store.incr(FREEE_KV.count(kind, `min:${minute}`), 120))) > lim.perMinute) return "limit";
+  if ((await kv(() => store.incr(FREEE_KV.count(kind, `day:${date}`), 2 * 86_400))) > lim.daily) return "limit";
   return "ok";
 }
 
@@ -169,10 +167,19 @@ async function tryUnder(request: Request, deps: FreeeDeps, c: KvCtx, action: Kin
   let trial = await loadTrial(c.store);
   let note: RestoreResult | "busy" | null = null;
   if (restoreDue(trial, deps.now(), deps.settings)) {
-    const r = await withWriteLock(c, async (until) => runRestore(deps, c, tok, until, range));
+    const r = await withWriteLock(c, async (until, held) => {
+      // 5分をこえたかは、印を取った後に読み直した記録で決め直す（印の外の古い記録で決めない）
+      const fresh = await loadTrial(c.store);
+      if (!restoreDue(fresh, deps.now(), deps.settings)) return { result: null, trial: fresh };
+      return runRestore(deps, c, tok, until, held, range);
+    });
     if (r === "expired") return fail("not-connected", TRY_MESSAGES.notConnected, 200);
-    note = r;
-    trial = await loadTrial(c.store);
+    if (r === "busy") note = "busy";
+    else {
+      // 戻した後の記録は、返ってきた物を使う（書いた直後に置き場を読み直さない）
+      note = r.result;
+      trial = r.trial;
+    }
   }
   if (under === "sender") return fail("limit", TRY_MESSAGES.senderLimit, 429);
   if (under === "limit") return fail("limit", TRY_MESSAGES.limit, 429);
@@ -181,7 +188,14 @@ async function tryUnder(request: Request, deps: FreeeDeps, c: KvCtx, action: Kin
   return tryRegister(deps, c, tok, sender, target!, range);
 }
 
-async function runRestore(deps: FreeeDeps, c: KvCtx, tok: KvToken, until: number, range: { from: string; to: string }): Promise<RestoreResult | "expired"> {
+async function runRestore(
+  deps: FreeeDeps,
+  c: KvCtx,
+  tok: KvToken,
+  until: number,
+  held: StillHeld,
+  range: { from: string; to: string },
+): Promise<{ result: RestoreResult; trial: Trial } | "expired"> {
   // 元に戻すは回数の上限とは別に数える（止めない。数えられなくても戻す）
   try {
     await c.store.incr(FREEE_KV.count("restore", `day:${todayIn(deps.timeZone, deps.now())}`), 2 * 86_400);
@@ -189,7 +203,7 @@ async function runRestore(deps: FreeeDeps, c: KvCtx, tok: KvToken, until: number
     // 数えられなくても戻す
   }
   try {
-    return await restoreTrial({ api: apiFor(deps, tok, until), store: c.store, settings: deps.settings, seed: deps.seed, companyId: tok.companyId, range });
+    return await restoreTrial({ api: apiFor(deps, tok, until), store: c.store, settings: deps.settings, seed: deps.seed, companyId: tok.companyId, range, held });
   } catch (e) {
     if (e instanceof FreeeExpired) {
       await markKvExpired(c, tok.accessToken);
@@ -228,7 +242,7 @@ type RegisterResult = "registered" | "refused" | "failed" | "unknown";
 const answer = (id: number, result: RegisterResult, reason: string, extra: Record<string, unknown> = {}) => json({ ok: true, id, result, reason, ...extra });
 
 async function tryRegister(deps: FreeeDeps, c: KvCtx, tok: KvToken, sender: string, target: { id: number; use: CardUse }, range: { from: string; to: string }): Promise<Response> {
-  const r = await withWriteLock(c, async (until) => registerUnderLock(deps, c, tok, sender, target, range, until));
+  const r = await withWriteLock(c, async (until, held) => registerUnderLock(deps, c, tok, sender, target, range, until, held));
   if (r === "busy") return fail("busy", TRY_MESSAGES.wait, 409);
   return r;
 }
@@ -241,25 +255,31 @@ async function registerUnderLock(
   target: { id: number; use: CardUse },
   range: { from: string; to: string },
   until: number,
+  held: StillHeld,
 ): Promise<Response> {
   const { id, use } = target;
   const s = deps.settings;
   const now = deps.now();
-  // 印の中で、もう一度記録を読む（印を取る前に、ほかの呼び出しが書いたかもしれない）
+  // 印の中で、もう一度記録を読む（印を取る前に、ほかの呼び出しが書いたかもしれない）。5分をこえたかもこの記録で決める
   let trial = await loadTrial(c.store);
   if (trial.repair) return answer(id, "refused", TRY_MESSAGES.repair);
+  // 取引の番号が分からない明細がある（番号を置けなかった など）：その場で要復旧にして断る（5分の間の2件目も）
+  if (hasUnknownDeal(trial)) {
+    await saveTrial(c.store, s, { ...trial, repair: true });
+    return answer(id, "refused", TRY_MESSAGES.repair);
+  }
   if (restoreDue(trial, now, s)) {
-    const r = await runRestore(deps, c, tok, until, range);
+    const r = await runRestore(deps, c, tok, until, held, range);
     if (r === "expired") return fail("not-connected", TRY_MESSAGES.notConnected, 200);
-    if (r === "repair") return answer(id, "refused", TRY_MESSAGES.repair);
-    if (r === "partial") return answer(id, "refused", TRY_MESSAGES.restoring);
-    trial = await loadTrial(c.store);
+    if (r.result === "repair") return answer(id, "refused", TRY_MESSAGES.repair);
+    if (r.result === "partial") return answer(id, "refused", TRY_MESSAGES.restoring);
+    trial = r.trial;
   }
   if (trial.items.length) {
     const left = Math.max(1, minutesLeft(trial, now, s));
     if (trial.by !== sender) return answer(id, "refused", `ほかの人が試しています（あと ${left}分で元に戻ります）`);
-    if (trial.items.some((i) => i.id === id)) return answer(id, "refused", `この明細はもう試しました（あと ${left}分たった後に、元に戻ります）`);
-    if (trial.items.length >= s.try.maxItemsPerTrial) return answer(id, "refused", `1回に試せるのは${s.try.maxItemsPerTrial}件までです（あと ${left}分たった後に、元に戻ります）`);
+    if (trial.items.some((i) => i.id === id)) return answer(id, "refused", `この明細はもう試しました（あと ${left}分たった後に、次にだれかが経理のタブを開いた時に元に戻ります）`);
+    if (trial.items.length >= s.try.maxItemsPerTrial) return answer(id, "refused", `1回に試せるのは${s.try.maxItemsPerTrial}件までです（あと ${left}分たった後に、次にだれかが経理のタブを開いた時に元に戻ります）`);
   }
 
   const api = apiFor(deps, tok, until);
@@ -321,17 +341,22 @@ async function registerUnderLock(
   trial = {
     ...trial,
     by: trial.items.length ? trial.by : sender,
-    items: [...trial.items, { id, account: found.account, no: item.no, use, dealIds: null, step: "writing" }],
+    items: [...trial.items, { id, account: found.account, no: item.no, use, dealIds: null, deleting: null, step: "writing" }],
     lastWriteAt: deps.now(),
     restoring: false,
   };
   await saveTrial(c.store, s, trial);
 
-  const w = await writeOne(api, tok, use, p.txn, p.line);
   const drop = async () => {
     trial = { ...trial, items: trial.items.filter((i) => i.id !== id) };
     await saveTrial(c.store, s, trial);
   };
+  // 書く直前に、印がまだ自分の物か（期限の後に書かない）
+  if (!(await held())) {
+    await drop();
+    return answer(id, "failed", "持ち時間が足りないので送りませんでした（何も書いていません）。もう一度押してください");
+  }
+  const w = await writeOne(api, tok, use, p.txn, p.line);
   if (w.kind === "registered") {
     trial = { ...trial, items: trial.items.map((i) => (i.id === id ? { ...i, dealIds: w.dealIds, step: "written" as const } : i)), lastWriteAt: deps.now() };
     try {

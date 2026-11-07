@@ -79,7 +79,13 @@ class FakeFreee {
   /** 明細を作ると、自動登録のルールで登録される */
   autoRuleOnCreate = false;
   /** この道で返事を途切れさせる（送った後） */
-  dropOn: "create_deal" | "create_private_deal" | "delete_deal" | null = null;
+  dropOn: "create_deal" | "create_private_deal" | "delete_deal" | "delete_txn" | null = null;
+  /** 明細を作る前に返事を途切れさせる（作らない） */
+  createTxnDropBefore = false;
+  /** create_deal の返事を deal_ids: [] にする */
+  emptyDealIds = false;
+  /** 書く呼び出しの前に（同時に動く物を差しこむ） */
+  beforeWrite: ((path: string) => Promise<void>) | null = null;
   /** 鍵 */
   access = "acc-1";
   refresh = "ref-1";
@@ -122,7 +128,9 @@ class FakeFreee {
       const offset = Number(url.searchParams.get("offset"));
       return ok({ wallet_txns: this.txns.filter((t) => t.walletable_id === wid).slice(offset, offset + limit) });
     }
+    if (method !== "GET" && this.beforeWrite) await this.beforeWrite(url.pathname);
     if (url.pathname === "/api/1/wallet_txns" && method === "POST") {
+      if (this.createTxnDropBefore) throw new TypeError("network");
       const b = body as Record<string, unknown>;
       const t: WalletTxn = {
         id: this.nextId++,
@@ -149,7 +157,7 @@ class FakeFreee {
       const id = this.nextDeal++;
       this.deals.set(id, { txnId: t.id, private: cd[2] === "create_private_deal" });
       if (this.dropOn === cd[2]) throw new TypeError("network");
-      return cd[2] === "create_deal" ? ok({ deal_ids: [id] }) : ok({ deal_id: id });
+      return cd[2] === "create_deal" ? ok({ deal_ids: this.emptyDealIds ? [] : [id] }) : ok({ deal_id: id });
     }
     const dd = url.pathname.match(/^\/api\/1\/deals\/(\d+)$/);
     if (dd && method === "DELETE") {
@@ -173,6 +181,7 @@ class FakeFreee {
       if (i < 0) return ok({ message: "x" }, 404);
       if (this.linkedTxnDeleteStatus && [...this.deals.values()].some((d) => d.txnId === this.txns[i].id)) return ok({ message: "x" }, this.linkedTxnDeleteStatus);
       this.txns.splice(i, 1);
+      if (this.dropOn === "delete_txn") throw new TypeError("network");
       return none();
     }
     return ok({ status_code: 404 }, 404);
@@ -391,7 +400,7 @@ describe("freee：サーバーがつながりを持ち続ける（置き場の�
     const b = await bodyOf(r);
     assert.equal(b.message, TRY_MESSAGES.notConnected);
     assert.equal(b.message, "いまは経理につながっていません（オーナーがつなぎ直します）");
-    assert.equal(await store.get(FREEE_KV.token), null, "使えない鍵は消す");
+    assert.ok(await store.get(FREEE_KV.token), "消さない（ほかの呼び出しが延ばして置いた新しい鍵を、古い写しを読んだこちらが消さないため）");
     assert.equal(f.tokenCalls("authorization_code"), 0);
   });
 
@@ -1029,5 +1038,380 @@ describe("freee：つなぎを外す時は、先に元に戻してから置き�
     assert.equal(parseTrial("{").repair, true);
     assert.equal(parseTrial(JSON.stringify({ v: 1, items: [{ id: 1 }] })).repair, true);
     assert.equal(parseTrial(null).repair, false);
+  });
+});
+
+// ---- 直しV の追加の直し ----
+
+/** オーナーがもう一度つなぐ（戻り先まで） */
+async function reconnect(f: FakeFreee, deps: FreeeDeps): Promise<Response> {
+  const start = await handleStart(ownerReq("/api/freee/start"), deps);
+  const loc = new URL(start.headers.get("location")!);
+  const sc = start.headers.getSetCookie().find((c) => c.startsWith(STATE_COOKIE))!.split(";")[0];
+  const q = new URLSearchParams({ code: `c-${++n}`, state: loc.searchParams.get("state")! });
+  return handleCallback(ownerReq(`/api/freee/callback?${q}`, { method: "GET", cookie: sc }), deps);
+}
+
+/**
+ * 置いた直後の GET が古い値を返す作り物の置き場（1回の呼び出しごとに作る。書いたこの置き場から、すぐ後に同じ鍵を読むと、書く前の値が返る）。
+ * 別に作った置き場（別の呼び出し）からは、新しい値が読める。
+ */
+function laggingStore(base: ReturnType<typeof memoryStore>): KvStore {
+  const before = new Map<string, string | null>();
+  const wrote = async (k: string) => {
+    if (!before.has(k)) before.set(k, await base.get(k));
+  };
+  return {
+    get: async (k) => (before.has(k) ? (before.get(k) ?? null) : base.get(k)),
+    set: async (k, v, o) => {
+      await wrote(k);
+      return base.set(k, v, o);
+    },
+    del: async (k) => {
+      await wrote(k);
+      return base.del(k);
+    },
+    getdel: (k) => base.getdel(k),
+    incr: async (k, ex) => {
+      await wrote(k);
+      return base.incr(k, ex);
+    },
+    rpush: (k, v, ex) => base.rpush(k, v, ex),
+    lpop: (k, c) => base.lpop(k, c),
+    expire: (k, ex) => base.expire(k, ex),
+  };
+}
+
+describe("freee：置き場の書いた直後の読み直し（直しW と同じ考え）", () => {
+  test("置いた直後の GET が古い値を返す置き場でも、つないだ時に「cookie だけ」に倒れない・来た人の窓口が 503 にならない", async () => {
+    const f = new FakeFreee();
+    const mem = memoryStore(() => clock.now);
+    // 前につないだ回がある（番号が進んでいる）
+    await advanceGen(ctxOf(mem));
+    const cb = await reconnect(f, makeDeps(f, laggingStore(mem)));
+    assert.equal(cb.headers.get("location"), "/accounting?freee=connected#freee");
+    f.addAllSeed();
+    const r = await read(makeDeps(f, laggingStore(mem)));
+    assert.equal(r.status, 200, JSON.stringify(await r.clone().json()));
+    assert.equal((await bodyOf(r)).rows.length, items.length);
+  });
+});
+
+describe("freee：数え方は同じ送り元 → 1分 → 1日（1つの送り元で全体を使い切れない）", () => {
+  test("1つの送り元が上限をこえて送り続けても、全体の1日の数はその送り元の上限までしか増えず、ほかの送り元は通る", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    const deps = makeDeps(f, store);
+    const id = f.txnOf(INCOME_ITEM.no)!.id;
+    for (let i = 0; i < 100; i++) {
+      at(T0 + i * 61_000);
+      await reg(deps, id, "shop", "198.51.100.50");
+    }
+    assert.equal(await store.get(FREEE_KV.count("register", "day:2026-11-05")), String(base.try.register.perSenderDaily), "全体の1日はその送り元の上限まで");
+    for (let i = 0; i < 200; i++) {
+      at(T0 + i * 3_000);
+      await read(deps, "198.51.100.50");
+    }
+    assert.equal(await store.get(FREEE_KV.count("read", "day:2026-11-05")), String(base.try.read.perSenderDaily));
+    at(T0 + 200 * 61_000);
+    assert.notEqual((await reg(deps, id, "shop", "198.51.100.51")).status, 429, "ほかの送り元は通る");
+    assert.equal((await read(deps, "198.51.100.51")).status, 200);
+  });
+
+  test("同じ /64 の違う IPv6 は同じ送り元（IPv4 を写した IPv6 は IPv4）", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    const deps = makeDeps(f, store);
+    for (let i = 0; i < base.try.read.perSenderDaily; i++) {
+      at(T0 + Math.floor(i / 25) * 61_000);
+      assert.equal((await read(deps, `2001:db8:1:2::${(i + 1).toString(16)}`)).status, 200, `${i}`);
+    }
+    at(T0 + 10 * 61_000);
+    assert.equal((await read(deps, "2001:db8:1:2:ffff:ffff:ffff:ffff")).status, 429, "同じ /64");
+    assert.equal((await read(deps, "2001:db8:1:3::1")).status, 200, "違う /64");
+    // IPv4 と、それを写した IPv6 は同じ送り元
+    const s2 = memoryStore(() => clock.now);
+    await connected(f, s2);
+    const d2 = makeDeps(f, s2);
+    for (let i = 0; i < base.try.read.perSenderDaily; i++) {
+      at(T0 + Math.floor(i / 25) * 61_000);
+      await read(d2, i % 2 ? "192.0.2.80" : "::ffff:192.0.2.80");
+    }
+    at(T0 + 10 * 61_000);
+    assert.equal((await read(d2, "::ffff:192.0.2.80")).status, 429);
+  });
+});
+
+describe("freee：元に戻す時に消す物は、記録の番号の物だけ", () => {
+  test("私用の取引を消すと 404 が返る時、1回目は要復旧（明細を消さない・作り直さない）", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    f.reopenOnDealDelete = false;
+    f.privateDeleteStatus = 404;
+    const deps = makeDeps(f, store);
+    assert.equal((await bodyOf(await reg(deps, f.txnOf(PRIVATE_ITEM.no)!.id, "private"))).result, "registered");
+    at(clock.now + holdMs + 1);
+    assert.equal((await bodyOf(await read(deps))).trial.phase, "repair");
+    assert.ok(!f.calls.some((c) => c.method === "DELETE" && c.path.startsWith("/api/1/wallet_txns/")), "明細を消さない");
+    assert.ok(!f.calls.some((c) => c.method === "POST" && c.path === "/api/1/wallet_txns"), "作り直さない");
+    assert.equal(f.deals.size, 1, "取引は残っている（記録も残す）");
+    assert.equal((await loadTrial(store)).items[0].dealIds!.length, 1);
+  });
+
+  test("取引を消した返事が途切れた次の回は、404 を「もう無い」として進める", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    const deps = makeDeps(f, store);
+    assert.equal((await bodyOf(await reg(deps, f.txnOf(SHOP_ITEM.no)!.id, "shop"))).result, "registered");
+    at(clock.now + holdMs + 1);
+    f.dropOn = "delete_deal";
+    assert.equal((await bodyOf(await read(deps))).trial.phase, "restoring");
+    assert.equal(f.deals.size, 0, "freee の中では消えた");
+    assert.ok((await loadTrial(store)).items[0].deleting, "消している番号を記録に置いた");
+    f.dropOn = null;
+    const b = await bodyOf(await read(deps));
+    assert.equal(b.trial.phase, "free", JSON.stringify(b.trial));
+    assert.equal((await loadTrial(store)).items.length, 0);
+    assert.equal(f.txnOf(SHOP_ITEM.no)!.status, 1);
+  });
+
+  test("印が同じでも番号の違う明細は消さない（オーナーが freee の画面で入れ直した明細を含む）", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    f.reopenOnDealDelete = false;
+    const deps = makeDeps(f, store);
+    const t = f.txnOf(SHOP_ITEM.no)!;
+    assert.equal((await bodyOf(await reg(deps, t.id, "shop"))).result, "registered");
+    // オーナーが freee の画面で、元の明細を消して同じ中身と印で入れ直した
+    f.txns = f.txns.filter((x) => x !== t);
+    const again = f.addSeed(SHOP_ITEM.no, { status: 2, due_amount: 0 });
+    at(clock.now + holdMs + 1);
+    assert.equal((await bodyOf(await read(deps))).trial.phase, "repair");
+    assert.ok(f.txns.includes(again), "番号の違う明細には触らない");
+    assert.ok(!f.calls.some((c) => c.method === "DELETE" && c.path.startsWith("/api/1/wallet_txns/")));
+  });
+
+  test("明細を消した返事が途切れた次の回に、見つからなければ消えた扱いで作り直す", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    f.reopenOnDealDelete = false;
+    const deps = makeDeps(f, store);
+    const t = f.txnOf(SHOP_ITEM.no)!;
+    assert.equal((await bodyOf(await reg(deps, t.id, "shop"))).result, "registered");
+    at(clock.now + holdMs + 1);
+    f.dropOn = "delete_txn";
+    assert.equal((await bodyOf(await read(deps))).trial.phase, "restoring");
+    assert.equal(f.txnOf(SHOP_ITEM.no), undefined, "freee の中では消えた");
+    assert.equal((await loadTrial(store)).items[0].step, "txn-deleting");
+    f.dropOn = null;
+    assert.equal((await bodyOf(await read(deps))).trial.phase, "free");
+    const now = f.txnOf(SHOP_ITEM.no)!;
+    assert.notEqual(now.id, t.id);
+    assert.equal(now.status, 1);
+    assert.equal(f.txns.filter((x) => hasMark(x.description, mark(SHOP_ITEM.no))).length, 1);
+  });
+
+  test("作り直しの返事が途切れて、次の回に見つからない時は、もう1つ作らずに要復旧", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    f.reopenOnDealDelete = false;
+    const deps = makeDeps(f, store);
+    assert.equal((await bodyOf(await reg(deps, f.txnOf(SHOP_ITEM.no)!.id, "shop"))).result, "registered");
+    at(clock.now + holdMs + 1);
+    f.createTxnDropBefore = true;
+    assert.equal((await bodyOf(await read(deps))).trial.phase, "restoring");
+    assert.equal((await loadTrial(store)).items[0].step, "recreating");
+    f.createTxnDropBefore = false;
+    const posts = () => f.calls.filter((c) => c.method === "POST" && c.path === "/api/1/wallet_txns").length;
+    const before = posts();
+    assert.equal((await bodyOf(await read(deps))).trial.phase, "repair");
+    assert.equal(posts(), before, "もう1つ作らない");
+  });
+
+  test("create_deal の返事が deal_ids: [] の時は「登録できた」ではなく、結果が分からない（要復旧）", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    f.emptyDealIds = true;
+    const deps = makeDeps(f, store);
+    const b = await bodyOf(await reg(deps, f.txnOf(SHOP_ITEM.no)!.id, "shop"));
+    assert.equal(b.result, "unknown");
+    assert.equal((await loadTrial(store)).repair, true);
+  });
+});
+
+describe("freee：オーナーの道との重なり", () => {
+  test("区切りをまたいで、オーナーの登録は試しの記録にある明細を断る（要復旧の記録も）", async () => {
+    const settings: FreeeSettings = { ...base, serverBudgetSeconds: 20, timeoutSeconds: 5 };
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    f.reopenOnDealDelete = false;
+    const t = f.txnOf(SHOP_ITEM.no)!;
+    assert.equal((await bodyOf(await reg(makeDeps(f, store, settings), t.id, "shop"))).result, "registered");
+    at(clock.now + holdMs + 1);
+    f.tick = 4000;
+    await read(makeDeps(f, store, settings));
+    f.tick = 0;
+    const mid = await loadTrial(store);
+    assert.equal(mid.restoring, true, "区切られた");
+    const now = f.txnOf(SHOP_ITEM.no) ?? t;
+    const or = await handleRegister(ownerReq("/api/freee/register", { cookie: ownerCookie(f.access), body: { id: now.id, use: "shop", account: "card", date: now.date, amount: now.amount } }), makeDeps(f, store, settings));
+    const ob = await bodyOf(or);
+    assert.equal(ob.reason, "来た人の試しを元に戻すまで、この明細は登録しません");
+    // 要復旧の記録にある明細も
+    const s2 = memoryStore(() => clock.now);
+    const g = new FakeFreee();
+    await connected(g, s2);
+    g.addAllSeed();
+    g.dropOn = "create_private_deal";
+    const p = g.txnOf(PRIVATE_ITEM.no)!;
+    await reg(makeDeps(g, s2), p.id, "private");
+    g.dropOn = null;
+    p.status = 1;
+    p.due_amount = p.amount;
+    const r2 = await handleRegister(ownerReq("/api/freee/register", { cookie: ownerCookie(g.access), body: { id: p.id, use: "private", account: "card", date: p.date, amount: p.amount } }), makeDeps(g, s2));
+    assert.equal((await bodyOf(r2)).reason, "来た人の試しを元に戻すまで、この明細は登録しません");
+  });
+
+  test("外す時に印が取れなければ鍵を消さない（409・cookie も残す）。書いている途中に外しても、外した後に書きが入らない", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    const deps = makeDeps(f, store);
+    let disconnectAnswer: Response | null = null;
+    f.beforeWrite = async (path) => {
+      if (path.endsWith("/create_deal") && !disconnectAnswer) disconnectAnswer = await handleDisconnect(ownerReq("/api/freee/disconnect", { cookie: ownerCookie(f.access) }), makeDeps(f, store));
+    };
+    assert.equal((await bodyOf(await reg(deps, f.txnOf(SHOP_ITEM.no)!.id, "shop"))).result, "registered");
+    const d = disconnectAnswer!;
+    assert.equal(d.status, 409);
+    assert.equal((await d.json()).message, "いま来た人の試しを書いています。少し待ってから、もう一度押してください");
+    assert.ok(!d.headers.getSetCookie().some((c) => c.startsWith(`${TOKEN_COOKIE}=`)), "cookie は消さない");
+    assert.ok(await store.get(FREEE_KV.token), "鍵は消さない");
+    f.beforeWrite = null;
+    // 外す：書いていない時は、先に元に戻してから消す。外した後は書きが入らない
+    const ok = await handleDisconnect(ownerReq("/api/freee/disconnect", { cookie: ownerCookie(f.access) }), makeDeps(f, store));
+    assert.equal(ok.status, 200);
+    assert.equal(await store.get(FREEE_KV.token), null);
+    const writes = f.writes().length;
+    const after = await reg(makeDeps(f, store), f.txnOf(PRIVATE_ITEM.no)!.id, "private", "10.20.30.40");
+    assert.equal((await bodyOf(after)).code, "not-connected");
+    assert.equal(f.writes().length, writes);
+  });
+
+  test("外す時に置き場が落ちたら 503 で、cookie は消えない", async () => {
+    const f = new FakeFreee();
+    const mem = memoryStore(() => clock.now);
+    await connected(f, mem);
+    const down: KvStore = { ...mem, set: async () => Promise.reject(new Error("down")), get: async () => Promise.reject(new Error("down")), incr: async () => Promise.reject(new Error("down")), del: async () => Promise.reject(new Error("down")) };
+    const r = await handleDisconnect(ownerReq("/api/freee/disconnect", { cookie: ownerCookie(f.access) }), makeDeps(f, down));
+    assert.equal(r.status, 503);
+    assert.equal((await r.json()).message, "サーバーの鍵を消せませんでした。少し待ってから、もう一度押してください");
+    assert.ok(!r.headers.getSetCookie().some((c) => c.startsWith(`${TOKEN_COOKIE}=`)), "cookie は消さない（もう一度押せる）");
+    assert.ok(await mem.get(FREEE_KV.token));
+  });
+
+  test("書いた後に番号が変わったら、markKvExpired は自分が書いた物を消す（延ばす所と同じ順）", async () => {
+    const f = new FakeFreee();
+    const mem = memoryStore(() => clock.now);
+    await connected(f, mem);
+    let after = false;
+    const store: KvStore = {
+      ...mem,
+      set: async (k, v, o) => {
+        const r = await mem.set(k, v, o);
+        // 鍵を書いた直後に、オーナーが外した（番号が進んだ）
+        if (k === FREEE_KV.token && !after) {
+          after = true;
+          await mem.incr(FREEE_KV.gen, 600);
+        }
+        return r;
+      },
+    };
+    const { markKvExpired } = await import("../kv");
+    await markKvExpired(ctxOf(store), f.access);
+    assert.equal(await mem.get(FREEE_KV.token), null, "書いた物を消した");
+  });
+});
+
+describe("freee：要復旧で止める所", () => {
+  test("番号を置けなかった後の、同じ人の2件目は断る（その場で要復旧）", async () => {
+    const f = new FakeFreee();
+    const mem = memoryStore(() => clock.now);
+    await connected(f, mem);
+    f.addAllSeed();
+    let trialWrites = 0;
+    const store: KvStore = {
+      ...mem,
+      set: async (k, v, o) => {
+        if (k === FREEE_KV.trial && ++trialWrites === 2) throw new Error("down");
+        return mem.set(k, v, o);
+      },
+    };
+    assert.equal((await bodyOf(await reg(makeDeps(f, store), f.txnOf(SHOP_ITEM.no)!.id, "shop", "10.1.2.3"))).result, "registered");
+    const writes = f.writes().length;
+    const second = await bodyOf(await reg(makeDeps(f, mem), f.txnOf(PRIVATE_ITEM.no)!.id, "private", "10.1.2.3"));
+    assert.equal(second.reason, TRY_MESSAGES.repair);
+    assert.equal(f.writes().length, writes);
+    assert.equal((await loadTrial(mem)).repair, true);
+  });
+
+  test("読めない記録・壊れた項目のある記録は、つなぎ直しで確かめずには消えない（見本の出金がみな見本どおりの未処理の時だけ消す）", async () => {
+    for (const raw of ["{", JSON.stringify({ v: 1, by: null, items: [{ id: "x" }], lastWriteAt: 1, repair: false, restoring: false })]) {
+      const f = new FakeFreee();
+      const store = memoryStore(() => clock.now);
+      f.addAllSeed();
+      // 見本の出金の1つが、まだ登録されたまま
+      const left = f.txnOf(SHOP_ITEM.no)!;
+      left.status = 2;
+      left.due_amount = 0;
+      await store.set(FREEE_KV.trial, raw, { ex: 600 });
+      await reconnect(f, makeDeps(f, store));
+      const t = await loadTrial(store);
+      assert.equal(t.repair, true, raw);
+      assert.equal(t.broken, true);
+      assert.ok(f.calls.some((c) => c.path === "/api/1/wallet_txns" && c.method === "GET"), "読んで確かめた");
+      // 直したら消える
+      left.status = 1;
+      left.due_amount = left.amount;
+      await reconnect(f, makeDeps(f, store));
+      assert.equal((await loadTrial(store)).repair, false, raw);
+    }
+  });
+
+  test("期限の後に書かない：印の期限が持ち時間より先に来る作り物の時計（置き場の時計が早く進む）で、freee に送らない", async () => {
+    const f = new FakeFreee();
+    const storeClock = { now: T0 };
+    const store = memoryStore(() => storeClock.now);
+    await connected(f, store);
+    storeClock.now = clock.now;
+    f.addAllSeed();
+    // freee を呼ぶたびに、置き場の時計だけが印の期限をこえて進む（こちらの時計はほとんど進まない）
+    const origFetch = f.fetch;
+    f.fetch = async (input, init) => {
+      storeClock.now += (base.try.lockSeconds + 60) * 1000;
+      return origFetch(input, init);
+    };
+    const deps = makeDeps(f, store);
+    const b = await bodyOf(await reg(deps, f.txnOf(SHOP_ITEM.no)!.id, "shop"));
+    assert.notEqual(b.result, "registered", JSON.stringify(b));
+    assert.ok(!f.calls.some((c) => c.path.includes("create_deal")), "freee に送らない");
   });
 });

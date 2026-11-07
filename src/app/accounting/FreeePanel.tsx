@@ -143,7 +143,12 @@ export function FreeePanel({ freee }: { freee: Freee }) {
 
   const onDisconnect = async (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted || busy || sending) return;
-    await freee.disconnect();
+    const r = await freee.disconnect();
+    if (!r.ok) {
+      // 外せなかった：cookie も鍵もそのまま（日誌は書かない）
+      setNote(r.reason);
+      return;
+    }
     writeJournal({ who: "オーナー", text: "テスト事業所とのつなぎを外した（このブラウザの鍵とサーバーの鍵を消した）" });
   };
 

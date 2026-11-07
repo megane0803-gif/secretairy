@@ -35,6 +35,7 @@ import {
   descriptionOf,
   lookup,
   lookupById,
+  markIn,
   markOf,
   pickBankAccount,
   pickCardAccount,
@@ -46,9 +47,9 @@ import {
   type Verdict,
 } from "./match";
 import { siteCheck } from "../server/site";
-import { currentGen, dropKvToken, putKvToken, readKvToken, StoreDown, withWriteLock, type KvCtx } from "./kv";
+import { currentGen, dropKvToken, genMovedPast, putKvToken, readKvToken, StoreDown, withWriteLock, type KvCtx, type StillHeld } from "./kv";
 import { seal, unseal } from "./seal";
-import { clearRepairedTrial, loadTrial, restoreTrial, type RestoreResult } from "./trial";
+import { clearRepairedTrial, loadTrial, restoreTrial, seedItemOfMark, type RestoreResult, type Trial } from "./trial";
 
 export const TOKEN_COOKIE = "__Host-secretairy-freee";
 export const STATE_COOKIE = "__Host-secretairy-freee-state";
@@ -257,6 +258,8 @@ function companyIdPage(companyId: number): Response {
 }
 
 export async function handleCallback(request: Request, deps: FreeeDeps): Promise<Response> {
+  // 窓口の始めの時刻（元に戻す時の持ち時間は、ここから数える。鍵の交換の時間も引く）
+  const startedAt = deps.now();
   const g = guard(request, deps, { method: "GET", session: false, needCompany: false });
   if (!g.ok) return g.response;
   const { env, settings } = deps;
@@ -300,7 +303,7 @@ export async function handleCallback(request: Request, deps: FreeeDeps): Promise
   const c = kvCtxOf(deps);
   if (!c) return back("connected", [...cookies, tokenCookie]);
   const shared = token.refreshToken !== null && (await putKvToken(c, { ...session, refreshToken: token.refreshToken }));
-  if (shared) await afterConnect(deps, session);
+  if (shared) await afterConnect(deps, session, startedAt);
   return back(shared ? "connected" : "connected-cookie", [...cookies, tokenCookie]);
 }
 
@@ -308,12 +311,13 @@ export async function handleCallback(request: Request, deps: FreeeDeps): Promise
  * つないだ後：前の回に元に戻せなかった試しを、オーナーの鍵で元に戻す。要復旧の記録は、オーナーが freee の側で
  * 見本どおりの未処理に直してあれば消す（読むだけで確かめる。消す・作り直すはしない）。どちらもうまくいかなければ記録は残す。
  */
-async function afterConnect(deps: FreeeDeps, s: Session): Promise<void> {
+async function afterConnect(deps: FreeeDeps, s: Session, startedAt: number): Promise<void> {
   try {
-    const t = await loadTrial(deps.store!);
-    if (t.items.length === 0 && !t.repair) return;
-    await withWriteLock({ store: deps.store!, settings: deps.settings, now: deps.now, random: deps.random }, async (until) => {
-      const ctx = { api: clientFor(deps, s, until), store: deps.store!, settings: deps.settings, seed: deps.seed, companyId: s.companyId, range: readRange(deps) };
+    await withWriteLock({ store: deps.store!, settings: deps.settings, now: deps.now, random: deps.random }, async (until, held) => {
+      // 印を取った後に記録を読む（印の外の古い記録で決めない）
+      const t = await loadTrial(deps.store!);
+      if (t.items.length === 0 && !t.repair) return null;
+      const ctx = { api: clientFor(deps, s, until, startedAt), store: deps.store!, settings: deps.settings, seed: deps.seed, companyId: s.companyId, range: readRange(deps), held };
       if (t.repair) await clearRepairedTrial(ctx);
       else await restoreTrial(ctx);
       return null;
@@ -364,7 +368,7 @@ async function sharedState(deps: FreeeDeps): Promise<{ shared: boolean | null; t
   if (!c) return { shared: false, trial: null };
   try {
     const got = await readKvToken(c);
-    const shared = !!got && got.token.companyId === deps.env.companyId && got.token.gen === (await currentGen(c.store));
+    const shared = !!got && got.token.companyId === deps.env.companyId && !genMovedPast(await currentGen(c.store), got.token.gen);
     const t = await loadTrial(c.store);
     return { shared, trial: t.repair ? "repair" : t.items.length ? "pending" : null };
   } catch {
@@ -382,27 +386,39 @@ export async function handleDisconnect(request: Request, deps: FreeeDeps): Promi
     if (g.response.status === 401 || g.response.status === 403) h.append("Set-Cookie", clearToken());
     return new Response(g.response.body, { status: g.response.status, headers: h });
   }
-  // 置き場の鍵も消す。その前に、まだ元に戻していない来た人の試しがあれば、オーナーの鍵で先に元に戻す
+  // 置き場の鍵も消す。試しがあっても無くても、先に書く時の印を取ってから（来た人が書いている途中に外して、外した後に書きが入らないように）。
+  // まだ元に戻していない来た人の試しがあれば、印の中でオーナーの鍵で先に元に戻す
   // （戻せなければ、元に戻す記録（明細と取引の番号）は置き場に残す。次につないだ時に元に戻す）
   const c = kvCtxOf(deps);
   if (!c) return json({ ok: true, restored: "none" }, 200, [clearToken()]);
-  let restored: RestoreResult | "none" | "busy" = "none";
+  const s = g.session!;
+  const startedAt = deps.now();
+  let r: RestoreResult | "none" | "busy";
   try {
-    const t = await loadTrial(c.store);
-    if (t.repair) restored = "repair";
-    else if (t.items.length) {
-      const s = g.session!;
-      const r = await withWriteLock(c, async (until) =>
-        restoreTrial({ api: clientFor(deps, s, until), store: c.store, settings: deps.settings, seed: deps.seed, companyId: s.companyId, range: readRange(deps) }).catch(() => "partial" as const),
-      );
-      restored = r;
-    }
-    await dropKvToken(c);
+    r = await withWriteLock(c, async (until, held) => {
+      const t = await loadTrial(c.store);
+      let restored: RestoreResult | "none" = "none";
+      if (t.repair) restored = "repair";
+      else if (t.items.length)
+        restored = (
+          await restoreTrial({ api: clientFor(deps, s, until, startedAt), store: c.store, settings: deps.settings, seed: deps.seed, companyId: s.companyId, range: readRange(deps), held }).catch((e) => {
+            if (e instanceof StoreDown) throw e;
+            return { result: "partial" as const };
+          })
+        ).result;
+      await dropKvToken(c);
+      return restored;
+    });
   } catch {
-    return json({ ok: false, code: "no-store", message: "サーバーの置き場につながらないので、サーバーの鍵を消せませんでした。少し待ってから、もう一度押してください" }, 503, [clearToken()]);
+    // 置き場が使えない：cookie は消さない（もう一度押せるように）
+    return json({ ok: false, code: "no-store", message: DISCONNECT_FAILED_MESSAGE }, 503);
   }
-  return json({ ok: true, restored }, 200, [clearToken()]);
+  // 印が取れない：鍵を消さない（cookie も残す）
+  if (r === "busy") return json({ ok: false, code: "busy", message: "いま来た人の試しを書いています。少し待ってから、もう一度押してください" }, 409);
+  return json({ ok: true, restored: r }, 200, [clearToken()]);
 }
+
+export const DISCONNECT_FAILED_MESSAGE = "サーバーの鍵を消せませんでした。少し待ってから、もう一度押してください";
 
 // ---- 明細を入れる・登録する・読み直す ----
 
@@ -444,8 +460,9 @@ export function readRange(deps: FreeeDeps): { from: string; to: string } {
  * この呼び出しの持ち時間（窓口の時間の上限より短く。返事の時間を残す）。
  * lockUntil：書く時の印の期限。印の期限の前に返事を待ち終えられない呼び出しは送らない（期限の後に書かない）。
  */
-export function clientFor(deps: FreeeDeps, s: Pick<Session, "accessToken">, lockUntil?: number): FreeeClient {
-  const budget = deps.now() + deps.settings.serverBudgetSeconds * 1000;
+export function clientFor(deps: FreeeDeps, s: Pick<Session, "accessToken">, lockUntil?: number, startedAt?: number): FreeeClient {
+  // startedAt：窓口の始めの時刻（持ち時間はそこから数える。無ければ今から）
+  const budget = (startedAt ?? deps.now()) + deps.settings.serverBudgetSeconds * 1000;
   return freeeClient({
     fetch: deps.fetch,
     settings: deps.settings,
@@ -458,10 +475,10 @@ export function clientFor(deps: FreeeDeps, s: Pick<Session, "accessToken">, lock
 /** 書く窓口の印：置き場がある時は、来た人の登録・元に戻すと同じ印を取る。取れなければ「少し待ってから」 */
 export const WRITE_BUSY_MESSAGE = "いま ほかの書き込み（来た人の試し・元に戻す など）をしています。少し待ってから、もう一度押してください";
 
-async function underWriteLock(deps: FreeeDeps, run: (lockUntil?: number) => Promise<Response>): Promise<Response> {
+async function underWriteLock(deps: FreeeDeps, run: (lockUntil?: number, held?: StillHeld) => Promise<Response>): Promise<Response> {
   if (!deps.store) return run();
   try {
-    const r = await withWriteLock({ store: deps.store, settings: deps.settings, now: deps.now, random: deps.random }, (until) => run(until));
+    const r = await withWriteLock({ store: deps.store, settings: deps.settings, now: deps.now, random: deps.random }, (until, held) => run(until, held));
     return r === "busy" ? json({ ok: false, code: "busy", message: WRITE_BUSY_MESSAGE }, 409) : r;
   } catch (e) {
     if (e instanceof StoreDown) return json({ ok: false, code: "no-store", message: "サーバーの置き場につながらないので、書きませんでした。少し待ってから、もう一度押してください" }, 503);
@@ -502,10 +519,10 @@ export async function handleImport(request: Request, deps: FreeeDeps): Promise<R
   const g = guard(request, deps, { method: "POST", session: true });
   if (!g.ok) return g.response;
   const s = g.session!;
-  return underWriteLock(deps, (until) => importUnderLock(deps, s, until));
+  return underWriteLock(deps, (until, held) => importUnderLock(deps, s, until, held));
 }
 
-async function importUnderLock(deps: FreeeDeps, s: Session, lockUntil?: number): Promise<Response> {
+async function importUnderLock(deps: FreeeDeps, s: Session, lockUntil?: number, held?: StillHeld): Promise<Response> {
   const api = clientFor(deps, s, lockUntil);
   const items = deps.seed.statement.items;
   let accounts;
@@ -538,6 +555,11 @@ async function importUnderLock(deps: FreeeDeps, s: Session, lockUntil?: number):
     if (l.kind !== "missing") {
       out.check++;
       continue;
+    }
+    if (held && !(await held())) {
+      // 書く時の印の期限が来た：書く前に区切る（画面が続きを呼ぶ）
+      out.stopped = { no: item.no, kind: "time", reason: "持ち時間の中で入れ終わらないので、ここで区切りました" };
+      break;
     }
     try {
       const made = await api.createWalletTxn({
@@ -616,19 +638,41 @@ export async function handleRegister(request: Request, deps: FreeeDeps): Promise
   if (!target) return json({ ok: false, code: "bad-request", message: "形がおかしいです" }, 400);
   const range = readRange(deps);
   if (target.date < range.from || target.date > range.to) return json({ ok: false, code: "bad-request", message: "読む期間の外の明細です" }, 400);
-  return underWriteLock(deps, async (until) => {
-    const answer = await registerOne(deps, s, target, range, until);
+  return underWriteLock(deps, async (until, held) => {
+    const answer = await registerOne(deps, s, target, range, until, held);
     if (answer === "expired") return expired();
     return json(answer);
   });
 }
 
-async function registerOne(deps: FreeeDeps, s: Session, target: RegisterTarget, range: { from: string; to: string }, lockUntil?: number): Promise<RegisterAnswer | "expired"> {
-  const api = clientFor(deps, s, lockUntil);
-  const p = await prepareOne(deps, api, s, target, range);
-  if (p.kind === "answer") return p.answer;
-  const w = await writeOne(api, s, target.use, p.txn, p.line);
+export const TRIAL_HELD_MESSAGE = "来た人の試しを元に戻すまで、この明細は登録しません";
+
+/** オーナーの登録で断るか：来た人の試しの記録（要復旧も）にある明細（番号か、印から引いた見本の番号）。読めない記録の時は印のある見本の明細を全部 */
+function inTrial(deps: FreeeDeps, t: Trial, txn: Pick<WalletTxn, "id" | "description">): boolean {
+  if (t.items.some((i) => i.id === txn.id)) return true;
+  const mark = markIn(txn.description, deps.settings.markPrefix);
+  const seed = mark ? seedItemOfMark(deps.seed, deps.settings.markPrefix, mark) : null;
+  if (!seed) return false;
+  return t.broken || t.items.some((i) => i.no === seed.no);
+}
+
+async function registerOne(
+  deps: FreeeDeps,
+  s: Session,
+  target: RegisterTarget,
+  range: { from: string; to: string },
+  lockUntil?: number,
+  held?: StillHeld,
+): Promise<RegisterAnswer | "expired"> {
   const id = target.id;
+  // 来た人の試しの記録にある明細は、元に戻すまで登録しない（印の中で読む。区切りをまたいでも同じ）
+  const trial = deps.store ? await loadTrial(deps.store) : null;
+  if (trial && trial.items.some((i) => i.id === id)) return { ok: true, id, result: "failed", reason: TRIAL_HELD_MESSAGE };
+  const api = clientFor(deps, s, lockUntil);
+  const p = await prepareOne(deps, api, s, target, range, { extra: trial ? (t) => (inTrial(deps, trial, t) ? TRIAL_HELD_MESSAGE : null) : undefined });
+  if (p.kind === "answer") return p.answer;
+  if (held && !(await held())) return { ok: true, id, result: "failed", reason: "持ち時間が足りないので送りませんでした（freee には何も書いていません）。もう一度押してください" };
+  const w = await writeOne(api, s, target.use, p.txn, p.line);
   if (w.kind === "expired") return "expired";
   if (w.kind === "registered") return { ok: true, id, result: "registered", dealIds: w.dealIds };
   if (w.kind === "time") return { ok: true, id, result: "failed", reason: "持ち時間が足りないので送りませんでした（freee には何も書いていません）。もう一度押してください" };
@@ -710,6 +754,8 @@ export async function writeOne(api: FreeeClient, s: Pick<Session, "companyId">, 
         company_id: s.companyId,
         deal_lines: [{ amount: txn.amount, account_item_id: line!.account_item_id, tax_code: line!.tax_code }],
       });
+      // 返事の取引の番号が空：登録できたかが分からない（結果が分からない）
+      if (dealIds.length === 0) return { kind: "unknown" };
       return { kind: "registered", dealIds };
     }
     const dealId = await api.createPrivateDeal(txn.id, s.companyId);

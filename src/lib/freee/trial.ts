@@ -19,13 +19,13 @@ import type { AccountingSeed, CardItem, CardUse, StatementAccount } from "../dat
 import type { KvStore } from "../line/store";
 import type { FreeeSettings } from "../settings";
 import { FreeeExpired, FreeeOutOfTime, FreeeRejected, type FreeeClient, type WalletTxn } from "./api";
-import { FREEE_KV, kv, StoreDown } from "./kv";
+import { FREEE_KV, kv, StoreDown, type StillHeld } from "./kv";
 import { descriptionOf, hasMark, markIn, markOf, pickBankAccount, pickCardAccount, WALLETABLE_TYPE } from "./match";
 
-export type TrialStep = "writing" | "written" | "deals-gone" | "txn-deleted" | "recreated";
+export type TrialStep = "writing" | "written" | "deals-gone" | "txn-deleting" | "txn-deleted" | "recreating" | "recreated";
 
 export type TrialItem = {
-  /** いまの freee の明細の番号（作り直したら新しい番号） */
+  /** いまの freee の明細の番号（作り直したら、記録した新しい番号） */
   id: number;
   account: StatementAccount;
   /** 見本の明細の番号（seed.statement.items の no） */
@@ -33,6 +33,8 @@ export type TrialItem = {
   use: CardUse;
   /** 取引の番号。null は「分からない」（返事が途切れた・置き場に書けなかった） */
   dealIds: number[] | null;
+  /** いま消している取引の番号（送る前に置く。前の回に送って返事が途切れた時だけ、404 を「もう無い」とみなす） */
+  deleting: number | null;
   step: TrialStep;
 };
 
@@ -45,13 +47,16 @@ export type Trial = {
   lastWriteAt: number | null;
   /** 要復旧：自分では元に戻せない（来た人の登録を止める。オーナーが直す） */
   repair: boolean;
+  /** 読めない記録だった（形が壊れている・壊れた項目があった）。どの明細を試したか分からないので、外す時は見本の出金を全部確かめる */
+  broken: boolean;
   /** 元に戻し始めた（終わるまで登録させない） */
   restoring: boolean;
 };
 
-export const EMPTY_TRIAL: Trial = { v: 1, by: null, items: [], lastWriteAt: null, repair: false, restoring: false };
+export const EMPTY_TRIAL: Trial = { v: 1, by: null, items: [], lastWriteAt: null, repair: false, broken: false, restoring: false };
+const BROKEN: Trial = { ...EMPTY_TRIAL, repair: true, broken: true };
 
-const STEPS = new Set<TrialStep>(["writing", "written", "deals-gone", "txn-deleted", "recreated"]);
+const STEPS = new Set<TrialStep>(["writing", "written", "deals-gone", "txn-deleting", "txn-deleted", "recreating", "recreated"]);
 const isId = (x: unknown): x is number => typeof x === "number" && Number.isSafeInteger(x) && x > 0;
 
 export function parseTrial(raw: string | null): Trial {
@@ -60,10 +65,10 @@ export function parseTrial(raw: string | null): Trial {
   try {
     d = JSON.parse(raw);
   } catch {
-    // 読めない記録は、元に戻せるか分からないので要復旧
-    return { ...EMPTY_TRIAL, repair: true };
+    // 読めない記録は、元に戻せるか分からないので要復旧（壊れた印つき）
+    return BROKEN;
   }
-  if (!d || typeof d !== "object" || d.v !== 1 || !Array.isArray(d.items)) return { ...EMPTY_TRIAL, repair: true };
+  if (!d || typeof d !== "object" || d.v !== 1 || !Array.isArray(d.items)) return BROKEN;
   const items: TrialItem[] = [];
   let bad = false;
   for (const x of d.items as Record<string, unknown>[]) {
@@ -74,12 +79,21 @@ export function parseTrial(raw: string | null): Trial {
       isId(x.no) &&
       (x.use === "shop" || x.use === "private") &&
       (x.dealIds === null || (Array.isArray(x.dealIds) && x.dealIds.every(isId))) &&
+      (x.deleting === undefined || x.deleting === null || isId(x.deleting)) &&
       STEPS.has(x.step as TrialStep);
     if (!ok) {
       bad = true;
       continue;
     }
-    items.push({ id: x.id as number, account: x.account as StatementAccount, no: x.no as number, use: x.use as CardUse, dealIds: (x.dealIds as number[] | null) ?? null, step: x.step as TrialStep });
+    items.push({
+      id: x.id as number,
+      account: x.account as StatementAccount,
+      no: x.no as number,
+      use: x.use as CardUse,
+      dealIds: (x.dealIds as number[] | null) ?? null,
+      deleting: (x.deleting as number | null | undefined) ?? null,
+      step: x.step as TrialStep,
+    });
   }
   return {
     v: 1,
@@ -87,9 +101,13 @@ export function parseTrial(raw: string | null): Trial {
     items,
     lastWriteAt: typeof d.lastWriteAt === "number" ? d.lastWriteAt : null,
     repair: d.repair === true || bad,
+    broken: d.broken === true || bad,
     restoring: d.restoring === true,
   };
 }
+
+/** 取引の番号が分からない明細があるか（返事が途切れた・置き場に書けなかった。消す・作り直すもしない） */
+export const hasUnknownDeal = (t: Trial) => t.items.some((i) => i.dealIds === null || i.step === "writing");
 
 export async function loadTrial(store: KvStore): Promise<Trial> {
   return parseTrial(await kv(() => store.get(FREEE_KV.trial)));
@@ -97,7 +115,7 @@ export async function loadTrial(store: KvStore): Promise<Trial> {
 
 /** 記録を書く（期限つき）。空なら消す。書けなければ StoreDown */
 export async function saveTrial(store: KvStore, settings: FreeeSettings, t: Trial): Promise<void> {
-  if (t.items.length === 0 && !t.repair) {
+  if (t.items.length === 0 && !t.repair && !t.broken) {
     await kv(() => store.del(FREEE_KV.trial));
     return;
   }
@@ -167,24 +185,40 @@ export type RestoreCtx = {
   seed: AccountingSeed;
   companyId: number;
   range: { from: string; to: string };
+  /** 書く直前に、書く時の印がまだ自分の物かを確かめる（無ければ確かめない） */
+  held?: StillHeld;
 };
 
 /** done：全部元に戻った（記録を消した）・partial：持ち時間などで区切った（次の呼び出しで続き）・repair：要復旧で止めた */
 export type RestoreResult = "done" | "partial" | "repair";
 
-/** 書く時の印の中から呼ぶ。FreeeExpired は投げる（鍵が切れた。呼ぶ側で扱う） */
-export async function restoreTrial(c: RestoreCtx): Promise<RestoreResult> {
+/** 印の期限が来ていた（書く前に区切る） */
+class LockLost extends Error {}
+
+/**
+ * 書く時の印の中から呼ぶ。終わった後の記録も返す（書いた直後に置き場を読み直さない）。FreeeExpired は投げる（鍵が切れた。呼ぶ側で扱う）。
+ * 一歩ごとに、送る前に「これからすること」を記録に置き、終わったら書きなおす：
+ *   - 取引を消す：deleting に番号を置いてから送る。404 を「もう無い」とみなすのは、前の回に送って返事が途切れた時（deleting が同じ番号）だけ。
+ *     1回目の 404 は要復旧（この窓口で消せない取引かもしれない。明細を消す・作り直すはしない）
+ *   - 明細を消す：記録の明細の番号（作り直した後は記録した新しい番号）と同じ明細だけ。違えば要復旧。txn-deleting を置いてから送り、
+ *     返事が途切れた次の回に見つからなければ消えた扱い
+ *   - 作り直す：recreating を置いてから送り、返事が途切れた次の回に見つからなければ、もう1つ作らずに要復旧
+ */
+export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResult; trial: Trial }> {
   let t = await loadTrial(c.store);
-  if (t.repair) return "repair";
-  if (t.items.length === 0) return "done";
+  if (t.repair) return { result: "repair", trial: t };
+  if (t.items.length === 0) return { result: "done", trial: t };
   const save = async () => saveTrial(c.store, c.settings, t);
-  const repair = async (): Promise<RestoreResult> => {
+  const repair = async (): Promise<{ result: RestoreResult; trial: Trial }> => {
     t = { ...t, repair: true };
     await save();
-    return "repair";
+    return { result: "repair", trial: t };
+  };
+  const write = async () => {
+    if (c.held && !(await c.held())) throw new LockLost();
   };
   // 取引の番号が分からない明細があれば、消す・作り直すもしない
-  if (t.items.some((i) => i.dealIds === null || i.step === "writing")) return repair();
+  if (hasUnknownDeal(t)) return repair();
   if (t.items.some((i) => !c.seed.statement.items.some((s) => s.no === i.no))) return repair();
   if (!t.restoring) {
     t = { ...t, restoring: true };
@@ -196,14 +230,21 @@ export async function restoreTrial(c: RestoreCtx): Promise<RestoreResult> {
     for (const item of t.items) {
       while (item.dealIds && item.dealIds.length > 0) {
         const id = item.dealIds[0];
+        const resumed = item.deleting === id;
+        if (!resumed) {
+          item.deleting = id;
+          await save();
+        }
+        await write();
         try {
           await c.api.deleteDeal(id, c.companyId);
         } catch (e) {
-          // 404：もう無い。ほかの 400 台：消せない（元に戻せない）→ 要復旧
           if (!(e instanceof FreeeRejected)) throw e;
-          if (e.status !== 404) return repair();
+          // 1回目の 404・ほかの 400 台：消せない（元に戻せない）→ 要復旧。前の回に送った後の 404 だけ「もう無い」
+          if (!(e.status === 404 && resumed)) return repair();
         }
         item.dealIds = item.dealIds.slice(1);
+        item.deleting = null;
         if (item.dealIds.length === 0 && item.step === "written") item.step = "deals-gone";
         await save();
       }
@@ -232,24 +273,44 @@ export async function restoreTrial(c: RestoreCtx): Promise<RestoreResult> {
       return { w, s, hit: (from[item.account] ?? []).filter((x) => x.company_id === c.companyId && x.walletable_id === w.id && x.walletable_type === w.type && hasMark(x.description, mark)) };
     };
 
-    // 3. 戻らない明細は、印のある見本の明細だけを消して作り直す
+    // 3. 戻らない明細は、記録の番号の見本の明細だけを消して作り直す
     let created = false;
     for (const item of t.items) {
       const { w, s, hit } = sameMark(item, txns);
       if (hit.length > 1) return repair();
       const x = hit[0];
+      if (item.step === "recreating") {
+        // 作り直しの返事が途切れた次の回：見本どおりの物が1つあれば、それが作った物。無ければもう1つ作らずに要復旧
+        if (x && isOriginal(c.seed, prefix, s, x, w, c.companyId)) {
+          item.id = x.id;
+          item.step = "recreated";
+          await save();
+          continue;
+        }
+        return repair();
+      }
+      if (x && x.id !== item.id) return repair(); // 印が同じでも番号が違う明細（オーナーが入れ直した など）には触らない
       if (x && isOriginal(c.seed, prefix, s, x, w, c.companyId)) continue;
       if (x) {
         // 作り直した明細が戻らない（自動登録のルールに当たった など）・見本と値が違う（手で変えた）→ 要復旧
         if (item.step === "recreated" || x.rule_matched === true || !matchesSeed(c.seed, prefix, s, x, w, c.companyId)) return repair();
-        // 消す前に、印が見本の印そのものかも確かめる（手で作った見本の明細だけ。同期で取った明細には印が無い）
         if (markIn(x.description, prefix) === null) return repair();
+        const resumed = item.step === "txn-deleting";
+        if (!resumed) {
+          item.step = "txn-deleting";
+          await save();
+        }
+        await write();
         try {
           await c.api.deleteWalletTxn(x.id, c.companyId);
         } catch (e) {
           if (!(e instanceof FreeeRejected)) throw e;
-          if (e.status !== 404) return repair();
+          if (!(e.status === 404 && resumed)) return repair();
         }
+        item.step = "txn-deleted";
+        await save();
+      } else if (item.step === "txn-deleting") {
+        // 消した返事が途切れた次の回：記録の番号の明細が見つからない → 消えた扱い
         item.step = "txn-deleted";
         await save();
       } else if (item.step !== "txn-deleted") {
@@ -257,6 +318,9 @@ export async function restoreTrial(c: RestoreCtx): Promise<RestoreResult> {
         return repair();
       }
       const p = seedTxnParams(c.seed, prefix, s);
+      item.step = "recreating";
+      await save();
+      await write();
       const made = await c.api.createWalletTxn({
         company_id: c.companyId,
         walletable_type: WALLETABLE_TYPE[p.account],
@@ -272,32 +336,34 @@ export async function restoreTrial(c: RestoreCtx): Promise<RestoreResult> {
       await save();
     }
 
-    // 4. 読み直して、全部が元の形かを確かめる
+    // 4. 読み直して、全部が元の形か（記録の番号の明細が1つだけで、見本どおりの未処理）を確かめる
     if (created) txns = await readAll();
     for (const item of t.items) {
       const { w, s, hit } = sameMark(item, txns);
-      if (hit.length !== 1 || !isOriginal(c.seed, prefix, s, hit[0], w, c.companyId)) return repair();
+      if (hit.length !== 1 || hit[0].id !== item.id || !isOriginal(c.seed, prefix, s, hit[0], w, c.companyId)) return repair();
     }
     t = { ...EMPTY_TRIAL };
     await save();
-    return "done";
+    return { result: "done", trial: t };
   } catch (e) {
     if (e instanceof FreeeExpired) {
       await save();
       throw e;
     }
-    // 持ち時間が足りない（送る前に止めた）・返事が途切れた（消すのは何度でも同じ。作るのは次の回に印で照らし合わせる）：区切る
-    if (e instanceof FreeeOutOfTime || !(e instanceof FreeeRejected)) {
+    // 印の期限が来た・持ち時間が足りない（送る前に止めた）・返事が途切れた：区切る（次の回に、記録の一歩から続ける）
+    if (e instanceof LockLost || e instanceof FreeeOutOfTime || !(e instanceof FreeeRejected)) {
       await save();
-      return "partial";
+      return { result: "partial", trial: t };
     }
     return repair();
   }
 }
 
 /**
- * 要復旧の記録が、オーナーが freee の側で直して見本どおりの未処理に戻っているか（読むだけ。消す・作り直すはしない）。
- * 全部戻っていれば記録を消して true（オーナーがもう一度つないだ時だけ呼ぶ）。
+ * 要復旧の記録を外してよいか（読むだけ。消す・作り直すはしない。オーナーがもう一度つないだ時だけ呼ぶ）。
+ * - ふつうの記録：記録の明細が、みな見本どおりの未処理（印があり・1つだけ）に戻っていれば外す
+ * - 読めない記録（壊れた）：どれを試したか分からないので、見本の出金がみな「印があり・見本どおり・未処理」と読めた時だけ外す
+ * 外したら true。
  */
 export async function clearRepairedTrial(c: RestoreCtx): Promise<boolean> {
   const t = await loadTrial(c.store);
@@ -306,14 +372,18 @@ export async function clearRepairedTrial(c: RestoreCtx): Promise<boolean> {
   const card = pickCardAccount(list, c.settings.cardName);
   const bank = pickBankAccount(list, c.settings.bankName);
   const prefix = c.settings.markPrefix;
+  const nos = t.broken ? c.seed.statement.items.filter((i) => sideOf(i) === "expense").map((i) => i.no) : t.items.map((i) => i.no);
+  if (nos.length === 0) return false;
   const read: Partial<Record<StatementAccount, WalletTxn[]>> = {};
-  for (const item of t.items) {
-    const w = item.account === "card" ? (card.ok ? card.walletable : null) : bank.ok ? bank.walletable : null;
-    const s = c.seed.statement.items.find((x) => x.no === item.no);
-    if (!w || !s) return false;
-    read[item.account] ??= await c.api.walletTxns(c.companyId, w, c.range);
+  for (const no of nos) {
+    const s = c.seed.statement.items.find((x) => x.no === no);
+    if (!s) return false;
+    const account = accountOf(s);
+    const w = account === "card" ? (card.ok ? card.walletable : null) : bank.ok ? bank.walletable : null;
+    if (!w) return false;
+    read[account] ??= await c.api.walletTxns(c.companyId, w, c.range);
     const mark = seedTxnParams(c.seed, prefix, s).mark;
-    const hit = read[item.account]!.filter((x) => x.company_id === c.companyId && x.walletable_id === w.id && hasMark(x.description, mark));
+    const hit = read[account]!.filter((x) => x.company_id === c.companyId && x.walletable_id === w.id && hasMark(x.description, mark));
     if (hit.length !== 1 || !isOriginal(c.seed, prefix, s, hit[0], w, c.companyId)) return false;
   }
   await saveTrial(c.store, c.settings, { ...EMPTY_TRIAL });

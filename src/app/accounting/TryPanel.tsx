@@ -61,7 +61,7 @@ export function TryPanel() {
     const r = await tryRegisterOne({ id: chosen.raw.id, use, label: `登録した 1件（${USE_LABEL[use]}）` });
     setNote(r.message);
     if (r.result === "registered" || r.result === "unconfirmed") {
-      writeJournal({ who: "オーナー", text: `人が登録：テスト用の事業所に、明細（出金）1件を${USE_LABEL[use]}の取引として登録した（${holdMinutes}分たった後に元に戻る）` });
+      writeJournal({ who: "オーナー", text: `人が登録：テスト用の事業所に、明細（出金）1件を${USE_LABEL[use]}の取引として登録した（${holdMinutes}分たった後に、次にだれかが経理のタブを開いた時に元に戻る）` });
       setPick(null);
       setUse(null);
     }

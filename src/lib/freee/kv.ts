@@ -49,6 +49,13 @@ export type KvCtx = {
 const days = (n: number) => Math.max(1, Math.round(n * 86_400));
 const mineOf = (random: (n: number) => Buffer) => random(16).toString("hex");
 
+/**
+ * いまのつないだ回の番号（無ければ 0）。
+ * 番号は進むだけなので、「変わった」は読んだ番号が自分の番号より大きい時だけと見る（書いた直後の読み直しが、まだ写っていない写しから
+ * 古い小さい番号で返っても、変わったとは見ない。同じ置き場の物を使えば upstash-sync-token で書いた所から読む。直しW）。
+ */
+export const genMovedPast = (current: number, mine: number) => current > mine;
+
 /** いまのつないだ回の番号（無ければ 0） */
 export async function currentGen(store: KvStore): Promise<number> {
   const raw = await kv(() => store.get(FREEE_KV.gen));
@@ -107,7 +114,7 @@ export async function putKvToken(c: KvCtx, t: Omit<KvToken, "gen">): Promise<boo
     const raw = await writeToken(c, { ...t, gen });
     if (!raw) return false;
     // 書いている間に、ほかの「つなぐ」「つなぎを外す」が番号を進めていたら、書いた鍵を消す
-    if ((await currentGen(c.store)) !== gen) {
+    if (genMovedPast(await currentGen(c.store), gen)) {
       await delIfSame(c, raw);
       return false;
     }
@@ -137,8 +144,10 @@ export async function kvAccess(c: KvCtx & { fetch: FetchLike; clientId: string; 
   if (!got) return { ok: false, why: "none" };
   let { token: t } = got;
   let raw = got.raw;
-  const gen = await currentGen(c.store);
-  if (t.companyId !== c.companyId || t.gen !== gen) return { ok: false, why: "none" };
+  const seen = await currentGen(c.store);
+  // 鍵の番号より新しい番号が読めたら、もう外された（つなぎ直された）鍵。古い番号しか読めない時は鍵の番号を使う
+  if (t.companyId !== c.companyId || genMovedPast(seen, t.gen)) return { ok: false, why: "none" };
+  const gen = t.gen;
   const now = c.now();
   const margin = c.settings.try.refreshMarginSeconds * 1000;
   if (t.expiresAt - margin > now) return { ok: true, token: t };
@@ -151,7 +160,8 @@ export async function kvAccess(c: KvCtx & { fetch: FetchLike; clientId: string; 
   try {
     // 印を取る前に、ほかの呼び出しが延ばし終えていたかもしれない（読み直す）
     const again = await readKvToken(c);
-    if (!again || again.token.gen !== gen || again.token.companyId !== c.companyId) return { ok: false, why: "none" };
+    if (!again || again.token.companyId !== c.companyId || genMovedPast(again.token.gen, gen) || genMovedPast(await currentGen(c.store), gen)) return { ok: false, why: "none" };
+    if (again.token.gen < gen) return { ok: true, token: t }; // 古い写しが読めた：前に読んだ鍵のまま
     t = again.token;
     raw = again.raw;
     if (t.expiresAt - margin > c.now()) return { ok: true, token: t };
@@ -162,7 +172,8 @@ export async function kvAccess(c: KvCtx & { fetch: FetchLike; clientId: string; 
       ans = await refreshAccessToken({ fetch: c.fetch, settings: c.settings, clientId: c.clientId, clientSecret: c.clientSecret, refreshToken: t.refreshToken });
     } catch (e) {
       if (e instanceof FreeeRejected) {
-        await delIfSame(c, raw);
+        // 消さない：ほかの呼び出しがもう延ばして新しい鍵を置いたのに、こちらは古い写しを読んで古い更新用の鍵を送ったのかもしれない
+        // （消すと、その新しい鍵まで消してしまう）。この呼び出しはつながっていない扱い。本当に使えなければ、オーナーがつなぎ直す
         return { ok: false, why: "none" };
       }
       // 返事が無い：更新用の鍵が使われたかどうか分からない。今の鍵が切れていなければそれを使う（次に延ばす時に freee が決める）
@@ -180,7 +191,7 @@ export async function kvAccess(c: KvCtx & { fetch: FetchLike; clientId: string; 
       gen,
     };
     // 書く前に番号を確かめる（つなぎを外された後なら、延ばした鍵は捨てる）
-    if ((await currentGen(c.store)) !== gen) return { ok: false, why: "none" };
+    if (genMovedPast(await currentGen(c.store), gen)) return { ok: false, why: "none" };
     const wrote = await writeToken(c, next);
     if (!wrote) {
       // 延ばせたのに書けない：古い更新用の鍵はもう使えない。つながっていない扱い
@@ -188,7 +199,7 @@ export async function kvAccess(c: KvCtx & { fetch: FetchLike; clientId: string; 
       return { ok: false, why: "none" };
     }
     // 書いている間につなぎを外されたら、書いた鍵を消す
-    if ((await currentGen(c.store)) !== gen) {
+    if (genMovedPast(await currentGen(c.store), gen)) {
       await delIfSame(c, wrote);
       return { ok: false, why: "none" };
     }
@@ -202,13 +213,17 @@ export async function kvAccess(c: KvCtx & { fetch: FetchLike; clientId: string; 
   }
 }
 
-/** freee が鍵を受けなかった（401）：次の呼び出しで延ばすように、置き場の鍵を「切れた」にする（同じ鍵の時だけ） */
+/**
+ * freee が鍵を受けなかった（401）：次の呼び出しで延ばすように、置き場の鍵を「切れた」にする（同じ鍵の時だけ）。
+ * 延ばす所と同じ順：書く前と書いた後につないだ回の番号を確かめ、書いた後に変わっていたら自分が書いた物を消す。
+ */
 export async function markKvExpired(c: KvCtx, accessToken: string): Promise<void> {
   try {
     const got = await readKvToken(c);
     if (!got || got.token.accessToken !== accessToken) return;
-    if ((await currentGen(c.store)) !== got.token.gen) return;
-    await writeToken(c, { ...got.token, expiresAt: 0 });
+    if (genMovedPast(await currentGen(c.store), got.token.gen)) return;
+    const wrote = await writeToken(c, { ...got.token, expiresAt: 0 });
+    if (wrote && genMovedPast(await currentGen(c.store), got.token.gen)) await delIfSame(c, wrote);
   } catch {
     // 書けなくても、次の呼び出しでまた 401 になるだけ
   }
@@ -219,18 +234,35 @@ export function writeLockSeconds(s: FreeeSettings): number {
   return Math.max(s.try.lockSeconds, s.serverBudgetSeconds + s.timeoutSeconds + 15);
 }
 
+/** 書く直前に呼ぶ：印がまだ自分の物か（置き場の時計で期限が来ていたら false。その時は書かない） */
+export type StillHeld = () => Promise<boolean>;
+
 /**
  * 書く時の「同時に1回」の印を取って中身を動かす。取れなければ "busy"。終わったら自分の印だけ消す。
- * run には印の期限（ms）を渡す。中で freee を呼ぶ時は、この期限より前に返事を待ち終える締め切りにする（期限の後に書かない）。
+ * run には印の期限（ms）と、印がまだ自分の物かを確かめる口（held）を渡す。中で freee を呼ぶ時は、この期限より前に返事を待ち終える
+ * 締め切りにし（期限の後に書かない）、書く直前に held() で確かめる（置き場の時計がこちらより早く進んでいても、期限の後に書かない）。
  */
-export async function withWriteLock<T>(c: { store: KvStore; settings: FreeeSettings; now: () => number; random: (n: number) => Buffer }, run: (lockUntil: number) => Promise<T>): Promise<T | "busy"> {
+export async function withWriteLock<T>(
+  c: { store: KvStore; settings: FreeeSettings; now: () => number; random: (n: number) => Buffer },
+  run: (lockUntil: number, held: StillHeld) => Promise<T>,
+): Promise<T | "busy"> {
   const mine = mineOf(c.random ?? randomBytes);
   const seconds = writeLockSeconds(c.settings);
   const got = await kv(() => c.store.set(FREEE_KV.writeLock, mine, { ex: seconds, nx: true }));
   if (!got) return "busy";
   const until = c.now() + seconds * 1000;
+  const held: StillHeld = async () => {
+    if (c.now() >= until - 1000) return false;
+    try {
+      // 自分の値の時だけ（期限で消えた null・ほかの呼び出しが取った値なら書かない）。同じ置き場の物で読むので、
+      // 書いた直後でも書いた所から読む（upstash-sync-token。直しW）
+      return (await c.store.get(FREEE_KV.writeLock)) === mine;
+    } catch {
+      return false;
+    }
+  };
   try {
-    return await run(until);
+    return await run(until, held);
   } finally {
     try {
       if ((await c.store.get(FREEE_KV.writeLock)) === mine) await c.store.del(FREEE_KV.writeLock);
