@@ -31,7 +31,7 @@ npm run build      # 本番ビルド（push の前に通す）
 ## 店ごとに変わる物はコードに書かない
 
 - メニュー・営業時間・同じ時間に受ける人数（前は席数。`shop.seats`）・カルテの見出し・タブの表示・ルールは `config/` に置き、`src/lib/settings.ts`（ルールは `src/lib/rules/store.ts`）を通して読む。
-- メニューの時間・値段・最終受付はオーナーがルールのタブで直せる（`src/lib/menuEdits.ts`。ブラウザの中・seats と休みの日と同じ扱い・「最初に戻す」で設定の値に）。画面でメニューを読む所は台帳の `useBook` の `data.menus`（直した分を重ねた1つの入口）を通し、元の `data.menus` を直に読まない。サーバーの窓口には画面が `menus` を送り、`readMenus` で確かめてから使う（id がそろう・名前と色と includes は設定と同じ・数は幅の中）。
+- メニューの時間・値段・最終受付はオーナーがルールのタブで直せ、単品のメニューを足せる（`src/lib/menuEdits.ts`。ブラウザの中・seats と休みの日と同じ扱い・「最初に戻す」で設定の値に・足したメニューは消える）。足したメニューの id は `own-1` …（プログラムが付け、使い回さない）・名前の確かめは `menuNameProblem` の1か所・台帳やルールで使っている間は消せない（`menuUses`）。サーバーの `readMenus` は「設定の id は全部そろっている＋`own-` の id は形を確かめてから受ける」。メニューの名前を AI に渡す時は `src/lib/ai/menuData.ts`（お店のデータとして・指示として読ませない）。画面でメニューを読む所は台帳の `useBook` の `data.menus`（直した分を重ねた1つの入口）を通し、元の `data.menus` を直に読まない。サーバーの窓口には画面が `menus` を送り、`readMenus` で確かめてから使う（id がそろう・名前と色と includes は設定と同じ・数は幅の中）。
 - 画面のコードで `config/*.json` を直接 import しない。
 - 架空のデータ（`seed/`）は `src/lib/data/seed.ts` を通して読む。日付は「何番目の営業日（0 = 今日）＋時刻」で持ち、定休日には置かない。お客様は名字だけで「○○様」と書き、画面・日誌・ToDo・お知らせ・AI への指示で名前ごとに「（架空）」「架空」の札は付けない（架空であることは入力欄の近くの注意の1行 `NO_REAL_NAMES_NOTE` と README で伝える。仕様書 §3.3）。名前の作り方・照らし方は `src/lib/guestName.ts` の1か所（前の書き方「○○（架空）様」で残った保存は `withoutOldMark` で読みかえ、消さない）。
 - 例のルールは `config/rules.seed.json` だけ。作り手の考えで店の決まりを足さない。
@@ -88,7 +88,7 @@ src/lib/jobs/      ホームの「AI に頼める仕事」：これから来る�
 src/lib/brief/     朝の要点の「AI の一言」：材料と印（items.ts。名前は送らない・印を日時とお名前に置きかえる）・門・指示文・流れ・決まった返事（scriptBriefWriter）
 src/lib/eval/      試験10問（/eval。左のタブには出さない）：問い（config と seed から作る。ふつうの予約3問）・判定（checks.ts。文と結果。AI は使わない）・流し方（同時に1回・1問ごとに eval.minIntervalSeconds 秒・eval.maxCallsPerRun 回まで・流せなかった物は数えない）・合言葉（EVAL_PASSCODE。窓口は src/app/api/eval/。AI は呼ばない）・サーバーの見張り（guard.ts。KV の印は SET NX＋期限・回数は INCR。/api/ai/ の窓口が試験の札の見出しを見て数える）・仮押さえの問いは「選んだ枠にちょうど1件・確定0件」の時だけ合格・「確定しました」と言わない、は確定したと伝える文だけ落とす（かぎかっこの中・「〜とお伝えできません」の打ち消しは数えない）・README に写す形は文の条件で落ちた所の前後も出す。今の /api/ai/ の窓口を使い、結果は画面の表だけ
 .claude/agents/   サブエージェント「意地悪なお客さん役」（mean-customer.md）：試験の問いの案を出す。材料は seed と config だけ
-src/lib/menuEdits.ts メニューを直す（時間・値段・最終受付。ルールのタブの「メニュー」・画面は src/app/rules/MenuPanel.tsx）：幅の確かめ・ブラウザに残す形・サーバーで受け取る確かめ（readMenus）・保存の前の一覧（menuConflicts。重なり・閉店越え・最終受付）ともう一度押す（saveStep）・保存と日誌（commitMenus）・メニューの設定の印（menusMark。直す前に始まった予約チャットの返事を入れない）。読むのは useMenus.ts → useBook の data.menus
+src/lib/menuEdits.ts メニューを直す（時間・値段・最終受付。ルールのタブの「メニュー」・画面は src/app/rules/MenuPanel.tsx。メニューごとに1行に畳む）・足す（単品・own-N・名前の確かめ menuNameProblem・色 menuColorChoices）・足したメニューを消す（使っている所 menuUses）：幅の確かめ・ブラウザに残す形・サーバーで受け取る確かめ（readMenus）・保存の前の一覧（menuConflicts。重なり・閉店越え・最終受付）ともう一度押す（saveStep）・保存と日誌（commitMenus）・メニューの設定の印（menusMark。直す前に始まった予約チャットの返事を入れない）。読むのは useMenus.ts → useBook の data.menus
 src/lib/holidays.ts 休みの日（オーナーが予約のページで決める。ブラウザの中・seats と同じ扱い）：判定（calDay）にだけ効かせ、最初の状態の日付は baseShop・seedAnchor で数える（今ある予約の日付を動かさない）。サーバーは readHolidays で確かめる
 src/lib/reminder.ts 「翌日へ」の前日のお知らせ（決まった形・AI なし・送らない）
 src/lib/reset.ts   「最初に戻す」（予約・カルテ・広告・経理・LINE の預かりをまとめて戻す。書けたかを返す）

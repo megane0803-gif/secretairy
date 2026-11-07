@@ -329,7 +329,7 @@ describe("🔒 鍵つきの2つは言葉で緩められない", () => {
     assert.ok(s.startsWith("# いつも守ること（🔒 鍵つき"));
     assert.match(s, /欄を埋めるだけ。保存はしない/);
     assert.match(s, /uncovered/);
-    for (const m of MENUS) assert.ok(s.includes(`${m.id}：${m.name}`));
+    for (const m of MENUS) assert.ok(s.includes(`${m.id}：「${m.name}」`));
   });
 });
 

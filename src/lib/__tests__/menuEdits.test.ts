@@ -107,7 +107,7 @@ beforeEach(() => {
 
 describe("1. おかしい値を断る（時間 30〜300分・30分きざみ／値段 0〜100,000円の整数／最終受付 開店〜閉店・30分きざみ）", () => {
   test("幅は設定から（config/shop.json の menuLimits・slotMinutes・営業時間）", () => {
-    assert.deepEqual(lim, { minMinutes: 30, maxMinutes: 300, maxPrice: 100000, step: 30, firstOpen: "10:00", lastClose: "20:00" });
+    assert.deepEqual(lim, { minMinutes: 30, maxMinutes: 300, maxPrice: 100000, step: 30, firstOpen: "10:00", lastClose: "20:00", maxAdded: 10, maxNameChars: 20 });
     assert.equal(minuteChoices(lim)[0], 30);
     assert.equal(minuteChoices(lim).at(-1), 300);
     assert.equal(minuteChoices(lim).length, 10);
@@ -245,7 +245,7 @@ describe("3. サーバー：形と数を確かめてから使う（readMenus。�
     assert.match(route, /readMenus\(\(body as Record<string, unknown>\)\.menus, getMenus\(\), getShop\(\)\)/);
     assert.match(route, /if \(!own\.ok\) return reply\(\{ ok: false, code: "bad-request"/);
     const s = ruleWordsSystem([{ id: "color", name: "カラー", minutes: 60, lastStart: "18:00" }]);
-    assert.match(s, /- color：カラー・60分・最終受付 18:00/);
+    assert.match(s, /- color：「カラー」・60分・最終受付 18:00/);
     assert.match(read("src/app/rules/RuleWords.tsx"), /void ask\(\{ mode: "ai", text: sentence, menus \}\)/);
   });
 });
