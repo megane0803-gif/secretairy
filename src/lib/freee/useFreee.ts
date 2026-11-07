@@ -25,6 +25,7 @@ import {
   type RunDeps,
 } from "./run";
 import { hasStarted, importHeld, isSending, parseFreee, recordKeys, stateOf, withLinked, type FreeeRecord } from "./state";
+import { tryRead, tryRegister, type TryInfo, type TryRead, type TryRegisterOutcome } from "./tryClient";
 
 export type FreeeStatus = "loading" | "connected" | "none" | "expired" | "off" | "not-set" | "no-company-id" | "wrong-company";
 
@@ -173,14 +174,29 @@ export function useFreeeSending(): boolean {
 }
 
 /** つながっているか（サーバーの答え）と、サーバーが読めていない環境変数の名前（中身は来ない） */
-export type FreeeStatusAnswer = { status: FreeeStatus; missing: string[] };
+export type FreeeStatusAnswer = {
+  status: FreeeStatus;
+  missing: string[];
+  /** つながっている時：サーバーもつながりを持っているか（来た人も試せるか）。分からなければ null */
+  shared?: boolean | null;
+  /** つながっている時：来た人の試しの記録（要復旧・まだ元に戻していない） */
+  trial?: "repair" | "pending" | null;
+};
 
 /**
  * サーバーの答えを読む。cookie が無い・切れた時は「つながっていない」（none / expired）。
  * 環境変数が本当に欠けている時は、その名前（missing）も読む。画面のテストでも同じ物を使う。
  */
 export function readStatusAnswer(httpStatus: number, body: unknown): FreeeStatusAnswer {
-  if (httpStatus === 200) return { status: "connected", missing: [] };
+  if (httpStatus === 200) {
+    const ok = body as { shared?: unknown; trial?: unknown } | null;
+    return {
+      status: "connected",
+      missing: [],
+      shared: typeof ok?.shared === "boolean" ? ok.shared : null,
+      trial: ok?.trial === "repair" || ok?.trial === "pending" ? ok.trial : null,
+    };
+  }
   const b = body as { code?: unknown; missing?: unknown } | null;
   const missing = Array.isArray(b?.missing) ? b.missing.filter((x): x is string => typeof x === "string").slice(0, 10) : [];
   const code = b?.code;
@@ -198,7 +214,7 @@ export function showConnect(a: FreeeStatusAnswer): boolean {
 async function fetchStatus(): Promise<FreeeStatusAnswer> {
   try {
     const res = await fetch("/api/freee/status", { credentials: "same-origin", cache: "no-store" });
-    const body = res.status === 200 ? null : await res.json().catch(() => null);
+    const body = await res.json().catch(() => null);
     return readStatusAnswer(res.status, body);
   } catch {
     return { status: "off", missing: [] };
@@ -219,6 +235,73 @@ async function loadList(): Promise<CheckOutcome | { ok: false; reason: string }>
   return r;
 }
 
+// ---- 来た人がそのまま試す（cookie が無い画面。サーバーがつながりを持っている時だけ。§1.8.2） ----
+
+/**
+ * on：来た人の窓口から読めた（一覧と登録の欄を freee の側にする）。line：つながっていない時の1行（アプリの中の明細のまま）。
+ * 画面のメモリの中だけに持つ（ブラウザには書かない。試しの様子はサーバーが毎回返す）。
+ */
+export type FreeeTryState = { on: boolean; info: TryInfo | null; line: string | null; busy: boolean };
+
+let tryState: FreeeTryState = { on: false, info: null, line: null, busy: false };
+const tryListeners = new Set<() => void>();
+function setTry(x: Partial<FreeeTryState>) {
+  tryState = { ...tryState, ...x };
+  tryListeners.forEach((f) => f());
+}
+const subscribeTry = (f: () => void) => {
+  tryListeners.add(f);
+  return () => tryListeners.delete(f);
+};
+
+/** 来た人の読む・読み直すの答えを、一覧と試しの様子に入れる */
+function applyTryRead(r: TryRead): void {
+  if (r.kind === "ok") {
+    setTry({ on: true, info: r.info, line: null });
+    setList({ phase: "ok", list: r.list });
+  } else if (r.kind === "not-connected") {
+    // 試していた途中（on）なら、一覧は架空の明細に切り替えず理由を出す
+    if (tryState.on) setList({ phase: "error", reason: r.message, reconnect: false });
+    setTry({ line: r.message, info: tryState.on ? tryState.info : null });
+  } else if (r.kind === "error") {
+    if (tryState.on) setList({ phase: "error", reason: r.message, reconnect: false });
+    else setTry({ line: null });
+  }
+}
+
+const nowIso = () => new Date().toISOString();
+
+/** 来た人：読む・読み直す（押した時と、経理のタブを開いた時だけ。自動で何度も呼ばない） */
+export async function tryReload(): Promise<TryRead> {
+  if (tryState.busy) return { kind: "error", message: "いまやりとりしています" };
+  setTry({ busy: true });
+  if (tryState.on) setList({ phase: "loading" });
+  try {
+    const r = await tryRead(freeePost, nowIso);
+    applyTryRead(r);
+    return r;
+  } finally {
+    setTry({ busy: false });
+  }
+}
+
+/** 来た人：1件を登録して、1回だけ読み直す（結果が分からない時は呼び直さない） */
+export async function tryRegisterOne(p: { id: number; use: CardUse; label: string }): Promise<TryRegisterOutcome> {
+  if (tryState.busy) return { result: "failed", message: "いまやりとりしています", read: null };
+  setTry({ busy: true });
+  try {
+    const r = await tryRegister(freeePost, p, nowIso);
+    if (r.read) applyTryRead(r.read);
+    return r;
+  } finally {
+    setTry({ busy: false });
+  }
+}
+
+export function useFreeeTry(): FreeeTryState {
+  return useSyncExternalStore(subscribeTry, () => tryState, () => tryState);
+}
+
 let opening: Promise<void> | null = null;
 
 /** 経理のタブを開いた時：つながっているかを聞き、つながっていれば1回だけ freee から読む */
@@ -231,6 +314,10 @@ function openAccounting(): Promise<void> {
     if (a.status === "connected") {
       if (!rec.linked) writeBrowser(FREEE_KEY, JSON.stringify(withLinked(parseFreee(read()), true)));
       await loadList();
+    } else if (a.status === "none" && !rec.linked && !hasStarted(rec)) {
+      // cookie が無い画面（来た人も）：サーバーがつながりを持っていれば、来た人の窓口から読む
+      await tryReload();
+      if (!tryState.on) setList({ phase: "idle" });
     } else if (a.status === "expired" || a.status === "none") {
       setList({ phase: "error", reason: a.status === "expired" ? "freee の鍵が切れました" : "freee とつながっていません", reconnect: true });
     } else setList({ phase: "idle" });
@@ -269,7 +356,16 @@ export function freeeMode(status: FreeeStatus, record: FreeeRecord): boolean {
 export function useFreeeMode(): boolean {
   const a = useFreeeStatus();
   const record = useFreeeRecord();
-  return freeeMode(a.status, record);
+  const t = useFreeeTry();
+  return freeeMode(a.status, record) || (t.on && a.status !== "connected");
+}
+
+/** 来た人の試しの画面か（オーナーのブラウザ（cookie がある・つながった印・送り始めた記録）では false） */
+export function useTryMode(): boolean {
+  const a = useFreeeStatus();
+  const record = useFreeeRecord();
+  const t = useFreeeTry();
+  return t.on && !freeeMode(a.status, record);
 }
 
 export function useFreee() {
@@ -339,7 +435,7 @@ export function useFreee() {
   const nowMs = Date.now();
   const sending = running || isSending(record, nowMs, settings.sendingStaleSeconds);
   const importWait = importHeld(record, nowMs) ? record.importHold : null;
-  return { record, status, missing: answer.missing, canConnect: showConnect(answer), settings, sending, importWait, started: hasStarted(record), refresh, disconnect, importStatements, register, check };
+  return { record, status, missing: answer.missing, shared: answer.shared ?? null, trial: answer.trial ?? null, canConnect: showConnect(answer), settings, sending, importWait, started: hasStarted(record), refresh, disconnect, importStatements, register, check };
 }
 
 /** 記録だけ（サーバーには聞かない）。経理の明細の行で、送っている間は選びを止めるのに使う（固定した明細は isFixed で） */

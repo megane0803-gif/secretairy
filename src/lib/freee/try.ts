@@ -22,6 +22,7 @@ import { freeeClient, FreeeExpired, FreeeOutOfTime, isOpen, type FreeeClient, ty
 import { FREEE_KV, kv, kvAccess, markKvExpired, StoreDown, withWriteLock, type KvCtx, type KvToken } from "./kv";
 import { lookupById, markIn, pickBankAccount, pickCardAccount } from "./match";
 import { envProblems, json, kvCtxOf, openRows, prepareOne, readRange, todayIn, writeOne, type FreeeDeps, type ReadAccount } from "./server";
+import type { TryInfo, TryPhase } from "./tryClient";
 import { loadTrial, matchesSeed, minutesLeft, restoreDue, restoreTrial, saveTrial, seedItemOfMark, type RestoreResult, type Trial } from "./trial";
 
 export const TRY_MESSAGES = {
@@ -33,22 +34,7 @@ export const TRY_MESSAGES = {
   limit: "いまは混んでいるので試せません。時間をおいてから、もう一度押してください",
   senderLimit: "今日はここから試せる回数を使い切りました。明日もう一度試してください",
   unknown: "送った後に返事が途切れました。送り直しません。いまは試せません（オーナーが直します）",
-  readFailed: "freee から読めませんでした（何も書いていません）",
-};
-
-export type TryPhase = "free" | "holding" | "restoring" | "repair";
-
-/** 画面に出す試しの様子（番号・ハッシュは出さない。明細の番号だけ） */
-export type TryInfo = {
-  phase: TryPhase;
-  /** 元に戻すまでの分（holding の時） */
-  minutes: number;
-  /** この送り元の試しか */
-  mine: boolean;
-  /** 試した明細（明細の番号・店用か私用か・いま freee でどうなっているか） */
-  items: { id: number; use: CardUse; state: "registered" | "open" | "other" }[];
-  holdMinutes: number;
-  maxItems: number;
+  readFailed: "テスト用の事業所から読めませんでした（何も書いていません）",
 };
 
 type Kind = "register" | "read";
@@ -326,7 +312,8 @@ async function registerUnderLock(
     }
     if (a.result === "already") return answer(id, "refused", "もう処理済みの明細です（何も書いていません）");
     if (a.result === "check") return answer(id, "refused", "未処理の見本の明細ではないので登録しません（何も書いていません）");
-    if (a.result === "failed") return answer(id, "failed", a.reason);
+    // 来た人の画面ではサービスの名前を札だけにする（理由の文の名前は言いかえる）
+    if (a.result === "failed") return answer(id, "failed", a.reason.replace(/「freee から読み直す」/g, "「読み直す」").replace(/freee/g, "テスト用の事業所"));
     return answer(id, "failed", TRY_MESSAGES.readFailed);
   }
 
@@ -360,7 +347,7 @@ async function registerUnderLock(
   }
   if (w.kind === "rejected") {
     await drop();
-    return answer(id, "failed", "freee が受けませんでした（何も書いていません）");
+    return answer(id, "failed", "テスト用の事業所が受けませんでした（何も書いていません）");
   }
   if (w.kind === "expired") {
     await drop();
