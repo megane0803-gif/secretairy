@@ -2,7 +2,7 @@
 
 // 台帳の予約を押すと開く1枚（スマホは下から出る1枚・PC は小さな窓。「予約を入れる」の1枚と同じ形・ボタンは下に止める）。
 // 上に今の中身（お客様・日時・メニュー・終わる時刻・確定か仮押さえか・どこから入ったか）。
-//   仮押さえ … 直さない。「仮押さえは承認の箱で、承認か見送りを決めます」と出し、承認の箱へ移れる
+//   仮押さえ … 直さない。「仮押さえは承認BOXで、承認か見送りを決めます」と出し、承認BOXへ移れる
 //   開始を過ぎた・カルテがある … 見るだけ
 //   確定で開始前 … 「この予約を取り消す」（もう一度押した時だけ）と、日時・メニューを変える（judgeSlot で変える前と保存の直前の2回）
 // 中身と確かめは src/lib/book/change.ts。🔒 確定は人：オーナーが押した時だけ。AI は使わない。
@@ -48,7 +48,7 @@ export function ReservationSheet({
   onClose: () => void;
   /** 変えられた時：変えた先の日の週へ */
   onMoved: (date: string) => void;
-  /** 仮押さえの時：承認の箱へ */
+  /** 仮押さえの時：承認BOXへ */
   onApprovals: () => void;
 }) {
   const book = useBook(data);
@@ -224,7 +224,7 @@ export function ReservationSheet({
                 <p className="sheet-note">{HOLD_NOTE}。</p>
                 <div className="sheet-foot">
                   <button type="button" className="btn primary sheet-go" onClick={onApprovals}>
-                    承認の箱へ
+                    承認BOXへ
                   </button>
                 </div>
               </>

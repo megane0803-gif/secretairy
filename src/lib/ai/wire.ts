@@ -77,7 +77,7 @@ export type HoldOffer = {
   start: string;
   heldAt: string;
   expiresAt: string;
-  /** 承認の箱に出す理由（1文） */
+  /** 承認BOXに出す理由（1文） */
   reason: string;
 };
 

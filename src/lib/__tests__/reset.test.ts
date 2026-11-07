@@ -102,7 +102,7 @@ describe("最初に戻す", () => {
   test("1回で全部：予約・カルテ（保存した物・メモ・案）・広告・経理・LINE の預かり。LINE のつなぎは残す", () => {
     const seed = getAccounting();
     const c = getCustomers()[0];
-    // 予約：仮押さえ（承認の箱）と保存したカルテ・翌日へ
+    // 予約：仮押さえ（承認BOX）と保存したカルテ・翌日へ
     const book: BookState = {
       ...withHold(emptyBook("2026-10-01"), {
         id: "h-1",
@@ -134,14 +134,14 @@ describe("最初に戻す", () => {
     const out = resetAll("2026-11-04");
 
     const resetBook = parseBook(readBrowser(BOOK_KEY));
-    assert.deepEqual(resetBook, emptyBook("2026-11-04", resetBook?.epoch), "仮押さえ・承認の箱・保存したカルテ・翌日へが消える");
+    assert.deepEqual(resetBook, emptyBook("2026-11-04", resetBook?.epoch), "仮押さえ・承認BOX・保存したカルテ・翌日へが消える");
     assert.equal(readBrowser(ADS_KEY), null);
     assert.equal(readBrowser(ACCOUNTING_KEY), null);
     const back = parseLine(readBrowser(LINE_KEY));
     assert.ok(back, "LINE のつなぎは残す");
     assert.equal(back!.token, "link1.secret1");
     assert.equal(back!.linked, true);
-    assert.deepEqual(back!.notified, [], "届けた承認待ちの印は消す（承認の箱が空に戻るので）");
+    assert.deepEqual(back!.notified, [], "届けた承認待ちの印は消す（承認BOXが空に戻るので）");
     assert.deepEqual(back!.handled, ["ev-1"], "受け取って済ませた知らせは2回使わない");
     assert.equal(out.lineToken, "link1.secret1", "サーバーの預かり物を消すのに使う");
     assert.deepEqual(getDesk().memos, {}, "カルテの施術メモ（LINE から入れたメモも）を消す");

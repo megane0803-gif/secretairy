@@ -1,6 +1,6 @@
 // 「○○様に別の日時を案内」の ToDo を作る1か所（プログラム。AI は使わない。docs/SPEC.md §1.3・§1.4・§1.11）。
 // 足す入口は3つあり、どれもここを通す（文・鍵・期限をそろえるため。後から入口を足す時もここを使う）：
-//   - 承認の箱の「直す」「見送り」と、LINE のボタンの「見送り」（book/state.ts の withReleased）
+//   - 承認BOXの「直す」「見送り」と、LINE のボタンの「見送り」（book/state.ts の withReleased）
 //   - 予約サイトで人数をこえて仮押さえを外した時（book/site.ts）
 //   - 承認待ちの仮押さえの枠が確定の予約で埋まった時（todo/full.ts。仮押さえはそのまま）
 //   - 予約（確定・仮押さえ）がある日をオーナーが休みの日にした時（book/holiday.ts。予約はそのまま）
@@ -34,7 +34,7 @@ export function rescheduleTitle(surname: string, from?: Pick<RescheduleFrom, "da
  */
 export function rescheduleTodo(input: {
   idPrefix: "td" | "td-site" | "td-full" | "td-hol";
-  /** 元の仮押さえの番号（元の頼みが分からなくても、承認の箱の行から分かる） */
+  /** 元の仮押さえの番号（元の頼みが分からなくても、承認BOXの行から分かる） */
   reservationId: string;
   surname: string;
   from: RescheduleFrom | null | undefined;

@@ -1,7 +1,7 @@
 // 予約サイト → 台帳の向き（docs/SPEC.md §1.4）。予約サイト同士をつなぐ有料のサービスの代わりを、自分で作る所。
 // ここは形と変え方だけ（どこにも書かない）。書くのは予約サイトの画面（BookingSite.tsx）と、ホームの「AI の仕事」（jobs/run.ts）。
 //
-// お客様が予約サイトで自分で決めた予約なので、承認の箱は通さずに「確定」で台帳に入る（札は「予約サイトから」・色は外の相手 = 藍）。
+// お客様が予約サイトで自分で決めた予約なので、承認BOXは通さずに「確定」で台帳に入る（札は「予約サイトから」・色は外の相手 = 藍）。
 // これは 🔒「確定は人」（店の側の確定）とは別の物：店の AI・自動の処理が確定するのではなく、外のお客様が自分で決めた予約を受け取るだけ。
 // AI は使わない。AI の道具（src/lib/ai/tools.ts）からも呼ばない。
 //
@@ -106,7 +106,7 @@ function overflows(target: Span, others: Span[], seats: number): boolean {
 
 /**
  * 予約サイトで、架空のお客様の予約が1件入る。AI は使わない。
- * 入ったら台帳に確定で入り（承認の箱は通さない）、重なって人数をこえる仮押さえは外して ToDo に足す。
+ * 入ったら台帳に確定で入り（承認BOXは通さない）、重なって人数をこえる仮押さえは外して ToDo に足す。
  */
 export function siteBook(state: BookState, ctx: SiteContext, mode: SiteMode): SiteOutcome {
   const { data, rules, now } = ctx;
@@ -212,7 +212,7 @@ export function siteBook(state: BookState, ctx: SiteContext, mode: SiteMode): Si
 
   const who = guestName(customer.surname);
   const journal: { who: JournalWho; text: string }[] = [
-    { who: SITE_WHO, text: `${SITE_NAME}から1件入った：${who} ${label}（お客様が自分で決めた予約なので、承認の箱は通さずに台帳へ）` },
+    { who: SITE_WHO, text: `${SITE_NAME}から1件入った：${who} ${label}（お客様が自分で決めた予約なので、承認BOXは通さずに台帳へ）` },
     ...released.map((x) => ({
       who: "プログラム" as const,
       text: `${SITE_NAME}の予約と同じ枠だったので、${guestName(x.surname)}の仮押さえ（${candidateLabel(data, x.reservation)}）を外し、ToDo に「${x.todo}」（今日中）を足した（二重予約を防ぐ。AI は使っていない）`,

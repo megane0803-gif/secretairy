@@ -1,10 +1,10 @@
 // オーナーが台帳から予約を入れる所（電話や店頭で受けた予約。docs/SPEC.md §1.4.1）。形と変え方だけ（どこにも書かない）。
 // 書くのは台帳の「入れる」の画面（OwnerBookSheet.tsx）。人のボタン（オーナーが押した「入れる」）だけが呼ぶ。
 //
-// 🔒 確定は人：オーナーが自分で入れるので、承認の箱は通さずに「確定」で台帳に入る（札は「台帳から（オーナー）」）。
+// 🔒 確定は人：オーナーが自分で入れるので、承認BOXは通さずに「確定」で台帳に入る（札は「台帳から（オーナー）」）。
 // AI・自動の処理・LINE の一言からは呼ばない。AI は使わない。
 //
-// 確かめ方は予約チャット・承認の箱と同じ判定（ai/slots.ts の judgeSlot）。入れる前と、保存する直前（その時の台帳で）の2回。
+// 確かめ方は予約チャット・承認BOXと同じ判定（ai/slots.ts の judgeSlot）。入れる前と、保存する直前（その時の台帳で）の2回。
 //   入れられない      … 店の基礎の判定（過ぎた日時・営業時間の外・最終受付・定休日と休みの日・同じ時間に受ける人数）と、鍵つきのルール
 //   もう一度押せば入れられる … オーナーが足したルール（来店の何時間前まで・初めての方の人数・組み合わせ など）だけに当たる時。
 //                        電話でお客様と話して決めた予約のため。どのルールに当たるかはオーナー向けの言葉で出し、日誌にも名前を残す。
@@ -81,7 +81,7 @@ export function splitVerdict(ctx: Pick<SlotContext, "menus">, v: Verdict): Omit<
   return { ok: bad.length === 0, lines, blocked, rules };
 }
 
-/** いまの台帳で、その予約を入れてよいか（予約チャット・承認の箱と同じ judgeSlot） */
+/** いまの台帳で、その予約を入れてよいか（予約チャット・承認BOXと同じ judgeSlot） */
 export function ownerCheck(ctx: SlotContext, input: Candidate): OwnerCheck {
   const menu = resolveMenu(ctx.menus, input.menuId);
   const v = judgeSlot(ctx, input);

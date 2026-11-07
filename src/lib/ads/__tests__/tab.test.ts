@@ -130,7 +130,7 @@ describe("1. TabFrame の rightAfterOnPhone（渡した時だけ使う口）", (
 describe("2. 押せない時の理由と「最初に戻す」", () => {
   test("理由と次に頼める日時は、ボタンのすぐ下にふつうの字（hint ではない）", () => {
     const btn = review.indexOf('{busy ? "見直しています…" : "AI に見直してもらう"}');
-    // うまくいった直後は「✓ 承認の箱に入れました」が先なので、理由の行の読み上げ（status）はその時だけ外す（直しB の12）
+    // うまくいった直後は「✓ 承認BOXに入れました」が先なので、理由の行の読み上げ（status）はその時だけ外す（直しB の12）
     const why = review.indexOf('<p className="ad-review-why" role={shown?.kind === "ok" ? undefined : "status"}>');
     assert.ok(btn >= 0 && why > btn);
     assert.match(review.slice(why, why + 200), /\{can\.reason\}\s*\{nextLabel && `次は \$\{nextLabel\} から頼めます。`\}/);

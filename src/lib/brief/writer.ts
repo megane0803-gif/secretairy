@@ -55,7 +55,7 @@ export function scriptBriefWriter(): BriefWriter {
       const out: string[] = [];
       for (const i of req.items) {
         if (i.kind === "reservation" && i.text.includes("初めての方")) out.push(`・${i.mark}は初めての方です。ご希望をゆっくり聞く`);
-        if (i.kind === "reservation" && i.text.includes("仮押さえ")) out.push(`・${i.mark}はまだ仮押さえです。承認の箱で見る`);
+        if (i.kind === "reservation" && i.text.includes("仮押さえ")) out.push(`・${i.mark}はまだ仮押さえです。承認BOXで見る`);
         if (i.kind === "reservation" && i.text.includes("前回の注意点")) out.push(`・${i.mark}は前回の注意点・申し送りを見てから始める`);
       }
       if (req.items.some((i) => i.kind === "approval")) out.push(`・${req.items.find((i) => i.kind === "approval")!.mark}は承認待ちです。見て押す`);

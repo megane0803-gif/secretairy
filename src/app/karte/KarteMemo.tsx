@@ -152,7 +152,7 @@ export function KarteMemo({
       {desk.noAi && (
         <div className="noai" role="alert">
           <strong>{NO_AI_MESSAGE}</strong>
-          <span>台帳・承認の箱・前回までのカルテなど、ほかの画面はそのまま使えます。</span>
+          <span>台帳・承認BOX・前回までのカルテなど、ほかの画面はそのまま使えます。</span>
           <button
             type="button"
             className="btn small"

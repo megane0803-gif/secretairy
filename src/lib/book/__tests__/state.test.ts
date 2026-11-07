@@ -1,4 +1,4 @@
-// 承認の箱：承認 = 確定して台帳に入る。直す・見送り = 仮押さえを外し、ToDo に「別の日時を案内」。
+// 承認BOX：承認 = 確定して台帳に入る。直す・見送り = 仮押さえを外し、ToDo に「別の日時を案内」。
 
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
@@ -18,8 +18,8 @@ const hold: HoldOffer = {
 };
 const now = "2026-11-04T02:00:00.000Z";
 
-describe("承認の箱", () => {
-  test("仮押さえで承認の箱に1行入る（同じ物は2回入らない）", () => {
+describe("承認BOX", () => {
+  test("仮押さえで承認BOXに1行入る（同じ物は2回入らない）", () => {
     const s = withHold(withHold(emptyBook("2026-11-04"), hold), hold);
     assert.equal(pendingApprovals(s, now).length, 1);
     assert.equal(s.chat[0].status, "hold");
@@ -60,7 +60,7 @@ describe("承認の箱", () => {
     assert.match(apply, /withReleased\(book, row\.approval\.id, "skipped", surname, ctx\.nowIso, ctx\.today\)/);
   });
 
-  test("期限が過ぎた仮押さえは、台帳にも承認の箱にも出ない", () => {
+  test("期限が過ぎた仮押さえは、台帳にも承認BOXにも出ない", () => {
     const s = withHold(emptyBook("2026-11-04"), hold);
     const later = "2026-11-05T01:00:00.000Z";
     assert.equal(activeChat(s, later).length, 0);

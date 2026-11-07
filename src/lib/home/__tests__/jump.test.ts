@@ -17,10 +17,10 @@ const jobs = read("src/app/home/AiJobs.tsx");
 const link = read("src/components/JumpLink.tsx");
 
 describe("ホーム：数字のカードの飛ぶ先", () => {
-  it("今日の予約 → 今日のお客様（畳める欄なので開いてから）。承認待ち → 承認の箱", () => {
+  it("今日の予約 → 今日のお客様（畳める欄なので開いてから）。承認待ち → 承認BOX", () => {
     assert.deepEqual(HOME_JUMPS.customers, { target: "customers", fold: "customers", label: "今日のお客様" });
     assert.equal(HOME_JUMPS.approvals.target, "approvals");
-    assert.equal(HOME_JUMPS.approvals.fold, undefined, "承認の箱は畳まない");
+    assert.equal(HOME_JUMPS.approvals.fold, undefined, "承認BOXは畳まない");
     for (const j of Object.values(HOME_JUMPS)) if (j.fold) assert.ok(HOME_FOLD_IDS.includes(j.fold));
   });
 
@@ -45,7 +45,7 @@ describe("ホーム：数字のカードの飛ぶ先", () => {
 });
 
 describe("ホーム：AI の仕事の結果のリンク", () => {
-  it("「承認待ち1件」は同じページの承認の箱へ（予約・広告のタブへは行かない）", () => {
+  it("「承認待ち1件」は同じページの承認BOXへ（予約・広告のタブへは行かない）", () => {
     assert.deepEqual(jobDoneLink({ result: JOB_APPROVAL_RESULT, tab: "reservations" }), { kind: "approvals" });
     assert.deepEqual(jobDoneLink({ result: JOB_APPROVAL_RESULT, tab: "ads" }), { kind: "approvals" });
   });
@@ -55,7 +55,7 @@ describe("ホーム：AI の仕事の結果のリンク", () => {
     assert.deepEqual(jobDoneLink({ result: "自動 3件・迷う物 1件", tab: "accounting" }), { kind: "tab", tab: "accounting" });
   });
 
-  it("画面は jobDoneLink を通し、承認の箱へは JumpLink で飛ぶ", () => {
+  it("画面は jobDoneLink を通し、承認BOXへは JumpLink で飛ぶ", () => {
     assert.match(jobs, /jobDoneLink\(done\)/);
     assert.match(jobs, /<JumpLink to="approvals"/);
   });

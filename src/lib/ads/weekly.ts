@@ -1,6 +1,6 @@
 // 毎週の見直しの報告（docs/SPEC.md §1.7.2）。見直しを1回するたびに、広告タブに4行のカードを1枚残す：
 //   ① 見た数字（期間・押された回数・お金・予約）… プログラムが表から入れる
-//   ② 止めた言葉・外した言葉 … 承認の箱の行（承認・見送り）から。理由の文は AI の案の理由を言葉の門（words.ts）に通した物
+//   ② 止めた言葉・外した言葉 … 承認BOXの行（承認・見送り）から。理由の文は AI の案の理由を言葉の門（words.ts）に通した物
 //   ③ 止めなかった言葉とその理由 … 予約につながっていないのに止めなかった言葉。理由はプログラムが決まりから入れる
 //   ④ 次に見る日 … 次の見直し（oncePerDays 日後）と、止めた言葉の判定日
 // AI は数を書かない。報告を作るのも残すのもプログラム。前の週のカードも一覧で見られる（listCount 枚まで）。
@@ -122,7 +122,7 @@ export function withNote(s: AdsState, kind: "judgement" | "report", id: string, 
 /** 画面に出す4行（① 見た数字 ② 止めた・外した ③ 止めなかった ④ 次に見る日） */
 export type ReportLines = { seen: string; changed: string; changedReason?: string; kept: string[]; next: string };
 
-/** 4行を、いまの承認の箱の行（承認・見送り）と判定から組み立てる。数はどれもプログラムが入れる */
+/** 4行を、いまの承認BOXの行（承認・見送り）と判定から組み立てる。数はどれもプログラムが入れる */
 export function reportLines(r: AdWeeklyReport, ads: AdsState, book: BookState, shop: ShopSettings, settings: Pick<AdSettings, "checkAfterDays">): ReportLines {
   const d = (x: string) => calDay(shop, x).label;
   const seen = `${d(r.from)}〜${d(r.to)}（${r.weeks}週）：押された ${r.seen.clicks.toLocaleString("ja-JP")}回・お金 ${yen(r.seen.cost)}・予約 ${r.seen.bookings}件（広告を出す言葉みんな）`;
@@ -135,7 +135,7 @@ export function reportLines(r: AdWeeklyReport, ads: AdsState, book: BookState, s
     const word = `${p.no}番「${p.text}」`;
     const row = r.proposalId ? ads.proposals.find((x) => x.id === r.proposalId) : undefined;
     const state = row?.state;
-    // 直したときは、承認の箱の行のほうの言葉を出す
+    // 直したときは、承認BOXの行のほうの言葉を出す
     const now = row ? { action: row.action, no: row.no, text: row.text } : p;
     const nowWord = `${now.no}番「${now.text}」`;
     if (state === "approved") {
@@ -146,8 +146,8 @@ export function reportLines(r: AdWeeklyReport, ads: AdsState, book: BookState, s
       if (j?.revert?.state === "approved") changed += "（判定のあと元に戻した）";
     } else if (state === "skipped") changed = `なし（${nowWord}を${actionVerb(now.action)}案は見送った）`;
     else if (state === "pending") changed = `承認待ち：${nowWord}を${actionVerb(now.action)}案`;
-    else changed = `なし（${word}を${actionVerb(p.action)}案は、もう承認の箱にありません）`;
-    if (row && (row.no !== p.no || row.action !== p.action)) changedReason = "（直したので、理由は承認の箱の行を見てください）";
+    else changed = `なし（${word}を${actionVerb(p.action)}案は、もう承認BOXにありません）`;
+    if (row && (row.no !== p.no || row.action !== p.action)) changedReason = "（直したので、理由は承認BOXの行を見てください）";
     else changedReason = p.reason ? `理由（AI）：${p.reason}` : `理由の文は言葉の門で載せていません（${p.reasonHidden ?? ""}）`;
   } else changed = `なし（${r.failed ?? "案は出ませんでした"}）`;
 

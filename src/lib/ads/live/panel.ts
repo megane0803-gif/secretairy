@@ -94,7 +94,7 @@ export type LivePanel = {
   send: (code: string) => Promise<void>;
   reread: () => Promise<void>;
   /**
-   * 承認した1件を試す（だれでも。直しU）。ほかが動いている間は動かさず false（承認の箱のボタンは押せなくしてある）。
+   * 承認した1件を試す（だれでも。直しU）。ほかが動いている間は動かさず false（承認BOXのボタンは押せなくしてある）。
    * 返事が届かない・分からない時も、自動では呼び直さない。
    */
   tryOne: (it: { kind: TryKind; no: number; text: string }) => Promise<boolean>;

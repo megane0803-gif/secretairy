@@ -1,7 +1,7 @@
 "use client";
 
 // 画面で使う台帳。最初の状態（seed/）を起点の日から数えて本当の日付に直し、
-// このブラウザに残した分（予約チャットの仮押さえ・確定・承認の箱・足した ToDo）を重ねる。
+// このブラウザに残した分（予約チャットの仮押さえ・確定・承認BOX・足した ToDo）を重ねる。
 // 書くのはこのブラウザの中だけ（サーバーには送らない）。
 
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";

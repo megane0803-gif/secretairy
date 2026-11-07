@@ -1,6 +1,6 @@
 "use client";
 
-// 広告タブの右の列：「AI に見直してもらう」。表とルールを /api/ai/ads へ送り、門を通った案を1つ承認の箱に入れる。
+// 広告タブの右の列：「AI に見直してもらう」。表とルールを /api/ai/ads へ送り、門を通った案を1つ承認BOXに入れる。
 // 門を2回通らなかったら案は出さず、日誌に書く。1週間に1つまで・もう案がある時は新しく出さない。
 // AI につながらない時は「今は AI につながりません」と出し、決まった返事（AI なし）で同じ流れを試せる。
 // 押せない時（7日に1つまで・承認待ちがある）は、ボタンのすぐ下にふつうの字で理由と次に頼める日時を出し、
@@ -120,7 +120,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
     });
     const addSteps = [...(res.adds?.steps ?? []), ...addPart.refused];
     const addLabels = addPart.rows.map((r) => addLabel({ no: r.no, text: table.searchTerms.find((t) => t.no === r.no)?.text ?? "" }));
-    const addLine = addLabels.length ? [{ who: "プログラム" as const, text: `承認の箱に入れた：足す案 ${addLabels.map((l) => `「${l}」`).join("・")}` }] : [];
+    const addLine = addLabels.length ? [{ who: "プログラム" as const, text: `承認BOXに入れた：足す案 ${addLabels.map((l) => `「${l}」`).join("・")}` }] : [];
     const withAdds = (s: AdsState) => (addPart.rows.length ? withReview(s, { adds: addPart.rows }, table, { nowIso, mode: useMode }, ads.settings) : s);
 
     if (!res.ok || !stop) {
@@ -146,7 +146,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
     });
     writeJournal(
       ...res.steps,
-      { who: "プログラム", text: `承認の箱に入れた：広告の案「${proposalLabel(stop.proposal)}」（見直しの報告も広告タブに残した）` },
+      { who: "プログラム", text: `承認BOXに入れた：広告の案「${proposalLabel(stop.proposal)}」（見直しの報告も広告タブに残した）` },
       ...addSteps,
       ...addLine,
     );
@@ -182,7 +182,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
   return (
     <div className="ad-review">
       <p className="hint">
-        4週分の表を AI が見て、「N番を止める」か「N番を外す」を1つだけ出します。プログラムが確かめてから承認の箱に入れます。決めるのはオーナーです。
+        4週分の表を AI が見て、「N番を止める」か「N番を外す」を1つだけ出します。プログラムが確かめてから承認BOXに入れます。決めるのはオーナーです。
       </p>
       <div className="chat-mode" role="group" aria-label="案を作る物">
         <button type="button" className={mode === "ai" ? "chat-mode-on" : "chat-mode-off"} aria-pressed={mode === "ai"} onClick={() => setMode("ai")}>
@@ -205,7 +205,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
       {shown?.kind === "ok" && (
         <div role="status">
           <p className="checked">
-            <span aria-hidden>✓</span> 承認の箱に入れました：{shown.text}
+            <span aria-hidden>✓</span> 承認BOXに入れました：{shown.text}
             {shown.tries > 1 && "（1回弾いて、作り直した案です）"}。
             <a
               href={`#${ADS_APPROVALS_ID}`}
@@ -243,7 +243,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
       {noAi && (
         <div className="noai" role="alert">
           <strong>{NO_AI_MESSAGE}</strong>
-          <span>表・承認の箱・日誌など、ほかの画面はそのまま使えます。</span>
+          <span>表・承認BOX・日誌など、ほかの画面はそのまま使えます。</span>
           <button
             type="button"
             className="btn small"
@@ -271,7 +271,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
           </ul>
           <strong>プログラムの確認</strong>
           <GateChecks checks={shown.checks} />
-          {shown.adds.length > 0 && <p className="checked">✓ 足す案は承認の箱に入れました：{shown.adds.join("・")}</p>}
+          {shown.adds.length > 0 && <p className="checked">✓ 足す案は承認BOXに入れました：{shown.adds.join("・")}</p>}
         </div>
       )}
       {shown?.kind === "note" && (

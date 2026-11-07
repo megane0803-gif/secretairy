@@ -1,12 +1,12 @@
 "use client";
 
 // ホームの「AI に頼める仕事」（docs/SPEC.md §1.12）。これから来る物を押す前から1行ずつ並べ、オーナーが好きな時に押す。
-// 行ごとの「動かす」と、一番上の行の「AI の仕事をまとめて動かす」（上から1つずつ順に）。結果はそれぞれの場所（承認の箱・経理タブ・ToDo）に届き、
+// 行ごとの「動かす」と、一番上の行の「AI の仕事をまとめて動かす」（上から1つずつ順に）。結果はそれぞれの場所（承認BOX・経理タブ・ToDo）に届き、
 // 行は「動いている → 済み（結果）」に変わって、そのタブへ移れる。日誌にも1行ずつ流れる。
 // 流れは src/lib/jobs/run.ts（テストと同じ物）。AI の窓口は今の /api/ai/ の物をそのまま使う。
 // 動いている印・二重に動かさない止め・モード（AI か決まった返事か）は AiJobsProvider の1か所で持ち、
 // 上のボタン（AiJobsRunBar）と下の一覧（AiJobsSection）の両方から使う。
-// 🔒 AI は仮押さえ・案まで。確定は承認の箱で人が押す。
+// 🔒 AI は仮押さえ・案まで。確定は承認BOXで人が押す。
 
 import Link from "next/link";
 import { createContext, useContext, useRef, useState, type ReactNode } from "react";
@@ -292,7 +292,7 @@ export function AiJobsSection() {
   );
 }
 
-/** 済んだ行の結果のリンク。承認の箱に入った物は同じページの承認の箱へ、ほかは結果が届いたタブへ（jobs/state.ts の jobDoneLink） */
+/** 済んだ行の結果のリンク。承認BOXに入った物は同じページの承認BOXへ、ほかは結果が届いたタブへ（jobs/state.ts の jobDoneLink） */
 function DoneLink({ done }: { done: JobDone }) {
   const to = jobDoneLink(done);
   if (to.kind === "approvals")

@@ -1,9 +1,9 @@
 "use client";
 
-// 広告の案の「AI のチーム」の会議（docs/SPEC.md §1.7.4）。承認の箱の広告の案の行（AdApprovalRows）の中、カードの下に出す。
+// 広告の案の「AI のチーム」の会議（docs/SPEC.md §1.7.4）。承認BOXの広告の案の行（AdApprovalRows）の中、カードの下に出す。
 // SecretAIry はオーナーの側近。案をチームで話し合ってからオーナーに出す：
 //   リサーチャー（プログラム）・分身（Claude）・野党（Claude）・補佐（Claude）の4つの小さいカード。
-// 🔒 決めるのは、今の承認の箱のボタン（承認／直す／見送り）だけ。会議には確定・承認の道具を渡さない。
+// 🔒 決めるのは、今の承認BOXのボタン（承認／直す／見送り）だけ。会議には確定・承認の道具を渡さない。
 // 会議は1つの案に1回まで。答えが戻った時に、案がまだ承認待ちで中身が同じ時だけ出す。
 
 import { useState } from "react";
@@ -163,7 +163,7 @@ export function AdTeam({ p, ads, rules, anchor }: { p: AdProposal; ads: ReturnTy
     if (!ask.ok) {
       ads.update((s) => withTeamFailed(s, p.id, startedAt));
       writeJournal({ who: "プログラム", text: `会議の答えが戻らなかった（${ask.message}）` });
-      setNote(`うまくいきませんでした：${ask.message}。承認の箱のボタンはそのまま押せます。`);
+      setNote(`うまくいきませんでした：${ask.message}。承認BOXのボタンはそのまま押せます。`);
       return;
     }
     let arrival = "missing" as TeamArrival;
@@ -183,7 +183,7 @@ export function AdTeam({ p, ads, rules, anchor }: { p: AdProposal; ads: ReturnTy
         <button type="button" className="btn" onClick={(e) => void start(e)} disabled={busy}>
           チームの会議にかける
         </button>
-        <small className="hint">分身・野党・補佐が話し合い、リサーチャーが数を並べます。決めるのは承認の箱のボタンだけです</small>
+        <small className="hint">分身・野党・補佐が話し合い、リサーチャーが数を並べます。決めるのは承認BOXのボタンだけです</small>
         {note && (
           <p className="hint" role="status">
             {note}

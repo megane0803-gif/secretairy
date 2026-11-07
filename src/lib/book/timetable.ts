@@ -18,9 +18,9 @@ export type TimetableBand = Span & {
   status: Reservation["status"];
   /** 承認で確定した予約（予約チャットから入った確定） */
   fresh: boolean;
-  /** 予約サイトから入った予約（お客様が自分で決めた確定。承認の箱は通らない） */
+  /** 予約サイトから入った予約（お客様が自分で決めた確定。承認BOXは通らない） */
   site?: boolean;
-  /** オーナーが台帳から入れた予約（人のボタンで確定。承認の箱は通らない。book/owner.ts） */
+  /** オーナーが台帳から入れた予約（人のボタンで確定。承認BOXは通らない。book/owner.ts） */
   owner?: boolean;
   /** だれが入れた物か（仮押さえ = AI・承認で確定と店が受けた確定 = 人・予約サイトから = 外。src/lib/actors.ts）。帯の頭の札だけに使う */
   actor: Actor;

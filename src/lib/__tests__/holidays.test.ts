@@ -3,7 +3,7 @@
 // - 受け付けるかの判定の全部（台帳・予約サイト・予約チャット・LINE の一言・AI の仕事・ルールの試し・翌日へ・ホームの今日）で同じに効く
 // - サーバーは画面から来た休みの日を、形・本当にある日・数の上限で確かめてから使う（おかしければ断る）
 // - 予約がある日を休みにする時は一覧を出し、お客様ごとに ToDo「別の日時を案内」を足す（予約は消さない）
-// - 休みの日の仮押さえと、開始の時刻をもう過ぎた仮押さえは、画面の承認の箱でも LINE の承認のボタンでも確定しない
+// - 休みの日の仮押さえと、開始の時刻をもう過ぎた仮押さえは、画面の承認BOXでも LINE の承認のボタンでも確定しない
 // - 「最初に戻す」で消える
 
 import assert from "node:assert/strict";
@@ -333,7 +333,7 @@ describe("7. 承認の時：休みの日と過ぎた時刻の仮押さえは確�
     assert.equal(ok.book.chat[0].status, "confirmed");
   });
 
-  test("画面の承認の箱：同じ確かめ。確定しない時は押せず、理由を出す", () => {
+  test("画面の承認BOX：同じ確かめ。確定しない時は押せず、理由を出す", () => {
     const box = read("src/components/ApprovalBox.tsx");
     assert.match(box, /const blocked = approveBlocker\(book\.shop, book\.now, r\);\s*if \(blocked\) return refuse\(what, blocked\);/);
     assert.match(box, /disabled=\{!!blocked\}/);

@@ -1,7 +1,7 @@
-// 承認の箱に出す行を、1か所で決める。
-// 承認の箱（ホーム・予約タブ）・どのタブにも出す「承認待ち N 件」・朝の要点の「承認待ち」は、
+// 承認BOXに出す行を、1か所で決める。
+// 承認BOX（ホーム・予約タブ）・どのタブにも出す「承認待ち N 件」・朝の要点の「承認待ち」は、
 // みなここの同じ行から数える（数と行がずれないように。docs/SPEC.md §1.3・§2.2）。
-// 経理は承認の箱を使わないので数えない（§1.8）。
+// 経理は承認BOXを使わないので数えない（§1.8）。
 
 import type { AdJudgement } from "./ads/results";
 import { pendingAd, pendingAdds, type AdAddProposal, type AdProposal, type AdsState } from "./ads/state";
@@ -18,7 +18,7 @@ export type ApprovalQueue = {
   adAdds: AdAddProposal[];
   /** 広告の「戻す案」の行（効いたかの判定で予約が減った言葉。あれば1つ。ads/verdict.ts。無ければ持たない） */
   adRevert?: AdJudgement;
-  /** 承認の箱の行の数（= 上の帯・朝の要点の「承認待ち」） */
+  /** 承認BOXの行の数（= 上の帯・朝の要点の「承認待ち」） */
   count: number;
 };
 
@@ -36,7 +36,7 @@ export function approvalQueue(book: BookState, ads: AdsState, nowIso: string): A
   };
 }
 
-/** 承認の箱のどの行を出すか。ホームは全部、予約タブは予約の行だけ（広告の案は広告タブとホームで押す） */
+/** 承認BOXのどの行を出すか。ホームは全部、予約タブは予約の行だけ（広告の案は広告タブとホームで押す） */
 export type ApprovalView = "all" | "reservations";
 
 /** その場所に出す行と、その数。数そのもの（上の帯・朝の要点）は approvalQueue の count のまま */
@@ -52,7 +52,7 @@ export function approvalsFor(
 export const HOLD_SOON_MINUTES = 60;
 
 /**
- * 仮押さえが自動で外れるまでの残り（承認の箱の行に出す）。
+ * 仮押さえが自動で外れるまでの残り（承認BOXの行に出す）。
  * 外れるのは作った時に保存した期限（expiresAt）で本当の時計なので、残りも同じ時計で「期限 − 今」から出す（「翌日へ」の日付では数えない）。
  * 画面は1分ごとの描き直し（useMinute）の「今」を渡す。
  */
@@ -66,14 +66,14 @@ export function holdLeft(expiresAt: string, nowMs: number): { minutes: number; t
   return { minutes, text, soon: minutes < HOLD_SOON_MINUTES };
 }
 
-/** 承認の箱の予約の行の並び：残りが1時間を切った行を上に（その中と、ほかの行は今までの古い順のまま） */
+/** 承認BOXの予約の行の並び：残りが1時間を切った行を上に（その中と、ほかの行は今までの古い順のまま） */
 export function soonFirst(rows: PendingRow[], nowMs: number): PendingRow[] {
   const soon = (r: PendingRow) => holdLeft(r.reservation.expiresAt, nowMs).soon;
   return [...rows.filter(soon), ...rows.filter((r) => !soon(r))];
 }
 
 /**
- * 同じお客様の、同じ日のほかの予約の時刻（早い順）。承認の箱の行に「! 同じ日の13:00にも予約があります」と出す（止めはしない）。
+ * 同じお客様の、同じ日のほかの予約の時刻（早い順）。承認BOXの行に「! 同じ日の13:00にも予約があります」と出す（止めはしない）。
  * 台帳の今ある予約（book.booked。確定と、期限の切れていない仮押さえ。外した物は入っていない）を「その予約の日付＋お客様の番号」で照らし、
  * その行自身は数えない。
  */
@@ -88,7 +88,7 @@ export function sameDayOthers(
 }
 
 /**
- * 承認の箱の予約の行に足す1行ずつ（理由の下・✓ とボタンの上。この1か所で決める）。
+ * 承認BOXの予約の行に足す1行ずつ（理由の下・✓ とボタンの上。この1か所で決める）。
  * 今は「外れるまでの残り」と「同じ日のほかの予約」。行に足す物を増やす時（直しC など）は、ここに種類を足し、
  * 画面（components/ApprovalRowNotes.tsx）は種類ごとの見た目だけ持つ。数（approvalQueue の count）と行の中身・ボタンは変えない。
  */
@@ -115,7 +115,7 @@ export function approvalRowNotes(row: PendingRow, ctx: ApprovalRowCtx): Approval
   ];
 }
 
-/** 承認の箱に出す予約の行の順と、行ごとの足す物（画面はこれを1回呼ぶだけ）。並べ方は soonFirst */
+/** 承認BOXに出す予約の行の順と、行ごとの足す物（画面はこれを1回呼ぶだけ）。並べ方は soonFirst */
 export function approvalRowsView(rows: PendingRow[], ctx: ApprovalRowCtx): { row: PendingRow; notes: ApprovalRowNote[]; soon: boolean }[] {
   return soonFirst(rows, ctx.nowMs).map((row) => {
     const notes = approvalRowNotes(row, ctx);

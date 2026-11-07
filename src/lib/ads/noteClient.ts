@@ -36,7 +36,7 @@ export function judgementFacts(j: AdJudgement): AdsNoteFacts {
   };
 }
 
-/** 報告の事実（いまの承認の箱の行から） */
+/** 報告の事実（いまの承認BOXの行から） */
 export function reportFacts(r: AdWeeklyReport, ads: AdsState): AdsNoteFacts {
   const row = r.proposalId ? ads.proposals.find((p) => p.id === r.proposalId) : undefined;
   const outcome = !r.proposal ? "none" : row?.state === "approved" ? "approved" : row?.state === "skipped" ? "skipped" : row ? "pending" : "none";
@@ -51,7 +51,7 @@ export function reportFacts(r: AdWeeklyReport, ads: AdsState): AdsNoteFacts {
 
 /**
  * 一言をまだ頼んでいない物（AI で作った案の物だけ。決まった返事の物には付けない）。新しい順に1つ。
- * 報告は、案が承認の箱で決まってから（承認待ちの間は頼まない）。
+ * 報告は、案が承認BOXで決まってから（承認待ちの間は頼まない）。
  */
 export function nextNoteTarget(ads: AdsState): { kind: "judgement"; item: AdJudgement } | { kind: "report"; item: AdWeeklyReport } | null {
   const j = (ads.judgements ?? []).find((x) => x.mode === "ai" && !x.noteTried);

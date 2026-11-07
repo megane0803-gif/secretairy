@@ -44,7 +44,7 @@ const limits = { maxTokens: team.maxReplyTokens, maxCalls: team.maxCalls, maxTwi
 const ANCHOR = "2026-11-05";
 const NOW = "2026-11-05T01:00:00.000Z";
 
-/** AI なしの見直しで出る案（1回目は町の名前の言葉で門に弾かれ、作り直しで「美容院 安い 学生」を外す案）を承認の箱に入れる */
+/** AI なしの見直しで出る案（1回目は町の名前の言葉で門に弾かれ、作り直しで「美容院 安い 学生」を外す案）を承認BOXに入れる */
 async function scriptProposal(): Promise<AdsState> {
   const r = await runReview({
     table,
@@ -148,7 +148,7 @@ describe("1. AI なしで最後まで通す（美容院 安い 学生）", () =>
     s = arrived.state;
     const p1 = pendingAd(s)!;
     assert.ok(shownTeam(p1));
-    // 会議は広告も承認の箱も変えない
+    // 会議は広告も承認BOXも変えない
     assert.equal(p1.state, "pending");
     assert.deepEqual(s.applied, []);
 
@@ -560,7 +560,7 @@ describe("上限は config に・窓口は /api/ai/ の下", () => {
     const route = readFileSync(join(__dirname, "../../../app/api/ai/ads/team/route.ts"), "utf8");
     const view = readFileSync(join(__dirname, "../../../components/AdTeam.tsx"), "utf8");
     for (const t of [route, view]) assert.doesNotMatch(t, /maxCalls:\s*\d|maxTokens:\s*\d|\d+_000\b/);
-    // 画面の部品は確定・承認の変え方を呼ばない（決めるのは承認の箱のボタン）
+    // 画面の部品は確定・承認の変え方を呼ばない（決めるのは承認BOXのボタン）
     assert.doesNotMatch(view, /approveAd|withAdApproved|withAdSkipped|withApproved/);
   });
 });

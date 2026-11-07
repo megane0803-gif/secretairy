@@ -1,4 +1,4 @@
-// 1. 承認待ちの数（上の帯・朝の要点）は、承認の箱の行の数と必ず同じ。
+// 1. 承認待ちの数（上の帯・朝の要点）は、承認BOXの行の数と必ず同じ。
 // どれも approvals.ts の approvalQueue（同じ行）から数える。
 
 import assert from "node:assert/strict";
@@ -28,7 +28,7 @@ function rowsOf(book: BookState, ads: AdsState) {
   return { q, rows: q.reservations.length + (q.ad ? 1 : 0) };
 }
 
-describe("1. 承認待ちの数 = 承認の箱の行の数", () => {
+describe("1. 承認待ちの数 = 承認BOXの行の数", () => {
   const adPending: AdsState = {
     ...emptyAds(),
     proposals: [
@@ -72,7 +72,7 @@ describe("1. 承認待ちの数 = 承認の箱の行の数", () => {
     assert.equal(approvalQueue(withdrawn, emptyAds(), now).count, 1);
   });
 
-  test("上の帯・朝の要点・承認の箱は、どれも同じ useApprovals（approvals.ts）から数える", () => {
+  test("上の帯・朝の要点・承認BOXは、どれも同じ useApprovals（approvals.ts）から数える", () => {
     const read = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
     for (const p of ["../../components/PendingBar.tsx", "../../app/home/HomeSummary.tsx", "../../components/ApprovalBox.tsx"]) {
       const src = read(p);
@@ -83,7 +83,7 @@ describe("1. 承認待ちの数 = 承認の箱の行の数", () => {
 });
 
 // 9. 仮押さえが自動で外れるまでの残り（本当の時計で「期限 − 今」）
-describe("承認の箱：仮押さえが外れるまでの残り", () => {
+describe("承認BOX：仮押さえが外れるまでの残り", () => {
   const nowMs = Date.parse(now);
   const at = (min: number) => new Date(nowMs + min * 60_000).toISOString();
 
@@ -109,7 +109,7 @@ describe("承認の箱：仮押さえが外れるまでの残り", () => {
     assert.equal(holdLeft(row.reservation.expiresAt, nowMs + 60_000).minutes, 129);
   });
 
-  test("表示と外れる時がずれない：残りが0になる時、台帳と承認の箱からも外れる", () => {
+  test("表示と外れる時がずれない：残りが0になる時、台帳と承認BOXからも外れる", () => {
     const s = withHold(emptyBook("2026-11-04"), hold("h1", at(10)));
     const end = nowMs + 10 * 60_000;
     assert.equal(holdLeft(at(10), end - 60_000).text, "あと1分で外れます");
@@ -141,7 +141,7 @@ describe("承認の箱：仮押さえが外れるまでの残り", () => {
 });
 
 // 10. 同じお客様の、同じ日のほかの予約
-describe("承認の箱：同じ日のほかの予約", () => {
+describe("承認BOX：同じ日のほかの予約", () => {
   const row = { id: "h1", customerId: "c04", date: "2026-11-06" };
   const b = (id: string, customerId: string, date: string, start: string) => ({ id, customerId, date, start });
 
@@ -175,7 +175,7 @@ describe("承認の箱：同じ日のほかの予約", () => {
 });
 
 // 行に足す物は1か所（approvals.ts の approvalRowNotes / approvalRowsView。直しC などはここに足す）
-describe("承認の箱：行に足す物の1か所", () => {
+describe("承認BOX：行に足す物の1か所", () => {
   const nowMs = Date.parse(now);
   const at = (min: number) => new Date(nowMs + min * 60_000).toISOString();
   const rowsOfState = (s: BookState) => approvalQueue(s, emptyAds(), now).reservations;
@@ -213,8 +213,8 @@ describe("承認の箱：行に足す物の1か所", () => {
   });
 });
 
-// 直しA の形（書けたかの { ok }）：承認の箱のボタンも、書けた時だけ成功の1行と日誌を出す
-describe("承認の箱：ブラウザに書けなかった時", () => {
+// 直しA の形（書けたかの { ok }）：承認BOXのボタンも、書けた時だけ成功の1行と日誌を出す
+describe("承認BOX：ブラウザに書けなかった時", () => {
   test("承認・直す・見送りとも update の ok を見てから日誌と成功の1行。書けなければ SAVE_FAILED_MESSAGE", () => {
     const box = readFileSync(new URL("../../components/ApprovalBox.tsx", import.meta.url), "utf8");
     const press = box.slice(box.indexOf("const press = "), box.indexOf("return (\n    <>"));

@@ -45,7 +45,7 @@ export default function ReservationsPage() {
           <AiSteps />
         </section>
 
-        {/* 月のカレンダー（「休みを決める」を入れると、日を押して休みにする・戻す）。PC は承認の箱・AI の手順の場所を動かさないよう、時間割の箱の外のここに。スマホは台帳のすぐ下 */}
+        {/* 月のカレンダー（「休みを決める」を入れると、日を押して休みにする・戻す）。PC は承認BOX・AI の手順の場所を動かさないよう、時間割の箱の外のここに。スマホは台帳のすぐ下 */}
         <section className="inline-box" aria-labelledby="res-month">
           <h2 id="res-month">月のカレンダー</h2>
           <MonthCalendar data={data} />
