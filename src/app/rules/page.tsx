@@ -2,7 +2,7 @@ import { TabPage } from "@/components/TabPage";
 import { addDays, calDay, openedDate } from "@/lib/calendar";
 import { getBookData } from "@/lib/book/data";
 import { getSeedRules } from "@/lib/rules/store";
-import { getMenus, getRuleWordsMaxChars, getShop } from "@/lib/settings";
+import { getRuleWordsMaxChars, getShop } from "@/lib/settings";
 import { RuleList, RuleLocked } from "./RuleBoard";
 import { RuleSide } from "./RuleSide";
 
@@ -16,9 +16,9 @@ export const dynamic = "force-dynamic";
  */
 export default function RulesPage() {
   const shop = getShop();
-  const menus = getMenus();
   const seed = getSeedRules();
-  const menuOptions = menus.map((m) => ({ id: m.id, name: m.name }));
+  // メニューは画面の側で台帳の data.menus（足した・直したメニューも重ねた1つの入口）から読む
+  const data = getBookData();
   // 「ためしに確かめる」で選べる日（開いた日から2週間。お休みの日も出して、断られるのを見られるように）
   const opened = openedDate(shop);
   const days = Array.from({ length: 14 }, (_, i) => calDay(shop, addDays(opened, i)));
@@ -32,15 +32,15 @@ export default function RulesPage() {
           seed={seed}
           shop={{ timezone: shop.timezone, slotMinutes: shop.slotMinutes }}
           days={days}
-          data={getBookData()}
+          data={data}
           // 言葉で書いて足す欄は、AI の鍵がある時だけ出す（鍵の中身は画面に渡さない）
           wordsOn={Boolean(process.env.ANTHROPIC_API_KEY)}
           wordsMaxChars={getRuleWordsMaxChars()}
         />
       }
     >
-      <RuleLocked seed={seed} menus={menuOptions} />
-      <RuleList seed={seed} menus={menuOptions} />
+      <RuleLocked seed={seed} data={data} />
+      <RuleList seed={seed} data={data} />
     </TabPage>
   );
 }

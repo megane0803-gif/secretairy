@@ -4,13 +4,15 @@
 // どのルールにも「どこに効くか」の札を出す。2つに分けてあるのは、スマホで間に右の列（ルールを足す欄）を出すため
 // （TabPage の rightAfterOnPhone={1}。部品は1つずつのまま）。
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { BigNumber, Fold } from "@/components/parts";
 import { DEMO_TAG_NOTE } from "@/lib/notices";
 import { KIND_INFO, scopeTag } from "@/lib/rules/describe";
 import type { ListedRule } from "@/lib/rules/overlay";
 import type { Rule } from "@/lib/rules/types";
 import { useRules } from "@/lib/rules/useRules";
+import type { BookData } from "@/lib/book/data";
+import { useBook } from "@/lib/book/useBook";
 import { RuleForm, type MenuOption } from "./RuleForm";
 
 const GROUPS: { level: Rule["level"]; title: string }[] = [
@@ -19,9 +21,16 @@ const GROUPS: { level: Rule["level"]; title: string }[] = [
   { level: "menu", title: "メニューごと" },
 ];
 
+/** メニューの選び（台帳の book.data.menus。ルールのタブの「メニュー」で足したメニューも入る1つの入口） */
+function useMenuOptions(data: BookData): MenuOption[] {
+  const menus = useBook(data).data.menus;
+  return useMemo(() => menus.map((m) => ({ id: m.id, name: m.name })), [menus]);
+}
+
 /** 数字3つと 🔒 いつも守ること（鍵つき） */
-export function RuleLocked({ seed, menus }: { seed: Rule[]; menus: MenuOption[] }) {
+export function RuleLocked({ seed, data }: { seed: Rule[]; data: BookData }) {
   const { rules } = useRules(seed);
+  const menus = useMenuOptions(data);
   const menuName = (id: string) => menus.find((m) => m.id === id)?.name ?? id;
   const locked = rules.filter((r) => r.locked);
   const own = rules.filter((r) => !r.locked);
@@ -56,8 +65,9 @@ export function RuleLocked({ seed, menus }: { seed: Rule[]; menus: MenuOption[] 
 }
 
 /** 今あるルールの一覧（全体・タブごと・メニューごとの3段）と、ぶつかった時・このブラウザの変更 */
-export function RuleList({ seed, menus }: { seed: Rule[]; menus: MenuOption[] }) {
+export function RuleList({ seed, data }: { seed: Rule[]; data: BookData }) {
   const { rules, update, remove, restore, resetAll, changedCount } = useRules(seed);
+  const menus = useMenuOptions(data);
   const menuName = (id: string) => menus.find((m) => m.id === id)?.name ?? id;
   const own = rules.filter((r) => !r.locked);
 

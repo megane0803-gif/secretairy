@@ -9,7 +9,7 @@ import type { Rule } from "../rules/types";
 import { validateOwnerRule } from "../rules/validate";
 import { clampSeats, seatsRangeOf, withSeats } from "../capacity";
 import { readHolidays, withHolidays } from "../holidays";
-import { readMenus } from "../menuEdits";
+import { ownNamesProblem, readMenus } from "../menuEdits";
 import { getShop, type AiSettings, type Menu, type ShopSettings } from "../settings";
 import { MAX_SHOWN } from "./replies";
 import type { ToolContext } from "./tools";
@@ -28,8 +28,9 @@ const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 
 
 export function parseReserveRequest(body: unknown, base: Menu[], ai: Pick<AiSettings, "maxMessages" | "maxMessageChars">): Parsed {
   if (!isObj(body)) return { ok: false, reason: "形がおかしいです" };
-  // 直したメニュー（ルールのタブ）：id がそろっているか・名前と色と includes が設定と同じか・数が幅の中か。1つでもおかしければ断る。
-  // 確かめた後は、台帳・候補・カルテの日付の確かめも直したメニューで（id は設定と同じ）
+  // 直したメニュー・足したメニュー（ルールのタブ）：設定の id がそろっているか・名前と色と includes が設定と同じか・数が幅の中か・
+  // 足したメニュー（own-）の形（名前・数・色・includes なし・数の上限・名前の重なり）。1つでもおかしければ断る。
+  // 確かめた後は、台帳・候補・カルテの日付の確かめも直した・足したメニューで
   const own = readMenus(body.menus, base, getShop());
   if (!own.ok) return { ok: false, reason: own.reason };
   const menus = own.value;
@@ -85,6 +86,9 @@ export function parseReserveRequest(body: unknown, base: Menu[], ai: Pick<AiSett
 
   const rules = readRules(body.rules, menus.map((m) => m.id));
   if (!rules) return { ok: false, reason: "ルールの形がおかしいです" };
+  // 足したメニューの名前に、店の中の決まりの言葉（今のルール）が入っていないか（ルールを読んだ後にもう一度）
+  const names = ownNamesProblem(menus, rules);
+  if (names) return { ok: false, reason: names };
 
   const visits: Visit[] = (Array.isArray(body.visits) ? body.visits : [])
     .filter(
