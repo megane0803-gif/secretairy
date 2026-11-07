@@ -146,13 +146,13 @@ describe("2. スマホの1週間の予約台帳（同じ部品で、見た目だ
     assert.match(css, /\.tt-col\.closed \{/);
   });
 
-  test("スマホの CSS：7列が幅に収まる（min-width 0・横に動かない）・30分の高さは 24〜32px", () => {
+  test("スマホの CSS：7列が幅に収まる（min-width 0・横に動かない）・30分の高さ（空いたマスの高さ）は 44px 以上", () => {
     const b = phoneBlock("--tt-hour");
     assert.match(b, /grid-template-columns: \d+px repeat\(7, minmax\(0, 1fr\)\);/);
     assert.match(b, /min-width: 0;/);
     assert.match(b, /\.tt-wrap \{ overflow-x: hidden; \}/);
     const hour = Number(/--tt-hour: (\d+)px/.exec(b)?.[1]);
-    assert.ok(hour / 2 >= 24 && hour / 2 <= 32, String(hour));
+    assert.ok(hour / 2 >= 44, String(hour));
     // 列の頭の件数と埋まりの棒・帯の中の時刻とメニュー名と札は、スマホでははぶく（名字は残す）
     assert.match(b, /\.tt-head \.tt-date, \.tt-head \.tt-count, \.tt-head \.minibar, \.tt-head \.tt-off-label \{ display: none; \}/);
     assert.match(b, /\.tt-band \.tt-band-top, \.tt-band \.tt-band-menu, \.tt-band\.short \.tt-band-menu \{ display: none; \}/);
@@ -369,6 +369,23 @@ describe("3. 段の流れ（src/lib/book/ownerFlow.ts）", () => {
     const confirm = sheet.indexOf('{stage === "confirm" && (');
     assert.ok(confirm > 0 && sheet.indexOf("onClick={press}") > confirm);
     assert.equal(sheet.split("onClick={press}").length - 1, 1);
+  });
+
+  test("スマホの右の索引（50音の行）は1つ 44×44px 以上。PC の索引の大きさは今のまま", () => {
+    const b = phoneBlock(".obs-kana-btn");
+    assert.match(b, /\.obs-kana-btn \{ min-width: 44px; min-height: 44px;/);
+    assert.match(b, /\.obs-kana-wrap \{ grid-template-columns: minmax\(0, 1fr\) 44px; \}/);
+    // PC（どの @media の外）は 32px の列・高さ 30px のまま
+    assert.match(css, /^\.obs-kana-wrap \{ display: grid; grid-template-columns: minmax\(0, 1fr\) 32px;/m);
+    assert.match(css, /^\.obs-kana-btn \{[^}]*min-height: 30px;/m);
+  });
+
+  test("③のメニューの1行は1つのまとまり（「カット＋カラー（120分・10,800円）」。かっこの内側に空きを作らない）", () => {
+    const sheet = read("src/app/reservations/OwnerBookSheet.tsx");
+    assert.match(sheet, /<span>\s*\{menu\.name\}\s*<span className="obs-nowrap">\{`（\$\{menu\.minutes\}分・\$\{yen\(menu\.price\)\}）`\}<\/span>\s*<\/span>/);
+    assert.match(css, /\.obs-nowrap \{ white-space: nowrap; \}/);
+    const m = { name: "カット＋カラー", minutes: 120, price: 10800 };
+    assert.equal(`${m.name}（${m.minutes}分・${yen(m.price)}）`, "カット＋カラー（120分・10,800円）");
   });
 
   test("スマホは画面いっぱいの1枚（予約を入れる1枚だけ。予約を押して開く1枚は今のまま）", () => {

@@ -236,10 +236,12 @@ export function OwnerBookSheet({ data, target, onClose }: { data: BookData; targ
                   <dd>{customer && <CustomerName surname={customer.surname} />}</dd>
                   <dt>メニュー</dt>
                   <dd>
+                    {/* 1つの span にまとめる（dd は flex なので、分けるとかっこの内側に空きが出る）。かっこの中は数の途中で折り返さない */}
                     {menu && (
-                      <>
-                        {menu.name}（<span className="num">{menu.minutes}</span>分・<span className="num">{yen(menu.price)}</span>）
-                      </>
+                      <span>
+                        {menu.name}
+                        <span className="obs-nowrap">{`（${menu.minutes}分・${yen(menu.price)}）`}</span>
+                      </span>
                     )}
                   </dd>
                   <dt>終わる時刻</dt>
