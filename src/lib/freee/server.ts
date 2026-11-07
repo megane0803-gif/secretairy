@@ -5,6 +5,9 @@
 // - 本番（VERCEL_ENV=production）で、本番のサイトの名前（host）に来た呼び出しだけ。プレビューの URL では全部止める
 // - 書く窓口（明細を入れる・登録する・読み直す・つなぎを外す・つなぐ）は POST だけで、Origin が本番のサイトの時だけ
 // - 鍵は暗号化した cookie（HttpOnly・Secure・SameSite・このサイトだけ）。cookie が無い呼び出しは受けない（つなぐ・戻り先を除く）
+//   （置き場（KV）の鍵でこの窓口は通さない。KV の鍵を使うのは、来た人用の窓口 /api/freee/try だけ。src/lib/freee/try.ts）
+// - オーナーが1回つないだら、更新用の鍵ごと置き場に暗号化して置く（src/lib/freee/kv.ts）。「つなぎを外す」で、先に来た人の試しを元に戻してから消す
+// - 書く窓口（明細を入れる・登録）は、来た人の登録・元に戻すと同じ「同時に1回」の印を取る（置き場がある時）
 // - 事業所の番号は、鍵の返事に入っていた番号（cookie の中）と FREEE_COMPANY_ID がちょうど同じ時だけ。ブラウザから来た番号は使わない
 // - 許可の返事・どの返事もキャッシュさせない
 
@@ -12,6 +15,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { accountOf, listRange, sideOf, type ListedTxn } from "../accounting/rows";
 import { isRealDate } from "../calendar";
 import type { AccountingSeed, CardItem, CardUse, StatementAccount } from "../data/types";
+import type { KvStore } from "../line/store";
 import type { FreeeSettings } from "../settings";
 import {
   exchangeCode,
@@ -31,6 +35,7 @@ import {
   descriptionOf,
   lookup,
   lookupById,
+  markIn,
   markOf,
   pickBankAccount,
   pickCardAccount,
@@ -42,7 +47,9 @@ import {
   type Verdict,
 } from "./match";
 import { siteCheck } from "../server/site";
+import { currentGen, dropKvToken, genMovedPast, putKvToken, readKvToken, StoreDown, withWriteLock, type KvCtx, type StillHeld } from "./kv";
 import { seal, unseal } from "./seal";
+import { clearRepairedTrial, loadTrial, restoreTrial, seedItemOfMark, type RestoreResult, type Trial } from "./trial";
 
 export const TOKEN_COOKIE = "__Host-secretairy-freee";
 export const STATE_COOKIE = "__Host-secretairy-freee-state";
@@ -69,7 +76,15 @@ export type FreeeDeps = {
   random: (n: number) => Buffer;
   /** 店の時間帯（読む期間の「今日」を決める。config/shop.json の timezone） */
   timeZone: string;
+  /** 置き場（Upstash。KV の環境変数が無ければ null。その時は、来た人用の窓口は動かず、オーナーの窓口は印なしで今どおり） */
+  store?: KvStore | null;
 };
+
+/** 置き場の道具（置き場と暗号の鍵がある時だけ） */
+export function kvCtxOf(deps: FreeeDeps): KvCtx | null {
+  if (!deps.store || !deps.env.cookieKey) return null;
+  return { store: deps.store, cookieKey: deps.env.cookieKey, settings: deps.settings, now: deps.now, random: deps.random };
+}
 
 export function envFrom(e: Record<string, string | undefined>, cookieKey: Buffer | null): FreeeEnv {
   const raw = (e.FREEE_COMPANY_ID ?? "").trim();
@@ -110,7 +125,7 @@ const NO_STORE = {
   "Referrer-Policy": "no-referrer",
 };
 
-function json(body: unknown, status = 200, cookies: string[] = []): Response {
+export function json(body: unknown, status = 200, cookies: string[] = []): Response {
   const h = new Headers({ ...NO_STORE, "Content-Type": "application/json; charset=utf-8" });
   for (const c of cookies) h.append("Set-Cookie", c);
   return new Response(JSON.stringify(body), { status, headers: h });
@@ -140,7 +155,7 @@ function readCookie(request: Request, name: string): string | null {
 
 // ---- 守り ----
 
-type Session = { accessToken: string; companyId: number; expiresAt: number };
+export type Session = { accessToken: string; companyId: number; expiresAt: number };
 
 type Guarded = { ok: true; session: Session | null } | { ok: false; response: Response };
 
@@ -182,7 +197,7 @@ export function guard(request: Request, deps: FreeeDeps, p: { method: "GET" | "P
   return { ok: true, session: { accessToken: s.accessToken, companyId: s.companyId, expiresAt: s.expiresAt } };
 }
 
-async function readBody(request: Request, max: number): Promise<Record<string, unknown> | null> {
+export async function readBody(request: Request, max: number): Promise<Record<string, unknown> | null> {
   const raw = await request.text();
   if (raw.length > max) return null;
   if (!raw) return {};
@@ -243,6 +258,8 @@ function companyIdPage(companyId: number): Response {
 }
 
 export async function handleCallback(request: Request, deps: FreeeDeps): Promise<Response> {
+  // 窓口の始めの時刻（元に戻す時の持ち時間は、ここから数える。鍵の交換の時間も引く）
+  const startedAt = deps.now();
   const g = guard(request, deps, { method: "GET", session: false, needCompany: false });
   if (!g.ok) return g.response;
   const { env, settings } = deps;
@@ -281,7 +298,33 @@ export async function handleCallback(request: Request, deps: FreeeDeps): Promise
   if (token.companyId !== env.companyId) return back("wrong-company", [...cookies, clearToken()]);
   const seconds = Math.min(token.expiresIn, settings.maxTokenSeconds);
   const session: Session = { accessToken: token.accessToken, companyId: token.companyId, expiresAt: deps.now() + seconds * 1000 };
-  return back("connected", [...cookies, cookie(TOKEN_COOKIE, seal(env.cookieKey!, "token", session, deps.random), { maxAge: seconds, sameSite: "Strict" })]);
+  const tokenCookie = cookie(TOKEN_COOKIE, seal(env.cookieKey!, "token", session, deps.random), { maxAge: seconds, sameSite: "Strict" });
+  // 置き場がある時：サーバーがつながりを持ち続ける（更新用の鍵ごと暗号化して置く）。置けなければ cookie だけ（来た人は試せない）
+  const c = kvCtxOf(deps);
+  if (!c) return back("connected", [...cookies, tokenCookie]);
+  const shared = token.refreshToken !== null && (await putKvToken(c, { ...session, refreshToken: token.refreshToken }));
+  if (shared) await afterConnect(deps, session, startedAt);
+  return back(shared ? "connected" : "connected-cookie", [...cookies, tokenCookie]);
+}
+
+/**
+ * つないだ後：前の回に元に戻せなかった試しを、オーナーの鍵で元に戻す。要復旧の記録は、オーナーが freee の側で
+ * 見本どおりの未処理に直してあれば消す（読むだけで確かめる。消す・作り直すはしない）。どちらもうまくいかなければ記録は残す。
+ */
+async function afterConnect(deps: FreeeDeps, s: Session, startedAt: number): Promise<void> {
+  try {
+    await withWriteLock({ store: deps.store!, settings: deps.settings, now: deps.now, random: deps.random }, async (until, held) => {
+      // 印を取った後に記録を読む（印の外の古い記録で決めない）
+      const t = await loadTrial(deps.store!);
+      if (t.items.length === 0 && !t.repair) return null;
+      const ctx = { api: clientFor(deps, s, until, startedAt), store: deps.store!, settings: deps.settings, seed: deps.seed, companyId: s.companyId, range: readRange(deps), held };
+      if (t.repair) await clearRepairedTrial(ctx);
+      else await restoreTrial(ctx);
+      return null;
+    });
+  } catch {
+    // 記録は残る（次の呼び出しで続き）
+  }
 }
 
 // ---- つながっているか（GET /api/freee/status） ----
@@ -310,10 +353,27 @@ export async function handleStatus(request: Request, deps: FreeeDeps): Promise<R
     );
   if (!readCookie(request, TOKEN_COOKIE) || !deps.env.cookieKey) return notConnected("no-cookie");
   const g = guard(request, deps, { method: "GET", session: true });
-  if (g.ok) return json({ ok: true, connected: true, expiresAt: new Date(g.session!.expiresAt).toISOString() });
+  if (g.ok) return json({ ok: true, connected: true, expiresAt: new Date(g.session!.expiresAt).toISOString(), ...(await sharedState(deps)) });
   const code = ((await g.response.clone().json()) as { code?: unknown }).code;
   if (code === "no-cookie" || code === "expired") return notConnected(code, g.response.headers.getSetCookie());
   return g.response;
+}
+
+/**
+ * オーナーの画面に出す：サーバーがつながりを持っているか（来た人も試せるか）と、元に戻す記録の様子。
+ * 置き場が無い時は shared: false。読めない時は null（どちらも中身・番号は出さない）。
+ */
+async function sharedState(deps: FreeeDeps): Promise<{ shared: boolean | null; trial: "repair" | "pending" | null }> {
+  const c = kvCtxOf(deps);
+  if (!c) return { shared: false, trial: null };
+  try {
+    const got = await readKvToken(c);
+    const shared = !!got && got.token.companyId === deps.env.companyId && !genMovedPast(await currentGen(c.store), got.token.gen);
+    const t = await loadTrial(c.store);
+    return { shared, trial: t.repair ? "repair" : t.items.length ? "pending" : null };
+  } catch {
+    return { shared: null, trial: null };
+  }
 }
 
 // ---- つなぎを外す（POST /api/freee/disconnect） ----
@@ -326,8 +386,39 @@ export async function handleDisconnect(request: Request, deps: FreeeDeps): Promi
     if (g.response.status === 401 || g.response.status === 403) h.append("Set-Cookie", clearToken());
     return new Response(g.response.body, { status: g.response.status, headers: h });
   }
-  return json({ ok: true }, 200, [clearToken()]);
+  // 置き場の鍵も消す。試しがあっても無くても、先に書く時の印を取ってから（来た人が書いている途中に外して、外した後に書きが入らないように）。
+  // まだ元に戻していない来た人の試しがあれば、印の中でオーナーの鍵で先に元に戻す
+  // （戻せなければ、元に戻す記録（明細と取引の番号）は置き場に残す。次につないだ時に元に戻す）
+  const c = kvCtxOf(deps);
+  if (!c) return json({ ok: true, restored: "none" }, 200, [clearToken()]);
+  const s = g.session!;
+  const startedAt = deps.now();
+  let r: RestoreResult | "none" | "busy";
+  try {
+    r = await withWriteLock(c, async (until, held) => {
+      const t = await loadTrial(c.store);
+      let restored: RestoreResult | "none" = "none";
+      if (t.repair) restored = "repair";
+      else if (t.items.length)
+        restored = (
+          await restoreTrial({ api: clientFor(deps, s, until, startedAt), store: c.store, settings: deps.settings, seed: deps.seed, companyId: s.companyId, range: readRange(deps), held }).catch((e) => {
+            if (e instanceof StoreDown) throw e;
+            return { result: "partial" as const };
+          })
+        ).result;
+      await dropKvToken(c);
+      return restored;
+    });
+  } catch {
+    // 置き場が使えない：cookie は消さない（もう一度押せるように）
+    return json({ ok: false, code: "no-store", message: DISCONNECT_FAILED_MESSAGE }, 503);
+  }
+  // 印が取れない：鍵を消さない（cookie も残す）
+  if (r === "busy") return json({ ok: false, code: "busy", message: "いま来た人の試しを書いています。少し待ってから、もう一度押してください" }, 409);
+  return json({ ok: true, restored: r }, 200, [clearToken()]);
 }
+
+export const DISCONNECT_FAILED_MESSAGE = "サーバーの鍵を消せませんでした。少し待ってから、もう一度押してください";
 
 // ---- 明細を入れる・登録する・読み直す ----
 
@@ -365,19 +456,38 @@ export function readRange(deps: FreeeDeps): { from: string; to: string } {
   return listRange(todayIn(deps.timeZone, deps.now()), deps.seed.statement.to, deps.settings.listDays);
 }
 
-/** この呼び出しの持ち時間（窓口の時間の上限より短く。返事の時間を残す） */
-function clientFor(deps: FreeeDeps, s: Session): FreeeClient {
+/**
+ * この呼び出しの持ち時間（窓口の時間の上限より短く。返事の時間を残す）。
+ * lockUntil：書く時の印の期限。印の期限の前に返事を待ち終えられない呼び出しは送らない（期限の後に書かない）。
+ */
+export function clientFor(deps: FreeeDeps, s: Pick<Session, "accessToken">, lockUntil?: number, startedAt?: number): FreeeClient {
+  // startedAt：窓口の始めの時刻（持ち時間はそこから数える。無ければ今から）
+  const budget = (startedAt ?? deps.now()) + deps.settings.serverBudgetSeconds * 1000;
   return freeeClient({
     fetch: deps.fetch,
     settings: deps.settings,
     accessToken: s.accessToken,
     now: deps.now,
-    deadline: deps.now() + deps.settings.serverBudgetSeconds * 1000,
+    deadline: lockUntil === undefined ? budget : Math.min(budget, lockUntil - 1000),
   });
 }
 
+/** 書く窓口の印：置き場がある時は、来た人の登録・元に戻すと同じ印を取る。取れなければ「少し待ってから」 */
+export const WRITE_BUSY_MESSAGE = "いま ほかの書き込み（来た人の試し・元に戻す など）をしています。少し待ってから、もう一度押してください";
+
+async function underWriteLock(deps: FreeeDeps, run: (lockUntil?: number, held?: StillHeld) => Promise<Response>): Promise<Response> {
+  if (!deps.store) return run();
+  try {
+    const r = await withWriteLock({ store: deps.store, settings: deps.settings, now: deps.now, random: deps.random }, (until, held) => run(until, held));
+    return r === "busy" ? json({ ok: false, code: "busy", message: WRITE_BUSY_MESSAGE }, 409) : r;
+  } catch (e) {
+    if (e instanceof StoreDown) return json({ ok: false, code: "no-store", message: "サーバーの置き場につながらないので、書きませんでした。少し待ってから、もう一度押してください" }, 503);
+    throw e;
+  }
+}
+
 /** 読む口座は2つだけ：カード（無ければ止める）と銀行（無ければ銀行の分だけ出さない） */
-async function accountsOf(api: FreeeClient, deps: FreeeDeps, companyId: number) {
+export async function accountsOf(api: FreeeClient, deps: FreeeDeps, companyId: number) {
   const list = await api.walletables(companyId);
   return { card: pickCardAccount(list, deps.settings.cardName), bank: pickBankAccount(list, deps.settings.bankName) };
 }
@@ -409,7 +519,11 @@ export async function handleImport(request: Request, deps: FreeeDeps): Promise<R
   const g = guard(request, deps, { method: "POST", session: true });
   if (!g.ok) return g.response;
   const s = g.session!;
-  const api = clientFor(deps, s);
+  return underWriteLock(deps, (until, held) => importUnderLock(deps, s, until, held));
+}
+
+async function importUnderLock(deps: FreeeDeps, s: Session, lockUntil?: number, held?: StillHeld): Promise<Response> {
+  const api = clientFor(deps, s, lockUntil);
   const items = deps.seed.statement.items;
   let accounts;
   const txns: Record<StatementAccount, WalletTxn[]> = { card: [], bank: [] };
@@ -441,6 +555,11 @@ export async function handleImport(request: Request, deps: FreeeDeps): Promise<R
     if (l.kind !== "missing") {
       out.check++;
       continue;
+    }
+    if (held && !(await held())) {
+      // 書く時の印の期限が来た：書く前に区切る（画面が続きを呼ぶ）
+      out.stopped = { no: item.no, kind: "time", reason: "持ち時間の中で入れ終わらないので、ここで区切りました" };
+      break;
     }
     try {
       const made = await api.createWalletTxn({
@@ -519,29 +638,84 @@ export async function handleRegister(request: Request, deps: FreeeDeps): Promise
   if (!target) return json({ ok: false, code: "bad-request", message: "形がおかしいです" }, 400);
   const range = readRange(deps);
   if (target.date < range.from || target.date > range.to) return json({ ok: false, code: "bad-request", message: "読む期間の外の明細です" }, 400);
-  const answer = await registerOne(deps, s, target, range);
-  if (answer === "expired") return expired();
-  return json(answer);
+  return underWriteLock(deps, async (until, held) => {
+    const answer = await registerOne(deps, s, target, range, until, held);
+    if (answer === "expired") return expired();
+    return json(answer);
+  });
 }
 
-async function registerOne(deps: FreeeDeps, s: Session, target: RegisterTarget, range: { from: string; to: string }): Promise<RegisterAnswer | "expired"> {
-  const api = clientFor(deps, s);
+export const TRIAL_HELD_MESSAGE = "来た人の試しを元に戻すまで、この明細は登録しません";
+
+/** オーナーの登録で断るか：来た人の試しの記録（要復旧も）にある明細（番号か、印から引いた見本の番号）。読めない記録の時は印のある見本の明細を全部 */
+function inTrial(deps: FreeeDeps, t: Trial, txn: Pick<WalletTxn, "id" | "description">): boolean {
+  if (t.items.some((i) => i.id === txn.id)) return true;
+  const mark = markIn(txn.description, deps.settings.markPrefix);
+  const seed = mark ? seedItemOfMark(deps.seed, deps.settings.markPrefix, mark) : null;
+  if (!seed) return false;
+  return t.broken || t.items.some((i) => i.no === seed.no);
+}
+
+async function registerOne(
+  deps: FreeeDeps,
+  s: Session,
+  target: RegisterTarget,
+  range: { from: string; to: string },
+  lockUntil?: number,
+  held?: StillHeld,
+): Promise<RegisterAnswer | "expired"> {
   const id = target.id;
-  const failed = (reason: string): RegisterAnswer => ({ ok: true, id, result: "failed", reason });
+  // 来た人の試しの記録にある明細は、元に戻すまで登録しない（印の中で読む。区切りをまたいでも同じ）
+  const trial = deps.store ? await loadTrial(deps.store) : null;
+  if (trial && trial.items.some((i) => i.id === id)) return { ok: true, id, result: "failed", reason: TRIAL_HELD_MESSAGE };
+  const api = clientFor(deps, s, lockUntil);
+  const p = await prepareOne(deps, api, s, target, range, { extra: trial ? (t) => (inTrial(deps, trial, t) ? TRIAL_HELD_MESSAGE : null) : undefined });
+  if (p.kind === "answer") return p.answer;
+  if (held && !(await held())) return { ok: true, id, result: "failed", reason: "持ち時間が足りないので送りませんでした（freee には何も書いていません）。もう一度押してください" };
+  const w = await writeOne(api, s, target.use, p.txn, p.line);
+  if (w.kind === "expired") return "expired";
+  if (w.kind === "registered") return { ok: true, id, result: "registered", dealIds: w.dealIds };
+  if (w.kind === "time") return { ok: true, id, result: "failed", reason: "持ち時間が足りないので送りませんでした（freee には何も書いていません）。もう一度押してください" };
+  if (w.kind === "rejected") return { ok: true, id, result: "failed", reason: `freee が受けませんでした（${w.status}）${w.messages.length ? `：${w.messages.join(" / ")}` : ""}` };
+  return { ok: true, id, result: "unknown", reason: "送った後に freee の返事が途切れました。送り直さずに、freee から読み直して照らし合わせてください" };
+}
+
+export type DealLine = { account_item_id: number; tax_code: number };
+export type Prepared = { kind: "answer"; answer: RegisterAnswer | "expired" } | { kind: "ready"; txn: WalletTxn; line: DealLine | null };
+
+/**
+ * 登録の前半（書かない）：書く直前に読んで照らし合わせ、店用なら科目と税区分を1つに決める。
+ * txns：もう読んだその口座の明細（無ければここで読む）。extra：ほかに確かめる事（来た人用の見本との照らし合わせ）。止める時は理由の文。
+ * fixedErrors：読めなかった時の理由を決まった文にする（freee の生の文を出さない。来た人用）。
+ */
+export async function prepareOne(
+  deps: FreeeDeps,
+  api: FreeeClient,
+  s: Pick<Session, "companyId">,
+  target: RegisterTarget,
+  range: { from: string; to: string },
+  opts: { txns?: WalletTxn[]; extra?: (txn: WalletTxn) => string | null; fixedErrors?: boolean } = {},
+): Promise<Prepared> {
+  const id = target.id;
+  const failed = (reason: string): Prepared => ({ kind: "answer", answer: { ok: true, id, result: "failed", reason } });
   let verdict: Verdict;
-  let line: { account_item_id: number; tax_code: number } | null = null;
+  let line: DealLine | null = null;
   try {
     const accounts = await accountsOf(api, deps, s.companyId);
     if (!accounts.card.ok) return failed(accounts.card.reason);
     const acc = target.account === "card" ? accounts.card : accounts.bank;
     if (!acc.ok) return failed(acc.reason);
     // 書く直前に読む（その口座の、読む期間の全部）
-    const txns = await api.walletTxns(s.companyId, acc.walletable, range);
+    const txns = opts.txns ?? (await api.walletTxns(s.companyId, acc.walletable, range));
     const found = lookupById(txns, { companyId: s.companyId, walletable: acc.walletable, id, markPrefix: deps.settings.markPrefix });
     if (found.kind === "found" && found.txn.entry_side === "income")
       return failed("入金は登録しません（売上の入金は、freee のルールで売上にしています）");
     if (found.kind === "found" && !useAllowed(found.txn.description, target.use, deps.seed))
       return failed("店用・私用の選びが、購入先の自動のルールと合いません");
+    if (found.kind === "found" && opts.extra) {
+      const why = opts.extra(found.txn);
+      if (why) return failed(why);
+    }
     verdict = verdictOf(
       lookupById(txns, { companyId: s.companyId, walletable: acc.walletable, id, markPrefix: deps.settings.markPrefix, expect: { date: target.date, amount: target.amount } }),
     );
@@ -554,31 +728,45 @@ async function registerOne(deps: FreeeDeps, s: Session, target: RegisterTarget, 
       line = { account_item_id: a.value.id, tax_code: t.value.code };
     }
   } catch (e) {
-    if (e instanceof FreeeExpired) return "expired";
+    if (e instanceof FreeeExpired) return { kind: "answer", answer: "expired" };
+    if (opts.fixedErrors) return failed(e instanceof FreeeOutOfTime ? "持ち時間の中で読み終わりませんでした（何も書いていません）" : "freee から読めませんでした（何も書いていません）");
     const r = readFailure(e);
     return failed(((await r.json()) as { message: string }).message);
   }
   if (verdict.kind === "missing") return failed("freee にこの明細がありません（読む期間の中に、この番号の明細がありません）。「freee から読み直す」を押してください");
-  if (verdict.kind === "done") return { ok: true, id, result: "already" };
-  if (verdict.kind === "check") return { ok: true, id, result: "check", reason: verdict.reason };
+  if (verdict.kind === "done") return { kind: "answer", answer: { ok: true, id, result: "already" } };
+  if (verdict.kind === "check") return { kind: "answer", answer: { ok: true, id, result: "check", reason: verdict.reason } };
+  return { kind: "ready", txn: verdict.txn, line };
+}
 
+export type Written =
+  | { kind: "registered"; dealIds: number[] }
+  | { kind: "expired" }
+  | { kind: "time" }
+  | { kind: "rejected"; status: number; messages: string[] }
+  | { kind: "unknown" };
+
+/** 登録の後半（書く）：店用は create_deal（内訳1行・科目1つ・税区分1つ）、私用は create_private_deal */
+export async function writeOne(api: FreeeClient, s: Pick<Session, "companyId">, use: CardUse, txn: WalletTxn, line: DealLine | null): Promise<Written> {
   try {
-    if (target.use === "shop") {
-      const dealIds = await api.createDeal(verdict.txn.id, {
+    if (use === "shop") {
+      const dealIds = await api.createDeal(txn.id, {
         company_id: s.companyId,
-        deal_lines: [{ amount: verdict.txn.amount, account_item_id: line!.account_item_id, tax_code: line!.tax_code }],
+        deal_lines: [{ amount: txn.amount, account_item_id: line!.account_item_id, tax_code: line!.tax_code }],
       });
-      return { ok: true, id, result: "registered", dealIds };
+      // 返事の取引の番号が空：登録できたかが分からない（結果が分からない）
+      if (dealIds.length === 0) return { kind: "unknown" };
+      return { kind: "registered", dealIds };
     }
-    const dealId = await api.createPrivateDeal(verdict.txn.id, s.companyId);
-    return { ok: true, id, result: "registered", dealIds: [dealId] };
+    const dealId = await api.createPrivateDeal(txn.id, s.companyId);
+    return { kind: "registered", dealIds: [dealId] };
   } catch (e) {
-    if (e instanceof FreeeExpired) return "expired";
+    if (e instanceof FreeeExpired) return { kind: "expired" };
     // 持ち時間が残っていないので、送る前に止めた（freee には何も送っていない）
-    if (e instanceof FreeeOutOfTime) return failed("持ち時間が足りないので送りませんでした（freee には何も書いていません）。もう一度押してください");
-    if (e instanceof FreeeRejected) return failed(`freee が受けませんでした（${e.status}）${e.messages.length ? `：${e.messages.join(" / ")}` : ""}`);
+    if (e instanceof FreeeOutOfTime) return { kind: "time" };
+    if (e instanceof FreeeRejected) return { kind: "rejected", status: e.status, messages: e.messages };
     // つながらない・待ちきれない・500 台・返事の形が違う：freee の中で済んだかもしれない
-    return { ok: true, id, result: "unknown", reason: "送った後に freee の返事が途切れました。送り直さずに、freee から読み直して照らし合わせてください" };
+    return { kind: "unknown" };
   }
 }
 
@@ -619,16 +807,11 @@ export async function handleCheck(request: Request, deps: FreeeDeps): Promise<Re
   try {
     const accounts = await accountsOf(api, deps, s.companyId);
     if (!accounts.card.ok) return json({ ok: false, code: "card", message: accounts.card.reason }, 409);
-    const read: { account: StatementAccount; walletable: { id: number; type: WalletTxn["walletable_type"] }; txns: WalletTxn[] }[] = [];
+    const read: ReadAccount[] = [];
     read.push({ account: "card", walletable: accounts.card.walletable, txns: await api.walletTxns(s.companyId, accounts.card.walletable, range, { stopAfterOpen: max }) });
     if (accounts.bank.ok)
       read.push({ account: "bank", walletable: accounts.bank.walletable, txns: await api.walletTxns(s.companyId, accounts.bank.walletable, range, { stopAfterOpen: max }) });
-    const open: ListedTxn[] = [];
-    for (const r of read)
-      for (const t of r.txns)
-        if (t.company_id === s.companyId && t.walletable_id === r.walletable.id && t.walletable_type === r.walletable.type && isOpen(t))
-          open.push({ id: t.id, account: r.account, date: t.date, side: t.entry_side, description: t.description.slice(0, 200), amount: t.amount });
-    open.sort((a, b) => (a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1));
+    const open = openRows(read, s.companyId);
     const capped = open.length > max;
     const [accountItems, taxes] = [await api.accountItems(s.companyId), await api.taxes(s.companyId)];
     const setup: SetupCheck = {
@@ -651,6 +834,19 @@ export async function handleCheck(request: Request, deps: FreeeDeps): Promise<Re
   } catch (e) {
     return readFailure(e);
   }
+}
+
+export type ReadAccount = { account: StatementAccount; walletable: { id: number; type: WalletTxn["walletable_type"] }; txns: WalletTxn[] };
+
+/** まだ処理していない明細（未処理で、登録待ちの金額が0より大きい）を、新しい順に（一覧の行の形） */
+export function openRows(read: ReadAccount[], companyId: number): ListedTxn[] {
+  const open: ListedTxn[] = [];
+  for (const r of read)
+    for (const t of r.txns)
+      if (t.company_id === companyId && t.walletable_id === r.walletable.id && t.walletable_type === r.walletable.type && isOpen(t))
+        open.push({ id: t.id, account: r.account, date: t.date, side: t.entry_side, description: t.description.slice(0, 200), amount: t.amount });
+  open.sort((a, b) => (a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1));
+  return open;
 }
 
 /** 本番の道具立て（窓口のファイルから呼ぶ） */

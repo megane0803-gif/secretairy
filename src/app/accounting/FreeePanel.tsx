@@ -43,6 +43,7 @@ export function FreeeConnectForm({ label }: { label: string }) {
 
 const CALLBACK_NOTE: Record<string, string> = {
   connected: "freee（テスト事業所）とつなぎました。",
+  "connected-cookie": "freee（テスト事業所）とつなぎました（このブラウザだけ。サーバーにつながりを置けなかったので、来た人はまだ試せません）。",
   state: "許可の合図が合わない・期限が過ぎたので止めました。もう一度つないでください。",
   denied: "freee で許可されなかったので、つないでいません。",
   failed: "freee から鍵を受け取れませんでした。もう一度つないでください。",
@@ -142,8 +143,13 @@ export function FreeePanel({ freee }: { freee: Freee }) {
 
   const onDisconnect = async (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted || busy || sending) return;
-    await freee.disconnect();
-    writeJournal({ who: "オーナー", text: "テスト事業所とのつなぎを外した（このブラウザの鍵を消した）" });
+    const r = await freee.disconnect();
+    if (!r.ok) {
+      // 外せなかった：cookie も鍵もそのまま（日誌は書かない）
+      setNote(r.reason);
+      return;
+    }
+    writeJournal({ who: "オーナー", text: "テスト事業所とのつなぎを外した（このブラウザの鍵とサーバーの鍵を消した）" });
   };
 
   const deals = dealIdsOf(record, keys);
@@ -171,6 +177,13 @@ export function FreeePanel({ freee }: { freee: Freee }) {
         freee から読み直す
       </button>
       <p className="hint">一覧を読むのは、経理のタブを開いた時と、このボタンを押した時だけです。</p>
+      {connected && freee.shared === true && <p className="hint">サーバーもつながりを持っています（来た人も、合言葉なしで試せます。試した物は元の形に戻します）。</p>}
+      {connected && freee.shared === false && <p className="hint">サーバーはつながりを持っていません（来た人は試せません）。もう一度つなぐと持ちます。</p>}
+      {connected && freee.trial === "repair" && (
+        <p className="problems" role="alert">
+          来た人の試しで、元の形に戻せなかった物があります（要復旧。来た人の登録は止めています）。freee の側で見本どおりの未処理に直してから、もう一度つないでください。
+        </p>
+      )}
       {callbackNote && (
         <p className="checked" role="status">
           {callbackNote}

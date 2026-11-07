@@ -29,6 +29,18 @@
     "sendingStaleSeconds": 120,
     "serverBudgetSeconds": 45,
     "importUnknownWaitSeconds": 120,
-    "maxImportCalls": 25
+    "maxImportCalls": 25,
+    "try": {
+      "holdSeconds": 300,
+      "maxItemsPerTrial": 2,
+      "lockSeconds": 120,
+      "refreshLockSeconds": 30,
+      "refreshMarginSeconds": 300,
+      "kvTokenDays": 30,
+      "trialKeepDays": 30,
+      "maxRequestChars": 300,
+      "register": { "daily": 100, "perMinute": 6, "perSenderDaily": 10 },
+      "read": { "daily": 600, "perMinute": 30, "perSenderDaily": 100 }
+    }
   }
 }

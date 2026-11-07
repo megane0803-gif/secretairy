@@ -14,7 +14,7 @@ import { md, yen } from "@/lib/accounting/sales";
 import { merchantName, USE_LABEL } from "@/lib/accounting/sort";
 import { register, registrationMessage, sortTrial } from "@/lib/accounting/state";
 import { useAccounting } from "@/lib/accounting/useAccounting";
-import type { useFreee } from "@/lib/freee/useFreee";
+import { useFreeeTry, type useFreee } from "@/lib/freee/useFreee";
 import { writeJournal, type JournalWho } from "@/lib/journal";
 import { DEMO_TAG_NOTE } from "@/lib/notices";
 import { FreeeConnectForm, useCallbackNote } from "./FreeePanel";
@@ -29,6 +29,8 @@ export function RegisterPanel({ freee }: { freee: ReturnType<typeof useFreee> })
   const { seed, settings, state, gate } = acct;
   const [trial, setTrial] = useState(false);
   const reg = state.registered;
+  // 来た人の窓口が「つながっていない」と答えた時の1行（オーナーがつなぎ直す。アプリの中の明細のまま）
+  const tryLine = useFreeeTry().line;
 
   const onRegister = (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted) return;
@@ -103,6 +105,11 @@ export function RegisterPanel({ freee }: { freee: ReturnType<typeof useFreee> })
         <p>
           <span className="tag text wrap">{settings.freee.unconnectedNote}</span>
         </p>
+        {tryLine && (
+          <p className="hint" role="status">
+            {tryLine}
+          </p>
+        )}
       </section>
       {callbackNote && (
         <p className="hint" role="status">
