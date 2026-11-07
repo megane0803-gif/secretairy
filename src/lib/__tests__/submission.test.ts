@@ -62,18 +62,48 @@ function tracked(): string[] {
 }
 
 describe("1. 安全の点検", () => {
-  test(".env で始まるファイルはリポジトリに入れない（.gitignore にもある）", () => {
+  test(".env で始まるファイルで追跡してよいのは一番上の .env.example だけ（.gitignore にもある）", () => {
     const files = tracked();
     assert.ok(files.length > 0, "git ls-files が読める");
-    assert.deepEqual(files.filter((f) => /(^|\/)\.env/.test(f)), []);
+    // .env・.env.local・.env.production・下のフォルダの .env.example などを追跡したら落ちる
+    assert.deepEqual(files.filter((f) => /(^|\/)\.env/.test(f) && f !== ".env.example"), []);
     const ignore = readFileSync(join(ROOT, ".gitignore"), "utf8");
     assert.match(ignore, /^\.env\*$/m);
+    assert.match(ignore, /^!\.env\.example$/m);
+    // 例外の行は .env* の後ろ（前にあると .env* に負けて効かない）
+    assert.ok(ignore.indexOf("!.env.example") > ignore.indexOf(".env*"));
+  });
+
+  test(".env.example は名前の見本だけ：値は全部空・名前はコードが読む環境変数", () => {
+    assert.ok(tracked().includes(".env.example"), ".env.example を追跡している");
+    const lines = readFileSync(join(ROOT, ".env.example"), "utf8").split(/\r?\n/);
+    const names: string[] = [];
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t || t.startsWith("#")) continue;
+      const m = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(t);
+      assert.ok(m, `名前=値 の形ではない行がある`);
+      assert.equal(m[2], "", `${m[1]} に値が入っている`);
+      names.push(m[1]);
+    }
+    assert.equal(new Set(names).size, names.length, "同じ名前が2回ある");
+    // コード（src の下。テストを除く）が読む環境変数の名前と同じ（Vercel が自動で入れる VERCEL_ で始まる物は除く）
+    const used = new Set<string>();
+    for (const p of walk(join(ROOT, "src")).filter((x) => /\.tsx?$/.test(x) && !x.includes("__tests__"))) {
+      const text = readFileSync(p, "utf8");
+      for (const m of text.matchAll(/\b(?:process\.env|env|e)\.([A-Z][A-Z0-9_]+)\b/g)) if (!m[1].startsWith("VERCEL_")) used.add(m[1]);
+    }
+    assert.deepEqual([...names].sort(), [...used].sort());
+    // README の「環境変数」の表にも全部の名前がある
+    const readme = readFileSync(join(ROOT, "README.md"), "utf8");
+    for (const n of names) assert.ok(readme.includes(`\`${n}\``), `README の表に ${n} が無い`);
   });
 
   test("鍵・トークンの形の物が、リポジトリのファイルに無い（ドキュメントは環境変数の名前だけ）", () => {
     const looksSecret = [
       /sk-ant-[A-Za-z0-9_-]{10,}/,
-      /\b(ANTHROPIC_API_KEY|LINE_CHANNEL_SECRET|LINE_CHANNEL_ACCESS_TOKEN|KV_REST_API_TOKEN|LINE_OWNER_PASSCODE)\s*=\s*["']?[A-Za-z0-9+/_-]{8,}/,
+      // 名前=値（.env.example のように値が空なら当たらない。改行の先は見ない）
+      /\b(ANTHROPIC_API_KEY|LINE_CHANNEL_SECRET|LINE_CHANNEL_ACCESS_TOKEN|KV_REST_API_TOKEN|UPSTASH_REDIS_REST_TOKEN|LINE_OWNER_PASSCODE|FREEE_CLIENT_SECRET|FREEE_COOKIE_KEY)[ \t]*=[ \t]*["']?[A-Za-z0-9+/_-]{8,}/,
       /Bearer\s+[A-Za-z0-9._-]{30,}/,
       /AKIA[0-9A-Z]{16}/,
       /-----BEGIN [A-Z ]*PRIVATE KEY-----/,

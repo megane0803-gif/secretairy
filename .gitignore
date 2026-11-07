@@ -9,6 +9,7 @@ next-env.d.ts
 
 # 鍵・秘密（Claude API キー、LINE のチャネル秘密、オーナー用の合言葉など）
 .env*
+!.env.example
 
 # ログ
 npm-debug.log*

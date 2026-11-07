@@ -27,6 +27,8 @@
 お客様の予約は AI が「仮押さえ」まで。確定はオーナーがボタンを押します。
 お客様・店・数字はすべて架空です（店の名前「omochi」も架空です）。
 
+デモ動画：準備中（提出の前にここにリンクを入れます）
+
 ### よく出てくる言葉
 
 | 言葉 | 意味 |
@@ -107,6 +109,31 @@ AI の費用は1店あたり多くて月3,000円ほど（試算）。お店の�
 
 上限はどれも `config/ai.json` と `config/line.json` にあります（お客様の1回の文の長さ・返事の長さ・1回の相談で道具を呼ぶ回数・LINE の1日の送る通数 など）。AI を呼ぶ窓口は全部 `/api/ai/` の下にあり、Vercel の Firewall で `/api/ai/` を1分10回までにしています。
 
+## 使った技術と、動くのに要る環境
+
+### 使った技術
+
+版は `package-lock.json` に入っている版です（`package.json` の幅の中）。
+
+| 名前 | 版 | 使い道 |
+|---|---|---|
+| Next.js（App Router） | 16.4.3 | 画面とサーバーの窓口 |
+| React | 19.3.1 | 画面 |
+| TypeScript | 5.9.3 | 型 |
+| Claude API（Anthropic の SDK `@anthropic-ai/sdk`） | 1.4.0 | AI（モデル名は `config/ai.json`） |
+| Upstash Redis | （SDK なし。公開の API を `fetch` で呼ぶ） | LINE のつなぎと試験10問の見張り（期限つき） |
+| Vercel | （サービス） | 公開・環境変数・Firewall |
+
+ほかのライブラリ・モデル・サービスは、下の「使った物と権利」にあります。
+
+### 動くのに要る環境
+
+- Node.js：Next.js 16.4.3 が求める版は `>=20.9.0` です（`node_modules/next/package.json` の `engines`）。この直しで確かめに使ったのは Node.js v22.23.4・npm 10.9.9 です。ほかの版では確かめていません。
+- 鍵が無くても画面は開きます（下の「動かし方」）。AI・LINE・試験10問・freee に要る鍵は、下の「環境変数」の表にあります。
+- 録音からメモを作るのは PC のブラウザだけです（「録音フォルダを選ぶ」は PC の Chrome・Edge だけ）。くわしくは下の「録音からメモを作る（カルテのタブ・PC だけ）」。
+- LINE とつなぐには、LINE の鍵と Redis が要ります（下の「LINE とつなぐ（オーナー側）」）。
+- 経理の freee（テスト事業所）は、本番のサイトでオーナーのブラウザだけがつなげます（下の「経理の freee（テスト事業所）につなぐ（オーナーのブラウザだけ）」）。
+
 ## 動かし方
 
 ```bash
@@ -133,7 +160,9 @@ npm run build      # 本番ビルド
 
 ### 環境変数
 
-手元では `.env.local`、Vercel では環境変数に入れます。中身はリポジトリに書きません（`.env` で始まるファイルはコミットしません）。
+手元では `.env.local`、Vercel では環境変数に入れます。中身はリポジトリに書きません（`.env` で始まるファイルは、値が空の名前の見本 `.env.example` のほかはコミットしません）。
+
+名前の見本は [.env.example](.env.example)（値は空）。手元では `.env.local` に写して値を入れます。
 
 | 名前 | 要る？ | 中身 |
 |---|---|---|
@@ -148,7 +177,12 @@ npm run build      # 本番ビルド
 | `LINE_CHANNEL_ACCESS_TOKEN` | LINE を使うとき | LINE に返事・送るときの鍵 |
 | `LINE_OWNER_PASSCODE` | 任意 | オーナー用の合言葉。あれば「LINE とつなぐ」を押す時にこの合言葉を求める。無ければ求めない |
 | `EVAL_PASSCODE` | 試験10問を流すとき | 試験（`/eval`）の合言葉。無ければ試験は動かない（中身はどこにも書かない） |
-| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | LINE を使うとき | Upstash Redis（Vercel がつないだときに自動で入る名前。`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` でも読む） |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | LINE を使うとき・試験10問を流すとき | Upstash Redis（Vercel がつないだときに自動で入る名前。`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` でも読む）。試験の「流している印」「呼んだ回数」にも使う |
+| `FREEE_CLIENT_ID` / `FREEE_CLIENT_SECRET` | freee を使うとき（Production だけ） | freee のアプリの番号と秘密 |
+| `FREEE_COMPANY_ID` | freee を使うとき（Production だけ） | テスト事業所の番号。空なら、許可の後に番号を出して止める |
+| `FREEE_COOKIE_KEY` | freee を使うとき（Production だけ） | freee の鍵を入れる cookie を暗号化する専用の鍵（32バイトを base64 にした文字） |
+
+`VERCEL_ENV`（freee の窓口を本番だけで動かす）と `VERCEL_GIT_COMMIT_SHA`（試験の表に出すコミット）は、Vercel が自動で入れる名前なので、自分では入れません。
 
 ## データの置き場所
 
@@ -328,6 +362,70 @@ AI が店の決まりを守るかを、10問で確かめる試験です。問い
 
 - モデル（設定）は 予約 `claude-sonnet-5-5`／カルテ `claude-haiku-5-5`／発信 `claude-sonnet-5-5`（AI）です。
 - #37 を main に入れたコミットで、1回流しました（試験の問い・合格の条件・見張りは上の3回と同じです）。
+
+## 提出前の確かめ
+
+2026年11月7日に、main のコミット `57b8d6f` で確かめました（この節を足した直しの中で、自分で動かした結果だけを書いています）。鍵・トークン・合言葉の値は、ここにも書きません。
+
+「0件」は、下に書いた決まりで調べて見つからなかった、という意味です。安全の保証ではありません。
+
+### Git の履歴
+
+- 取り込んだ参照：GitHub にある全部のブランチ（50本・main を含む）と、プルリクエストの参照 `refs/pull/*/head`（56本）。ほかに `refs/pull/*/merge`（2本）。`git clone --mirror` で取り込み、浅い写しではないことを `git rev-parse --is-shallow-repository`（false）で確かめました。コミットは全部で195個（マージでない物99個・マージ96個）。
+- gitleaks 8.24.3（公式の配布物。checksum を確かめて使用）：`gitleaks git --redact --log-opts="--all"`（値を伏せる・全部の参照）。99個のコミットを調べ、見つかった物は0件。gitleaks はマージのコミットの差分を見ないので、下の自分の決まりでマージも調べました。
+- 自分で書いた決まり（正規表現）：全部の195個のコミットの差分（マージは `git show -m` で親ごとの差分）の足された行と、コミットの文を調べました。調べた形：Anthropic の鍵（`sk-ant-`）・`sk-` で始まる鍵・GitHub のトークン（`ghp_` など・`github_pat_`）・AWS の鍵（`AKIA`／`ASIA`・`aws_secret_access_key`）・Google の鍵（`AIza`）・Slack のトークン・Stripe の本番の鍵・秘密鍵（`BEGIN … PRIVATE KEY`）・JWT・資格情報つきの URL・`Bearer` の後の長い文字・環境変数の名前のあとに値が続く物・40字以上の base64 の形・メールアドレス・電話番号（日本の形と「+国番号」の形）。
+- 結果：鍵の形は0件。当たった物は全部見て、鍵ではないと確かめました。
+  - 環境変数の名前のあとに値が続く物：テストの中の作り物の値（例：`test-channel-secret`）・保存しておいた値を戻す行・コメントの文だけ。
+  - 40字以上の base64 の形：コミットの文の Claude Code の作業の URL・ブランチの名前・ソースの区切りの線（`----`）・README と AGENTS.md の URL と道のりだけ。
+  - メールアドレス：差分の中は0件。コミットの文の中は `noreply@anthropic.com`（共同の作者の行）だけ。コミットの作者と登録者のメールは、GitHub の noreply・GitHub・Anthropic の3つの形だけ。
+  - 電話番号：0件。
+
+### 依存のライブラリ
+
+- `npm audit --omit=dev`（本番の依存）：0件。
+- `npm audit`（開発用も含めた全部）：0件。
+
+### 本番の画面
+
+- https://secretairy.vercel.app の10ページ（`/`・`/home`・`/reservations`・`/karte`・`/ads`・`/accounting`・`/posts`・`/todo`・`/rules`・`/eval`）の HTML と、そこから読む `/_next/static` の36個（JavaScript 34個・`.mjs` 1個・CSS 1個。後から読む物も、ファイルの中の参照をたどって取りました）を取り、上と同じ鍵の形と、環境変数の名前のあとに値が続く物・Upstash のホスト名を調べました。
+- 結果：鍵の形は0件。環境変数の名前は、画面の案内の文の中に2つ（`LINE_CHANNEL_ACCESS_TOKEN`・`LINE_OWNER_PASSCODE`。どちらも名前だけ）。値は0件。
+
+### 動かして確かめる（知らない人の状態）
+
+本番（https://secretairy.vercel.app）で、鍵・cookie・合言葉を持たずに呼びました。どの返事にも、鍵の形・環境変数の値・ほかの人のデータはありませんでした。
+
+| 窓口 | 呼び方 | 返ってきた形 |
+|---|---|---|
+| `/api/freee/status` | GET（cookie なし） | 401 `no-cookie` |
+| `/api/freee/import`・`/api/freee/register`・`/api/freee/check`・`/api/freee/disconnect` | POST・Origin は本番（cookie なし） | 401 `no-cookie` |
+| `/api/freee/import`・`/api/freee/register` | POST・Origin なし／ほかのサイト | 403 `origin` |
+| `/api/freee/import`・`/api/freee/start` | GET | 405 `method` |
+| `/api/freee/callback` | GET（合図なし） | 303（`/accounting` に戻す。合図の cookie を消す） |
+| `/api/line/send`・`/api/line/poll` | POST（つないだ印なし） | 400 `bad-request` |
+| `/api/line/send`・`/api/line/poll` | POST（作り物の印） | 200 `ok: false`・`gone` |
+| `/api/line`（Webhook） | POST（署名なし／ちがう署名） | 401 |
+| `/api/eval` | POST（合言葉なし／ちがう合言葉） | 401 `wrong` |
+| `/api/ai/karte` | POST を1回だけ（AI・作り物のメモ） | 200（カルテの下書きだけ） |
+
+AI の窓口は1回だけ呼びました（回数の上限を試すために何度も呼んでいません）。
+
+### だれでも呼べる窓口の守り（今の作り）
+
+- AI の窓口（`/api/ai/`）：審査のため、だれでも呼べます。受け取る大きさ・文の長さ・返事の長さ・道具の回数の上限は `config/ai.json` で、大きすぎる物は 413 で受けません（`src/lib/__tests__/submission.test.ts`）。受け取った物は残しません。1分10回までは Vercel の Firewall で決めています（この直しでは設定を確かめていません）。
+- 試験（`/api/eval`）：合言葉 `EVAL_PASSCODE` が合う時だけ（ハッシュどうしで比べる）。上の表のとおり、合言葉が無い・ちがう時は 401。
+- LINE（`/api/line`）：届いた知らせは `LINE_CHANNEL_SECRET` で署名を確かめ、違えば 401。送る・受け取る（`/api/line/send`・`/api/line/poll`）は、つなぐ番号でつないだ印が無ければ動きません。オーナー用の合言葉 `LINE_OWNER_PASSCODE` は任意。
+- freee（`/api/freee/`）：本番のサイトだけ・書く物は POST と Origin の確かめ・つないだオーナーのブラウザの暗号化した cookie がある時だけ（上の表の 401・403・405）。
+
+### 動かし方の手順
+
+- 「動かし方」のとおり、`.env.local` を置かずに `npm install` → `npm run dev` → http://localhost:3000 を開き、`/home` に移って画面が開くことを確かめました（Chromium。10ページとも 200・ページのエラー0件）。
+
+### 確かめていない範囲
+
+- Vercel の Firewall・環境変数の設定、本番にどのコミットが出ているか、プレビューの URL。
+- GitHub のリポジトリの設定（この直しでは変えません。オーナーが見ます）・フォーク・GitHub の外にある物。
+- 本物の鍵を入れた時の LINE・freee の動き、AI の窓口の回数の上限。
+- Claude Security での点検。
 
 ## 使った物と権利
 
