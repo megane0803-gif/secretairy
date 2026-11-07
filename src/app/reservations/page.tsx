@@ -35,7 +35,7 @@ export default function ReservationsPage() {
         <WeekTimetable data={data} />
 
         <section className="inline-box after-right-sp" aria-labelledby="res-approvals">
-          <h2 id="res-approvals">承認待ちの予約（ホームの承認の箱と同じ行）</h2>
+          <h2 id="res-approvals">承認待ちの予約（ホームの承認BOXと同じ行）</h2>
           <ApprovalBox data={data} compact only="reservations" />
         </section>
 

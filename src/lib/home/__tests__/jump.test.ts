@@ -26,7 +26,7 @@ describe("ホーム：数字のカードの飛ぶ先", () => {
 
   it("飛ぶ先の id がホームの画面にある", () => {
     assert.match(summary, /id="customers"\s+anchor="customers"/, "今日のお客様の欄に id");
-    assert.match(page, /<Panel title="承認の箱" id="approvals"/, "承認の箱に id");
+    assert.match(page, /<Panel title="承認BOX" id="approvals"/, "承認BOXに id");
   });
 
   it("4枚のカードがそれぞれの先へリンクになっている", () => {

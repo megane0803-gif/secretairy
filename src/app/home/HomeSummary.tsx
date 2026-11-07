@@ -124,7 +124,7 @@ export function HomeSummary({
               <JumpLink to="customers" className="bignum-link" title="今日のお客様を見る">
                 <BigNumber label="今日の予約" value={book.book.todayCount} unit="件" go="↓" />
               </JumpLink>
-              <JumpLink to="approvals" className="bignum-link" title="承認の箱を見る">
+              <JumpLink to="approvals" className="bignum-link" title="承認BOXを見る">
                 <BigNumber label="承認待ち" value={approvals.count} unit="件" go="↓" />
               </JumpLink>
               <Link href={TABS.todo.path} className="bignum-link" title="ToDo のタブで見る（期限が今日の物）">

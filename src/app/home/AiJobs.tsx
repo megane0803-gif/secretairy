@@ -35,11 +35,11 @@ type Phase = "running" | { note: string };
 
 /** 何が動いて、結果がどこへ行くか（短く） */
 const FLOW: Record<JobId, string> = {
-  reserve: "AI が返事をして仮押さえ → 承認の箱へ",
+  reserve: "AI が返事をして仮押さえ → 承認BOXへ",
   card: "自動のルールで仕分け → 迷う物は経理タブへ",
-  ads: "AI が案を1つ → 確かめて承認の箱へ",
+  ads: "AI が案を1つ → 確かめて承認BOXへ",
   memo: "AI が ToDo の文に → ToDo へ",
-  site: "空いている枠に入る → 台帳へ（承認の箱は通さない・AI なし）",
+  site: "空いている枠に入る → 台帳へ（承認BOXは通さない・AI なし）",
 };
 
 /** 一覧の欄の id（上のボタンから開いて、見える所まで動かす） */
@@ -183,7 +183,7 @@ export function AiJobsRunBar() {
       {noAi && (
         <div className="noai" role="alert">
           <strong>{NO_AI_MESSAGE}</strong>
-          <span>承認の箱・ToDo・経理など、ほかの画面はそのまま使えます。</span>
+          <span>承認BOX・ToDo・経理など、ほかの画面はそのまま使えます。</span>
           <button
             type="button"
             className="btn small"
@@ -297,8 +297,8 @@ function DoneLink({ done }: { done: JobDone }) {
   const to = jobDoneLink(done);
   if (to.kind === "approvals")
     return (
-      <JumpLink to="approvals" title="このページの承認の箱へ">
-        承認の箱で決める ↓
+      <JumpLink to="approvals" title="このページの承認BOXへ">
+        承認BOXで決める ↓
       </JumpLink>
     );
   return <Link href={TABS[to.tab].path}>{TABS[to.tab].label}のタブへ →</Link>;

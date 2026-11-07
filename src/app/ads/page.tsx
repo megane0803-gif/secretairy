@@ -37,7 +37,7 @@ export default function AdsPage() {
       <AdsWeeks />
 
       <section className="inline-box" aria-labelledby="ads-approvals">
-        <h2 id="ads-approvals">承認待ち（ホームの承認の箱と同じ行）</h2>
+        <h2 id="ads-approvals">承認待ち（ホームの承認BOXと同じ行）</h2>
         <AdApprovalRows seedRules={seedRules} standalone />
       </section>
 
