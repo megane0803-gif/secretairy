@@ -3,7 +3,7 @@
 // 予約チャット（お客様のスマホ画面のつもり）。予約タブの右の列。
 // 送るたびに、このブラウザの台帳とルールをいっしょに /api/ai/reserve へ送り、返事を少しずつ受け取る。
 // サーバーは何も残さない。仮押さえ・日誌・AI の手順を残すのは、この画面（ブラウザ）の側。
-// AI は仮押さえまで。確定はオーナーが承認の箱で押す。
+// AI は仮押さえまで。確定はオーナーが承認BOXで押す。
 // 「最初に戻す」を押したら、戻す前に始まった返事は止め、戻した後に届いた知らせ（仮押さえなど）は捨てる（台帳の印 epoch）。
 // 返事が途中で切れたら「返事が途中で切れました。もう一度送ってください。」と出す（受け取った仮押さえがあればそれも。ai/reserveStream.ts）。
 // AI の窓口が混んでいる時（429）は、混んでいる時の1文を出す（ai/busy.ts）。
@@ -239,7 +239,7 @@ export function ReserveChat({ data }: { data: BookData }) {
           mine.add(h.id);
           setConvHolds((l) => (l.includes(h.id) ? l : [...l, h.id]));
           held.push(candidateLabel(book.data, h));
-          writeJournal({ who: "AI", text: `仮押さえした：${who} ${candidateLabel(book.data, h)}（承認の箱へ）` });
+          writeJournal({ who: "AI", text: `仮押さえした：${who} ${candidateLabel(book.data, h)}（承認BOXへ）` });
           break;
         }
         case "release": {
@@ -249,7 +249,7 @@ export function ReserveChat({ data }: { data: BookData }) {
           book.update((s) => (sameEpoch(s, epoch) ? withGuestReleased(s, e.holdId, customer.id, new Date().toISOString()) : s));
           mine.delete(e.holdId);
           setConvHolds((l) => l.filter((x) => x !== e.holdId));
-          writeJournal({ who: "AI", text: `仮押さえを外した（${who}の頼み）：${r ? candidateLabel(book.data, r) : e.holdId}（承認の箱から外した）` });
+          writeJournal({ who: "AI", text: `仮押さえを外した（${who}の頼み）：${r ? candidateLabel(book.data, r) : e.holdId}（承認BOXから外した）` });
           break;
         }
         case "todo": {
@@ -299,7 +299,7 @@ export function ReserveChat({ data }: { data: BookData }) {
       if (end === "cut" && live()) {
         // 終わりの印が来ないまま切れた：黙らずに知らせる（受け取った仮押さえは入っている。送り直しても2つにしない）
         setMsgs((m) => [...m, { from: "note", text: cutNotice(held) }]);
-        writeJournal({ who: "プログラム", text: `予約チャットの返事が途中で切れた（${who}の相談${held.length ? `。仮押さえ ${held.join("・")} は承認の箱に入れた` : ""}）` });
+        writeJournal({ who: "プログラム", text: `予約チャットの返事が途中で切れた（${who}の相談${held.length ? `。仮押さえ ${held.join("・")} は承認BOXに入れた` : ""}）` });
         scroll();
       }
       if (useMode === "ai" && !aiFailed && live()) setNoAi(false);
@@ -382,7 +382,7 @@ export function ReserveChat({ data }: { data: BookData }) {
       {noAi && (
         <div className="noai" role="alert">
           <strong>{NO_AI_MESSAGE}</strong>
-          <span>台帳・承認の箱・ルールなど、ほかの画面はそのまま使えます。</span>
+          <span>台帳・承認BOX・ルールなど、ほかの画面はそのまま使えます。</span>
           <button type="button" className="btn small" onClick={trySample} disabled={busy}>
             決まった返事で試す（AI なし）
           </button>
@@ -456,7 +456,7 @@ export function ReserveChat({ data }: { data: BookData }) {
         </p>
       )}
       <p className="chat-note">
-        AI は「仮押さえ」まで。確定はお店（承認の箱）で人が押します。
+        AI は「仮押さえ」まで。確定はお店（承認BOX）で人が押します。
       </p>
     </div>
   );

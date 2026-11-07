@@ -31,7 +31,7 @@ export function instructionsFor(
   lines.push("# 店の決まり（オーナーが書いた文）");
   if (texts.length === 0) lines.push("- （この場面に効く文の決まりはありません）");
   for (const r of texts) lines.push(`- [${scopeTag(r, menuName)}] ${r.label}`);
-  lines.push("- 文の決まりどうしがぶつかって決められないときは、進めずに「承認の箱に回します」と返す。");
+  lines.push("- 文の決まりどうしがぶつかって決められないときは、進めずに「承認BOXに回します」と返す。");
 
   if (verdict) {
     lines.push("");

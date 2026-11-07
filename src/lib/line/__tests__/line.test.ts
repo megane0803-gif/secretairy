@@ -291,7 +291,7 @@ describe("承認のボタン：つないだオーナーだけ・1つの行で1�
     assert.equal(p.events.length, 1);
   });
 
-  test("画面の側でも、同じ行は1回だけ確定する（承認の箱のボタンと同じ変え方）", () => {
+  test("画面の側でも、同じ行は1回だけ確定する（承認BOXのボタンと同じ変え方）", () => {
     const now = at("2026-11-04", "09:00");
     const nowIso = now.toISOString();
     const ctx = ctxAt(now);
@@ -437,7 +437,7 @@ describe("一言の振り分け（決まった返事で。Claude と LINE は呼
       karte: null,
       memoMax: 1500,
     });
-    // 仮押さえで承認の箱に1行。確定はしていない
+    // 仮押さえで承認BOXに1行。確定はしていない
     assert.equal(out.book.chat[0].status, "hold");
     assert.equal(pendingApprovals(out.book, now.toISOString()).length, 1);
     assert.match(out.reply, /^仮押さえしました：青木様/);

@@ -58,9 +58,9 @@ export const RIGHT_KEY = "rightWidth";
 export const TABS_KEY = "tabSwitches";
 /** オーナーが足した・直した・消したルール（例のルールに重ねる分） */
 export const RULES_KEY = "rules";
-/** 予約チャットから入った予約・承認の箱・足した ToDo・起点の日（book/state.ts） */
+/** 予約チャットから入った予約・承認BOX・足した ToDo・起点の日（book/state.ts） */
 export const BOOK_KEY = "book";
-/** 広告の承認の箱・止めた／外した言葉（ads/state.ts） */
+/** 広告の承認BOX・止めた／外した言葉（ads/state.ts） */
 export const ADS_KEY = "ads";
 /** 経理：通販の明細で選んだ印・会計への登録・足した自動のルール（accounting/state.ts） */
 export const ACCOUNTING_KEY = "accounting";

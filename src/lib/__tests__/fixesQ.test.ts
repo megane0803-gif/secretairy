@@ -173,7 +173,7 @@ describe("1-3. 画面から送られる相談の中身", () => {
   });
 });
 
-describe("1-4. ルールの判定と承認の箱", () => {
+describe("1-4. ルールの判定と承認BOX", () => {
   test("判定の入口で、暦に無い日付は受けない（店の設定の確かめ・ルールに進まない）", () => {
     const c = ctxAt(NOW);
     for (const d of BAD) {
@@ -204,7 +204,7 @@ describe("1-4. ルールの判定と承認の箱", () => {
     assert.equal(past.base.find((b) => b.id === "future")?.ok, false);
   });
 
-  test("承認の箱：暦に無い日付の仮押さえは確定しない。ふつうの日付は今どおり", () => {
+  test("承認BOX：暦に無い日付の仮押さえは確定しない。ふつうの日付は今どおり", () => {
     const now = { date: "2026-11-04", time: "09:00" };
     for (const d of BAD) assert.match(approveBlocker(shop, now, { date: d, start: "15:00" }) ?? "", /日付が暦にないので確定できません/, d);
     assert.equal(approveBlocker(shop, now, { date: "2026-11-05", start: "15:00" }), null);
@@ -348,7 +348,7 @@ describe("2. LINE のボタンで確定した時に、書けたかを見る", ()
       const again = commitPress(press({ id: "e2" }), store, ctx(), "r-1");
       assert.equal(again.written, true);
       assert.equal(m.book.chat[0].status, "confirmed");
-      // 画面の承認の箱で押しなおしても同じ変え方で確定できる
+      // 画面の承認BOXで押しなおしても同じ変え方で確定できる
       assert.equal(withApproved(held(), "ap-h1", nowIso).chat[0].status, "confirmed");
     });
 

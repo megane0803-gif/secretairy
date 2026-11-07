@@ -41,7 +41,7 @@ export type ChatReservation = {
   /** 仮押さえの期限（ISO）。確定した物には使わない */
   expiresAt: string;
   /**
-   * site = 予約サイトから入った予約（お客様が自分で決めたので、承認の箱は通さずに確定で入る。book/site.ts）
+   * site = 予約サイトから入った予約（お客様が自分で決めたので、承認BOXは通さずに確定で入る。book/site.ts）
    * owner = オーナーが台帳から入れた予約（電話・店頭で受けた物。人のボタンで確定。book/owner.ts）
    */
   via?: "site" | "owner";

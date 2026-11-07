@@ -5,7 +5,7 @@
 //   2. 売りの言葉が入っている（featured.ts の featuredWordIn。空白を除いて比べる）
 //   3. その4週で予約が1件以上ある
 //   4. まだ足していない・外していない・見送っていない（もう「広告を出す言葉」にある・足す案が承認待ち、もここ）
-// 承認の箱に入れる前に、画面でもう一度ここで確かめる（addRowsFrom）。承認する時も（state.ts の approveAdd）。
+// 承認BOXに入れる前に、画面でもう一度ここで確かめる（addRowsFrom）。承認する時も（state.ts の approveAdd）。
 
 import { featuredWordIn } from "./featured";
 import type { AdWeek } from "../data/types";
@@ -91,13 +91,13 @@ export function addCandidates(table: AdTable, words: readonly string[], opts: { 
     .sort((a, b) => b.total.bookings - a.total.bookings || b.total.clicks - a.total.clicks || a.no - b.no);
 }
 
-/** 承認の箱に入れる足す案の1行（id と門の印つき） */
+/** 承認BOXに入れる足す案の1行（id と門の印つき） */
 export type AddRow = { id: string; no: number; reason: string; checks: AddCheck[] };
 
 /**
  * サーバーから受け取った足す案を、画面でもう一度確かめる（候補の4つ・理由の言葉の門・同じ番号は1つ・上限）。
  * skipNo = 同じ見直しで「外す」案にした調べ言葉（同じ言葉を外して足す、を同じ回に出さない）。
- * 通らなかった物は承認の箱に入れず、日誌の1行（プログラム）にする。
+ * 通らなかった物は承認BOXに入れず、日誌の1行（プログラム）にする。
  */
 export function addRowsFrom(
   table: AdTable,

@@ -193,7 +193,7 @@ export function LinePanel({ data, headings, needsPasscode = false }: { data: Boo
         <ul className="line-notes">
           <li>LINE からの知らせは、店の LINE の秘密で署名を確かめ、違う物は捨てます。つながっていない人の LINE では何も動きません。</li>
           <li>画面が閉じている時に LINE が来たら「画面を開いている間だけ動きます」と返します。</li>
-          <li>予約は予約チャットと同じ道具とプログラムの判定を通し、仮押さえまで。確定は、承認の箱か LINE の「承認」ボタン（つないだ LINE の人だけ・1つの行で1回だけ）。</li>
+          <li>予約は予約チャットと同じ道具とプログラムの判定を通し、仮押さえまで。確定は、承認BOXか LINE の「承認」ボタン（つないだ LINE の人だけ・1つの行で1回だけ）。</li>
           <li>
             返事で済む時は返事で返します（数えない）。送る（数える）のは承認待ちの知らせと朝の要点で、1日 {settings.dailyPushLimit}通まで（無料は月200通）。
           </li>

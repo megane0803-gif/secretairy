@@ -1,7 +1,7 @@
 "use client";
 
 // 画面に1つだけの、広告のテスト用アカウントの流れ（livePanel）と、つながっているかの札（直しU・docs/SPEC.md §1.7.8）。
-// 承認から呼ぶ「試す」（AdApprovalRows・AdAddRow。広告のタブとホームの承認の箱）・「読み直す」ボタンと一覧（AdsLiveRead）・
+// 承認から呼ぶ「試す」（AdApprovalRows・AdAddRow。広告のタブとホームの承認BOX）・「読み直す」ボタンと一覧（AdsLiveRead）・
 // 「くわしく」のオーナーの「用意」「送る」（AdsLive）が、みなこの1つを使う（押している間の印・頼みの番号・epoch・遅れた返事を出さない、を共にする）。
 // 札はページを開いてから1回だけ GET する（Google は呼ばない）。失敗した時は「分からない」（つないでいない、とは分ける）。
 
@@ -112,7 +112,7 @@ export function useLiveLink(): LiveLink {
 }
 
 /**
- * 承認した後に1回だけ試す（広告のタブとホームの承認の箱の、止める・外す・足す）。LINE のボタンの承認と戻す案からは呼ばない。
+ * 承認した後に1回だけ試す（広告のタブとホームの承認BOXの、止める・外す・足す）。LINE のボタンの承認と戻す案からは呼ばない。
  * つないでいない・分からない時は呼ばない（承認は作品の中だけで効いている）。返事が届かなくても呼び直さない。
  */
 export async function tryAfterApprove(it: { kind: TryKind; no: number; text: string }): Promise<"started" | "off" | "unknown" | "not-run"> {

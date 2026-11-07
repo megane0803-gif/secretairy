@@ -2,12 +2,12 @@
 // 承認して止めた（外した）言葉ごとに、判定日（承認の checkAfterDays 日後。ToDo「効いたか見る」の期限）に、
 // 前（止める前の同じ週の数）と後（止めた後の数。最初の状態に架空の数として置いた seed/ads.json の after）を比べる。
 //   数が少なくて分からない → まだ分からない（その言葉の押された回数が少ない・予約が少ない・後の数が無い）
-//   予約が減った           → 戻す案（戻すのは取り消せない操作なので、承認の箱に入れる。決めるのは人）
+//   予約が減った           → 戻す案（戻すのは取り消せない操作なので、承認BOXに入れる。決めるのは人）
 //   お金が減って予約が減っていない → 効いた
 //   （お金が減っていない   → まだ分からない）
 // 結果は広告タブのカード・日誌・ToDo（判定日の行を済みにする）に出す。
 //
-// 🔒 確定は人：戻す（approveRevert）を呼ぶのは、人が承認の箱の「承認」を押したときだけ。判定そのものは何も止めも戻しもしない。
+// 🔒 確定は人：戻す（approveRevert）を呼ぶのは、人が承認BOXの「承認」を押したときだけ。判定そのものは何も止めも戻しもしない。
 
 import { calDay, shopNow } from "../calendar";
 import type { AdReport, AdWeek } from "../data/types";
@@ -59,7 +59,7 @@ export function judgeNumbers(
   if (x.before.bookings + x.after.bookings < rule.minBookings)
     return { verdict: "unknown", why: "予約の数が少なく、違いがたまたまかどうか分からないので、まだ分かりません。" };
   if (x.after.bookings < x.before.bookings)
-    return { verdict: "revert", why: `予約が減りました。${x.action === "stop" ? "止める" : "外す"}前に戻す案を、承認の箱に入れました。` };
+    return { verdict: "revert", why: `予約が減りました。${x.action === "stop" ? "止める" : "外す"}前に戻す案を、承認BOXに入れました。` };
   if (x.after.cost < x.before.cost) return { verdict: "worked", why: "お金が減って、予約は減っていません。" };
   return { verdict: "unknown", why: "お金が減っていないので、まだ分かりません。" };
 }
@@ -128,7 +128,7 @@ export function judgementLine(j: AdJudgement, channel: string): string {
 }
 
 /**
- * 判定を入れる：判定（広告タブのカード）・ToDo（判定日の行を済みに）・日誌。戻す案なら承認の箱に1行（judgement.revert）。
+ * 判定を入れる：判定（広告タブのカード）・ToDo（判定日の行を済みに）・日誌。戻す案なら承認BOXに1行（judgement.revert）。
  * 同じ言葉（承認した案）は2回判定しない。止めた・外した言葉そのものは変えない。
  */
 export function withJudged(
@@ -159,7 +159,7 @@ export function withJudged(
   return { ads: { ...ads, judgements: [...made, ...(ads.judgements ?? [])] }, book: nextBook, journal, made };
 }
 
-/** 承認の箱の「戻す案」（承認待ちの物があれば、古い順に1つ） */
+/** 承認BOXの「戻す案」（承認待ちの物があれば、古い順に1つ） */
 export function pendingRevert(ads: AdsState): AdJudgement | null {
   const list = (ads.judgements ?? []).filter((j) => j.revert?.state === "pending");
   return list.sort((a, b) => a.judgedAt.localeCompare(b.judgedAt))[0] ?? null;
@@ -171,7 +171,7 @@ export function revertLabel(j: Pick<AdJudgement, "no" | "text" | "action">): str
 }
 
 /**
- * 🔒 戻す案の「承認」：広告の管理画面で、止めた（外した）言葉を元に戻す。人が承認の箱の「承認」を押したときだけ呼ぶ。
+ * 🔒 戻す案の「承認」：広告の管理画面で、止めた（外した）言葉を元に戻す。人が承認BOXの「承認」を押したときだけ呼ぶ。
  * 戻すと判定はそのまま残る（日誌にも）。止めた言葉の一覧から外れるので、次の見直しでまた選べる。
  */
 export function approveRevert(ads: AdsState, id: string, nowIso: string, channel: string): { ads: AdsState; journal: Journal } {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useApprovals } from "@/lib/useApprovals";
 
-/** どのタブにも出す1行。押すとホーム（承認の箱）へ行く。数は承認の箱の行の数（approvals.ts） */
+/** どのタブにも出す1行。押すとホーム（承認BOX）へ行く。数は承認BOXの行の数（approvals.ts） */
 export function PendingBar() {
   const n = useApprovals().count;
   return (

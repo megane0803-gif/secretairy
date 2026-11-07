@@ -144,7 +144,7 @@ describe("2. 週を動かす：7日ずつ・端の週も7列・最初と最後�
     const a = viewWeek(shop, TODAY, v0.all, "2026-11-18", range0);
     assert.equal(v0.clock.today.date, "2026-11-04");
     assert.ok(a.every((d) => !d.isToday));
-    // 台帳の確かめ・承認の箱・ホームは book.book（今日からの7日）のまま。画面は見ている週を別の所から読む
+    // 台帳の確かめ・承認BOX・ホームは book.book（今日からの7日）のまま。画面は見ている週を別の所から読む
     assert.match(read("src/app/reservations/WeekTimetable.tsx"), /timetable\(view\.days,/);
     assert.match(read("src/app/reservations/Ledger.tsx"), /view\.days\.map/);
   });

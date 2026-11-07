@@ -296,7 +296,7 @@ export function RuleForm({
               aria-label="ルールの文"
             />
             <small className="hint">
-              文のルールはプログラムでは確かめず、AI（Claude）への指示に入れます。AI の答えは承認の箱を通るので、最後は人が見ます。
+              文のルールはプログラムでは確かめず、AI（Claude）への指示に入れます。AI の答えは承認BOXを通るので、最後は人が見ます。
             </small>
           </>
         )}

@@ -42,7 +42,7 @@ describe("1. どの行にどの印か（stepMarks.ts）", () => {
 
   test("仮押さえ・外す・聞き返す・代わりを調べる・ToDo・料金は →", () => {
     for (const s of [
-      { kind: "hold", text: "仮押さえ：11/12（木）10:00 カット（承認の箱へ。期限は24時間）" },
+      { kind: "hold", text: "仮押さえ：11/12（木）10:00 カット（承認BOXへ。期限は24時間）" },
       { kind: "release", text: "仮押さえを外す：…" },
       { kind: "ask", text: "日付の確かめ：「20日」と「来週」が食い違うので、決めずに聞き返した" },
       { kind: "todo", text: "ToDo に足した：…" },

@@ -104,8 +104,8 @@ describe("8. 経理：「あと N件 選ぶ」は選ぶ所へのリンク・押�
 
 describe("12. 広告：「AI に見直してもらう」がうまくいった直後の出し方", () => {
   const review = read("src/app/ads/AdsReview.tsx");
-  it("うまくいった1行（✓ 承認の箱に入れました…すぐ下で決める ↓）が、押せない理由より先", () => {
-    const ok = review.indexOf("承認の箱に入れました：{shown.text}");
+  it("うまくいった1行（✓ 承認BOXに入れました…すぐ下で決める ↓）が、押せない理由より先", () => {
+    const ok = review.indexOf("承認BOXに入れました：{shown.text}");
     const why = review.indexOf('<p className="ad-review-why"');
     assert.ok(ok > 0 && why > ok, "うまくいった1行が先");
     assert.match(review, /すぐ下で決める ↓/);

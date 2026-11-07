@@ -1,5 +1,5 @@
 // 広告の案を承認した時の知らせの1行（画面に依らない形。直しU・docs/SPEC.md §1.7.8）。
-// 広告のタブの承認の行と、ホームの承認の箱の行（止める・外す・足す）が同じ文を出す。LINE のボタンの承認と戻す案は試さない。
+// 広告のタブの承認の行と、ホームの承認BOXの行（止める・外す・足す）が同じ文を出す。LINE のボタンの承認と戻す案は試さない。
 // サービスの名前は書かない（画面に出すのは、つながっている時の札だけ）。「100%」「必ず」「すぐ反映」は書かない。
 
 import type { LiveTried } from "./panel";
@@ -25,7 +25,7 @@ export const HOME_LIST_NOTE = "一覧は広告のタブで見られます。";
 
 const bare = (s: string) => s.replace(/。$/, "");
 
-/** 承認した時の知らせ（where = 広告のタブか、ホームの承認の箱か） */
+/** 承認した時の知らせ（where = 広告のタブか、ホームの承認BOXか） */
 export function approvedNotice(a: Approved, tried: LiveTried | null, where: "ads" | "home"): string {
   const head = `✓ ${a.no}番「${a.text}」${PAST[a.kind]}`;
   const todo = a.todo ? "ToDo に「効いたか見る」を足しました。" : "";

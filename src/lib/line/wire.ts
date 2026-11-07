@@ -3,12 +3,12 @@
 
 import { getLineSettings } from "../settings";
 
-/** 画面が受け取る LINE の知らせ。text = オーナーの一言 / press = 承認の箱のボタン（合言葉でつないだ LINE から押した物だけ） */
+/** 画面が受け取る LINE の知らせ。text = オーナーの一言 / press = 承認BOXのボタン（合言葉でつないだ LINE から押した物だけ） */
 export type ScreenEvent =
   | { id: string; at: string; kind: "text"; text: string }
   | { id: string; at: string; kind: "press"; approvalId: string; target: ApprovalTarget; how: "approve" | "skip" };
 
-/** 承認の箱のどの行か（予約の仮押さえ / 広告の案） */
+/** 承認BOXのどの行か（予約の仮押さえ / 広告の案） */
 export type ApprovalTarget = "reservation" | "ad";
 
 /** LINE に届ける承認待ちの1行（何を・いつ・理由）。ボタンの印（1回だけ効く）はサーバーが付ける */

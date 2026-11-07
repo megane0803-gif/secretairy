@@ -1,5 +1,5 @@
 // 予約サイト → 台帳の向き（docs/SPEC.md §1.4）。Claude は呼ばない（AI を使わない流れ）。
-// - 「ここで予約が入る（デモ）」：架空のお客様の予約が、空いている枠に1件、確定で台帳に入る（承認の箱は通さない）
+// - 「ここで予約が入る（デモ）」：架空のお客様の予約が、空いている枠に1件、確定で台帳に入る（承認BOXは通さない）
 // - 入った枠は空きから外れる（予約チャット・朝の要点の空き枠・発信の空き枠・予約サイトの ○△×）
 // - 仮押さえと同じ枠に入ったら、仮押さえを外し、ToDo に「○○様に別の日時を案内」を今日中として足す
 // - 同じ時間に受ける人数を守る
@@ -83,7 +83,7 @@ const hold = (over: Partial<HoldOffer> = {}): HoldOffer => ({
 const press = (s: BookState, mode: "free" | "onHold", data: BookData = base) => siteBook(s, { data, rules, now: NOW }, mode);
 
 describe("1. ここで予約が入る（デモ）：空いている枠に1件", () => {
-  test("架空のお客様の予約が、確定で台帳に入る（札は「予約サイトから」・承認の箱は通さない）", () => {
+  test("架空のお客様の予約が、確定で台帳に入る（札は「予約サイトから」・承認BOXは通さない）", () => {
     const s0 = emptyBook(TODAY);
     const o = press(s0, "free");
     assert.ok(o.ok, o.ok ? "" : o.note);
@@ -91,7 +91,7 @@ describe("1. ここで予約が入る（デモ）：空いている枠に1件", 
     assert.equal(o.placed.status, "confirmed");
     assert.equal(o.placed.via, "site");
     assert.equal(siteCount(o.state), 1);
-    assert.equal(o.state.approvals.length, 0, "承認の箱に行は入らない");
+    assert.equal(o.state.approvals.length, 0, "承認BOXに行は入らない");
     assert.equal(pendingApprovals(o.state, NOW_ISO).length, 0);
     const r = view(base, o.state).all.find((x) => x.id === o.placed.id);
     assert.equal(r?.source, "site", "台帳では「予約サイトから」");
@@ -163,9 +163,9 @@ describe("2. 二重予約を防ぐ：仮押さえと同じ枠に入れる（デ�
     assert.deepEqual([o.placed.date, o.placed.start, o.placed.menuId], ["2026-11-06", "15:00", "cut"], "仮押さえと同じ枠");
     assert.notEqual(o.placed.customerId, "c04", "別の架空のお客様");
     assert.equal(o.state.chat.some((r) => r.id === "h1"), false, "仮押さえは外れる");
-    assert.equal(pendingApprovals(o.state, NOW_ISO).length, 0, "承認の箱から消える");
+    assert.equal(pendingApprovals(o.state, NOW_ISO).length, 0, "承認BOXから消える");
     assert.equal(o.state.approvals.find((a) => a.reservationId === "h1")?.state, "taken");
-    // 文は承認の箱の「直す」「見送り」と同じ1か所（todo/reschedule.ts）。元の頼みの日時とメニューを添える
+    // 文は承認BOXの「直す」「見送り」と同じ1か所（todo/reschedule.ts）。元の頼みの日時とメニューを添える
     const t = o.state.todos.find((x) => x.title === "江口様に別の日時を案内（11/6（金） 15:00 カットの代わり）");
     assert.ok(t, "ToDo に足す");
     assert.equal(t!.due, TODAY, "今日中");

@@ -1,7 +1,7 @@
 // 判定と報告の「一言のまとめ」（docs/SPEC.md §1.7.3）。Claude（Haiku。config/ai.json の adsNote）が1文だけ書く。
 // 送るのは、プログラムが決めた事実を言葉にした物だけ（数は送らない・書かせない）。答えは言葉の門（words.ts）に通し、
 // 当たったら出さない（作り直しはしない）。AI につながらない時も出さない（決まった返事は無い）。
-// 一言は飾り：判定・報告・承認の箱は、一言が無くてもそのまま動く。
+// 一言は飾り：判定・報告・承認BOXは、一言が無くてもそのまま動く。
 
 import Anthropic from "@anthropic-ai/sdk";
 import { NoAiError } from "../ai/model";
@@ -83,7 +83,7 @@ export function adsNoteUserText(f: AdsNoteFacts): string {
       `- 予約：${f.bookingsDown ? "減った" : "減っていない"}`,
     ];
     if (f.fewNumbers) lines.push("- 数が少なくて、違いが分かりにくい");
-    if (f.verdict === "revert") lines.push(`- ${actionVerb(f.action)}前に戻す案を承認の箱に入れた（決めるのはオーナー）`);
+    if (f.verdict === "revert") lines.push(`- ${actionVerb(f.action)}前に戻す案を承認BOXに入れた（決めるのはオーナー）`);
     lines.push("", "オーナーへの一言を、ひとつの短い文で書いてください。");
     return lines.join("\n");
   }

@@ -2,7 +2,7 @@
 // 開け閉めは見る人のブラウザに欄ごとに覚える（secretairy:homeFolds）。覚えた物があれば、PC／スマホの最初の状態より先に使う。
 // 壊れている物・知らない欄・true/false でない物は読まない（その欄は最初の状態に戻る）。
 
-/** 畳める欄（6つ）。承認の箱・朝の要点・まずやる3つ・一言メモは畳まない */
+/** 畳める欄（6つ）。承認BOX・朝の要点・まずやる3つ・一言メモは畳まない */
 export const HOME_FOLD_IDS = ["customers", "notes", "free", "jobs", "journal", "line"] as const;
 export type HomeFoldId = (typeof HOME_FOLD_IDS)[number];
 

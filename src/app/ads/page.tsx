@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * 広告のタブ。架空の広告の4週分を見て、AI が「止める言葉」か「外す言葉」を1つ提案し、
- * プログラムの門を通してから承認の箱へ。決めるのはオーナー（承認／直す／見送り）。
+ * プログラムの門を通してから承認BOXへ。決めるのはオーナー（承認／直す／見送り）。
  * 真ん中の並び（PC・スマホとも）：4週分 → 承認待ち → 効いたかの判定 → 毎週の見直しの報告 → 広告の管理画面 → 2つの一覧 → くわしく。
  * スマホでは右の列（AI に見直してもらう）を4週分のすぐ下に出す（rightAfterOnPhone={1}。部品は1つのまま）。
  */
@@ -37,7 +37,7 @@ export default function AdsPage() {
       <AdsWeeks />
 
       <section className="inline-box" aria-labelledby="ads-approvals">
-        <h2 id="ads-approvals">承認待ち（ホームの承認の箱と同じ行）</h2>
+        <h2 id="ads-approvals">承認待ち（ホームの承認BOXと同じ行）</h2>
         <AdApprovalRows seedRules={seedRules} standalone />
       </section>
 
@@ -46,7 +46,7 @@ export default function AdsPage() {
       <AdsReport />
 
       <Fold summary="くわしく（プログラムの確認と、広告の数の形）">
-        <p>AI の案は、承認の箱に入れる前にプログラムが3つ確かめます。弾いたら理由を渡して1回だけ作り直させ、それでもだめなら案は出さずに日誌に書きます。</p>
+        <p>AI の案は、承認BOXに入れる前にプログラムが3つ確かめます。弾いたら理由を渡して1回だけ作り直させ、それでもだめなら案は出さずに日誌に書きます。</p>
         <ul>
           <li>✓ {GATE_LABELS.exists}（止める＝広告を出す言葉・外す＝調べた言葉。もう止めた物は選ばない）</li>
           <li>✓ {GATE_LABELS.noAdd}（止める・外すの道具は「止める」「外す」の2つだけ。この2つでは言葉を足せません）</li>
@@ -64,8 +64,8 @@ export default function AdsPage() {
           案は{ads.oncePerDays}日に1つまで。承認すると、{ads.checkAfterDays}日後を期限に ToDo「効いたか見る」を足します。数（回数・お金・予約）は AI に書かせず、表からプログラムが入れます。
         </p>
         <p>
-          効いたかの判定は、判定日（承認の{ads.checkAfterDays}日後）に前と後の数をプログラムが比べます。お金が減って予約が減っていなければ「効いた」、予約が減ったら「戻す案」（承認の箱へ）、数が少なければ「まだ分からない」。その言葉の押された回数が{ads.judge.minWordClicks}回より少ない時・前と後の予約を足して{ads.judge.minBookings}件より少ない時は「まだ分からない」。後の数は、最初の状態に前もって置いた数です。
-          戻す案は承認の箱に入り、戻すのはオーナーの「承認」だけです。
+          効いたかの判定は、判定日（承認の{ads.checkAfterDays}日後）に前と後の数をプログラムが比べます。お金が減って予約が減っていなければ「効いた」、予約が減ったら「戻す案」（承認BOXへ）、数が少なければ「まだ分からない」。その言葉の押された回数が{ads.judge.minWordClicks}回より少ない時・前と後の予約を足して{ads.judge.minBookings}件より少ない時は「まだ分からない」。後の数は、最初の状態に前もって置いた数です。
+          戻す案は承認BOXに入り、戻すのはオーナーの「承認」だけです。
         </p>
         <FieldList fields={AD_FIELDS} />
         <AdsConnect />

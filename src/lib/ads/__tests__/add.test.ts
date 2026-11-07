@@ -1,4 +1,4 @@
-// 言葉を足す案（docs/SPEC.md §1.7.5）：候補はプログラムが決める → AI は候補の番号から選ぶだけ → 承認の箱 → 承認で「広告を出す言葉」に1行。
+// 言葉を足す案（docs/SPEC.md §1.7.5）：候補はプログラムが決める → AI は候補の番号から選ぶだけ → 承認BOX → 承認で「広告を出す言葉」に1行。
 // Claude は呼ばず、決まった返事（script.ts）か、決まった案を返す物に置きかえる。
 
 import assert from "node:assert/strict";
@@ -87,7 +87,7 @@ const addCall = (no: unknown, reason = "売りのメニューで調べた方が�
 const pick = (model: AdsModel | null, t: AdTable = table) =>
   runAddPick({ table: t, words, rules: LOCKED_RULES, settings, model, maxTokens: ai.maxReplyTokens, maxAdds: ai.maxAdds, maxCalls: ai.maxAddCalls });
 
-/** 見直し1回（決まった返事）を、広告タブと同じ形で承認の箱に入れた状態 */
+/** 見直し1回（決まった返事）を、広告タブと同じ形で承認BOXに入れた状態 */
 async function reviewed(s: AdsState = EMPTY_ADS, nowIso = NOW, mode: "script" | "ai" = "script", model?: AdsModel) {
   const t = tableOf(report, settings, s);
   const req: AdsRequest = { mode, table: t, rules: LOCKED_RULES };
@@ -275,8 +275,8 @@ function pendingAds(s: AdsState) {
   return pendingAdds(s);
 }
 
-describe("承認の箱（足す案）", () => {
-  test("止める・外すの行の下に足すの行。数は承認の箱の行から（予約タブには出さない）", async () => {
+describe("承認BOX（足す案）", () => {
+  test("止める・外すの行の下に足すの行。数は承認BOXの行から（予約タブには出さない）", async () => {
     const { state } = await reviewed();
     const q = approvalQueue(emptyBook(TODAY), state, NOW);
     assert.ok(q.ad);
@@ -455,7 +455,7 @@ describe("ブラウザに残す形", () => {
     for (const f of ["src/lib/ads/useAds.ts", "src/lib/jobs/browserStore.ts"]) assert.match(readFileSync(f, "utf8"), /isEmptyAds\(next\)/, f);
   });
 
-  test("ホームの「AI の仕事」の結果「承認待ち3件」も承認の箱へのリンク", () => {
+  test("ホームの「AI の仕事」の結果「承認待ち3件」も承認BOXへのリンク", () => {
     assert.deepEqual(jobDoneLink({ result: "承認待ち3件", tab: "ads" }), { kind: "approvals" });
     assert.deepEqual(jobDoneLink({ result: "案は出ませんでした（門を通らず）", tab: "ads" }), { kind: "tab", tab: "ads" });
   });

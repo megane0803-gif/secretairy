@@ -130,9 +130,9 @@ describe("起点をそろえる（最初の状態のままのブラウザ）", (
 describe("起点を動かさない（何か入れた後のブラウザ）", () => {
   const base = emptyBook(YESTERDAY);
   const touched: [string, BookState][] = [
-    ["予約チャットの仮押さえ（承認の箱も）", withHold(base, hold)],
+    ["予約チャットの仮押さえ（承認BOXも）", withHold(base, hold)],
     ["予約サイト・台帳から入れた予約", { ...base, chat: [{ id: "site-1", customerId: "c04", menuId: "cut", date: "2026-11-08", start: "15:00", status: "confirmed", heldAt: hold.heldAt, expiresAt: hold.expiresAt, via: "site" }], siteSeq: 1 }],
-    ["承認の箱の行だけ", { ...base, approvals: [{ id: "ap-x", reservationId: "x", createdAt: hold.heldAt, reason: "理由", state: "skipped" }] }],
+    ["承認BOXの行だけ", { ...base, approvals: [{ id: "ap-x", reservationId: "x", createdAt: hold.heldAt, reason: "理由", state: "skipped" }] }],
     ["足した ToDo", { ...base, todos: [{ id: "td-1", title: "仕入れ", createdAt: hold.heldAt, done: false }] }],
     ["保存したカルテ", { ...base, kartes: [{ id: "k1", customerId: "c04", date: YESTERDAY, menuId: "cut", memo: "メモ", sections: {}, savedAt: hold.heldAt }] }],
     ["最初の ToDo の済みの印", { ...base, todoMarks: { "ts-01": { done: true, at: hold.heldAt } } }],

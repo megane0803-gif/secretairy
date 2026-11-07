@@ -46,7 +46,7 @@ export function HomeSummary({
   brief: Omit<BriefAiSettings, "model">;
 }) {
   const book = useBook(data);
-  // 承認待ちは承認の箱の行と同じ数（approvals.ts）
+  // 承認待ちは承認BOXの行と同じ数（approvals.ts）
   const approvals = useApprovals();
   // ToDo の期限の数：ToDo のタブと同じ一覧・同じ数え方から（items.ts の todoDueCounts）。期限の無い物（メモ・次回など）は数えない。
   // 今日まで＝期限が今日、期限切れ＝期限が今日より前（お客様への連絡で過ぎた物も入る）。先の日の物は入れない
@@ -119,12 +119,12 @@ export function HomeSummary({
         )}
         <div className="morning-wrap">
           <div className="morning-row">
-            {/* 数字のカードは押せる：今日の予約 → 今日のお客様（閉じていれば開く）・承認待ち → 承認の箱・ToDo → ToDo のタブ */}
+            {/* 数字のカードは押せる：今日の予約 → 今日のお客様（閉じていれば開く）・承認待ち → 承認BOX・ToDo → ToDo のタブ */}
             <div className="bignums home-bignums">
               <JumpLink to="customers" className="bignum-link" title="今日のお客様を見る">
                 <BigNumber label="今日の予約" value={book.book.todayCount} unit="件" go="↓" />
               </JumpLink>
-              <JumpLink to="approvals" className="bignum-link" title="承認の箱を見る">
+              <JumpLink to="approvals" className="bignum-link" title="承認BOXを見る">
                 <BigNumber label="承認待ち" value={approvals.count} unit="件" go="↓" />
               </JumpLink>
               <Link href={TABS.todo.path} className="bignum-link" title="ToDo のタブで見る（期限が今日の物）">

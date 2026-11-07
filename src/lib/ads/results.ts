@@ -1,5 +1,5 @@
 // 広告の「効いたかの判定」と「毎週の見直しの報告」の形と、ブラウザに残っていた物の読み方（docs/SPEC.md §1.7.1・§1.7.2）。
-// 置き場所は広告の承認の箱と同じ secretairy:ads（state.ts の AdsState の judgements・reports）。
+// 置き場所は広告の承認BOXと同じ secretairy:ads（state.ts の AdsState の judgements・reports）。
 // なので「最初に戻す」「広告を最初に戻す」で、いっしょに消える。
 
 import { isRealDate } from "../calendar";
@@ -16,7 +16,7 @@ export const VERDICT_LABEL: Record<AdVerdict, string> = {
   unknown: "まだ分からない",
 };
 
-/** 戻す案（承認の箱の行）。pending = 承認待ち / approved = 戻した / skipped = 戻さなかった */
+/** 戻す案（承認BOXの行）。pending = 承認待ち / approved = 戻した / skipped = 戻さなかった */
 export type AdRevertState = "pending" | "approved" | "skipped";
 
 /** 判定1つ（止めた・外した言葉1つに1つ。数はどれもプログラムが入れた物） */
@@ -68,7 +68,7 @@ export type AdWeeklyReport = {
   to: string;
   weeks: number;
   seen: AdWeek;
-  /** ② 案（承認の箱の行の id。止めたか・見送ったかは、その行から出す） */
+  /** ② 案（承認BOXの行の id。止めたか・見送ったかは、その行から出す） */
   proposalId?: string;
   proposal?: {
     action: AdAction;
