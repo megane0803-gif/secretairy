@@ -1,7 +1,7 @@
 // 予約を本当の日付に直し、台帳の形にまとめる。数はここ（プログラム）が出す。AI は数を作らない。
 //
 // 最初の状態（seed/reservations.json）は「何番目の営業日」で持つ。それを「起点の日」から数えて本当の日付に直す。
-// 起点は、そのブラウザで初めて開いた日（book/state.ts）。「最初に戻す」を押すと今日を起点に作り直す。
+// 起点は、そのブラウザで初めて開いた日（まだ何も触っていなければ開いた日。book/state.ts）。「最初に戻す」を押すと今日を起点に作り直す。
 // 予約チャットで入った仮押さえ・確定は、本当の日付のままブラウザに残る（book/state.ts の extra）。
 
 import { businessDayAt, calDay, lastStartOf, toHHMM, toMinutes, weekFrom, type CalDay } from "./calendar";

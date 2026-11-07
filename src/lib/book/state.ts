@@ -2,6 +2,7 @@
 // ここは形と変え方だけ（どこにも書かない）。書くのは useBook.ts。
 //
 // 起点（anchor）：そのブラウザで初めて開いた日。最初の状態の予約（何番目の営業日）はこの日から数える。
+// まだ何も触っていない（最初の状態のまま。isUntouched）ブラウザは、開くたびに起点を今日にそろえる（store.ts の alignAnchor）。
 // 「最初に戻す」を押すと、今日を起点に作り直す。
 //
 // 🔒 確定は人：確定（approve）を呼ぶのは画面の「承認」ボタンだけ（ApprovalBox.tsx）。
@@ -97,6 +98,30 @@ export type BookState = {
 
 export function emptyBook(anchor: string, epoch?: string): BookState {
   return { v: 1, anchor, chat: [], approvals: [], todos: [], kartes: [], dayOffset: 0, todoMarks: {}, ...(epoch ? { epoch } : {}) };
+}
+
+/**
+ * 台帳が「最初の状態のまま」か：予約チャット・予約サイト・台帳から入れた予約（chat）・承認の箱・足した ToDo・保存したカルテ・
+ * 最初の状態の ToDo の印・最初のカルテや ToDo の文の直し・最初の予約を人が直した分・予約サイトの番号が1つも無く、「翌日へ」の日数が 0。
+ * ブラウザに残っていた形のまま（読む前の物）でも確かめられるように、ゆるい形で受け取る（形のおかしい物が入っていても「触った」と見る）。
+ * 休みの日・止めた時間・日報・メニュー・人数・日誌は本当の日付や設定で持つ別の置き場所なので、ここでは見ない。
+ */
+export function isUntouched(s: Partial<Record<keyof BookState, unknown>>): boolean {
+  const none = (x: unknown) => x === undefined || x === null || (Array.isArray(x) && x.length === 0);
+  const noKeys = (x: unknown) => x === undefined || x === null || (typeof x === "object" && !Array.isArray(x) && Object.keys(x as object).length === 0);
+  const zero = (x: unknown) => x === undefined || x === null || x === 0;
+  return (
+    none(s.chat) &&
+    none(s.approvals) &&
+    none(s.todos) &&
+    none(s.kartes) &&
+    noKeys(s.todoMarks) &&
+    noKeys(s.seedKarteEdits) &&
+    noKeys(s.todoTitles) &&
+    noKeys(s.seedResEdits) &&
+    zero(s.siteSeq) &&
+    zero(s.dayOffset)
+  );
 }
 
 /** 「最初に戻す」の印を作る */
