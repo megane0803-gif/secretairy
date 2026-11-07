@@ -33,6 +33,7 @@
     "maxItems": 20,
     "maxSearchPages": 5,
     "timeoutSeconds": 15,
+    "serverBudgetSeconds": 45,
     "lockSeconds": 120,
     "tokenSeconds": 3600,
     "tokenReuseMarginSeconds": 300,

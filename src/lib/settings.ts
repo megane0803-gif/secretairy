@@ -195,7 +195,7 @@ export type AdSettings = {
  * budgetName・budgetMicros = 用意で作る予算の名前と1日の額（円×1,000,000。小さな作り物の額）/
  * keywordMatch = 用意で作る言葉の合い方 / maxKeywordChars・maxKeywordWords = 言葉の長さの上限（公式の上限）/
  * maxRequestChars = 受け取る大きさ / maxItems = 1回に送る案の数 / maxSearchPages = 読む時のページの数 /
- * timeoutSeconds = 1回の呼び出しの待ち時間 / lockSeconds = 「動いている印」の期限 /
+ * timeoutSeconds = 1回の呼び出しの待ち時間 / serverBudgetSeconds = 1回の窓口の持ち時間 / lockSeconds = 「動いている印」の期限 /
  * tokenSeconds = 通行証の長さ / tokenReuseMarginSeconds = 切れる何秒前まで使い回すか /
  * daily = 1日（店の時間帯の日付）の上限（用意・送る・読み直す・止めるの数）/
  * passcode = オーナー用の合言葉（短い設定は無いのと同じ・長さの上限・間違いの数の上限とその時間）
@@ -215,6 +215,8 @@ export type AdsLiveSettings = {
   maxItems: number;
   maxSearchPages: number;
   timeoutSeconds: number;
+  /** 1回の窓口の持ち時間（これを過ぎたら新しく呼ばない。Vercel に途中で止められないように） */
+  serverBudgetSeconds: number;
   lockSeconds: number;
   tokenSeconds: number;
   tokenReuseMarginSeconds: number;

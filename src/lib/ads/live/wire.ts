@@ -31,7 +31,8 @@ export type LiveFail = { ok: false; code: string; message: string };
 /** つながっているか（Google は呼ばない。環境変数がそろっている・プレビューではない、だけで決める） */
 export type LiveStatusResponse = { ok: true; connected: boolean; canWrite: boolean };
 
-export type LiveSetupResponse = { ok: true; lines: string[] } | LiveFail;
+/** created = 何か作った（もう用意してあって何も作らなかった時は false。日誌は作った時だけ） */
+export type LiveSetupResponse = { ok: true; created: boolean; lines: string[] } | LiveFail;
 
 export type LiveSendResponse = { ok: true; result: LiveResult; lines: LiveLine[] } | LiveFail;
 

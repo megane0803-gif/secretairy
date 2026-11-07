@@ -20,6 +20,8 @@ export type ApiCtx = {
   settings: AdsLiveSettings;
   fetch: FetchLike;
   now: () => number;
+  /** この時刻（ミリ秒）を過ぎたら新しく呼ばない（窓口の持ち時間 serverBudgetSeconds） */
+  deadline?: number;
 };
 
 type Json = Record<string, unknown>;
@@ -54,6 +56,9 @@ function target(ctx: ApiCtx, method: "search" | "mutate"): { url: string; custom
 /** 1回呼ぶ（外に出さない）。うまくいかなければ決まった理由で投げる */
 async function post(ctx: ApiCtx, method: "search" | "mutate", body: Json): Promise<Json> {
   const t = target(ctx, method);
+  const left = (ctx.deadline ?? Infinity) - ctx.now();
+  // 持ち時間を過ぎたら、呼ぶ前に止める（何も送っていない）
+  if (left <= 0) throw new LiveError("timeout", true);
   const token = await accessToken({ key: ctx.env.key!, settings: ctx.settings, fetch: ctx.fetch, now: ctx.now });
   let res: Response;
   try {
@@ -62,7 +67,7 @@ async function post(ctx: ApiCtx, method: "search" | "mutate", body: Json): Promi
       headers: { Authorization: `Bearer ${token}`, "login-customer-id": t.login, "Content-Type": "application/json" },
       body: JSON.stringify(body),
       cache: "no-store",
-      signal: AbortSignal.timeout(ctx.settings.timeoutSeconds * 1000),
+      signal: AbortSignal.timeout(Math.max(1000, Math.min(ctx.settings.timeoutSeconds * 1000, left))),
     });
   } catch (e) {
     throw new LiveError(e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError") ? "timeout" : "network");

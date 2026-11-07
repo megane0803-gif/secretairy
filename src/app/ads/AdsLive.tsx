@@ -14,6 +14,8 @@ import { featuredWords } from "@/lib/ads/featured";
 import { driftOf, liveRead, liveSend, liveSetup, liveStatus, outcomeText } from "@/lib/ads/live/client";
 import { NOT_CONNECTED_MESSAGE, type LiveReadResponse } from "@/lib/ads/live/wire";
 import { readAdsState, useAds } from "@/lib/ads/useAds";
+import { sameEpoch } from "@/lib/book/state";
+import { currentEpoch } from "@/lib/book/store";
 import { writeJournal } from "@/lib/journal";
 import { getMenus } from "@/lib/settings";
 
@@ -70,8 +72,8 @@ export function AdsLive() {
     void run("setup", async () => {
       const r = await liveSetup(code);
       if (!r.ok) return void setShown({ head: r.message, lines: [] });
-      writeJournal({ who: "オーナー", text: "テスト用の広告アカウントに店の広告を用意した" });
-      setShown({ head: "✓ 用意しました", lines: r.lines });
+      if (r.created) writeJournal({ who: "オーナー", text: "テスト用の広告アカウントに店の広告を用意した" });
+      setShown({ head: r.created ? "✓ 用意しました" : "もう用意してあります", lines: r.lines });
     });
   };
 
@@ -82,10 +84,14 @@ export function AdsLive() {
     void run("send", async () => {
       // 送る直前の状態で作る（作った日時はブラウザの時計）
       const { payload } = syncPayload(readAdsState(), words, c, new Date().toISOString());
+      // 「最初に戻す」が途中で押されたら、返事が来ても印を付けない（始めた時の印を持つ）
+      const epoch = currentEpoch();
       if (payload.items.length === 0) return void setShown({ head: "送る案がありません（承認済みで、まだ反映していない案だけを送ります）", lines: [] });
       const r = await liveSend(code, payload);
       if (!r.ok) return void setShown({ head: r.message, lines: [] });
       const lines = r.lines.map(outcomeText);
+      if (!sameEpoch({ epoch: currentEpoch() }, epoch))
+        return void setShown({ head: "送っている間に「最初に戻す」が押されたので、印は付けませんでした（テスト用アカウントの中は変わっています。読み直してください）", lines });
       // 直しR の結果の読み込みと同じ道で印を付ける（「もう〜だった」も印。2回でも1回）
       const m = loadSyncResult(JSON.stringify(r.result), { read: readAdsState, update: ads.update, words, settings: c, journal: "テスト用の広告アカウントに送った" });
       if (!m.ok) return void setShown({ head: m.note, lines });

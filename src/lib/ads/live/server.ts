@@ -78,6 +78,8 @@ const fail = (code: string, message: string, status: number): Response => json({
 export const LIVE_KEY = {
   lock: "ads:live:lock",
   wrong: "ads:live:passwrong",
+  /** 間違いが上限に届いた時から wrongWindowSeconds 秒、合っていても受けない印 */
+  locked: "ads:live:passlock",
   day: (date: string, kind: "setup" | "send" | "read" | "stop") => `ads:live:day:${date}:${kind}`,
 };
 const DAY_SECONDS = 2 * 86_400;
@@ -125,7 +127,8 @@ const LOCKED_MESSAGE = "オーナー用の合言葉を何回もまちがえた�
 
 /**
  * オーナー用の合言葉。間違いの数は窓口全体で1つ（だれが間違えても同じ数に足す）。
- * 間違えた時は先に incr で足し、上限をこえたら「待って」。合っていても、もう上限なら受けない（同じ文を返す）。
+ * 間違えた時は先に incr で足す。上限（maxWrong）に届いたら、その時から wrongWindowSeconds 秒の「受けない印」を置き、
+ * 印がある間は、合っている合言葉でも受けない（どちらにも同じ文を返す＝合っているかを漏らさない）。
  */
 async function owner(d: LiveDeps, given: unknown): Promise<Response | null> {
   const p = d.settings.passcode;
@@ -133,8 +136,10 @@ async function owner(d: LiveDeps, given: unknown): Promise<Response | null> {
     return fail("no-passcode", "オーナー用の合言葉が設定されていないので、用意と送るは動きません", 503);
   const store = d.store!;
   const r = checkPasscode(given, d.env.ownerPasscode, { maxChars: p.maxChars, minChars: p.minChars });
+  if (await kv(() => store.get(LIVE_KEY.locked))) return fail("locked", LOCKED_MESSAGE, 429);
   if (r !== "ok") {
     const n = await kv(() => store.incr(LIVE_KEY.wrong, p.wrongWindowSeconds));
+    if (n >= p.maxWrong) await kv(() => store.set(LIVE_KEY.locked, "1", { ex: p.wrongWindowSeconds, nx: true }));
     return n > p.maxWrong ? fail("locked", LOCKED_MESSAGE, 429) : fail("wrong", "オーナー用の合言葉がちがいます", 401);
   }
   const n = Number((await kv(() => store.get(LIVE_KEY.wrong))) ?? 0);
@@ -154,9 +159,12 @@ async function withLock(d: LiveDeps, run: () => Promise<Response>): Promise<Resp
   const mine = (d.random ?? randomBytes)(16).toString("hex");
   const got = await kv(() => store.set(LIVE_KEY.lock, mine, { ex: d.settings.lockSeconds, nx: true }));
   if (!got) return fail("busy", BUSY_MESSAGE, 409);
+  startClock(d);
   try {
     return await run();
   } finally {
+    // 読んで消すの間に期限が切れて、ほかの印に替わることは、印の期限（lockSeconds 120秒）が窓口の持ち時間（45秒）と
+    // Vercel の上限（maxDuration 60秒）より長いので起きにくい（起きても、ほかの印を消すのは1回だけ）
     try {
       if ((await store.get(LIVE_KEY.lock)) === mine) await store.del(LIVE_KEY.lock);
     } catch {
@@ -178,7 +186,10 @@ async function writeGate(request: Request, d: LiveDeps): Promise<{ ok: true; bod
   return { ok: true, body };
 }
 
-const ctxOf = (d: LiveDeps): ApiCtx => ({ env: d.env, settings: d.settings, fetch: d.fetch, now: d.now });
+// 窓口ごとの持ち時間（始めた時から serverBudgetSeconds）。読む・送るの全部の呼び出しが同じ締め切りを使う
+const deadlines = new WeakMap<LiveDeps, number>();
+const startClock = (d: LiveDeps) => deadlines.set(d, d.now() + d.settings.serverBudgetSeconds * 1000);
+const ctxOf = (d: LiveDeps): ApiCtx => ({ env: d.env, settings: d.settings, fetch: d.fetch, now: d.now, deadline: deadlines.get(d) });
 
 /** うまくいかなかった訳を返事に（決まった文だけ。not-test は「テスト用アカウントではないので送りませんでした」） */
 function liveFail(e: unknown): Response {
@@ -420,7 +431,7 @@ async function setup(d: LiveDeps): Promise<Response> {
   if (missing.length) made.push(`言葉${missing.length}つ`);
   if (wanted.length > missing.length) lines.push(`言葉${wanted.length - missing.length}つはもうあったので作りませんでした`);
 
-  if (ops.length === 0) return json({ ok: true, lines: ["もう用意してあります（何も作りませんでした）", ...lines] } satisfies LiveSetupResponse);
+  if (ops.length === 0) return json({ ok: true, created: false, lines: ["もう用意してあります（何も作りませんでした）", ...lines] } satisfies LiveSetupResponse);
 
   // 先に同じ中身を validateOnly で確かめ（何も作らない）、通ったら本当に送る（1回の mutate。全部できるか、何もできないか）
   try {
@@ -446,14 +457,14 @@ async function setup(d: LiveDeps): Promise<Response> {
     const kws = group ? after.keywords.filter((k) => k.groupRn === group.rn) : [];
     const okAll = !!after.campaign && !!group && wanted.every((t) => kws.some((k) => sameWords(k.text, t) && k.match === s.keywordMatch));
     if (after.campaign && campaigns.length === 0 && after.campaign.status !== "PAUSED") lines.push("読み直すと、キャンペーンが止めた状態になっていません");
-    if (!okAll && !after.campaign && unknown) return fail("unknown", "作れたか分かりません（読み直してください）", 502);
-    if (!okAll && !after.campaign) return fail("failed", "読み直してもキャンペーンが見つかりませんでした", 502);
-    if (!okAll) lines.push("読み直すと、足りない物があります（もう一度「用意」を押すと、足りない物だけ作ります）");
+    if (!okAll && unknown) return fail("unknown", "作れたか分かりません（読み直してください。もう一度「用意」を押すと、足りない物だけ作ります）", 502);
+    if (!okAll)
+      return fail("failed", "読み直すと、足りない物があります（もう一度「用意」を押すと、足りない物だけ作ります）", 502);
   } catch (e) {
     if (e instanceof LiveError && e.code === "not-test") throw e;
     return fail("unknown", "作れたか分かりません（読み直してください）", 502);
   }
-  return json({ ok: true, lines: [`作りました：${made.join("・")}（広告文は作りません・キャンペーンは止めたまま）`, ...lines] } satisfies LiveSetupResponse);
+  return json({ ok: true, created: true, lines: [`作りました：${made.join("・")}（広告文は作りません・キャンペーンは止めたまま）`, ...lines] } satisfies LiveSetupResponse);
 }
 
 // ---- 送る（承認した案：止める・外す・足す） ----
@@ -617,7 +628,9 @@ async function send(d: LiveDeps, items: Item[]): Promise<Response> {
     try {
       const r = await mutate(ctx, todo.map((p) => p.op!), { validateOnly: false, partialFailure: true });
       todo.forEach((p, i) => {
-        if (r.allFailed || r.failed.has(i)) {
+        // どの操作が受けられなかったか読めない時は、どれも「分からない」にして、読み直しで決める
+        if (r.allFailed) p.sent = "unknown";
+        else if (r.failed.has(i)) {
           p.op = undefined;
           p.line = line(p.item, "failed", "送りましたが、受けられませんでした");
         } else p.sent = "ok";
@@ -680,6 +693,7 @@ const STATUS_WORD: Record<string, string> = { ENABLED: "出す設定", PAUSED: "
 
 export async function handleLiveRead(request: Request, d: LiveDeps): Promise<Response> {
   return safely(async () => {
+    startClock(d);
     const g = gate(request, d, "POST");
     if (!g.ok) return g.response;
     if (!d.store) return fail("no-store", NO_STORE_MESSAGE, 503);

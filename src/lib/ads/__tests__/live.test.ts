@@ -171,7 +171,7 @@ describe("鍵と通行証", () => {
   });
 
   test("読めない鍵は「無い」と同じ（理由に鍵の中身を出さない）", async () => {
-    for (const bad of ["{", "{}", JSON.stringify({ client_email: EMAIL, private_key: "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----" }), "not json"])
+    for (const bad of ["{", "{}", JSON.stringify({ client_email: EMAIL, private_key: ["-----BEGIN", "PRIVATE KEY-----\nAAAA\n-----END", "PRIVATE KEY-----"].join(" ") }), "not json"])
       assert.equal(serviceKeyFrom(bad), null);
     const { deps } = world({ env: { [LIVE_ENV.key]: "{ broken" } });
     const r = await handleLiveStatus(req("/api/ads/live/status", { method: "GET" }), deps);
@@ -259,6 +259,8 @@ describe("つながっているか・止まる時", () => {
     assert.match(ui, /テスト用アカウントから読み直す/);
     assert.match(ui, /（つなぐ手順は README）/);
     assert.match(ui, /type="password"/);
+    assert.match(ui, /sameEpoch\(\{ epoch: currentEpoch\(\) \}, epoch\)/, "「最初に戻す」が途中で押されたら印を付けない");
+    assert.match(ui, /if \(r\.created\) writeJournal/);
     assert.doesNotMatch(ui, /localStorage|sessionStorage|writeBrowser/, "合言葉をブラウザに残さない");
     for (const f of ["src/app/ads/AdsLive.tsx", "src/lib/ads/live/client.ts", "src/lib/ads/live/wire.ts", "src/lib/ads/connectLoad.ts"]) {
       const s = readFileSync(f, "utf8");
@@ -404,6 +406,7 @@ describe("用意（テスト用アカウントの中に店の広告を作る）"
     const b = await bodyOf(await handleLiveSetup(setupReq(), w.deps));
     assert.equal(b.ok, true);
     assert.match(b.lines.join(), /もう用意してあります/);
+    assert.equal(b.created, false, "何も作らなかった時は日誌を書かない");
     assert.equal(w.google.mutateCalls.length, before);
     assert.equal(w.google.campaigns.length, 1);
     assert.equal(w.google.groups.length, 1);
@@ -413,6 +416,16 @@ describe("用意（テスト用アカウントの中に店の広告を作る）"
     await handleLiveSetup(setupReq(), w.deps);
     assert.equal(w.google.criteria.length, 8);
     assert.equal(w.google.campaigns.length, 1);
+  });
+
+  test("用意で答えが届かず、読み直しても足りない時は「作りました」と言わない（分からない）", async () => {
+    const w = await prepared();
+    w.google.criteria = w.google.criteria.slice(2);
+    w.google.hooks.dropBeforeMutate = true;
+    const b = await bodyOf(await handleLiveSetup(setupReq(), w.deps));
+    assert.equal(b.ok, false);
+    assert.equal(b.code, "unknown");
+    assert.doesNotMatch(JSON.stringify(b), /作りました/);
   });
 
   test("REMOVED の物は無い物として探す・同じ名前が2つ以上なら作らない", async () => {
@@ -625,6 +638,34 @@ describe("送る（止める・外す・足す）", () => {
     assert.equal(b.result.results[0].status, "failed");
   });
 
+  test("本当に送った後、どれが受けられなかったか読めない時は「できなかった」にせず、読み直して決める", async () => {
+    const w = await prepared();
+    const realFetch = w.google.fetch;
+    w.deps.fetch = async (url, init) => {
+      const res = await realFetch(url, init);
+      const b = url.endsWith(":mutate") ? JSON.parse(String(init.body)) : null;
+      // 本当に送った時だけ、場所の無い部分の失敗を返す（変わってはいる）
+      if (b && !b.validateOnly) return new Response(JSON.stringify({ mutateOperationResponses: [], partialFailureError: { code: 3, details: [{ errors: [{ errorCode: { x: "Y" } }] }] } }));
+      return res;
+    };
+    const r = await bodyOf(await handleLiveSend(sendReq(payloadOf([EXCLUDE, ADD])), w.deps));
+    assert.deepEqual(r.lines.map((l: any) => l.outcome), ["done", "done"]);
+  });
+
+  test("持ち時間を過ぎたら、新しく呼ばない（送る前なら「できなかった」）", async () => {
+    const w = await prepared();
+    const realFetch = w.google.fetch;
+    let searches = 0;
+    w.deps.fetch = async (url, init) => {
+      if (url.endsWith(":search") && ++searches === 5) clock += live.serverBudgetSeconds * 1000; // 読む途中で時間が過ぎた
+      return realFetch(url, init);
+    };
+    const n = w.google.mutateCalls.length;
+    const r = await bodyOf(await handleLiveSend(sendReq(payloadOf([EXCLUDE])), w.deps));
+    assert.equal(w.google.mutateCalls.length, n, "送っていない");
+    assert.equal(r.lines[0].outcome, "failed");
+  });
+
   test("本当に送った時に受けられなかった物は「できなかった」", async () => {
     const w = await prepared();
     w.google.hooks.rejectTextOnSend = ADD.text;
@@ -709,13 +750,14 @@ describe("オーナーだけ（合言葉）", () => {
     const n = w.google.calls.length;
     for (const p of [undefined, "", "ちがう合言葉ちがう合言葉ちがう", 1234, PASS + "x"]) {
       // 間違いの数の上限は下のテストで見る（ここでは1回ずつ数え直す）
-      for (const r of [await handleLiveSetup(setupReq(p), w.deps), (await w.store!.del(LIVE_KEY.wrong), await handleLiveSend(sendReq(payloadOf([STOP]), p), w.deps))]) {
+      for (const r of [await handleLiveSetup(setupReq(p), w.deps), (await w.store!.del(LIVE_KEY.wrong), await w.store!.del(LIVE_KEY.locked), await handleLiveSend(sendReq(payloadOf([STOP]), p), w.deps))]) {
         assert.equal(r.status, 401);
         const text = await r.text();
         assert.equal(JSON.parse(text).code, "wrong");
         clean(text);
       }
       await w.store!.del(LIVE_KEY.wrong);
+      await w.store!.del(LIVE_KEY.locked);
     }
     assert.equal(w.google.calls.length, n);
   });
@@ -747,6 +789,19 @@ describe("オーナーだけ（合言葉）", () => {
     assert.equal((await bodyOf(right)).code, "locked");
     assert.equal(w.google.calls.length, n);
     clock += live.passcode.wrongWindowSeconds * 1000 + 1000;
+    assert.equal((await bodyOf(await handleLiveSend(sendReq(payloadOf([STOP])), w.deps))).ok, true);
+  });
+
+  test("受けない10分は、上限に届いた時から数える（最初の間違いからではない）", async () => {
+    const w = await prepared();
+    const max = live.passcode.maxWrong;
+    const win = live.passcode.wrongWindowSeconds * 1000;
+    await handleLiveSetup(setupReq("wrong-first-xxxxxxxxxx"), w.deps);
+    clock += win - 60_000; // 最初の間違いから9分
+    for (let i = 1; i < max; i++) await handleLiveSetup(setupReq(`wrong-${i}-xxxxxxxxxxxx`), w.deps);
+    clock += 2 * 60_000; // 最初の間違いからは11分・上限に届いてからは2分
+    assert.equal((await bodyOf(await handleLiveSend(sendReq(payloadOf([STOP])), w.deps))).code, "locked");
+    clock += win;
     assert.equal((await bodyOf(await handleLiveSend(sendReq(payloadOf([STOP])), w.deps))).ok, true);
   });
 

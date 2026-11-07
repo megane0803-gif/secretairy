@@ -266,7 +266,8 @@ export function fakeGoogle(p: { publicKeyPem: string; email: string; managerId: 
       }
       return o;
     });
-    return reply({ results, fieldMask: q.fields.map(camel).join(","), requestId: "fake" });
+    // 本物と同じく、合う行が無い時は results を省く
+    return reply({ ...(results.length ? { results } : {}), fieldMask: q.fields.map(camel).join(","), requestId: "fake" });
   }
 
   function sampleFields(from: string): Set<string> {
