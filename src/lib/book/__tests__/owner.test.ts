@@ -114,7 +114,7 @@ describe("3. 保存する直前に、その時の台帳でもう一度確かめ�
     const sheet = read("src/app/reservations/OwnerBookSheet.tsx");
     assert.match(sheet, /const w = book\.update\(\(s\) => \{\s*out = ownerBook\(s, \{ \.\.\.ctx, startedEpoch/);
     // 書けなかった時は「入れました」と言わない（直しA の形）
-    assert.match(sheet, /if \(o\.ok && !w\.ok\) return setNote\(SAVE_FAILED_MESSAGE\);/);
+    assert.match(sheet, /if \(o\.ok && !w\.ok\) return go\(\{ kind: "note", note: SAVE_FAILED_MESSAGE \}\);/);
     assert.match(sheet, /if \(!e\.nativeEvent\.isTrusted/);
     // 入れられない時は押せない
     assert.match(sheet, /disabled=\{!check \|\| check\.blocked\.length > 0\}/);

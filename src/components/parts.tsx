@@ -54,9 +54,9 @@ export function Checked({ children }: { children: ReactNode }) {
 }
 
 /** 細かい所（畳んでおく） */
-export function Fold({ summary, children }: { summary: string; children: ReactNode }) {
+export function Fold({ summary, className, children }: { summary: string; className?: string; children: ReactNode }) {
   return (
-    <details className="fold">
+    <details className={className ? `fold ${className}` : "fold"}>
       <summary>{summary}</summary>
       <div>{children}</div>
     </details>

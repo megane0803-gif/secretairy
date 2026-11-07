@@ -5,7 +5,6 @@ import { Fold, Panel } from "@/components/parts";
 import { getBookData } from "@/lib/book/data";
 import { BookingSite } from "./BookingSite";
 import { HolidayList } from "./HolidayList";
-import { Ledger } from "./Ledger";
 import { LedgerViewProvider } from "./LedgerView";
 import { MenuTable } from "./MenuTable";
 import { MonthCalendar } from "./MonthCalendar";
@@ -20,7 +19,7 @@ export default function ReservationsPage() {
   return (
     <TabPage
       tab="reservations"
-      rightFirstOnPhone
+      rightMidOnPhone
       right={
         <Panel title="予約チャット">
           <p className="hint">お客様のスマホのつもりの画面です。AI が空きとルールを確かめて候補を出し、お客様が選ぶと「仮押さえ」まで進めます。</p>
@@ -30,21 +29,23 @@ export default function ReservationsPage() {
     >
       {/* 見ている週・月・開いている「台帳から入れる」の1枚は、この共通の親（LedgerViewProvider）が1つだけ持つ（時間割・日ごとのカード・月のカレンダーが同じ週を指す） */}
       <LedgerViewProvider data={data}>
-        {/* PC：真ん中の列の一番上に時間割の台帳（右の列の予約チャットと横に並ぶ）。スマホは隠し、下の日ごとのカードを出す（予約チャットが上の並びは今のまま） */}
+        {/* 真ん中の列の一番上に時間割の台帳（PC は右の列の予約チャットと横に並ぶ。スマホも同じ時間割を幅に詰めて、見出しのすぐ下に。日ごとのカードはその中に畳む）。
+            スマホの並び（TabPage の rightMidOnPhone）：見出し → 台帳 → 月のカレンダー → 休みの日の一覧 → 予約サイト → 予約チャット（右の列）→ 承認待ちの予約 → AI の手順 → くわしく。
+            札 after-right-sp を付けた欄だけが、スマホで予約チャットの後へ回る（PC の並びは DOM の順のまま） */}
         <WeekTimetable data={data} />
 
-        <section className="inline-box" aria-labelledby="res-approvals">
+        <section className="inline-box after-right-sp" aria-labelledby="res-approvals">
           <h2 id="res-approvals">承認待ちの予約（ホームの承認の箱と同じ行）</h2>
           <ApprovalBox data={data} compact only="reservations" />
         </section>
 
-        <section className="inline-box" aria-labelledby="res-steps">
+        <section className="inline-box after-right-sp" aria-labelledby="res-steps">
           <h2 id="res-steps">AI の手順</h2>
           <p className="hint">どの道具で何を調べ、どのルールで外したかを、プログラムが1行ずつ書きます。</p>
           <AiSteps />
         </section>
 
-        {/* 月のカレンダー（「休みを決める」を入れると、日を押して休みにする・戻す）。PC は承認の箱・AI の手順の場所を動かさないよう、時間割の箱の外のここに。スマホは日ごとのカードのすぐ上 */}
+        {/* 月のカレンダー（「休みを決める」を入れると、日を押して休みにする・戻す）。PC は承認の箱・AI の手順の場所を動かさないよう、時間割の箱の外のここに。スマホは台帳のすぐ下 */}
         <section className="inline-box" aria-labelledby="res-month">
           <h2 id="res-month">月のカレンダー</h2>
           <MonthCalendar data={data} />
@@ -57,12 +58,11 @@ export default function ReservationsPage() {
         </section>
 
         <div className="book-pair">
-          <Ledger data={data} className="ledger-cards" />
           <BookingSite data={data} />
         </div>
       </LedgerViewProvider>
 
-      <Fold summary="くわしく（最終受付と、組み合わせのメニュー）">
+      <Fold className="after-right-sp" summary="くわしく（最終受付と、組み合わせのメニュー）">
         <p>最初の状態は今日から2週間分（と、前回の来店の記録）です。</p>
         <MenuTable data={data} />
         <p className="hint">時間・値段・最終受付は、ルールのタブの「メニュー」で直せます。</p>

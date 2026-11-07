@@ -1,4 +1,4 @@
-// 1週間の予約台帳の「時間割」の形（PC の予約タブの真ん中の列の一番上に出す。右の列の予約チャットと横に並ぶ）。
+// 1週間の予約台帳の「時間割」の形（予約タブの真ん中の列の一番上に出す。PC は右の列の予約チャットと横に並ぶ。スマホも同じ形を画面の幅に詰めて出す）。
 // 横に今日から7日、縦に営業時間。予約は時間の長さの分だけ縦に伸びる帯にする。
 // ここは並べ方の計算だけ（どこに・どの高さで出すか）。数（件数・埋まり）は台帳（reservations.ts の weekLedger）の物をそのまま使う。
 // 同じ時間に受ける人数が2人以上で時間が重なるときは、重なった帯を横に分けて並べる。
@@ -40,7 +40,12 @@ export type TimetableBand = Span & {
 export type TimetableColumn = {
   date: string;
   label: string;
+  /** スマホの列の頭（曜日の1字と日にち。「月」「9」） */
+  dow: string;
+  dayNum: number;
   isToday: boolean;
+  /** オーナーが決めた休みの日（定休日とは列の頭の色を分ける） */
+  holiday: boolean;
   /** 定休日・休みの日は false（列を灰色にする） */
   open: boolean;
   hours: LedgerDay["hours"];
@@ -62,12 +67,21 @@ export type Timetable = {
   to: number;
   /** 1時間ごとの目盛り */
   ticks: { label: string; top: number }[];
+  /** 30分の線（点線。スマホの時間割）の位置 */
+  halves: number[];
   columns: TimetableColumn[];
   /** いまの時刻の線（今日の列が7日の中にあり、営業時間の幅の中のときだけ） */
   now: { date: string; top: number } | null;
 };
 
 const round = (n: number) => Math.round(n * 100) / 100;
+
+const DOW = ["日", "月", "火", "水", "木", "金", "土"];
+/** 「2026-11-09」→ 曜日の1字「月」と日にち 9（スマホの列の頭） */
+export function dowOf(date: string): { dow: string; dayNum: number } {
+  const [y, m, d] = date.split("-").map(Number);
+  return { dow: DOW[new Date(Date.UTC(y, m - 1, d)).getUTCDay()], dayNum: d };
+}
 
 /** 重なった帯を横に分ける：始まりの早い順に、空いているいちばん左の場所へ。重なりの一まとまりごとに数を決める */
 function lanesOf(list: Reservation[]): Map<string, { lane: number; lanes: number }> {
@@ -118,6 +132,8 @@ export function timetable(
 
   const ticks: Timetable["ticks"] = [];
   for (let t = from; t <= to; t += 60) ticks.push({ label: toHHMM(t), top: at(t) });
+  const halves: number[] = [];
+  for (let t = from + 30; t < to; t += 60) halves.push(at(t));
 
   const columns = week.map((d): TimetableColumn => {
     const lanes = lanesOf(d.reservations);
@@ -131,7 +147,9 @@ export function timetable(
     return {
       date: d.date,
       label: d.label,
+      ...dowOf(d.date),
       isToday: d.isToday,
+      holiday: !!d.holiday,
       open: d.open && d.hours !== null,
       hours: d.hours,
       count: d.reservations.length,
@@ -166,7 +184,7 @@ export function timetable(
     if (m >= from && m <= to) line = { date: now.date, top: at(m) };
   }
 
-  return { from, to, ticks, columns, now: line };
+  return { from, to, ticks, halves, columns, now: line };
 }
 
 /**

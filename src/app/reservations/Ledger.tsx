@@ -13,72 +13,64 @@ import { menuColorClass, menuLegend } from "@/lib/book/menuColor";
 import { useBook } from "@/lib/book/useBook";
 import { OWNER_TAG } from "@/lib/book/owner";
 import { freeRanges, type LedgerDay, type Reservation } from "@/lib/reservations";
-import { useLedgerView, WeekNav } from "./LedgerView";
+import { useLedgerView } from "./LedgerView";
 import { openProps } from "./TimetableGrid";
 
 type Book = ReturnType<typeof useBook>;
 
 /**
- * 1週間の予約台帳（日ごとのカード）。予約タブではスマホで出す（PC は真ん中の列の一番上の時間割 WeekTimetable）。
- * className で、どの幅で出すかを決める（予約タブは "ledger-cards"）。
+ * 1週間の予約台帳の日ごとのカード（中身だけ）。予約タブのスマホで、時間割（WeekTimetable）の下の畳んだ「日ごとの一覧で見る」の中に出す（PC は出さない）。
+ * 見出し・凡例・週の動かし方・確かめの一覧・起点の説明・「最初に戻す」は時間割の側に1回だけ出すので、ここには置かない。
  */
-export function Ledger({ data, className }: { data: BookData; className?: string }) {
+export function LedgerDays({ data }: { data: BookData }) {
   const book = useBook(data);
-  // 見ている週はページの共通の親（LedgerView.tsx）が持つ。空いている時間を押すと、下から1枚の「入れる」画面（1枚も親が持つ）
+  // 見ている週はページの共通の親（LedgerView.tsx）が持つ（時間割と同じ週）。空いている時間を押すと「予約を入れる」1枚（1枚も親が持つ）
   const view = useLedgerView();
   const onPick = (date: string, start: string) => view.act({ kind: "open", target: { date, start } });
   // 予約の行を押すと、その予約の1枚（見る・取り消す・変える。ReservationSheet。1枚は親が持つ）
   const onOpen = (id: string) => view.act({ kind: "detail", id });
 
   return (
-    <section className={["ledger", className].filter(Boolean).join(" ")}>
-      <h2>1週間の予約台帳</h2>
-      <LedgerNotes book={book} />
-      <WeekNav />
-      <div className="week-wrap">
-        <ol className="week">
-          {view.days.map((d) => (
-            <li
-              key={d.date}
-              id={`ledger-day-${d.date}`}
-              className={["day", d.open ? "" : "closed", d.isToday ? "today" : "", d.outside ? "outside" : ""].join(" ").trim()}
-            >
-              <div className="day-head">
-                <span className="day-date">{d.label}</span>
-                {d.isToday && <span className="tag">今日</span>}
-              </div>
-              {!d.hours ? (
-                <>
-                  <span className="day-hours">{d.holiday ? "休みの日" : "お休み"}</span>
-                  {/* 休みにした日に残った予約も隠さない（消さずに残し、ToDo で別の日時を案内する） */}
-                  {d.reservations.length > 0 && (
-                    <>
-                      <p className="problems small">✗ お休みの日に残っている予約 {d.reservations.length}件（お客様に別の日時を案内してください）</p>
-                      <SlotList list={d.reservations} onOpen={onOpen} />
-                    </>
-                  )}
-                </>
-              ) : (
-                <>
-                  <span className="day-count">
-                    <strong className="num">{d.reservations.length}</strong> 件
-                  </span>
-                  <MiniBar value={d.usedMinutes} max={d.capacityMinutes} label="埋まり" />
-                  <span className="day-hours">
-                    {d.hours.open}–{d.hours.close}
-                  </span>
-                  <SlotList list={d.reservations} onOpen={onOpen} />
-                  {!d.outside && <FreeTimes book={book} day={d} onPick={onPick} />}
-                </>
-              )}
-            </li>
-          ))}
-        </ol>
-      </div>
-
-      <LedgerChecks book={book} />
-      <LedgerReset book={book} data={data} />
-    </section>
+    <div className="week-wrap">
+      <ol className="week">
+        {view.days.map((d) => (
+          <li
+            key={d.date}
+            id={`ledger-day-${d.date}`}
+            className={["day", d.open ? "" : "closed", d.isToday ? "today" : "", d.outside ? "outside" : ""].join(" ").trim()}
+          >
+            <div className="day-head">
+              <span className="day-date">{d.label}</span>
+              {d.isToday && <span className="tag">今日</span>}
+            </div>
+            {!d.hours ? (
+              <>
+                <span className="day-hours">{d.holiday ? "休みの日" : "お休み"}</span>
+                {/* 休みにした日に残った予約も隠さない（消さずに残し、ToDo で別の日時を案内する） */}
+                {d.reservations.length > 0 && (
+                  <>
+                    <p className="problems small">✗ お休みの日に残っている予約 {d.reservations.length}件（お客様に別の日時を案内してください）</p>
+                    <SlotList list={d.reservations} onOpen={onOpen} />
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                <span className="day-count">
+                  <strong className="num">{d.reservations.length}</strong> 件
+                </span>
+                <MiniBar value={d.usedMinutes} max={d.capacityMinutes} label="埋まり" />
+                <span className="day-hours">
+                  {d.hours.open}–{d.hours.close}
+                </span>
+                <SlotList list={d.reservations} onOpen={onOpen} />
+                {!d.outside && <FreeTimes book={book} day={d} onPick={onPick} />}
+              </>
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -171,6 +163,7 @@ export function LedgerNotes({ book }: { book: Book }) {
           </span>
         )}
       </p>
+      <p className="hint sp-only tt-sp-note">スマホの時間割では、帯に名字だけを出します（時刻・メニュー・札は、帯を押して開く1枚で見られます）。</p>
     </>
   );
 }
