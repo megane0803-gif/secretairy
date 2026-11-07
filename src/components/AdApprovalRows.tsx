@@ -23,13 +23,14 @@ import { useRules } from "@/lib/rules/useRules";
 import { getAdsFixMaxChars, getShop } from "@/lib/settings";
 import { pendingRevert } from "@/lib/ads/verdict";
 import { teamDecisionLine } from "@/lib/ads/team/state";
+import { AdAddRow } from "./AdAddRow";
 import { AdRevertRow } from "./AdRevertRow";
 import { AdTeam } from "./AdTeam";
 
 const MAX_FIX_CHARS = getAdsFixMaxChars();
 
-/** プログラムの確認（✓ の印を3つ） */
-export function GateChecks({ checks }: { checks: GateCheck[] }) {
+/** プログラムの確認（✓ の印。止める・外すは3つ・足すは4つ） */
+export function GateChecks({ checks }: { checks: (Omit<GateCheck, "id"> & { id: string })[] }) {
   return (
     <ul className="gate" aria-label="プログラムの確認">
       {checks.map((c) => (
@@ -62,6 +63,8 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
   const [noAi, setNoAi] = useState(false);
 
   const p = ads.pending;
+  // 足す案の行（止める・外すの行の下に出す。AI のチームの会議は付けない）
+  const adds = ads.adds.map((x) => <AdAddRow key={x.id} p={x} onDone={setDone} />);
 
   const approve = (e: React.MouseEvent, x: AdProposal) => {
     // 人がボタンを押したときだけ（スクリプトから押したことにはできない）
@@ -236,20 +239,22 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
     return (
       <>
         {row}
+        {adds}
         <AdRevertRow onDone={setDone} />
       </>
     );
   return (
     <>
-      {row || revert ? (
+      {row || revert || adds.length ? (
         <ul className="approvals compact">
           {row}
+          {adds}
           <AdRevertRow onDone={setDone} />
         </ul>
       ) : (
         <p className="checked">✓ 広告の案の承認待ちはありません</p>
       )}
-      {done && !row && (
+      {done && (!row || adds.length > 0) && (
         <p className="hint" role="status">
           {done}
         </p>

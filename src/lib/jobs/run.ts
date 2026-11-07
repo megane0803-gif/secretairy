@@ -1,7 +1,7 @@
 // ホームの「AI の仕事」の流れ（docs/SPEC.md §1.12）。押した時に、これから来る物を1行ずつ動かし、結果をそれぞれの場所に届ける。
 //   予約の相談 … 架空のお客様の文1件を、予約チャットと同じ /api/ai/reserve へ → 返事をして仮押さえ → 承認の箱へ
 //   新しい明細 … 経理の「次の明細（試し）」の架空の明細を、いま効く自動のルールで仕分け（AI なし）→ 迷う物は経理タブへ
-//   広告の見直し … 広告タブと同じ /api/ai/ads → 画面でももう一度門 → 承認の箱へ（今週の案がもうある時は動かさない）
+//   広告の見直し … 広告タブと同じ /api/ai/ads → 画面でももう一度門 → 承認の箱へ（足す案も同じ決まりで。今週の案がもうある時は動かさない）
 //   メモ … 架空のメモ1件を、メモを投げると同じ /api/ai/todo → ToDo へ
 //   予約サイトから予約が入る … 予約サイトの「ここで予約が入る（デモ）」と同じ（AI なし。book/site.ts）→ 台帳へ（承認の箱は通さない）
 //
@@ -13,8 +13,9 @@ import { getAccounting, getAds, getJobSeeds, getTodos } from "../data/seed";
 import type { AccountingSeed, AdReport, JobSeed } from "../data/types";
 import { sortTrial, type AccountingState } from "../accounting/state";
 import { checkDraft, proposalLabel } from "../ads/gate";
-import { buildTable } from "../ads/report";
-import { canPropose, offNos, withProposal, type AdsState } from "../ads/state";
+import { addLabel, addRowsFrom } from "../ads/add";
+import { featuredWords } from "../ads/featured";
+import { canPropose, tableOf, withReview, type AdsState } from "../ads/state";
 import { buildWeeklyReport, withReport } from "../ads/weekly";
 import type { AdsRequest, AdsResponse } from "../ads/wire";
 import { AI_FAILED_MESSAGE, reasonOf } from "../ai/busy";
@@ -29,13 +30,13 @@ import type { JournalWho } from "../journal";
 import { allKartes, resolveSeedKartes, toVisits, withSeedKarteEdits } from "../karte/record";
 import { assembleBook } from "../book/assemble";
 import type { Rule } from "../rules/types";
-import type { AdSettings } from "../settings";
+import { getAdsMaxAdds, type AdSettings } from "../settings";
 import type { TabId } from "../tabs";
 import { memoDue } from "../todo/due";
 import { resolveSeedTodos, withMemoTodo } from "../todo/items";
 import { maskNames, restoreNames } from "../todo/names";
 import type { TodoRequest, TodoResponse } from "../todo/wire";
-import { JOB_APPROVAL_RESULT, JOB_IDS, isJobDone, withJobDone, type JobId, type JobsState } from "./state";
+import { JOB_APPROVAL_RESULT, JOB_IDS, isJobDone, jobApprovalResult, withJobDone, type JobId, type JobsState } from "./state";
 
 /** ai = Claude / script = 決まった返事（AI なし。テストと同じ物） */
 export type JobMode = "ai" | "script";
@@ -322,7 +323,7 @@ async function adsJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
   if (blocked) return { kind: "skip", note: blocked };
   if (!take(budget, AI_CALLS.ads)) return { kind: "limit" };
   env.journal({ who: "オーナー", text: `AI の仕事を動かした：広告の見直し（${env.mode === "script" ? "決まった返事・AI なし" : "AI"}）` });
-  const table = buildTable(env.adReport ?? getAds(), env.adSettings, offNos(env.store.ads()));
+  const table = tableOf(env.adReport ?? getAds(), env.adSettings, env.store.ads());
   const res = await env.ask.ads({ mode: env.mode, table, rules: env.rules.filter((r) => !r.locked) });
   // 見直しを1回するたびに、広告タブに報告を1枚残す（広告タブと同じ。数はプログラムが表から入れる）
   const weekly = (x: Pick<Parameters<typeof buildWeeklyReport>[0], "proposal" | "failed">) =>
@@ -342,33 +343,56 @@ async function adsJob(env: JobEnv, budget: JobBudget): Promise<JobOutcome> {
     if (res.code === "no-ai") return { kind: "no-ai" };
     if (res.code === "busy") return { kind: "busy" };
     if (res.code === "bad-request") return { kind: "failed", note: reasonOf(res) ?? AI_FAILED_MESSAGE };
-    env.journal(...res.steps);
-    env.store.setAds((s) => withReport(s, weekly({ failed: `案はプログラムの確認を通らなかったので、出しませんでした（${res.problems.join("。")}）` }), env.adSettings));
-    return { kind: "done", result: "案は出ませんでした（門を通らず）", tab: "ads" };
-  }
-  // 受け取った案を、画面でももう一度門で確かめてから承認の箱に入れる（広告タブと同じ）
-  const again = checkDraft(table, env.adSettings.towns, {
-    tool: res.proposal.action === "stop" ? "stop_keyword" : "exclude_term",
-    action: res.proposal.action,
-    no: res.proposal.no,
-    reason: res.proposal.reason,
-    extraKeys: [],
-  });
-  if (!again.ok) {
-    env.journal(...res.steps, { who: "プログラム", text: `画面の確認で弾いた：${again.problems.join("。")}（案は出さなかった）` });
-    env.store.setAds((s) => withReport(s, weekly({ failed: `案は画面の確認を通らなかったので、出しませんでした（${again.problems.join("。")}）` }), env.adSettings));
-    return { kind: "done", result: "案は出ませんでした（門を通らず）", tab: "ads" };
   }
   const id = env.newId?.() ?? `ad-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  // 受け取った案を、画面でももう一度門で確かめてから承認の箱に入れる（広告タブと同じ）
+  const again = res.ok
+    ? checkDraft(table, env.adSettings.towns, {
+        tool: res.proposal.action === "stop" ? "stop_keyword" : "exclude_term",
+        action: res.proposal.action,
+        no: res.proposal.no,
+        reason: res.proposal.reason,
+        extraKeys: [],
+      })
+    : null;
+  const stop = again?.ok ? again : null;
+  // 足す案（広告タブと同じ：止める・外すの結果に関係なく、画面でも確かめなおす。同じ回に外す言葉は足さない）
+  const addPart = addRowsFrom(table, featuredWords(env.adSettings, env.data.menus), res.adds?.picks, {
+    baseId: id,
+    maxAdds: getAdsMaxAdds(),
+    ...(stop?.proposal.action === "exclude" ? { skipNo: stop.proposal.no } : {}),
+  });
+  const addSteps = [...(res.adds?.steps ?? []), ...addPart.refused];
+  const addLabels = addPart.rows.map((r) => addLabel({ no: r.no, text: table.searchTerms.find((t) => t.no === r.no)?.text ?? "" }));
+  const addLine = addLabels.length ? [{ who: "プログラム" as const, text: `承認の箱に入れた：足す案 ${addLabels.map((l) => `「${l}」`).join("・")}` }] : [];
+
+  if (!res.ok || !stop) {
+    const problems = !res.ok ? res.problems : again && !again.ok ? again.problems : [];
+    env.journal(
+      ...res.steps,
+      ...(res.ok ? [{ who: "プログラム" as const, text: `画面の確認で弾いた：${problems.join("。")}（案は出さなかった）` }] : []),
+      ...addSteps,
+      ...addLine,
+    );
+    const failed = `案は${res.ok ? "画面" : "プログラム"}の確認を通らなかったので、出しませんでした（${problems.join("。")}）`;
+    let added = 0;
+    env.store.setAds((s) => {
+      const next = addPart.rows.length ? withReview(s, { adds: addPart.rows }, table, { nowIso, mode: env.mode }, env.adSettings) : s;
+      added = next === s ? 0 : addPart.rows.length;
+      return withReport(next, weekly({ failed }), env.adSettings);
+    });
+    if (added) return { kind: "done", result: jobApprovalResult(added), tab: "ads" };
+    return { kind: "done", result: "案は出ませんでした（門を通らず）", tab: "ads" };
+  }
   let added = false;
   env.store.setAds((s) => {
-    const next = withProposal(s, again.proposal, table, { id, checks: again.checks, nowIso, mode: env.mode }, env.adSettings);
+    const next = withReview(s, { proposal: { ...stop.proposal, id, checks: stop.checks }, adds: addPart.rows }, table, { nowIso, mode: env.mode }, env.adSettings);
     added = next !== s;
-    return added ? withReport(next, weekly({ proposal: { ...again.proposal, id } }), env.adSettings) : next;
+    return added ? withReport(next, weekly({ proposal: { ...stop.proposal, id } }), env.adSettings) : next;
   });
   if (!added) return { kind: "skip", note: ALREADY_THIS_WEEK };
-  env.journal(...res.steps, { who: "プログラム", text: `承認の箱に入れた：広告の案「${proposalLabel(again.proposal)}」` });
-  return { kind: "done", result: JOB_APPROVAL_RESULT, tab: "ads" };
+  env.journal(...res.steps, { who: "プログラム", text: `承認の箱に入れた：広告の案「${proposalLabel(stop.proposal)}」` }, ...addSteps, ...addLine);
+  return { kind: "done", result: jobApprovalResult(1 + addPart.rows.length), tab: "ads" };
 }
 
 // ── メモ ─────────────────────────────────────────────────

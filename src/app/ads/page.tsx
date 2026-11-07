@@ -1,10 +1,12 @@
 import { AdApprovalRows } from "@/components/AdApprovalRows";
 import { TabPage } from "@/components/TabPage";
 import { FieldList, Fold, Panel } from "@/components/parts";
+import { ADD_CHECK_LABELS } from "@/lib/ads/add";
 import { GATE_LABELS } from "@/lib/ads/gate";
 import { AD_FIELDS } from "@/lib/data/types";
 import { getSeedRules } from "@/lib/rules/store";
 import { getAdSettings, getShop } from "@/lib/settings";
+import { AdsConnect } from "./AdsConnect";
 import { AdsReport, AdsWeeks } from "./AdsReport";
 import { AdsResults } from "./AdsResults";
 import { AdsReview } from "./AdsReview";
@@ -46,8 +48,16 @@ export default function AdsPage() {
         <p>AI の案は、承認の箱に入れる前にプログラムが3つ確かめます。弾いたら理由を渡して1回だけ作り直させ、それでもだめなら案は出さずに日誌に書きます。</p>
         <ul>
           <li>✓ {GATE_LABELS.exists}（止める＝広告を出す言葉・外す＝調べた言葉。もう止めた物は選ばない）</li>
-          <li>✓ {GATE_LABELS.noAdd}（道具は「止める」「外す」の2つだけ。言葉を足す道具はありません）</li>
+          <li>✓ {GATE_LABELS.noAdd}（止める・外すの道具は「止める」「外す」の2つだけ。この2つでは言葉を足せません）</li>
           <li>✓ {GATE_LABELS.town}（{ads.towns.join("・")}）</li>
+        </ul>
+        <p>
+          そのあと別の1回で、言葉を足す案を出します。足してよい言葉はプログラムが決め（売りのメニューの名前が入って予約につながった調べ言葉だけ）、AI はその番号から選ぶだけです（1回に2件まで・作り直しはしない）。足す案の確認は4つです。承認すると広告の管理画面の「広告を出す言葉」に1行足します（数はまだ無いので「—」。「効いたか見る」の ToDo・効いたかの判定は、足した言葉にはまだありません）。
+        </p>
+        <ul>
+          {Object.values(ADD_CHECK_LABELS).map((l) => (
+            <li key={l}>✓ {l}</li>
+          ))}
         </ul>
         <p>
           案は{ads.oncePerDays}日に1つまで。承認すると、{ads.checkAfterDays}日後を期限に ToDo「効いたか見る」を足します。数（回数・お金・予約）は AI に書かせず、表からプログラムが入れます。
@@ -57,6 +67,7 @@ export default function AdsPage() {
           戻す案は承認の箱に入り、戻すのはオーナーの「承認」だけです。
         </p>
         <FieldList fields={AD_FIELDS} />
+        <AdsConnect />
       </Fold>
     </TabPage>
   );

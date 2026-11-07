@@ -16,6 +16,8 @@
     "maxReplyTokens": 600,
     "maxTries": 2,
     "maxFixChars": 100,
+    "maxAddCalls": 1,
+    "maxAdds": 2,
     "maxRequestChars": 200000
   },
   "adsTeam": {

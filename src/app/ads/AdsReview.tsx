@@ -11,12 +11,14 @@ import { useState } from "react";
 import { GateChecks } from "@/components/AdApprovalRows";
 import { askAdsReview } from "@/lib/ads/client";
 import { checkDraft, proposalLabel, type GateCheck } from "@/lib/ads/gate";
-import { canPropose, resetAds, withProposal } from "@/lib/ads/state";
+import { addLabel, addRowsFrom } from "@/lib/ads/add";
+import { featuredWords } from "@/lib/ads/featured";
+import { canPropose, resetAds, withReview, type AdsState } from "@/lib/ads/state";
 import { buildWeeklyReport, withReport } from "@/lib/ads/weekly";
 import type { GatedProposal } from "@/lib/ads/gate";
 import type { RejectedDraft } from "@/lib/ads/review";
 import { demoClock, demoInstant } from "@/lib/calendar";
-import { getShop } from "@/lib/settings";
+import { getAdsMaxAdds, getMenus, getShop } from "@/lib/settings";
 import { useAds } from "@/lib/ads/useAds";
 import type { AdsMode } from "@/lib/ads/wire";
 import { AI_BUSY_MESSAGE, failText } from "@/lib/ai/busy";
@@ -28,9 +30,11 @@ import type { Rule } from "@/lib/rules/types";
 import { useRules } from "@/lib/rules/useRules";
 
 type Shown =
-  | { kind: "ok"; text: string; checks: GateCheck[]; tries: number }
-  | { kind: "gate"; problems: string[]; checks: GateCheck[] }
+  | { kind: "ok"; text: string; checks: GateCheck[]; tries: number; adds: string[] }
+  | { kind: "gate"; problems: string[]; checks: GateCheck[]; adds: string[] }
   | { kind: "note"; text: string };
+
+const MAX_ADDS = getAdsMaxAdds();
 
 /** 広告のタブの「承認待ち」の見出しの id（うまくいった直後のリンクの先） */
 export const ADS_APPROVALS_ID = "ads-approvals";
@@ -88,40 +92,65 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
         setShown({ kind: "note", text: AI_BUSY_MESSAGE });
         return;
       }
-      if (useMode === "ai") setNoAi(false);
       if (res.code === "bad-request") {
+        if (useMode === "ai") setNoAi(false);
         setShown({ kind: "note", text: failText(res.message, "画面を開きなおしてから押してください。") });
         return;
       }
-      writeJournal(...res.steps);
-      ads.update((s) => withReport(s, report({ failed: `案はプログラムの確認を通らなかったので、出しませんでした（${res.problems.join("。")}）`, rejected: res.rejected }), ads.settings));
-      setShown({ kind: "gate", problems: res.problems, checks: res.checks });
-      return;
     }
     if (useMode === "ai") setNoAi(false);
-    // 受け取った案を、この画面でももう一度門で確かめてから承認の箱に入れる
-    const again = checkDraft(ads.table, ads.settings.towns, {
-      tool: res.proposal.action === "stop" ? "stop_keyword" : "exclude_term",
-      action: res.proposal.action,
-      no: res.proposal.no,
-      reason: res.proposal.reason,
-      extraKeys: [],
-    });
-    if (!again.ok) {
-      writeJournal(...res.steps, { who: "プログラム", text: `画面の確認で弾いた：${again.problems.join("。")}（案は出さなかった）` });
-      ads.update((s) => withReport(s, report({ failed: `案は画面の確認を通らなかったので、出しませんでした（${again.problems.join("。")}）`, rejected: res.rejected }), ads.settings));
-      setShown({ kind: "gate", problems: again.problems, checks: again.checks });
-      return;
-    }
     const nowIso = clockIso();
     const id = `ad-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-    const weekly = report({ proposal: { ...again.proposal, id }, rejected: res.rejected });
+    // 止める・外すの案（今と同じ流れ）：受け取った案を、この画面でももう一度門で確かめる
+    const again = res.ok
+      ? checkDraft(ads.table, ads.settings.towns, {
+          tool: res.proposal.action === "stop" ? "stop_keyword" : "exclude_term",
+          action: res.proposal.action,
+          no: res.proposal.no,
+          reason: res.proposal.reason,
+          extraKeys: [],
+        })
+      : null;
+    const stop = again?.ok ? again : null;
+    // 足す案（止める・外すの結果に関係なく）：画面でも足す用の4つと言葉の門で確かめなおす。同じ回に外す言葉は足さない
+    const addPart = addRowsFrom(table, featuredWords(ads.settings, getMenus()), res.adds?.picks, {
+      baseId: id,
+      maxAdds: MAX_ADDS,
+      ...(stop?.proposal.action === "exclude" ? { skipNo: stop.proposal.no } : {}),
+    });
+    const addSteps = [...(res.adds?.steps ?? []), ...addPart.refused];
+    const addLabels = addPart.rows.map((r) => addLabel({ no: r.no, text: table.searchTerms.find((t) => t.no === r.no)?.text ?? "" }));
+    const addLine = addLabels.length ? [{ who: "プログラム" as const, text: `承認の箱に入れた：足す案 ${addLabels.map((l) => `「${l}」`).join("・")}` }] : [];
+    const withAdds = (s: AdsState) => (addPart.rows.length ? withReview(s, { adds: addPart.rows }, table, { nowIso, mode: useMode }, ads.settings) : s);
+
+    if (!res.ok || !stop) {
+      const problems = !res.ok ? res.problems : again && !again.ok ? again.problems : [];
+      const checks = !res.ok ? res.checks : again && !again.ok ? again.checks : [];
+      const failed = !res.ok
+        ? `案はプログラムの確認を通らなかったので、出しませんでした（${problems.join("。")}）`
+        : `案は画面の確認を通らなかったので、出しませんでした（${problems.join("。")}）`;
+      writeJournal(
+        ...res.steps,
+        ...(res.ok ? [{ who: "プログラム" as const, text: `画面の確認で弾いた：${problems.join("。")}（案は出さなかった）` }] : []),
+        ...addSteps,
+        ...addLine,
+      );
+      ads.update((s) => withReport(withAdds(s), report({ failed, rejected: res.rejected }), ads.settings));
+      setShown({ kind: "gate", problems, checks, adds: addLabels });
+      return;
+    }
+    const weekly = report({ proposal: { ...stop.proposal, id }, rejected: res.rejected });
     ads.update((s) => {
-      const next = withProposal(s, again.proposal, table, { id, checks: again.checks, nowIso, mode: useMode }, ads.settings);
+      const next = withReview(s, { proposal: { ...stop.proposal, id, checks: stop.checks }, adds: addPart.rows }, table, { nowIso, mode: useMode }, ads.settings);
       return next === s ? s : withReport(next, weekly, ads.settings);
     });
-    writeJournal(...res.steps, { who: "プログラム", text: `承認の箱に入れた：広告の案「${proposalLabel(again.proposal)}」（見直しの報告も広告タブに残した）` });
-    setShown({ kind: "ok", text: proposalLabel(again.proposal), checks: again.checks, tries: res.tries });
+    writeJournal(
+      ...res.steps,
+      { who: "プログラム", text: `承認の箱に入れた：広告の案「${proposalLabel(stop.proposal)}」（見直しの報告も広告タブに残した）` },
+      ...addSteps,
+      ...addLine,
+    );
+    setShown({ kind: "ok", text: proposalLabel(stop.proposal), checks: stop.checks, tries: res.tries, adds: addLabels });
   }
 
   const reset = (e: React.MouseEvent) => {
@@ -193,6 +222,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
           </p>
           <strong>プログラムの確認</strong>
           <GateChecks checks={shown.checks} />
+          {shown.adds.length > 0 && <p className="checked">✓ 足す案も入れました：{shown.adds.join("・")}</p>}
         </div>
       )}
       {!can.ok && (
@@ -241,6 +271,7 @@ export function AdsReview({ seedRules, timezone }: { seedRules: Rule[]; timezone
           </ul>
           <strong>プログラムの確認</strong>
           <GateChecks checks={shown.checks} />
+          {shown.adds.length > 0 && <p className="checked">✓ 足す案は承認の箱に入れました：{shown.adds.join("・")}</p>}
         </div>
       )}
       {shown?.kind === "note" && (

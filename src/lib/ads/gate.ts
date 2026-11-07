@@ -87,6 +87,10 @@ export function checkDraft(table: AdTable, towns: string[], d: AdDraft, words: s
   } else if (row.off) {
     exists.ok = false;
     exists.reason = `${no}番「${row.text}」はもう${row.kind === "keyword" ? "止めて" : "外して"}います`;
+  } else if (row.kind === "term" && (row.addMark === "added" || row.addMark === "pending")) {
+    // 広告を出す言葉に足した（足す案が承認待ちの）調べ言葉は外さない
+    exists.ok = false;
+    exists.reason = `${no}番「${row.text}」は広告を出す言葉に${row.addMark === "added" ? "足した" : "足す案が承認待ちの"}言葉なので外しません`;
   }
 
   // 3. 外す言葉に町の名前が入っていないか（番号が表に無ければ見られない）

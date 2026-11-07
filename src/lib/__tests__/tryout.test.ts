@@ -105,7 +105,7 @@ describe("A2. 予約タブの「承認待ち」は予約の行だけ（ホーム
     const res = approvalsFor(q, "reservations");
     assert.equal(res.ad, null, "予約タブには広告の案を出さない");
     assert.equal(res.count, 1);
-    assert.deepEqual(approvalsFor(q, "all"), { reservations: q.reservations, ad: q.ad, count: 2 });
+    assert.deepEqual(approvalsFor(q, "all"), { reservations: q.reservations, ad: q.ad, adAdds: [], count: 2 });
   });
 
   test("予約タブは only=\"reservations\" で、その時は広告の案の行（AdApprovalRows）を描かない", () => {

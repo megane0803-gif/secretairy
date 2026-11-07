@@ -1,7 +1,8 @@
-// 広告の見直しで AI に渡す道具は2つだけ：「止める」と「外す」。
-// 言葉を足す道具は作らない（売りのメニュー以外へ広げない）。
-// どちらの道具も、番号と理由1文しか受け取らない。数（回数・お金・予約）は AI に書かせず、表からプログラムが入れる。
-// 道具を呼んでも何も変わらない。案は門（gate.ts）を通ってから承認の箱に入り、変えるのはオーナーの「承認」だけ。
+// 広告の見直しで AI に渡す道具。止める・外すの見直しには2つだけ：「止める」と「外す」（この2つでは言葉を足せない）。
+// 言葉を足すのは、そのあとの別の1回の「足す」（add_keyword）だけ。足すのは、売りのメニューの名前が入って予約につながった
+// 調べ言葉だけで、プログラムが決めた候補（add.ts）の番号から選ぶ。売り以外へは広げない。
+// どの道具も、番号と理由1文しか受け取らない。数（回数・お金・予約）は AI に書かせず、表からプログラムが入れる。
+// 道具を呼んでも何も変わらない。案は門（gate.ts・add.ts）を通ってから承認の箱に入り、変えるのはオーナーの「承認」だけ。
 
 import type { AdAction } from "./report";
 
@@ -64,6 +65,27 @@ export const AD_TOOL_DEFS: AdToolDef[] = [
     },
   },
 ];
+
+/** 足す道具の名前（止める・外すの見直しには渡さない） */
+export const AD_ADD_TOOL = "add_keyword";
+
+export type AdAddToolDef = Omit<AdToolDef, "name"> & { name: typeof AD_ADD_TOOL };
+
+/** 足す道具：プログラムが作った候補の番号と理由1文だけを受け取る */
+export const AD_ADD_TOOL_DEF: AdAddToolDef = {
+  name: AD_ADD_TOOL,
+  description:
+    "お客さんが調べた言葉を1つ、広告を出す言葉に足す案を出す。番号は「足す候補」の一覧の番号だけ（候補に無い番号は使えない）。足したい候補ごとに1回ずつ呼ぶ。呼ぶと承認の箱に入り、オーナーが決める。",
+  input_schema: {
+    type: "object",
+    properties: {
+      no: { type: "integer", description: "足す言葉の番号（足す候補の一覧）" },
+      reason: { type: "string", description: REASON },
+    },
+    required: ["no", "reason"],
+    additionalProperties: false,
+  },
+};
 
 export function isAdTool(name: string): name is AdToolName {
   return name === "stop_keyword" || name === "exclude_term";

@@ -86,6 +86,15 @@ export function reservationCard(
   };
 }
 
+/**
+ * LINE に届ける承認待ちの行の番号（予約の仮押さえと、止める・外すの広告の案だけ）。
+ * 足す案（ads.adds）と戻す案は届けない（画面の承認の箱で押す）。LINE のボタンも、止める・外すの行だけを受ける（applyPress）。
+ */
+export function lineApprovalIds(bookPendingIds: readonly string[], ads: AdsState): string[] {
+  const ad = pendingAd(ads);
+  return [...bookPendingIds, ...(ad ? [ad.id] : [])];
+}
+
 /** 承認待ちの広告の案を、LINE に届ける形にする */
 export function adCard(p: AdProposal, channel: string): ApprovalCard {
   return {
