@@ -4,9 +4,12 @@
 // 大きい数字3つ（売上・来店・客単価）・日ごとの小さい棒（休業日は点。日報がある日は休業日でも棒。押すとその日の売上と来店）・支払い方法の割合の棒・日ごとの表。
 // 月を選べる（最初から入っている月と、日報が入っている月）。数はどれもプログラムが日ごとの数から出す（accounting/daily.ts と sales.ts。AI は使わない）。
 // 日報は freee にも会計にも AI にも送らない。
+// 「日報を入れる」の1枚はここの1つだけ。経理の見出しの下のボタン（スマホ）とホームのボタン（/accounting?daily=today）は、accounting/dailyOpen.ts を通してここに開いてもらう。
+// 内訳（技術・店販）を入れた日は、その日を押した時と日ごとの表に出し、月の大きい数字の下に内訳を入れた日の分を1行（数はプログラムが日ごとの数から足す）。
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BigNumber, Fold, MiniBar } from "@/components/parts";
+import { onDailySheetRequest, wantsDailyOpen, withoutDailyOpen } from "@/lib/accounting/dailyOpen";
 import { DAILY_SECTION_NOTE, initialMonth, monthAfterRemove, monthTitle, parseDaily, salesMonths, summarizeMonth, type DailyCommit } from "@/lib/accounting/daily";
 import { yen } from "@/lib/accounting/sales";
 import { useBookState, useMinute } from "@/lib/book/useBook";
@@ -19,6 +22,10 @@ import { useHolidays } from "@/lib/useHolidays";
 import { DailySheet } from "./DailySheet";
 
 const readRaw = () => readBrowser(DAILY_KEY);
+const noSub = () => () => {};
+
+/** その日の内訳の1つ（「技術 25,000円・店販 5,000円」） */
+export const splitText = (x: { tech: number; retail: number }) => `技術 ${yen(x.tech)}・店販 ${yen(x.retail)}`;
 
 export function SalesReport() {
   // 店の設定に、予約のページで決めた休みの日を重ねる（台帳と同じ。useBook）。休業日の判定はこの shop の calDay
@@ -49,6 +56,26 @@ export function SalesReport() {
     setSheet((x) => ({ date, n: (x?.n ?? 0) + 1 }));
   };
 
+  // ほかのボタン（経理の見出しの下・ホーム）からの「今日の1枚を開いて」。1枚はここの1つだけ（dailyOpen.ts）。
+  // ホームから来た時（?daily=today）は、ブラウザの中身を読み終えた描画（hydrated）で開き、印は URL から消す（開き直しで、もう一度開かない）
+  const hydrated = useSyncExternalStore(noSub, () => true, () => false);
+  const todayRef = useRef(today);
+  todayRef.current = today;
+  const [wantOpen, setWantOpen] = useState(false);
+  useEffect(() => onDailySheetRequest(() => setWantOpen(true)), []);
+  useEffect(() => {
+    const l = window.location;
+    if (!wantsDailyOpen(l.search)) return;
+    window.history.replaceState(window.history.state, "", withoutDailyOpen(l.pathname, l.search, l.hash));
+    setWantOpen(true);
+  }, []);
+  useEffect(() => {
+    if (!wantOpen || !hydrated) return;
+    setWantOpen(false);
+    setDone(null);
+    setSheet((x) => ({ date: todayRef.current, n: (x?.n ?? 0) + 1 }));
+  }, [wantOpen, hydrated]);
+
   // 「最初に戻す」で印が変わったら、開いている1枚を閉じる（戻す前に入れかけた数は保存しない。保存の側でも印を確かめる）
   const epochRef = useRef(book.state.epoch);
   useEffect(() => {
@@ -77,7 +104,8 @@ export function SalesReport() {
       </h2>
       <p className="hint">{DAILY_SECTION_NOTE}</p>
       <div className="acct-daily-bar">
-        <button type="button" className="btn primary acct-daily-open" onClick={() => openSheet(today)}>
+        {/* スマホの幅では出さない（見出しのすぐ下の同じボタン DailyOpenTop を出す。同じボタンを2つ見せない。globals.css） */}
+        <button type="button" className="btn primary acct-daily-open acct-daily-in" onClick={() => openSheet(today)}>
           日報を入れる
         </button>
         {months.length > 1 && (
@@ -104,6 +132,12 @@ export function SalesReport() {
         <BigNumber label="来店" value={s.visits} unit="人" />
         <BigNumber label="客単価" value={s.perVisit} unit="円" />
       </div>
+      {s.split.days > 0 && (
+        <p className="acct-split-month">
+          {splitText(s.split)}
+          <span className="hint">（内訳を入れた {s.split.days}日分）</span>
+        </p>
+      )}
 
       <h3 className="acct-h3">日ごとの売上</h3>
       <div className="daybars" role="group" aria-label={`${s.month}月の日ごとの売上（棒を押すと、その日の売上と来店）`}>
@@ -144,6 +178,7 @@ export function SalesReport() {
           <>
             <strong>{pickedDay.label}</strong> 売上 <strong className="num">{yen(pickedDay.sales)}</strong>・来店 <strong className="num">{pickedDay.visits}人</strong>
             {pickedDay.daily && <span className="tag own acct-daily-tag">日報</span>}
+            {pickedDay.split && <span className="acct-split-day num">（{splitText(pickedDay.split)}）</span>}
           </>
         ) : (
           <span className="hint">
@@ -196,7 +231,10 @@ export function SalesReport() {
                     </td>
                   ) : d.shown ? (
                     <>
-                      <td className="num">{yen(d.sales)}</td>
+                      <td className="num">
+                        {yen(d.sales)}
+                        {d.split && <small className="acct-split-cell">{splitText(d.split)}</small>}
+                      </td>
                       <td className="num">{d.visits}人</td>
                       <td className="num">{d.visits > 0 ? yen(Math.round(d.sales / d.visits)) : "—"}</td>
                     </>

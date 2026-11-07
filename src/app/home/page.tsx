@@ -8,13 +8,14 @@ import { getBookData } from "@/lib/book/data";
 import { getBriefLimits, getJobsSettings, getKarteHeadings, getReminderSettings, getTodoLimits } from "@/lib/settings";
 import { needsOwnerPasscode } from "@/lib/line/server";
 import { AiJobsProvider, AiJobsRunBar, AiJobsSection } from "./AiJobs";
+import { HomeTopActions } from "./HomeDailyOpen";
 import { HomeSummary } from "./HomeSummary";
 import { LinePanel } from "./LinePanel";
 
 export const dynamic = "force-dynamic";
 
 // ホームの並び（docs/SPEC.md §1.6）。欄は「題名＋1行の説明＋だれの札」。細かい欄は開け閉めでき、ブラウザに覚える（RememberFold）。
-// 真ん中：承認待ち＋まとめて動かす → 朝の要点（数字3枚＋まずやる3つ）→ 一言メモ → 今日のお客様 → 今日の注意 → 空いている時間 → AI に頼める仕事 → くわしく・最初に戻す
+// 真ん中：承認待ち＋まとめて動かす・日報を入れる（経理のタブの今日の1枚を開く）→ 朝の要点（数字3枚＋まずやる3つ）→ 一言メモ → 今日のお客様 → 今日の注意 → 空いている時間 → AI に頼める仕事 → くわしく・最初に戻す
 // 右の列：承認の箱 → これまでの動き（日誌）→ LINE とつなぐ。スマホは真ん中の並びのまま、その後に右の列。
 export default function HomePage() {
   const data = getBookData();
@@ -23,7 +24,11 @@ export default function HomePage() {
     <AiJobsProvider data={data} settings={getJobsSettings()}>
       <TabPage
         tab="home"
-        beside={<AiJobsRunBar />}
+        beside={
+          <HomeTopActions>
+            <AiJobsRunBar />
+          </HomeTopActions>
+        }
         right={
           <>
             <Panel title="承認の箱" id="approvals" tag={<ActorTag actor="human" />} desc="確認して決める物。決めるのはオーナーです">
