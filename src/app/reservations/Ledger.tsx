@@ -201,13 +201,18 @@ export function LedgerChecks({ book }: { book: Book }) {
   );
 }
 
+/** 台帳の中身はブラウザごと（PC とスマホは別々）の1行 */
+export const PER_BROWSER_NOTE =
+  "この画面の中身は、このブラウザだけに保存しています（PC とスマホは別々）。両方で同じ最初の状態を見る時は、両方で『最初に戻す』を押してください。";
+
 /** 起点の日と「最初に戻す」 */
 export function LedgerReset({ book, data }: { book: Book; data: BookData }) {
   return (
     <div className="reset-row">
       <span className="hint">
-        起点：{book.anchor.label}（このブラウザで初めて開いた日）。最初の予約はこの日から数えて置いています。
+        起点：{book.anchor.label}。最初の予約はこの日から数えて置いています（まだ何も触っていない時は、開いた日が起点です）。
       </span>
+      <span className="hint">{PER_BROWSER_NOTE}</span>
       <ResetBook data={data} />
     </div>
   );

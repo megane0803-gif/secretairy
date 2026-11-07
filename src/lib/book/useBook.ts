@@ -5,7 +5,7 @@
 // 書くのはこのブラウザの中だけ（サーバーには送らない）。
 
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
-import { BOOK_KEY, readBrowser, subscribeBrowser, writeBrowser, type BrowserWrite } from "../browser";
+import { BOOK_KEY, readBrowser, subscribeBrowser, type BrowserWrite } from "../browser";
 import { demoClock, demoInstant, shopToday } from "../calendar";
 import { allKartes, resolveSeedKartes, toVisits, withSeedKarteEdits } from "../karte/record";
 import { withSeats } from "../capacity";
@@ -15,7 +15,7 @@ import { useCapacity } from "../useCapacity";
 import { useHolidays } from "../useHolidays";
 import { useMenus } from "../useMenus";
 import type { BookData } from "./data";
-import { updateBook } from "./store";
+import { alignAnchor, updateBook } from "./store";
 import { assembleBook } from "./assemble";
 import { emptyBook, parseBook, pendingApprovals, type BookState } from "./state";
 
@@ -34,7 +34,7 @@ export function useMinute(): number {
   );
 }
 
-/** このブラウザの台帳の中身。まだ一度も開いていなければ、今日（このブラウザの時計・店の時間帯）を起点にして覚える */
+/** このブラウザの台帳の中身。まだ一度も開いていない・まだ何も触っていなければ、今日（このブラウザの時計・店の時間帯）を起点にして覚える */
 export function useBookState() {
   const todayDate = shopToday(getShop()).today.date;
   const raw = useSyncExternalStore(subscribeBrowser, read, () => null);
@@ -42,8 +42,9 @@ export function useBookState() {
   const state: BookState = stored ?? emptyBook(todayDate);
 
   useEffect(() => {
-    // そのブラウザで初めて開いた日を起点として覚える（docs/SPEC.md §5.1）
-    if (!parseBook(read())) writeBrowser(BOOK_KEY, JSON.stringify(emptyBook(todayDate)));
+    // そのブラウザで初めて開いた日を起点として覚える。まだ何も触っていなければ、開いた日（今日）に起点をそろえる
+    // （PC とスマホで最初の中身を同じにする。書けなかった時は今の起点のまま。docs/SPEC.md §5.1・store.ts の alignAnchor）
+    alignAnchor(todayDate);
   }, [todayDate]);
 
   // 書く直前に読みなおす（別の窓で変えた分を消さないように）。書けたかどうかを返す（store.ts）
