@@ -43,7 +43,14 @@
     { "id": "m-d", "name": "服の通販D" },
     { "id": "m-e", "name": "通販モールE" },
     { "id": "m-f", "name": "タオルの通販F" },
-    { "id": "m-i", "name": "掃除用品の通販I" }
+    { "id": "m-i", "name": "掃除用品の通販I" },
+    { "id": "m-g", "name": "美容材料の卸G" },
+    { "id": "m-m", "name": "店舗の家賃M" },
+    { "id": "m-n", "name": "電気の料金N" },
+    { "id": "m-o", "name": "ガスと水道の料金O" },
+    { "id": "m-j", "name": "カードの売上の入金J" },
+    { "id": "m-k", "name": "コード決済の売上の入金K" },
+    { "id": "m-l", "name": "撮影スタジオL" }
   ],
   "rules": [
     { "merchantId": "m-a", "use": "shop" },
@@ -82,7 +89,15 @@
       { "no": 17, "date": "2026-11-05", "merchantId": "m-d", "amount": 4290 },
       { "no": 18, "date": "2026-11-08", "merchantId": "m-a", "amount": 6930 },
       { "no": 19, "date": "2026-11-09", "merchantId": "m-d", "amount": 3980 },
-      { "no": 20, "date": "2026-11-10", "merchantId": "m-b", "amount": 990 }
+      { "no": 20, "date": "2026-11-10", "merchantId": "m-b", "amount": 990 },
+      { "no": 21, "date": "2026-10-20", "merchantId": "m-k", "amount": 70907, "account": "bank", "side": "income" },
+      { "no": 22, "date": "2026-10-26", "merchantId": "m-n", "amount": 14860, "account": "bank", "side": "expense" },
+      { "no": 23, "date": "2026-10-27", "merchantId": "m-l", "amount": 16500, "account": "bank", "side": "income" },
+      { "no": 24, "date": "2026-10-28", "merchantId": "m-o", "amount": 9320, "account": "bank", "side": "expense" },
+      { "no": 25, "date": "2026-10-30", "merchantId": "m-j", "amount": 171265, "account": "bank", "side": "income" },
+      { "no": 26, "date": "2026-10-30", "merchantId": "m-m", "amount": 98000, "account": "bank", "side": "expense" },
+      { "no": 27, "date": "2026-11-04", "merchantId": "m-g", "amount": 38720, "account": "bank", "side": "expense" },
+      { "no": 28, "date": "2026-11-05", "merchantId": "m-k", "amount": 129737, "account": "bank", "side": "income" }
     ]
   },
   "trial": {

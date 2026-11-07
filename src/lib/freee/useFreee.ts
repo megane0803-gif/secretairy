@@ -3,13 +3,28 @@
 // 画面で使う freee（テスト事業所）のつなぎ。鍵はブラウザの JavaScript からは見えない（HttpOnly の cookie）。
 // 画面が持つのは記録（secretairy:freee。明細ごとの状態・取引の番号）だけ。
 // つながっているかはサーバー（/api/freee/status）に聞く。cookie が無い画面（審査員の画面も）は「つながっていない」。
+// freee から読んだ明細の一覧は、画面のメモリの中だけに持つ（ブラウザには書かない）。読みに行くのは、経理のタブを開いた時
+// （つながっている答えを受けた時に1回）と「freee から読み直す」を押した時だけ（自動で何度も読みに行かない）。
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { FREEE_KEY, readBrowser, subscribeBrowser, writeBrowser } from "../browser";
 import type { CardUse } from "../data/types";
 import { getFreeeSettings } from "../settings";
-import { pressCheck, pressImport, pressRegister, recoverIfIdle, withFreeeLock, type LockLike, type Post, type RunDeps } from "./run";
-import { hasStarted, importHeld, isSending, parseFreee, type FreeeRecord } from "./state";
+import {
+  pressCheck,
+  pressImport,
+  pressRegister,
+  recoverIfIdle,
+  withFreeeLock,
+  BUSY_REASON,
+  type CheckOutcome,
+  type FreeeList,
+  type LockLike,
+  type Post,
+  type RegisterTarget,
+  type RunDeps,
+} from "./run";
+import { hasStarted, importHeld, isSending, parseFreee, recordKeys, stateOf, withLinked, type FreeeRecord } from "./state";
 
 export type FreeeStatus = "loading" | "connected" | "none" | "expired" | "off" | "not-set" | "no-company-id" | "wrong-company";
 
@@ -58,6 +73,48 @@ function browserLocks(): LockLike | null {
   }
 }
 
+// ---- freee から読んだ一覧（画面のメモリの中だけ） ----
+
+/** 一覧の読み方の状態。idle：まだ読んでいない・loading：読んでいる・ok：読めた・error：読めなかった（架空の明細には切り替えない） */
+export type FreeeListState =
+  | { phase: "idle" }
+  | { phase: "loading" }
+  | { phase: "ok"; list: FreeeList }
+  | { phase: "error"; reason: string; reconnect: boolean };
+
+let listState: FreeeListState = { phase: "idle" };
+const listListeners = new Set<() => void>();
+function setList(x: FreeeListState) {
+  listState = x;
+  listListeners.forEach((f) => f());
+}
+const subscribeList = (f: () => void) => {
+  listListeners.add(f);
+  return () => listListeners.delete(f);
+};
+
+/** freee から読めなかった時の1行（理由を括弧に）。カードの口座が無い時は、つなぎ直しても直らないので「つなぐ」は言わない */
+export function listErrorText(reason: string, reconnect: boolean): string {
+  const why = reason.replace(/。?もう一度 freee とつないでください。?$/, "").replace(/[。.]+$/, "");
+  return `freee から読めませんでした（${why}）。${reconnect ? "もう一度 freee とつないでください" : ""}`;
+}
+
+/** 読み直しの答えが「つなぎ直しが要る」か（カードの口座が無い時と、ほかのタブでやりとりしている時以外） */
+export const needsReconnect = (reason: string, cardName: string) => !reason.includes(`「${cardName}」`) && reason !== BUSY_REASON && !reason.startsWith("いま freee と");
+
+// ---- つながっているか（同じ画面の部品で1つを共有する） ----
+
+let statusState: FreeeStatusAnswer = { status: "loading", missing: [] };
+const statusListeners = new Set<() => void>();
+function setStatus(x: FreeeStatusAnswer) {
+  statusState = x;
+  statusListeners.forEach((f) => f());
+}
+const subscribeStatus = (f: () => void) => {
+  statusListeners.add(f);
+  return () => statusListeners.delete(f);
+};
+
 function runDeps(): RunDeps {
   const s = getFreeeSettings();
   return {
@@ -69,6 +126,7 @@ function runDeps(): RunDeps {
     locks: browserLocks(),
     importWaitSeconds: s.importUnknownWaitSeconds,
     maxImportCalls: s.maxImportCalls,
+    onList: (list) => setList({ phase: "ok", list }),
   };
 }
 
@@ -147,23 +205,86 @@ async function fetchStatus(): Promise<FreeeStatusAnswer> {
   }
 }
 
-export function useFreee() {
+/** freee から読み直す（一覧を入れかえ、記録の明細を照らし合わせる）。読めなかった時は理由を出す（架空の明細には切り替えない） */
+async function loadList(): Promise<CheckOutcome | { ok: false; reason: string }> {
+  setList({ phase: "loading" });
+  const r = await pressed((d) => {
+    // 照らし合わせるのは、まだ済んでいない記録の明細だけ（登録した・もう処理済みは入れない）
+    const rec = d.read();
+    const keys = recordKeys(rec).filter((k) => !["registered", "already"].includes(stateOf(rec, k)));
+    return pressCheck(d, keys.slice(-getFreeeSettings().maxListRows));
+  });
+  if (r.ok) return r;
+  setList({ phase: "error", reason: r.reason, reconnect: needsReconnect(r.reason, getFreeeSettings().cardName) });
+  return r;
+}
+
+let opening: Promise<void> | null = null;
+
+/** 経理のタブを開いた時：つながっているかを聞き、つながっていれば1回だけ freee から読む */
+function openAccounting(): Promise<void> {
+  if (opening) return opening;
+  opening = (async () => {
+    const a = await fetchStatus();
+    setStatus(a);
+    const rec = parseFreee(read());
+    if (a.status === "connected") {
+      if (!rec.linked) writeBrowser(FREEE_KEY, JSON.stringify(withLinked(parseFreee(read()), true)));
+      await loadList();
+    } else if (a.status === "expired" || a.status === "none") {
+      setList({ phase: "error", reason: a.status === "expired" ? "freee の鍵が切れました" : "freee とつながっていません", reconnect: true });
+    } else setList({ phase: "idle" });
+  })().finally(() => {
+    opening = null;
+  });
+  return opening;
+}
+
+/** つながっているか（同じ画面の部品で共有する。聞きに行くのは経理のタブを開いた時と、押した後） */
+export function useFreeeStatus(): FreeeStatusAnswer {
+  return useSyncExternalStore(subscribeStatus, () => statusState, () => statusState);
+}
+
+/** freee から読んだ一覧の状態（画面のメモリの中だけ） */
+export function useFreeeList(): FreeeListState {
+  return useSyncExternalStore(subscribeList, () => listState, () => listState);
+}
+
+/** 記録（このブラウザの中）。つながった印・送り始めたか・固定した選び */
+export function useFreeeRecord(): FreeeRecord {
   const raw = useSyncExternalStore(subscribeBrowser, read, () => null);
-  const record = useMemo(() => parseFreee(raw), [raw]);
+  return useMemo(() => parseFreee(raw), [raw]);
+}
+
+/**
+ * 明細の一覧と登録の欄を freee の側にするか：つながっている・つながった印がある（鍵が切れても黙って架空の明細に切り替えない）・送り始めた記録がある。
+ * それ以外（cookie が無い画面・審査員の画面も）は、アプリの中の架空の明細と「会計に登録」。
+ */
+export function freeeMode(status: FreeeStatus, record: FreeeRecord): boolean {
+  if (status === "off") return false;
+  return status === "connected" || record.linked || hasStarted(record);
+}
+
+/** 経理の画面が freee の側か（真ん中の一覧と右の列で同じ答え） */
+export function useFreeeMode(): boolean {
+  const a = useFreeeStatus();
+  const record = useFreeeRecord();
+  return freeeMode(a.status, record);
+}
+
+export function useFreee() {
+  const record = useFreeeRecord();
   const running = useSyncExternalStore(subscribeActive, () => active, () => false);
-  const [answer, setAnswer] = useState<FreeeStatusAnswer>({ status: "loading", missing: [] });
+  const answer = useFreeeStatus();
   const status = answer.status;
   const settings = getFreeeSettings();
 
-  const refresh = useCallback(async () => setAnswer(await fetchStatus()), []);
+  const refresh = useCallback(async () => setStatus(await fetchStatus()), []);
   useEffect(() => {
-    let alive = true;
-    void fetchStatus().then((s) => alive && setAnswer(s));
+    // 経理のタブを開いた時：つながっているかを聞き、つながっていれば freee から1回読む
+    void openAccounting();
     // 開いた時：排他が空いていれば、前に止まった「送っている」を「結果が分からない」にする（読み込み直した時も）
     void recoverIfIdle(runDeps());
-    return () => {
-      alive = false;
-    };
   }, []);
 
   // 送っている印が古くなる時刻（sendingAt＋120秒）と、明細を入れるのを待つ期限で、描き直す
@@ -189,10 +310,13 @@ export function useFreee() {
     } catch {
       // つながらなくても、次の status で分かる
     }
+    // オーナーが自分で外した：つながった印を外す（一覧は架空の明細に戻る。送り始めた記録があれば freee の欄のまま）
+    writeBrowser(FREEE_KEY, JSON.stringify(withLinked(parseFreee(read()), false)));
+    setList({ phase: "idle" });
     await refresh();
   }, [refresh]);
 
-  /** 「freee に明細を入れる」（排他の中。結果が分からない時は待つ期限を残す） */
+  /** 「freee に明細を入れる」（排他の中。結果が分からない時は待つ期限を残す）。一覧は読み直さない（「freee から読み直す」で） */
   const importStatements = useCallback(async () => {
     const r = await pressed((d) => pressImport(d));
     void refresh();
@@ -201,16 +325,16 @@ export function useFreee() {
 
   /** 照らし合わせてから、1件ずつ登録する（排他の中） */
   const register = useCallback(
-    async (uses: Record<string, CardUse>, nos: number[]) => {
-      const r = await pressed((d) => pressRegister(d, { uses, nos }));
+    async (uses: Record<string, CardUse>, targets: RegisterTarget[]) => {
+      const r = await pressed((d) => pressRegister(d, { uses, targets }));
       void refresh();
       return r;
     },
     [refresh],
   );
 
-  /** freee から読み直して照らし合わせる（排他の中・書かない） */
-  const check = useCallback(async (nos: number[]) => pressed((d) => pressCheck(d, nos)), []);
+  /** 「freee から読み直す」：一覧を入れかえ、記録の明細を照らし合わせる（排他の中・書かない） */
+  const check = useCallback(async () => loadList(), []);
 
   const nowMs = Date.now();
   const sending = running || isSending(record, nowMs, settings.sendingStaleSeconds);
@@ -218,11 +342,11 @@ export function useFreee() {
   return { record, status, missing: answer.missing, canConnect: showConnect(answer), settings, sending, importWait, started: hasStarted(record), refresh, disconnect, importStatements, register, check };
 }
 
-/** 記録だけ（サーバーには聞かない）。経理の明細の行で、送り始めた後（選びを固定した後）に選びを止めるのに使う */
-export function useFreeeLocked(): boolean {
+/** 記録だけ（サーバーには聞かない）。経理の明細の行で、送っている間は選びを止めるのに使う（固定した明細は isFixed で） */
+export function useFreeeBusy(): boolean {
   const raw = useSyncExternalStore(subscribeBrowser, read, () => null);
   const on = useSyncExternalStore(subscribeActive, () => active, () => false);
-  return useMemo(() => on || parseFreee(raw).uses !== null, [raw, on]);
+  return useMemo(() => on || isSending(parseFreee(raw), Date.now(), getFreeeSettings().sendingStaleSeconds), [raw, on]);
 }
 
 /** 「最初に戻す」の確かめの文に、freee の記録が残ると出すか */

@@ -30,7 +30,11 @@ const MALL = id("通販モールE");
 const TOWEL = id("タオルの通販F");
 const nowIso = "2026-11-11T01:00:00.000Z";
 // 件数は書き込まず、明細とルールからプログラムで出す（明細の件数を変えてもテストを直さなくてよいように）
-const ITEMS = seed.statement.items;
+const ALL = seed.statement.items;
+// 仕分けて登録するのは出金だけ（銀行の入金は見せるだけ）
+const ITEMS = ALL.filter((i) => (i.side ?? "expense") === "expense");
+const CARD = ALL.filter((i) => (i.account ?? "card") === "card");
+const BANK = ALL.filter((i) => i.account === "bank");
 const AUTO = ITEMS.filter((i) => seed.rules.some((r) => r.merchantId === i.merchantId)).length;
 const MANUAL = ITEMS.length - AUTO;
 
@@ -40,20 +44,29 @@ function chooseAll(s: AccountingState, pick: (merchantId: string, no: number) =>
 }
 
 describe("最初の状態（seed/accounting.json）", () => {
-  test("通販の明細は番号つきの20件前後（10/13〜11/10）。購入先はどれも一覧にあり、自動のルールは4件", () => {
-    const items = seed.statement.items;
-    assert.ok(items.length >= 18 && items.length <= 22, `20件前後（${items.length}件）`);
+  test("カードの明細は番号つきの20件前後・銀行の明細は入金4件と出金4件（10/13〜11/10）。購入先はどれも一覧にあり、自動のルールは4件", () => {
+    const items = ALL;
+    assert.ok(CARD.length >= 18 && CARD.length <= 22, `20件前後（${CARD.length}件）`);
+    assert.ok(CARD.every((i) => i.account === undefined && i.side === undefined), "カードは出金だけ");
+    assert.equal(BANK.filter((i) => i.side === "income").length, 4);
+    assert.equal(BANK.filter((i) => i.side === "expense").length, 4);
     assert.deepEqual(items.map((i) => i.no), Array.from({ length: items.length }, (_, k) => k + 1));
     assert.equal(seed.statement.from, "2026-10-13");
     assert.equal(seed.statement.to, "2026-11-10");
     for (const i of items) {
       assert.ok(i.date >= seed.statement.from && i.date <= seed.statement.to, `${i.no}番の日付`);
       assert.ok(seed.merchants.some((m) => m.id === i.merchantId), `${i.no}番の購入先`);
-      assert.deepEqual(Object.keys(i).sort(), ["amount", "date", "merchantId", "no"], "品名は持たない");
+      const keys = i.account ? ["account", "amount", "date", "merchantId", "no", "side"] : ["amount", "date", "merchantId", "no"];
+      assert.deepEqual(Object.keys(i).sort(), keys, "品名は持たない");
     }
     assert.equal(new Set(items.map((i) => i.merchantId)).size, seed.merchants.length, "一覧の購入先はどれも明細に出てくる");
     assert.equal(seed.rules.length, 4);
     assert.deepEqual(seed.rules.find((r) => r.merchantId === id("美容材料の通販A")), { merchantId: id("美容材料の通販A"), use: "shop" });
+  });
+
+  test("銀行の明細：小さな美容室の規模の金額。購入先の名前はどれもほかの名前を含まない（摘要の文字で1つに決まる）", () => {
+    for (const i of BANK) assert.ok(i.amount >= 1000 && i.amount <= 300000, `${i.no}番 ${i.amount}円`);
+    for (const a of seed.merchants) for (const b of seed.merchants) if (a !== b) assert.ok(!a.name.includes(b.name), `${a.name} に ${b.name}`);
   });
 
   test("通販モールは前の月までに店用と私用の両方があり、自動のルールは無い", () => {
@@ -115,7 +128,7 @@ describe("自動のルールで仕分ける（AI は使わない）", () => {
   });
   test("人が選ぶのは数件：初めての購入先と、前にも仕分けた購入先（通販モール）", () => {
     assert.equal(manualItems(sorted).length, MANUAL);
-    assert.ok(MANUAL >= 3 && MANUAL <= 5, `数件（${MANUAL}件）`);
+    assert.ok(MANUAL >= 3 && MANUAL <= 9, `数件（${MANUAL}件）`);
     assert.ok(sorted.fresh.length >= 1);
     assert.ok(sorted.fresh.every((i) => !seed.history.some((h) => h.merchantId === i.merchantId)));
     assert.ok(sorted.known.length >= 2, "通販モールは2件以上（見出しに「次から自動」が1つ）");
@@ -172,10 +185,10 @@ describe("プログラムの門と登録", () => {
     assert.equal(r.state.registered!.total, ITEMS.length);
     assert.equal(r.state.registered!.auto, AUTO);
     assert.equal(r.state.registered!.manual, MANUAL);
-    assert.equal(r.state.registered!.shopAmount + r.state.registered!.privateAmount, seed.statement.items.reduce((a, i) => a + i.amount, 0));
+    assert.equal(r.state.registered!.shopAmount + r.state.registered!.privateAmount, ITEMS.reduce((a, i) => a + i.amount, 0), "入金は数えない");
     assert.equal(r.message, `自動 ${AUTO}件・人が選んだ ${MANUAL}件。自動のルールに「タオルの通販F＝店用」を足しました`);
     assert.equal(r.journal.length, 2);
-    assert.ok(r.journal[0].text.startsWith(`人が登録：会計に通販の明細 ${ITEMS.length}件（自動 ${AUTO}件・人が選んだ ${MANUAL}件）`));
+    assert.ok(r.journal[0].text.startsWith(`人が登録：会計にカードと銀行の明細（出金）${ITEMS.length}件（自動 ${AUTO}件・人が選んだ ${MANUAL}件）`));
     assert.equal(r.journal[0].who, "オーナー");
     assert.match(r.journal[1].text, /自動のルールに足した：タオルの通販F＝店用/);
     assert.deepEqual(effectiveRules(seed.rules, r.state).length, 5);
@@ -238,12 +251,14 @@ describe("ブラウザに残す形", () => {
   });
 });
 
-describe("9. 通販の明細（架空）は20件前後。自動と人が選ぶ数は、作った明細からプログラムが出す", () => {
-  test("20件・自動16件・人が選ぶ4件（初めての購入先2件・通販モール2件）", () => {
+describe("9. カードの明細（架空）は20件前後＋銀行の8件。自動と人が選ぶ数は、作った明細からプログラムが出す", () => {
+  test("カード20件・銀行8件（入金4件は見せるだけ）。出金24件：自動16件・人が選ぶ8件（初めての購入先6件・通販モール2件）", () => {
     const s = sortCurrent(seed);
-    assert.equal(ITEMS.length, 20);
+    assert.equal(CARD.length, 20);
+    assert.equal(BANK.length, 8);
+    assert.equal(ITEMS.length, 24);
     assert.equal(s.auto.length, 16);
-    assert.equal(s.fresh.length, 2);
+    assert.equal(s.fresh.length, 6);
     assert.equal(s.known.length, 2);
   });
   test("画面の数は書き込まず、仕分けた結果から出す（「23件」などの決まった数が画面のコードに無い）", async () => {

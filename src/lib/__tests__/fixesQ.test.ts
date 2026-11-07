@@ -34,6 +34,7 @@ import { applyPress } from "../line/apply";
 import { commitPress, LINE_PRESS_FAILED, LINE_PRESS_RESET, type PressStore } from "../line/press";
 import { readPick, type SortModel } from "../line/sort";
 import type { ScreenEvent } from "../line/wire";
+import { readList } from "../freee/run";
 import { getRules } from "../rules/store";
 import { judge } from "../rules/judge";
 import { getAdSettings, getAiSettings, getLineSettings } from "../settings";
@@ -251,6 +252,12 @@ describe("1-5. 台帳から入れる・予約を直す・予約サイト・LINE 
       assert.equal(out.ok, false, d);
       assert.deepEqual(parseSiteStops(siteStopsRaw([`${d} 10:00`, "2026-11-05 10:00"])), ["2026-11-05 10:00"]);
     }
+  });
+
+  test("経理の freee から読んだ一覧：暦に無い日付の行は落とし、ふつうの行は今どおり", () => {
+    const row = { id: 1, account: "card", side: "expense", date: "2026-11-05", amount: 1000, description: "テスト" };
+    const list = readList({ range: { from: "2026-10-01", to: "2026-11-30" }, rows: [row, { ...row, id: 2, date: "2026-11-31" }] }, nowIso);
+    assert.deepEqual(list?.rows.map((r) => r.id), [1]);
   });
 
   test("ブラウザに残った台帳：暦に無い日付の予約は読まない（形のおかしい物と同じ）", () => {

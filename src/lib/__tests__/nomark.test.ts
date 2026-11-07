@@ -9,6 +9,8 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { CardStatement } from "../../app/accounting/CardStatement";
+import { RegisterColumn } from "../../app/accounting/RegisterColumn";
 import { TodoTitle } from "../../components/TodoRows";
 import { parseAds } from "../ads/state";
 import { emptyBook, parseBook, withChatTodo, withReleased } from "../book/state";
@@ -16,6 +18,7 @@ import { guestTitleHead, isGuestTitle, withoutOldMark } from "../guestName";
 import { parseJobs } from "../jobs/state";
 import { parseJournal } from "../journal";
 import { NO_REAL_NAMES_NOTE } from "../notices";
+import { getAccountingSettings } from "../settings";
 import { rescheduleTitle } from "../todo/reschedule";
 
 const OLD = "（架空）";
@@ -61,6 +64,25 @@ describe("1. 画面に出す文に「（架空）」が残っていない", () =
   test("画面（src/app・src/components）の説明の文にも「架空」が無い（試験のページ /eval の説明と、注意の1行 NO_REAL_NAMES_NOTE だけは残す）", () => {
     const screens = [...walk(join("src", "app")), ...walk("src/components")].filter((f) => !f.startsWith(join("src", "app", "eval")));
     for (const f of screens) assert.ok(!withoutComments(readFileSync(f, "utf8")).includes("架空"), `${f} に「架空」`);
+  });
+
+  test("設定ファイルから画面に出す文（経理の明細の説明・入金の1行・freee の札と文）にも「架空」が無い", () => {
+    const strings: string[] = [];
+    const collect = (x: unknown) => {
+      if (typeof x === "string") strings.push(x);
+      else if (Array.isArray(x)) x.forEach(collect);
+      else if (x && typeof x === "object") Object.values(x).forEach(collect);
+    };
+    collect(JSON.parse(readFileSync(join("config", "accounting.json"), "utf8")));
+    const s = getAccountingSettings();
+    for (const t of [s.statementNote, s.incomeNote, s.freee.statementNote, s.freee.incomeNote, s.freee.label, s.freee.unconnectedNote]) assert.ok(strings.includes(t));
+    for (const t of strings) assert.ok(!t.includes("架空"), `config/accounting.json の「${t}」に「架空」`);
+  });
+
+  test("経理の画面（設定ファイルから出す文も入れて描いた物）に「架空」が無い", () => {
+    const html = renderToStaticMarkup(createElement(CardStatement)) + renderToStaticMarkup(createElement(RegisterColumn));
+    assert.ok(html.includes(getAccountingSettings().statementNote), "設定の説明の文を描いている");
+    assert.ok(!html.includes("架空"), "経理の画面に「架空」");
   });
 
   test("入力欄の近くの注意の1行は残す", () => {

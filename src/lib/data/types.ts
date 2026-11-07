@@ -134,7 +134,7 @@ export type SalesMonth = {
   days: SalesDay[];
 };
 
-/** 購入先（架空） */
+/** 購入先・振込元（架空）。freee から読んだ明細は、摘要にこの名前がちょうど1つ含まれる時だけ、その購入先と見る */
 export type Merchant = { id: string; name: string };
 
 /** 自動のルール：この購入先は店用（私用） */
@@ -143,7 +143,12 @@ export type MerchantRule = { merchantId: string; use: CardUse };
 /** 前の月までに仕分けた数（購入先ごと） */
 export type MerchantHistory = { merchantId: string; shop: number; private: number };
 
-/** 通販の明細の1行。来るのは日付・購入先・金額だけ（品名は無い） */
+/** 明細の口座（カード / 銀行） */
+export type StatementAccount = "card" | "bank";
+/** 出金 / 入金 */
+export type StatementSide = "expense" | "income";
+
+/** カード・銀行の明細の1行。来るのは日付・購入先（振込元）・金額だけ（品名は無い） */
 export type CardItem = {
   /** 番号（1から） */
   no: number;
@@ -152,6 +157,10 @@ export type CardItem = {
   merchantId: string;
   /** 円 */
   amount: number;
+  /** 口座（無ければカード） */
+  account?: StatementAccount;
+  /** 出金か入金か（無ければ出金。入金は見せるだけで、仕分けも登録もしない） */
+  side?: StatementSide;
 };
 
 /** version：データの版（freee（テスト事業所）の明細の摘要の印「SecretAIry:<版>:<番号>」に使う。今回の明細だけが持つ） */
@@ -164,7 +173,7 @@ export type AccountingSeed = {
   /** 前の月までの自動のルール */
   rules: MerchantRule[];
   history: MerchantHistory[];
-  /** 会計がカード会社から取り込んだ、未処理の通販の明細 */
+  /** アプリの中の架空のカードと銀行の明細（つないでいない画面の一覧。freee に入れる明細も同じ） */
   statement: CardStatement;
   /** 登録の後の「次の明細（試し）」 */
   trial: CardStatement;
@@ -208,8 +217,10 @@ export const AD_FIELDS: FieldNote[] = [
 export const CARD_FIELDS: FieldNote[] = [
   { key: "statement.items[].no", label: "番号" },
   { key: "statement.items[].date", label: "日付（YYYY-MM-DD。品名は来ない）" },
-  { key: "statement.items[].merchantId", label: "購入先（merchants の id）" },
+  { key: "statement.items[].merchantId", label: "購入先・振込元（merchants の id）" },
   { key: "statement.items[].amount", label: "金額（円）" },
+  { key: "statement.items[].account", label: "口座（card＝カード・bank＝銀行。無ければカード）" },
+  { key: "statement.items[].side", label: "出金か入金か（expense・income。無ければ出金。入金は見せるだけ）" },
   { key: "rules[]", label: "前の月までの自動のルール（購入先ごとに店用か私用）" },
   { key: "history[]", label: "前の月までに仕分けた数（購入先ごとの店用・私用）" },
   { key: "sales.days[]", label: "売上の1日分（日付・来店・支払い方法ごとの金額。定休日は持たない）" },
