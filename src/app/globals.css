@@ -960,6 +960,20 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
   width: 100%; box-sizing: border-box; font-family: ui-monospace, monospace; font-size: 0.8rem; padding: 6px 8px; resize: vertical;
   border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text);
 }
+/* 広告のテスト用アカウント（「くわしく」の中・つないでいない時は1行だけ） */
+.ad-live { display: flex; flex-direction: column; gap: 6px; min-width: 0; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.ad-live-off { margin: 8px 0 0; }
+.ad-live-badge { margin: 0; padding: 6px 10px; border: 1px solid var(--ok); border-radius: var(--radius-sm); color: var(--text); background: var(--surface); overflow-wrap: anywhere; }
+.ad-live-pass { display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: 360px; }
+.ad-live-pass input {
+  width: 100%; box-sizing: border-box; font-size: 1rem; padding: 6px 8px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text);
+}
+.ad-live-read { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ad-live-table { max-width: 100%; overflow-x: auto; }
+.ad-live-table table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.ad-live-table caption { text-align: left; padding-bottom: 2px; }
+.ad-live-table th, .ad-live-table td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: left; overflow-wrap: anywhere; }
 .ad-review .btn.big { font-size: 1.05rem; padding: 10px 14px; }
 /* 押せない時の理由と次に頼める日時は、ボタンのすぐ下にふつうの字の大きさで（小さい hint にしない） */
 .ad-review-why { margin: 0; font-size: 1rem; font-weight: 400; color: var(--text); overflow-wrap: anywhere; }

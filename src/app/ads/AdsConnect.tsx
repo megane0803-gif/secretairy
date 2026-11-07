@@ -5,11 +5,10 @@
 // 今の画面の見た目と動画を変えないため、閉じた折りたたみの中に小さく置く。鍵・合言葉・本物の広告の番号は出さない。
 
 import { useMemo, useState } from "react";
-import { readSyncResult, syncPayload, withSynced } from "@/lib/ads/connect";
+import { syncPayload } from "@/lib/ads/connect";
+import { loadSyncResult } from "@/lib/ads/connectLoad";
 import { featuredWords } from "@/lib/ads/featured";
 import { readAdsState, useAds } from "@/lib/ads/useAds";
-import { SAVE_FAILED_MESSAGE } from "@/lib/browser";
-import { writeJournal } from "@/lib/journal";
 import { getMenus } from "@/lib/settings";
 
 export function AdsConnect() {
@@ -45,19 +44,9 @@ export function AdsConnect() {
 
   const load = (e: React.MouseEvent) => {
     if (!e.nativeEvent.isTrusted) return;
-    // 書く直前に読みなおした状態で照らす
-    const r = readSyncResult(paste, readAdsState(), words, c);
+    const r = loadSyncResult(paste, { read: readAdsState, update: ads.update, words, settings: c, journal: "本物の広告の結果を読み込んだ" });
     if (!r.ok) return void setRead({ head: r.note, lines: [] });
-    let n = 0;
-    const w = ads.update((s) => {
-      const again = readSyncResult(paste, s, words, c);
-      if (!again.ok) return s;
-      n = again.marks.length;
-      return withSynced(s, again.marks, new Date().toISOString());
-    });
-    if (!w.ok) return void setRead({ head: SAVE_FAILED_MESSAGE, lines: [] });
-    writeJournal({ who: "オーナー", text: `本物の広告の結果を読み込んだ：反映済みの印 ${n}件${r.notes.length ? `・知らせ ${r.notes.length}件` : ""}` });
-    setRead({ head: n ? `✓ 本物に反映済みの印を ${n}件 付けました` : "印を付けた案はありません", lines: r.notes });
+    setRead({ head: r.marked ? `✓ 本物に反映済みの印を ${r.marked}件 付けました` : "印を付けた案はありません", lines: r.notes });
   };
 
   return (

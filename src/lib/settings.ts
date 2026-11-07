@@ -185,6 +185,41 @@ export type AdSettings = {
    * maxPasteChars = 貼られた結果の文字の大きさの上限 / maxItems = 渡す中身・読む結果の数の上限
    */
   connect: { campaign: string; adGroup: string; maxPasteChars: number; maxItems: number };
+  /** 広告のテスト用アカウントに本当に送る（src/lib/ads/live/。サーバーの側だけ。docs/SPEC.md §1.7.8） */
+  live: AdsLiveSettings;
+};
+
+/**
+ * 広告のテスト用アカウント（config/ads.json の live）。鍵・番号・合言葉は入れない（環境変数だけ）。
+ * label = つながっている時の札（サービスの名前を画面に出すのはこの札だけ）/ apiVersion = API の版（ここの1か所で変える）/
+ * budgetName・budgetMicros = 用意で作る予算の名前と1日の額（円×1,000,000。小さな作り物の額）/
+ * keywordMatch = 用意で作る言葉の合い方 / maxKeywordChars・maxKeywordWords = 言葉の長さの上限（公式の上限）/
+ * maxRequestChars = 受け取る大きさ / maxItems = 1回に送る案の数 / maxSearchPages = 読む時のページの数 /
+ * timeoutSeconds = 1回の呼び出しの待ち時間 / lockSeconds = 「動いている印」の期限 /
+ * tokenSeconds = 通行証の長さ / tokenReuseMarginSeconds = 切れる何秒前まで使い回すか /
+ * daily = 1日（店の時間帯の日付）の上限（用意・送る・読み直す・止めるの数）/
+ * passcode = オーナー用の合言葉（短い設定は無いのと同じ・長さの上限・間違いの数の上限とその時間）
+ */
+export type AdsLiveSettings = {
+  label: string;
+  apiBase: string;
+  apiVersion: string;
+  tokenUrl: string;
+  scope: string;
+  budgetName: string;
+  budgetMicros: number;
+  keywordMatch: "PHRASE" | "EXACT" | "BROAD";
+  maxKeywordChars: number;
+  maxKeywordWords: number;
+  maxRequestChars: number;
+  maxItems: number;
+  maxSearchPages: number;
+  timeoutSeconds: number;
+  lockSeconds: number;
+  tokenSeconds: number;
+  tokenReuseMarginSeconds: number;
+  daily: { setup: number; send: number; read: number; stop: number };
+  passcode: { minChars: number; maxChars: number; maxWrong: number; wrongWindowSeconds: number };
 };
 
 export function getAdSettings(): AdSettings {
@@ -315,6 +350,11 @@ export type FreeeSettings = {
 
 export function getFreeeSettings(): FreeeSettings {
   return getAccountingSettings().freee;
+}
+
+/** 本番のサイトの場所（config/accounting.json の freee.siteOrigin の1か所。freee と広告のテスト用アカウントの窓口が使う） */
+export function getSiteOrigin(): string {
+  return getFreeeSettings().siteOrigin;
 }
 
 export function getAccountingSettings(): AccountingSettings {

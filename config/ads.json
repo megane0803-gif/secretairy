@@ -18,5 +18,26 @@
     "maxPasteChars": 20000,
     "maxItems": 50
   },
+  "live": {
+    "label": "Google 広告（テスト用アカウント）",
+    "apiBase": "https://googleads.googleapis.com",
+    "apiVersion": "v26",
+    "tokenUrl": "https://oauth2.googleapis.com/token",
+    "scope": "https://www.googleapis.com/auth/adwords",
+    "budgetName": "もちの木 検索 の予算",
+    "budgetMicros": 100000000,
+    "keywordMatch": "PHRASE",
+    "maxKeywordChars": 80,
+    "maxKeywordWords": 10,
+    "maxRequestChars": 30000,
+    "maxItems": 20,
+    "maxSearchPages": 5,
+    "timeoutSeconds": 15,
+    "lockSeconds": 120,
+    "tokenSeconds": 3600,
+    "tokenReuseMarginSeconds": 300,
+    "daily": { "setup": 5, "send": 20, "read": 60, "stop": 10 },
+    "passcode": { "minChars": 16, "maxChars": 200, "maxWrong": 5, "wrongWindowSeconds": 600 }
+  },
   "gateWords": ["のせい", "責任", "失敗", "ミス", "悪い", "下手", "ダメ", "だめ", "怠", "絶対", "必ず", "確実", "代行", "業者"]
 }

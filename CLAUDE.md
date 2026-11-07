@@ -22,7 +22,8 @@ npm run build      # 本番ビルド（push の前に通す）
 
 - 最初の状態はリポジトリのファイル（`config/` など）。画面で触った後の変化は、見ている人のブラウザの中だけに残す。
 - サーバーにファイルやデータベースで書き込む作りにしない（`data/` は作らない）。公開 URL を見た人どうしでデータが混ざらないようにするため。
-- 例外は LINE のつなぎと試験10問の見張りだけ：Redis（Upstash）に「合言葉のつなぎ」と「画面が受け取りに来るまでの LINE の知らせ」（仕様書 §1.9）、試験の「流している印」と「呼んだ回数」（`src/lib/eval/guard.ts`。仕様書 §1.13）を期限つきで置く。お客様の記録・台帳・日誌は置かない。
+- 例外は LINE のつなぎと試験10問の見張りと広告のテスト用アカウントの見張りだけ：Redis（Upstash）に「合言葉のつなぎ」と「画面が受け取りに来るまでの LINE の知らせ」（仕様書 §1.9）、試験の「流している印」と「呼んだ回数」（`src/lib/eval/guard.ts`。仕様書 §1.13）、広告のテスト用アカウントの「動いている印」「1日の回数」「合言葉の間違いの数」（`src/lib/ads/live/server.ts`。仕様書 §1.7.8）を期限つきで置く。お客様の記録・台帳・日誌は置かない。
+- 広告のテスト用アカウント（仕様書 §1.7.8）にオーナーが送った作り物の言葉は、Google のテスト用アカウントに残る（「最初に戻す」でも戻らない）。鍵（サービスアカウントの鍵）と番号は Vercel の Production の環境変数だけ・サーバーの中だけで読む。
 - 経理の freee（テスト事業所）の鍵は、サーバーには置かず、つないだブラウザの暗号化した cookie にだけ持たせる（仕様書 §1.8.1）。
 - AI を呼ぶ API はブラウザから要るデータとルールを毎回受け取り、答えを返すだけ。受け取った物を残さない。
 - AI を呼ぶ窓口は全部 `src/app/api/ai/` の下（Vercel の Firewall で `/api/ai/` を1分10回まで）。上限の数（字数・返事の長さ・道具の回数・送る通数・受け取る大きさ）は `config/` に置き、コードに直に書かない。
@@ -83,12 +84,15 @@ src/lib/posts/team/ 発信の下書きの「AI のチーム」：候補にして
 src/lib/line/      LINE のつなぎ（オーナー側）：署名・Redis・つなぎと預かり（bridge）・一言の振り分け（sort）・画面での入れ方（apply）・ボタンの分を書く（press。書けた時だけ日誌と確定の返事・「最初に戻す」の印が違えば書かない）
 src/app/api/line/  LINE の窓口（Webhook・つなぐ・受け取り・送る）。画面の処理と混ぜない
 src/lib/freee/     経理の freee（テスト事業所）：暗号化した cookie（seal.ts）・API（api.ts。公式の定義で確かめた形だけ）・照らし合わせと状態の分け方（match.ts）・窓口の中身と守り（server.ts）・画面の記録（state.ts）・1件ずつ送る流れ（run.ts）。AI は呼ばない
-src/app/api/freee/ freee の窓口（つなぐ・戻り先・つながっているか・外す・明細を入れる・登録・読み直す）。中身は src/lib/freee/server.ts
+src/app/api/freee/ freee の窓口（つなぐ・戻り先・つながっているか・外す・明細を入れる・登録・読み直す）。中身は src/lib/freee/server.ts（本番のサイトか・受ける形・Origin は src/lib/server/site.ts）
 src/lib/home/      ホームの欄の開け閉め：最初の状態（PC／スマホ）と覚えた物の読み方（folds.ts。画面に依らない）・画面で使う形（useHomeFolds.ts）
 src/lib/jobs/      ホームの「AI に頼める仕事」：これから来る物4行の流れ（run.ts。今の /api/ai/ の窓口をそのまま使う）・済みの印（ブラウザの中に残す形）
 src/lib/brief/     朝の要点の「AI の一言」：材料と印（items.ts。名前は送らない・印を日時とお名前に置きかえる）・門・指示文・流れ・決まった返事（scriptBriefWriter）
 src/lib/eval/      試験10問（/eval。左のタブには出さない）：問い（config と seed から作る。ふつうの予約3問）・判定（checks.ts。文と結果。AI は使わない）・流し方（同時に1回・1問ごとに eval.minIntervalSeconds 秒・eval.maxCallsPerRun 回まで・流せなかった物は数えない）・合言葉（EVAL_PASSCODE。窓口は src/app/api/eval/。AI は呼ばない）・サーバーの見張り（guard.ts。KV の印は SET NX＋期限・回数は INCR。/api/ai/ の窓口が試験の札の見出しを見て数える）・仮押さえの問いは「選んだ枠にちょうど1件・確定0件」の時だけ合格・「確定しました」と言わない、は確定したと伝える文だけ落とす（かぎかっこの中・「〜とお伝えできません」の打ち消しは数えない）・README に写す形は文の条件で落ちた所の前後も出す。今の /api/ai/ の窓口を使い、結果は画面の表だけ
-connect/          本物の検索広告（Google 広告）の中で動かす見本のスクリプト（google-ads/secretairy-sync.js）。アプリの動きとビルドには入れない・本物のアカウントでは動かしていない。広告の部品を直に読むのは main だけ（テストは作り物の部品を差し込む）。サービスの名前を書いてよいのはここ（とそのテスト）と README の「本物の検索広告につなぐ道」・「使った物と権利」だけ（画面とアプリのコードには出さない）
+connect/          本物の検索広告（Google 広告）の中で動かす見本のスクリプト（google-ads/secretairy-sync.js）。アプリの動きとビルドには入れない・本物のアカウントでは動かしていない。広告の部品を直に読むのは main だけ（テストは作り物の部品を差し込む）。サービスの名前（Google 広告）は、画面ではテスト用アカウントにつながっている時の札（config/ads.json の live.label）だけ。コード・仕様書・README には書いてよい
+src/lib/ads/live/  広告のテスト用アカウントに本当に送る（サーバーの側だけ。仕様書 §1.7.8）：環境変数4つ（env.ts。鍵・管理アカウントの番号・広告アカウントの番号・オーナー用の合言葉）・通行証（token.ts。JWT を Node の crypto で・5分前まで使い回す）・REST（api.ts。書くのは mutate だけで、入口で毎回テスト用アカウントかを確かめる。developer-token は送らない）・窓口の中身（server.ts。用意・送る・読み直す・合言葉・1日の上限と間違いの数は KvStore・動いている印）・決まった理由（errors.ts）・画面との形（wire.ts）と画面から呼ぶ形（client.ts）。結果は直しR の受け取る結果と同じ形で、印は connectLoad.ts の1つの道。画面は src/app/ads/AdsLive.tsx（「くわしく」の中だけ）。テストは作り物の Google（__tests__/fakeGoogle.ts。公式の形でない送り方を断る）
+src/app/api/ads/live/ 広告のテスト用アカウントの窓口（status・setup・send・read）。中身は src/lib/ads/live/server.ts。AI は呼ばない
+src/lib/server/    窓口の共通の守り：本番のサイトか・受ける形・Origin（site.ts の siteCheck。freee と広告のテスト用アカウント）・合言葉の比べ方（passcode.ts の checkPasscode。試験と広告のテスト用アカウント）。2つ作らない
 .claude/agents/   サブエージェント「意地悪なお客さん役」（mean-customer.md）：試験の問いの案を出す。材料は seed と config だけ
 src/lib/menuEdits.ts メニューを直す（時間・値段・最終受付。ルールのタブの「メニュー」・画面は src/app/rules/MenuPanel.tsx。メニューごとに1行に畳む）・足す（単品・own-N・名前の確かめ menuNameProblem・色 menuColorChoices）・足したメニューを消す（使っている所 menuUses）：幅の確かめ・ブラウザに残す形・サーバーで受け取る確かめ（readMenus）・保存の前の一覧（menuConflicts。重なり・閉店越え・最終受付）ともう一度押す（saveStep）・保存と日誌（commitMenus）・メニューの設定の印（menusMark。直す前に始まった予約チャットの返事を入れない）。読むのは useMenus.ts → useBook の data.menus
 src/lib/holidays.ts 休みの日（オーナーが予約のページで決める。ブラウザの中・seats と同じ扱い）：判定（calDay）にだけ効かせ、最初の状態の日付は baseShop・seedAnchor で数える（今ある予約の日付を動かさない）。サーバーは readHolidays で確かめる
@@ -135,4 +139,4 @@ src/lib/brief/cache.ts 朝の要点の AI の一言の答えを材料ごとに�
   - 一言の振り分けの道具は `src/lib/line/sort.ts` の3つ（仮押さえ・ToDo・カルテのメモ）だけ。テストでは `scriptSortModel` と置きかえた LINE・`memoryStore` を使う（Claude と LINE は呼ばない）。お客さん側の LINE はまだ。
 - ホームの「AI に頼める仕事」（`src/lib/jobs/`）は、今の窓口（予約・広告・メモ）と今の変え方（仮押さえ・承認の箱・ToDo）をそのまま呼ぶだけ。確定は呼ばない。1回押した時に AI を呼ぶ回数は `config/ai.json` の `jobs.maxAiCallsPerPress` まで。テストでは決まった返事に置きかえる（`src/lib/jobs/__tests__/jobs.test.ts`）。
 - 経理の freee（テスト事業所。仕様書 §1.8.1）：AI は呼ばない（科目も金額も AI は決めない）。つないでいる時の明細の一覧は freee から読んだ「まだ処理していない明細」（口座は「SecretAIry カード」「SecretAIry 口座」の2つだけ・期間は今日の90日前から statement.to と今日の遅い方まで・200件まで・読むのはタブを開いた時と「freee から読み直す」だけ・読めなければ理由を出し架空の明細に切り替えない）。一覧の行と仕分けは `src/lib/accounting/rows.ts`・`view.ts`（摘要に購入先の名前がちょうど1つの時だけその購入先のルール・入金は見せるだけ）。freee の明細の選びと状態は `t<wallet_txn の id>` で持ち、架空の明細の番号と混ぜない。登録するのは人の「登録」ボタンの分だけで、1件ずつ・書く直前に freee の明細を読んで照らし合わせる。窓口は本番のサイト（`VERCEL_ENV=production` と `secretairy.vercel.app`）だけ・書く物は POST と Origin の確かめ・cookie が無い呼び出しは受けない・事業所の番号は鍵の返事の番号と `FREEE_COMPANY_ID` だけ（ブラウザから来た番号は使わない）。鍵の自動の更新・freee 側を消して戻すボタン・売上を送ること・自動登録ルールとの同期は作らない。「結果が分からない」は送り直さない（「freee から読み直す」の後でだけ）。明細を入れる・登録・読み直す・「最初に戻す」は同じ排他（Web Locks。`run.ts` の `withFreeeLock`）の中だけ。明細を入れた結果が分からない時は待つ期限（`importHold`）を残す。サーバーは持ち時間（`serverBudgetSeconds`）で区切る。テストは fetch と Web Locks を置きかえる（`src/lib/freee/__tests__/freee.test.ts`。freee は呼ばない）。freee の名前を画面に出すのは、つながっている時の札・つなぐボタン・つながっていない画面の札だけ。
-- 秘密の鍵（Claude API キー・LINE の秘密 `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・オーナー用の合言葉 `LINE_OWNER_PASSCODE`（任意）・試験の合言葉 `EVAL_PASSCODE`（試験を流す時）・Redis の `KV_REST_API_URL`／`KV_REST_API_TOKEN`・freee の `FREEE_CLIENT_ID`／`FREEE_CLIENT_SECRET`／`FREEE_COMPANY_ID`／`FREEE_COOKIE_KEY`（Production だけ））は `.env.local`（Vercel では環境変数）に置く。`.env` で始まるファイルはコミットしない。
+- 秘密の鍵（Claude API キー・LINE の秘密 `LINE_CHANNEL_SECRET`・`LINE_CHANNEL_ACCESS_TOKEN`・オーナー用の合言葉 `LINE_OWNER_PASSCODE`（任意）・試験の合言葉 `EVAL_PASSCODE`（試験を流す時）・Redis の `KV_REST_API_URL`／`KV_REST_API_TOKEN`・freee の `FREEE_CLIENT_ID`／`FREEE_CLIENT_SECRET`／`FREEE_COMPANY_ID`／`FREEE_COOKIE_KEY`（Production だけ）・広告のテスト用アカウントの `GOOGLE_ADS_SERVICE_ACCOUNT_KEY`／`GOOGLE_ADS_LOGIN_CUSTOMER_ID`／`GOOGLE_ADS_CUSTOMER_ID`／`GOOGLE_ADS_OWNER_PASSCODE`（Production だけ・`NEXT_PUBLIC_` を付けない））は `.env.local`（Vercel では環境変数）に置く。`.env` で始まるファイルはコミットしない。

@@ -41,6 +41,7 @@ import {
   type BankAccount,
   type Verdict,
 } from "./match";
+import { siteCheck } from "../server/site";
 import { seal, unseal } from "./seal";
 
 export const TOKEN_COOKIE = "__Host-secretairy-freee";
@@ -149,17 +150,12 @@ type Guarded = { ok: true; session: Session | null } | { ok: false; response: Re
  */
 export function guard(request: Request, deps: FreeeDeps, p: { method: "GET" | "POST"; session: boolean; needCompany?: boolean; envCheck?: boolean }): Guarded {
   const { env, settings } = deps;
-  const site = new URL(settings.siteOrigin);
+  // 本番のサイトか・受ける形・Origin は共通の守り（src/lib/server/site.ts。広告のテスト用アカウントの窓口も同じ物）
+  const site = siteCheck(request, { vercelEnv: env.vercelEnv, siteOrigin: settings.siteOrigin, method: p.method });
   // プレビュー・手元・本番の別の URL では、freee の窓口を全部止める
-  if (env.vercelEnv !== "production" || (request.headers.get("host") ?? "").toLowerCase() !== site.host)
-    return { ok: false, response: json({ ok: false, code: "off", message: "ここでは freee につなぎません（本番のサイトだけ）" }, 404) };
-  if (request.method !== p.method) return { ok: false, response: json({ ok: false, code: "method", message: "受けない形です" }, 405) };
-  if (p.method === "POST") {
-    const origin = request.headers.get("origin");
-    const fetchSite = request.headers.get("sec-fetch-site");
-    if (origin !== site.origin || (fetchSite !== null && fetchSite !== "same-origin"))
-      return { ok: false, response: json({ ok: false, code: "origin", message: "本番のサイトから来た呼び出しではないので受けません" }, 403) };
-  }
+  if (site === "off") return { ok: false, response: json({ ok: false, code: "off", message: "ここでは freee につなぎません（本番のサイトだけ）" }, 404) };
+  if (site === "method") return { ok: false, response: json({ ok: false, code: "method", message: "受けない形です" }, 405) };
+  if (site === "origin") return { ok: false, response: json({ ok: false, code: "origin", message: "本番のサイトから来た呼び出しではないので受けません" }, 403) };
   if (p.envCheck === false) return { ok: true, session: null };
   const missing = envProblems(env);
   if (missing.length) {
