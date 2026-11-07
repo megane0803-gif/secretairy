@@ -1994,6 +1994,73 @@ describe("直しU：だれでも承認したら試す（元の形に戻す → 1
   });
 });
 
+describe("直しW：日ごとの塩は、置けた時は自分の値をそのまま使う（置いた直後の GET が写しから null でも落ちない）", () => {
+  const DAY = "2026-11-07";
+  const SALT = LIVE_KEY.trySalt(DAY);
+
+  /** 書くのは元の所・読むのは写しから、の作り物：置いた直後の GET は1回だけ null（まだ写っていない）。gets で GET の回数を数える */
+  function lagging(base: KvStore, opts: { saltGet?: "lag" | "null" } = {}) {
+    const fresh = new Set<string>();
+    const gets: string[] = [];
+    const store: KvStore = {
+      ...base,
+      set: async (k, v, o) => {
+        const ok = await base.set(k, v, o);
+        if (ok) fresh.add(k);
+        return ok;
+      },
+      get: async (k) => {
+        gets.push(k);
+        if (k === SALT && opts.saltGet === "null") return null;
+        if (fresh.delete(k)) return null;
+        return base.get(k);
+      },
+    };
+    return { store, gets };
+  }
+
+  test("その日の最初の1回（塩を作る時）：置いた直後の GET が null を返しても、503 にならずに通る（塩は自分の値・GET はしない）", async () => {
+    const w = await prepared();
+    const lag = lagging(w.store!);
+    w.deps.store = lag.store;
+    const r = await handleLiveTry(tryReq({ kind: "stop", no: 7 }), w.deps);
+    const b = await bodyOf(r);
+    assert.equal(r.status, 200, JSON.stringify(b));
+    assert.equal(b.line.outcome, "done");
+    assert.ok(!lag.gets.includes(SALT), "置けた時は塩を読み直さない");
+    // 置いた塩で数えている（送り元の数の鍵は、置いた塩と合わせたハッシュ）
+    const salt = (await w.store!.get(SALT))!;
+    assert.match(salt, /^[0-9a-f]{32}$/);
+    const hash = sourceHash(salt, sourceBucket("203.0.113.7"));
+    assert.equal(await w.store!.get(LIVE_KEY.trySource(DAY, hash)), "1");
+  });
+
+  test("SET NX が置けなかった時（もう塩がある）は GET の値を使う", async () => {
+    const w = await prepared();
+    await w.store!.set(SALT, "f".repeat(32), { ex: 3600 });
+    const lag = lagging(w.store!);
+    w.deps.store = lag.store;
+    const r = await handleLiveTry(tryReq({ kind: "stop", no: 7 }), w.deps);
+    assert.equal(r.status, 200);
+    assert.ok(lag.gets.includes(SALT), "置けなかった時だけ読む");
+    assert.equal(await w.store!.get(SALT), "f".repeat(32), "前の塩はそのまま");
+    const hash = sourceHash("f".repeat(32), sourceBucket("203.0.113.7"));
+    assert.equal(await w.store!.get(LIVE_KEY.trySource(DAY, hash)), "1", "前の塩で数えた");
+  });
+
+  test("置けなかった上に GET も null なら、今どおり 503 no-store（何も書かない）", async () => {
+    const w = await prepared();
+    await w.store!.set(SALT, "f".repeat(32), { ex: 3600 });
+    const n = w.google.mutateCalls.length;
+    w.deps.store = lagging(w.store!, { saltGet: "null" }).store;
+    const r = await handleLiveTry(tryReq({ kind: "stop", no: 7 }), w.deps);
+    assert.equal(r.status, 503);
+    assert.match(r.headers.get("cache-control") ?? "", /no-store/);
+    assert.equal((await bodyOf(r)).code, "no-store");
+    assert.equal(w.google.mutateCalls.length, n);
+  });
+});
+
 describe("鍵の扱い（リポジトリ・設定）", () => {
   test("PEM や鍵の JSON をリポジトリに入れない（テストは generateKeyPairSync で作る）", () => {
     for (const f of ["src/lib/ads/__tests__/live.test.ts", "src/lib/ads/__tests__/fakeGoogle.ts", "config/ads.json", ".env.example"]) {
@@ -2013,7 +2080,10 @@ describe("README", () => {
   test("直しU：だれでも試せる道（元に戻してから1件・テスト用アカウントの中だけ・店の広告に届かない理由・オーナーの送るとの違い・窓口の守りの表）", () => {
     const readme = readFileSync("README.md", "utf8");
     const sec = readme.slice(readme.indexOf("#### だれでも試せる道（直しU。合言葉なし）"), readme.indexOf("- **何を**（オーナーの操作）"));
-    for (const w of ["元の形に戻してから", "承認した1件だけ", "テスト用アカウントの中だけ・店の広告には届かない理由", "オーナーの「送る」との違い", "種類（止める・外す・足す）と番号", "付けない（次の人が元に戻すため）", "人を確かめる物ではありません", "x-real-ip", "生の IP は Redis にもログにも残しません", "まだ本番では呼んでいません"])
+    for (const w of ["元の形に戻してから", "承認した1件だけ", "テスト用アカウントの中だけ・店の広告には届かない理由", "オーナーの「送る」との違い", "種類（止める・外す・足す）と番号", "付けない（次の人が元に戻すため）", "人を確かめる物ではありません", "x-real-ip", "生の IP は Redis にもログにも残しません"])
+      assert.ok(sec.includes(w), w);
+    // 直しW：直しU の後の本番で 503 だったこと・直した所・Merge の後に確かめること（まだ確かめていない・次の日の最初の1回）
+    for (const w of ["503 no-store", "置けた時は作った値をそのまま使い", "`upstash-sync-token`", "承認の箱から1件承認して、try が通った", "**まだ確かめていません**", "次の日に確かめます"])
       assert.ok(sec.includes(w), w);
     assert.doesNotMatch(sec, /100%|必ず|すぐ反映/);
     const guard = readme.slice(readme.indexOf("### だれでも呼べる窓口の守り（今の作り）"), readme.indexOf("### 動かし方の手順"));

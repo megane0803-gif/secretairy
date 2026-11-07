@@ -832,11 +832,15 @@ export function sourceBucket(ip: string): string {
     .join(":")}::/64`;
 }
 
-/** 日ごとの塩（サーバーが作って KV に置く。2日で消える）。置けない・読めない時は StoreDown */
+/**
+ * 日ごとの塩（サーバーが作って KV に置く。2日で消える）。置けない・読めない時は StoreDown。
+ * 置けた（SET NX が true）時は、作った値をそのまま使う（置いた直後の GET は、まだ写っていない写しから null で返ることがある）。
+ * 読むのは、ほかの呼び出しがもう置いていて置けなかった時だけ。
+ */
 async function saltOf(d: LiveDeps, date: string): Promise<string> {
   const store = d.store!;
   const fresh = (d.random ?? randomBytes)(16).toString("hex");
-  await kv(() => store.set(LIVE_KEY.trySalt(date), fresh, { ex: DAY_SECONDS, nx: true }));
+  if (await kv(() => store.set(LIVE_KEY.trySalt(date), fresh, { ex: DAY_SECONDS, nx: true }))) return fresh;
   const salt = await kv(() => store.get(LIVE_KEY.trySalt(date)));
   if (!salt) throw new StoreDown();
   return salt;
