@@ -600,6 +600,20 @@ describe("8. メニューの欄を、メニューごとに畳む", () => {
   });
 });
 
+describe("8b. メニューの欄の入力欄は 44px 以上・値段の欄は矢印なしでそろえる", () => {
+  test("`.menu-edit` の中の select と input に min-height: 44px。値段（number）の増減の矢印は出さない", () => {
+    const css = read("src/app/globals.css");
+    assert.match(css, /\.menu-edit select,\n\.menu-edit input \{ box-sizing: border-box; min-height: 44px; \}/);
+    assert.match(css, /\.menu-edit input\[type="number"\] \{ appearance: textfield; -moz-appearance: textfield; \}/);
+    assert.match(css, /\.menu-edit input\[type="number"\]::-webkit-inner-spin-button,\n\.menu-edit input\[type="number"\]::-webkit-outer-spin-button \{ -webkit-appearance: none; margin: 0; \}/);
+    // 足す欄（名前・色・時間・値段・最終受付）も、直しF からある行も、同じ .menu-edit の中
+    const p = read("src/app/rules/MenuPanel.tsx");
+    assert.match(p, /<div className="menu-edit">/);
+    assert.match(p, /aria-label="足すメニューの名前"/);
+    assert.match(p, /aria-label="足すメニューの色"/);
+  });
+});
+
 describe("9. 読む入口は1つ（useBook の data.menus）", () => {
   test("ルールの一覧（RuleBoard）も台帳の data.menus から、メニューの名前を引く", () => {
     const b = read("src/app/rules/RuleBoard.tsx");

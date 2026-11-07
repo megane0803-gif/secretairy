@@ -2142,5 +2142,12 @@ h3.section-title { font-size: 1rem; }
 .menu-edit-fields select,
 .menu-edit-fields input { width: 100%; min-width: 0; font: inherit; font-variant-numeric: tabular-nums; padding: 4px 6px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); }
 .menu-edit-fields input[aria-invalid="true"] { border-color: var(--warn); }
+/* メニューの欄の入力欄は、指で押しやすい高さ（44px 以上。直しF からある行と「＋ メニューを足す」の欄の両方） */
+.menu-edit select,
+.menu-edit input { box-sizing: border-box; min-height: 44px; }
+/* 値段の欄の増減の小さな矢印は出さない（押した欄だけ矢印が出て、ほかの値段の欄と形がずれないように） */
+.menu-edit input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+.menu-edit input[type="number"]::-webkit-inner-spin-button,
+.menu-edit input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .menu-edit-diff { border: 1px solid var(--accent); border-radius: var(--radius-sm); padding: 8px 10px; background: var(--accent-soft); }
 .menu-edit-diff ul { margin: 4px 0; padding-left: 1.2em; }
