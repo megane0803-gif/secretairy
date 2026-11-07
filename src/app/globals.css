@@ -1703,6 +1703,9 @@ h3.section-title { font-size: 1rem; }
 .tag.wrap { white-space: normal; display: inline-block; }
 .freee-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .freee-connect { margin: 8px 0; }
+.freee-try { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; min-width: 0; }
+.freee-try label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.freee-try select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); width: 100%; max-width: 100%; }
 
 /* 発信の下書きの「AI のチーム」（docs/SPEC.md §1.10.1）。カードの形と色は広告のチームと同じ .voice */
 .team-edit { margin: 0; min-width: 0; overflow-wrap: anywhere; }

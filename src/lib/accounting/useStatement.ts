@@ -7,7 +7,7 @@
 import { useCallback, useMemo } from "react";
 import type { CardUse } from "../data/types";
 import { isFixed } from "../freee/state";
-import { useFreeeBusy, useFreeeList, useFreeeMode, useFreeeRecord, useFreeeStatus, type FreeeListState } from "../freee/useFreee";
+import { useFreeeBusy, useFreeeList, useFreeeMode, useFreeeRecord, useFreeeStatus, useTryMode, type FreeeListState } from "../freee/useFreee";
 import { getFreeeSettings } from "../settings";
 import { withAutoNext, withChoice, withLiveAutoNext, withLiveChoice } from "./state";
 import { useAccounting } from "./useAccounting";
@@ -23,7 +23,11 @@ export function useStatement() {
   const acct = useAccounting();
   const record = useFreeeRecord();
   const list = useFreeeList();
-  const status = useFreeeStatus().status;
+  // 来た人の試し（cookie が無い画面で、サーバーがつながりを持っている時）は、つながっている扱いで一覧を出す。
+  // 試すのは右の列で1件ずつなので、真ん中の一覧の店用／私用は選べない（見るだけ）
+  const tryMode = useTryMode();
+  const realStatus = useFreeeStatus().status;
+  const status = tryMode ? "connected" : realStatus;
   const freee = useFreeeMode();
   const busy = useFreeeBusy();
   const { seed, state } = acct;
@@ -37,8 +41,8 @@ export function useStatement() {
 
   /** その行の選びを止めるか（架空の明細は登録の後・freee の明細は送り始めて固定した後と、送っている間） */
   const locked = useCallback(
-    (key: string) => (view.mode === "seed" ? !!state.registered : busy || isFixed(record, key)),
-    [view.mode, state.registered, busy, record],
+    (key: string) => (view.mode === "seed" ? !!state.registered : tryMode || busy || isFixed(record, key)),
+    [view.mode, state.registered, busy, record, tryMode],
   );
   const choose = useCallback(
     (key: string, use: CardUse) => {
@@ -51,12 +55,12 @@ export function useStatement() {
   const toggleAuto = useCallback(
     (merchantId: string, on: boolean) => {
       if (view.mode === "seed") acct.update((s) => withAutoNext(seed, s, merchantId, on));
-      else if (!busy) acct.update((s) => withLiveAutoNext(s, merchantId, on));
+      else if (!busy && !tryMode) acct.update((s) => withLiveAutoNext(s, merchantId, on));
     },
-    [acct, busy, seed, view.mode],
+    [acct, busy, seed, view.mode, tryMode],
   );
-  const autoLocked = view.mode === "seed" ? !!state.registered : busy;
-  return { acct, view, phase, locked, choose, toggleAuto, autoLocked, record };
+  const autoLocked = view.mode === "seed" ? !!state.registered : busy || tryMode;
+  return { acct, view, phase, locked, choose, toggleAuto, autoLocked, record, tryMode };
 }
 
 export function phaseOf(freee: boolean, status: string, list: FreeeListState): StatementPhase {

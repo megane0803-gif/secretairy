@@ -227,6 +227,7 @@ export function CardStatement() {
       </h3>
       <p className="hint">1行ずつ「店用」か「私用」を押します。「次から自動」に印を付けた購入先は、登録のときに自動のルールに足します（今回の印で）。</p>
       {live && <p className="hint">摘要に購入先の名前がちょうど1つ入っている明細だけ、その購入先のルールを使います（0か2つ以上なら人が選びます）。</p>}
+      {st.tryMode && <p className="hint">試すのは登録の欄で1件ずつです（ここでは店用・私用を選べません。見るだけ）。</p>}
       <h4 className="acct-h4">初めての購入先（{sorted.fresh.length}件）</h4>
       <Group st={st} items={sorted.fresh} kind="fresh" />
       <h4 className="acct-h4">前にも仕分けた購入先（{sorted.known.length}件）</h4>

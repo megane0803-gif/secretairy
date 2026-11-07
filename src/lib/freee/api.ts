@@ -47,12 +47,15 @@ export type WalletTxn = {
   walletable_id: number;
   description: string;
   status: number;
+  /** 自動登録のルールで登録されたか（公式の定義で必ずある欄。無い返事は読まない＝ undefined） */
+  rule_matched?: boolean;
 };
 
 export type AccountItem = { id: number; name: string; available: boolean };
 export type Tax = { code: number; name: string; name_ja: string; available: boolean };
 
-export type TokenAnswer = { accessToken: string; expiresIn: number; companyId: number | null };
+/** refreshToken：更新用の鍵（返事に無ければ null。その時は cookie だけでつなぐ） */
+export type TokenAnswer = { accessToken: string; expiresIn: number; companyId: number | null; refreshToken: string | null };
 
 const isInt = (x: unknown): x is number => typeof x === "number" && Number.isInteger(x);
 const isStr = (x: unknown): x is string => typeof x === "string";
@@ -75,7 +78,7 @@ function messagesOf(body: unknown): string[] {
 export function freeeClient(p: { fetch: FetchLike; settings: FreeeSettings; accessToken: string; now?: () => number; deadline?: number | null }) {
   const { settings, accessToken } = p;
   const now = p.now ?? (() => Date.now());
-  const call = async (method: "GET" | "POST", path: string, opts: { query?: Record<string, string | number>; body?: unknown } = {}): Promise<unknown> => {
+  const call = async (method: "GET" | "POST" | "DELETE", path: string, opts: { query?: Record<string, string | number>; body?: unknown } = {}): Promise<unknown> => {
     if (p.deadline != null && now() + settings.timeoutSeconds * 1000 > p.deadline) throw new FreeeOutOfTime("持ち時間が残っていないので送りませんでした");
     const url = new URL(path, settings.apiBase);
     for (const [k, v] of Object.entries(opts.query ?? {})) url.searchParams.set(k, String(v));
@@ -105,11 +108,19 @@ export function freeeClient(p: { fetch: FetchLike; settings: FreeeSettings; acce
     if (res.status === 401) throw new FreeeExpired("鍵が切れました");
     if (res.status >= 500) throw new FreeeServerError(res.status);
     if (res.status >= 400) throw new FreeeRejected(res.status, messagesOf(body));
+    // 消す呼び出しの返事は 204（中身なし）
+    if (method === "DELETE" && res.status === 204) return null;
+    if (method === "DELETE") throw new FreeeNoAnswer("消した返事の形が違います");
     if (!parsed) throw new FreeeNoAnswer("freee の返事を読めませんでした");
     return body;
   };
 
   return {
+    /** いま送れるか（持ち時間が残っているか）。送る前の一歩を記録に置く前に確かめる（送れないのに一歩だけ残さない） */
+    canSend(): boolean {
+      return !(p.deadline != null && now() + settings.timeoutSeconds * 1000 > p.deadline);
+    },
+
     /** 口座一覧（GET /api/1/walletables） */
     async walletables(companyId: number): Promise<Walletable[]> {
       const b = (await call("GET", "/api/1/walletables", { query: { company_id: companyId } })) as { walletables?: unknown };
@@ -215,6 +226,19 @@ export function freeeClient(p: { fetch: FetchLike; settings: FreeeSettings; acce
       if (!isInt(b?.deal_id)) throw new FreeeNoAnswer("プライベート取引を登録した返事の形が違います");
       return b.deal_id;
     },
+
+    /**
+     * 取引を消す（DELETE /api/1/deals/{id}?company_id=。返事は 204）。来た人の試しを元に戻す時だけ使う。
+     * 404 は FreeeRejected（もう無い）。
+     */
+    async deleteDeal(dealId: number, companyId: number): Promise<void> {
+      await call("DELETE", `/api/1/deals/${dealId}`, { query: { company_id: companyId } });
+    },
+
+    /** 口座明細を消す（DELETE /api/1/wallet_txns/{id}?company_id=。返事は 204）。印のある見本の明細を作り直す時だけ使う */
+    async deleteWalletTxn(txnId: number, companyId: number): Promise<void> {
+      await call("DELETE", `/api/1/wallet_txns/${txnId}`, { query: { company_id: companyId } });
+    },
   };
 }
 
@@ -242,6 +266,7 @@ function toTxn(t: unknown): WalletTxn | null {
     walletable_id: x.walletable_id,
     description: isStr(x.description) ? x.description : "",
     status: x.status,
+    ...(typeof x.rule_matched === "boolean" ? { rule_matched: x.rule_matched } : {}),
   };
 }
 
@@ -249,7 +274,8 @@ function toTxn(t: unknown): WalletTxn | null {
  * 許可のコードを鍵に換える（POST {tokenUrl}。form の形で grant_type=authorization_code）。
  * 送る物の形は freee 公式の freee-mcp（github.com/freee/freee-mcp の src/auth/oauth.ts）と同じ。
  * 返事の company_id は、許可で選んだ事業所の番号。無ければ null（その時は鍵を捨てて止める）。
- * refresh_token は読まない（持たない・自動の更新はしない）。
+ * refresh_token は、形（空でない文字）を確かめて読む。無ければ null（cookie だけでつなぐ。サーバーには置かない）。
+ * 更新用の鍵は cookie には入れない（サーバーの置き場に暗号化して置くだけ。src/lib/freee/kv.ts）。
  */
 export async function exchangeCode(p: {
   fetch: FetchLike;
@@ -260,25 +286,44 @@ export async function exchangeCode(p: {
   codeVerifier: string;
   redirectUri: string;
 }): Promise<TokenAnswer> {
+  return tokenPost(p, {
+    grant_type: "authorization_code",
+    client_id: p.clientId,
+    client_secret: p.clientSecret,
+    code: p.code,
+    redirect_uri: p.redirectUri,
+    code_verifier: p.codeVerifier,
+  });
+}
+
+/**
+ * 更新用の鍵でアクセスの鍵を延ばす（POST {tokenUrl}。form の形で grant_type=refresh_token）。
+ * 送る物の形は exchangeCode と同じ freee 公式の形（freee-mcp の src/auth/oauth.ts の更新と同じ）。
+ * 更新用の鍵は1回使うと変わる（返事の refresh_token が次の鍵）。
+ */
+export async function refreshAccessToken(p: { fetch: FetchLike; settings: FreeeSettings; clientId: string; clientSecret: string; refreshToken: string }): Promise<TokenAnswer> {
+  return tokenPost(p, {
+    grant_type: "refresh_token",
+    client_id: p.clientId,
+    client_secret: p.clientSecret,
+    refresh_token: p.refreshToken,
+  });
+}
+
+async function tokenPost(p: { fetch: FetchLike; settings: FreeeSettings }, form: Record<string, string>): Promise<TokenAnswer> {
   let res: Response;
   try {
     res = await p.fetch(p.settings.tokenUrl, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        client_id: p.clientId,
-        client_secret: p.clientSecret,
-        code: p.code,
-        redirect_uri: p.redirectUri,
-        code_verifier: p.codeVerifier,
-      }).toString(),
+      body: new URLSearchParams(form).toString(),
       cache: "no-store",
       signal: AbortSignal.timeout(p.settings.timeoutSeconds * 1000),
     });
   } catch {
     throw new FreeeNoAnswer("freee から返事がありません");
   }
+  if (res.status >= 500) throw new FreeeServerError(res.status);
   if (!res.ok) throw new FreeeRejected(res.status, []);
   let b: Record<string, unknown>;
   try {
@@ -289,5 +334,7 @@ export async function exchangeCode(p: {
   if (!isStr(b?.access_token) || !b.access_token || !isInt(b.expires_in) || b.expires_in <= 0) throw new FreeeBadShape("鍵の返事の形が違います");
   const cid = b.company_id;
   const companyId = isInt(cid) && cid > 0 ? cid : isStr(cid) && /^[1-9]\d{0,18}$/.test(cid) ? Number(cid) : null;
-  return { accessToken: b.access_token, expiresIn: b.expires_in, companyId };
+  const rt = b.refresh_token;
+  const refreshToken = isStr(rt) && rt.length > 0 && rt.length <= 2000 && !/\s/.test(rt) ? rt : null;
+  return { accessToken: b.access_token, expiresIn: b.expires_in, companyId, refreshToken };
 }
