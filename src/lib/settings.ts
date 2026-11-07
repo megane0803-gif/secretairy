@@ -227,7 +227,7 @@ export function getAdsAiSettings(): AdsAiSettings {
 export type AccountingSettings = {
   /** 明細を取り込み、登録する先（画面の札。例「会計」）。オーナーのブラウザで freee（テスト事業所）につながっている時は freee の札（freee.label） */
   service: string;
-  /** つないでいない画面の明細の説明（アプリの中の架空のカードと銀行の明細） */
+  /** つないでいない画面の明細の説明（アプリの中に入っている見本のカードと銀行の明細。画面に出す文なので「架空」は書かない） */
   statementNote: string;
   /** 入金の行の近くの1行（つないでいない画面） */
   incomeNote: string;

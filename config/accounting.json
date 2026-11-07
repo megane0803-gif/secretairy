@@ -1,6 +1,6 @@
 {
   "service": "会計",
-  "statementNote": "アプリの中の架空のカードと銀行の明細です。freee とつなぐと、freee のまだ処理していない明細を読んで出します",
+  "statementNote": "アプリの中に入っている見本のカードと銀行の明細です。freee とつなぐと、freee のまだ処理していない明細を読んで出します",
   "incomeNote": "売上の入金は、会計のルールで売上にしています。ここからは送りません",
   "daily": { "maxTotalYen": 1000000, "maxVisits": 50, "maxDays": 400 },
   "freee": {

@@ -173,7 +173,7 @@ describe("つないでいない時（審査員の画面も）：アプリの中�
   });
 
   test("文の形：つないでいない時・つないでいる時・入金の1行（設定に置く）", () => {
-    assert.equal(settings.statementNote, "アプリの中の架空のカードと銀行の明細です。freee とつなぐと、freee のまだ処理していない明細を読んで出します");
+    assert.equal(settings.statementNote, "アプリの中に入っている見本のカードと銀行の明細です。freee とつなぐと、freee のまだ処理していない明細を読んで出します");
     assert.equal(freee.statementNote, "freee（テスト事業所）から読んだ、まだ処理していない明細（カード・銀行）");
     assert.equal(freee.incomeNote, "売上の入金は、freee のルールで売上にしています。ここからは送りません");
     assert.equal(freee.bankName, "SecretAIry 口座");
