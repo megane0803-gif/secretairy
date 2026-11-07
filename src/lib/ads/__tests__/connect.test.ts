@@ -99,8 +99,10 @@ describe("渡す中身", () => {
     const json = JSON.stringify(payload);
     // 「secretairy-ads-sync」の形の名前のほかに、鍵・合言葉・本物の広告の番号（123-456-7890 の形）が無い
     assert.doesNotMatch(json.replaceAll(SYNC_FORMAT, ""), /token|secret|pass|apikey|api_key|customerId|\d{3}-\d{3}-\d{4}/i);
-    const cfg = readFileSync("config/ads.json", "utf8");
-    assert.doesNotMatch(cfg, /\d{3}-\d{3}-\d{4}|token|secret|passcode/i, "設定にも本物の番号・鍵を入れない");
+    // テスト用アカウントの設定（live）は、通行証を作る行き先（…/token）と合言葉の上限の数を持つので別に見る（鍵・番号・メールは無い）
+    const { live, ...rest } = JSON.parse(readFileSync("config/ads.json", "utf8")) as Record<string, unknown>;
+    assert.doesNotMatch(JSON.stringify(rest), /\d{3}-\d{3}-\d{4}|token|secret|passcode/i, "設定にも本物の番号・鍵を入れない");
+    assert.doesNotMatch(JSON.stringify(live), /\d{3}-?\d{3}-?\d{4}|PRIVATE KEY|@|secret|client_email|customer/i, "テスト用アカウントの設定にも鍵・番号・メールを入れない");
   });
 
   test("数の上限（maxItems）をこえた分は次に回す", () => {
@@ -205,8 +207,14 @@ describe("結果の読み込み", () => {
     assert.doesNotMatch(readFileSync("src/lib/ads/connect.ts", "utf8"), /sampleResult/);
     assert.match(ui, /読み込む/);
     assert.match(ui, /<textarea/);
-    for (const f of ["src/app/ads/AdsConnect.tsx", "src/app/ads/page.tsx", "src/app/ads/AdsReport.tsx", "src/components/AdAddRow.tsx", "config/ads.json"])
+    for (const f of ["src/app/ads/AdsConnect.tsx", "src/app/ads/AdsLive.tsx", "src/app/ads/page.tsx", "src/app/ads/AdsReport.tsx", "src/components/AdAddRow.tsx"])
       assert.doesNotMatch(readFileSync(f, "utf8"), /Google|グーグル/, f);
+    // 設定で名前を書くのは、テスト用アカウントにつながっている時の札（live.label）だけ
+    const { live, ...rest } = JSON.parse(readFileSync("config/ads.json", "utf8")) as { live: Record<string, unknown> };
+    assert.doesNotMatch(JSON.stringify(rest), /Google|グーグル/);
+    const { label, ...liveRest } = live;
+    assert.match(String(label), /^Google 広告（テスト用アカウント）$/);
+    assert.doesNotMatch(JSON.stringify(liveRest).replace(/https:\/\/[a-z0-9.]+\.googleapis\.com[^"]*/g, ""), /Google|グーグル/);
   });
 });
 

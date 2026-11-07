@@ -7,6 +7,7 @@ import { AD_FIELDS } from "@/lib/data/types";
 import { getSeedRules } from "@/lib/rules/store";
 import { getAdSettings, getShop } from "@/lib/settings";
 import { AdsConnect } from "./AdsConnect";
+import { AdsLive } from "./AdsLive";
 import { AdsReport, AdsWeeks } from "./AdsReport";
 import { AdsResults } from "./AdsResults";
 import { AdsReview } from "./AdsReview";
@@ -68,6 +69,7 @@ export default function AdsPage() {
         </p>
         <FieldList fields={AD_FIELDS} />
         <AdsConnect />
+        <AdsLive />
       </Fold>
     </TabPage>
   );
