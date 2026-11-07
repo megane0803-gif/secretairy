@@ -178,7 +178,12 @@ export function FreeePanel({ freee }: { freee: Freee }) {
       </button>
       <p className="hint">一覧を読むのは、経理のタブを開いた時と、このボタンを押した時だけです。</p>
       {connected && freee.shared === true && <p className="hint">サーバーもつながりを持っています（来た人も、合言葉なしで試せます。試した物は元の形に戻します）。</p>}
-      {connected && freee.shared === false && <p className="hint">サーバーはつながりを持っていません（来た人は試せません）。もう一度つなぐと持ちます。</p>}
+      {connected && freee.shared === false && !freee.dead && <p className="hint">サーバーはつながりを持っていません（来た人は試せません）。もう一度つなぐと持ちます。</p>}
+      {connected && freee.dead && (
+        <p className="problems" role="alert">
+          サーバーの鍵を延ばせませんでした（freee が断りました）。来た人は試せません。もう一度つないでください。
+        </p>
+      )}
       {connected && freee.trial === "repair" && (
         <p className="problems" role="alert">
           来た人の試しで、元の形に戻せなかった物があります（要復旧。来た人の登録は止めています）。freee の側で見本どおりの未処理に直してから、もう一度つないでください。

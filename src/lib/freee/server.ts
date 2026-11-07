@@ -47,7 +47,7 @@ import {
   type Verdict,
 } from "./match";
 import { siteCheck } from "../server/site";
-import { currentGen, dropKvToken, genMovedPast, putKvToken, readKvToken, StoreDown, withWriteLock, type KvCtx, type StillHeld } from "./kv";
+import { currentGen, dropKvToken, genMovedPast, isDeadToken, putKvToken, readKvToken, StoreDown, withWriteLock, type KvCtx, type StillHeld } from "./kv";
 import { seal, unseal } from "./seal";
 import { clearRepairedTrial, loadTrial, restoreTrial, seedItemOfMark, type RestoreResult, type Trial } from "./trial";
 
@@ -363,16 +363,18 @@ export async function handleStatus(request: Request, deps: FreeeDeps): Promise<R
  * オーナーの画面に出す：サーバーがつながりを持っているか（来た人も試せるか）と、元に戻す記録の様子。
  * 置き場が無い時は shared: false。読めない時は null（どちらも中身・番号は出さない）。
  */
-async function sharedState(deps: FreeeDeps): Promise<{ shared: boolean | null; trial: "repair" | "pending" | null }> {
+async function sharedState(deps: FreeeDeps): Promise<{ shared: boolean | null; dead: boolean; trial: "repair" | "pending" | null }> {
   const c = kvCtxOf(deps);
-  if (!c) return { shared: false, trial: null };
+  if (!c) return { shared: false, dead: false, trial: null };
   try {
     const got = await readKvToken(c);
-    const shared = !!got && got.token.companyId === deps.env.companyId && !genMovedPast(await currentGen(c.store), got.token.gen);
+    const held = !!got && got.token.companyId === deps.env.companyId && !genMovedPast(await currentGen(c.store), got.token.gen);
+    // freee が延ばすのを断った鍵：来た人は試せない（つなぎ直してください）
+    const dead = held && (await isDeadToken(c, got!.raw));
     const t = await loadTrial(c.store);
-    return { shared, trial: t.repair ? "repair" : t.items.length ? "pending" : null };
+    return { shared: held && !dead, dead, trial: t.repair ? "repair" : t.items.length ? "pending" : null };
   } catch {
-    return { shared: null, trial: null };
+    return { shared: null, dead: false, trial: null };
   }
 }
 

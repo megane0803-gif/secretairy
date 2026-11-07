@@ -192,8 +192,10 @@ export type RestoreCtx = {
 /** done：全部元に戻った（記録を消した）・partial：持ち時間などで区切った（次の呼び出しで続き）・repair：要復旧で止めた */
 export type RestoreResult = "done" | "partial" | "repair";
 
-/** 印の期限が来ていた（書く前に区切る） */
+/** 印の期限が来ていた（書く前に区切る。この後は置き場に書かない） */
 class LockLost extends Error {}
+/** 一歩を記録に置けなかった（送っていない。一歩は外して区切る） */
+class StepNotPlaced extends Error {}
 
 /**
  * 書く時の印の中から呼ぶ。終わった後の記録も返す（書いた直後に置き場を読み直さない）。FreeeExpired は投げる（鍵が切れた。呼ぶ側で扱う）。
@@ -214,8 +216,39 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
     await save();
     return { result: "repair", trial: t };
   };
-  const write = async () => {
+  /**
+   * 一歩（取引を消す・明細を消す・作り直す）の順：① 持ち時間と印を確かめる（一歩を置く前）② 一歩を記録に置く ③ 送る。
+   * 送っていないと分かる止まり方（持ち時間が足りない・印を失った・一歩を置けなかった・鍵を受けられなかった 401）では、
+   * その一歩を記録に残さない（置いていたら外す）。一歩を残すのは、送った後に返事が途切れた時（送ったか分からない時）だけ。
+   * place：この回に一歩を置くか（前の回に送った一歩が残っている時は置かない＝そのまま）。undo：置いた一歩を外す。
+   */
+  const stepped = async <T>(place: boolean, set: () => void, undo: () => void, call: () => Promise<T>): Promise<T> => {
+    if (!c.api.canSend()) throw new FreeeOutOfTime("持ち時間が残っていないので送りませんでした");
     if (c.held && !(await c.held())) throw new LockLost();
+    if (place) {
+      set();
+      try {
+        await save();
+      } catch {
+        undo();
+        try {
+          await save();
+        } catch {
+          // 外した形も書けない：置き場が使えない（次の回も、置き場が戻ってから続ける）
+        }
+        throw new StepNotPlaced();
+      }
+    }
+    try {
+      return await call();
+    } catch (e) {
+      // 送る前に止めた（持ち時間）・鍵を受けられなかった：送っていないので、置いた一歩を外す
+      if (place && (e instanceof FreeeOutOfTime || e instanceof FreeeExpired)) {
+        undo();
+        await save();
+      }
+      throw e;
+    }
   };
   // 取引の番号が分からない明細があれば、消す・作り直すもしない
   if (hasUnknownDeal(t)) return repair();
@@ -230,14 +263,15 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
     for (const item of t.items) {
       while (item.dealIds && item.dealIds.length > 0) {
         const id = item.dealIds[0];
+        // 前の回に送って返事が途切れた一歩（送る前に止まった一歩は、その回に外してある）
         const resumed = item.deleting === id;
-        if (!resumed) {
-          item.deleting = id;
-          await save();
-        }
-        await write();
         try {
-          await c.api.deleteDeal(id, c.companyId);
+          await stepped(
+            !resumed,
+            () => (item.deleting = id),
+            () => (item.deleting = null),
+            () => c.api.deleteDeal(id, c.companyId),
+          );
         } catch (e) {
           if (!(e instanceof FreeeRejected)) throw e;
           // 1回目の 404・ほかの 400 台：消せない（元に戻せない）→ 要復旧。前の回に送った後の 404 だけ「もう無い」
@@ -296,13 +330,14 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
         if (item.step === "recreated" || x.rule_matched === true || !matchesSeed(c.seed, prefix, s, x, w, c.companyId)) return repair();
         if (markIn(x.description, prefix) === null) return repair();
         const resumed = item.step === "txn-deleting";
-        if (!resumed) {
-          item.step = "txn-deleting";
-          await save();
-        }
-        await write();
+        const before = item.step;
         try {
-          await c.api.deleteWalletTxn(x.id, c.companyId);
+          await stepped(
+            !resumed,
+            () => (item.step = "txn-deleting"),
+            () => (item.step = before),
+            () => c.api.deleteWalletTxn(x.id, c.companyId),
+          );
         } catch (e) {
           if (!(e instanceof FreeeRejected)) throw e;
           if (!(e.status === 404 && resumed)) return repair();
@@ -318,18 +353,22 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
         return repair();
       }
       const p = seedTxnParams(c.seed, prefix, s);
-      item.step = "recreating";
-      await save();
-      await write();
-      const made = await c.api.createWalletTxn({
-        company_id: c.companyId,
-        walletable_type: WALLETABLE_TYPE[p.account],
-        walletable_id: w.id,
-        entry_side: p.entry_side,
-        amount: p.amount,
-        date: p.date,
-        description: p.description,
-      });
+      const before = item.step;
+      const made = await stepped(
+        true,
+        () => (item.step = "recreating"),
+        () => (item.step = before),
+        () =>
+          c.api.createWalletTxn({
+            company_id: c.companyId,
+            walletable_type: WALLETABLE_TYPE[p.account],
+            walletable_id: w.id,
+            entry_side: p.entry_side,
+            amount: p.amount,
+            date: p.date,
+            description: p.description,
+          }),
+      );
       item.id = made.id;
       item.step = "recreated";
       created = true;
@@ -346,12 +385,17 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
     await save();
     return { result: "done", trial: t };
   } catch (e) {
+    // 印を失った：置き場に書かない（新しく印を取った呼び出しの記録を、古い中身で上書きしない）。記録は一歩ごとに置いてある
+    if (e instanceof LockLost) return { result: "partial", trial: t };
+    // 一歩を置けなかった（外してある）・置き場が使えない：書かずに区切る
+    if (e instanceof StepNotPlaced) return { result: "partial", trial: t };
+    if (e instanceof StoreDown) throw e;
     if (e instanceof FreeeExpired) {
       await save();
       throw e;
     }
-    // 印の期限が来た・持ち時間が足りない（送る前に止めた）・返事が途切れた：区切る（次の回に、記録の一歩から続ける）
-    if (e instanceof LockLost || e instanceof FreeeOutOfTime || !(e instanceof FreeeRejected)) {
+    // 持ち時間が足りない（送る前に止めた。一歩は外してある）・返事が途切れた（一歩は残す）：区切る（次の回に、記録の一歩から続ける）
+    if (e instanceof FreeeOutOfTime || !(e instanceof FreeeRejected)) {
       await save();
       return { result: "partial", trial: t };
     }

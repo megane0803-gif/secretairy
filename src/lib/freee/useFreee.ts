@@ -179,6 +179,8 @@ export type FreeeStatusAnswer = {
   missing: string[];
   /** つながっている時：サーバーもつながりを持っているか（来た人も試せるか）。分からなければ null */
   shared?: boolean | null;
+  /** つながっている時：サーバーの鍵を freee が延ばすのを断った（来た人は試せない。つなぎ直してください） */
+  dead?: boolean;
   /** つながっている時：来た人の試しの記録（要復旧・まだ元に戻していない） */
   trial?: "repair" | "pending" | null;
 };
@@ -189,11 +191,12 @@ export type FreeeStatusAnswer = {
  */
 export function readStatusAnswer(httpStatus: number, body: unknown): FreeeStatusAnswer {
   if (httpStatus === 200) {
-    const ok = body as { shared?: unknown; trial?: unknown } | null;
+    const ok = body as { shared?: unknown; dead?: unknown; trial?: unknown } | null;
     return {
       status: "connected",
       missing: [],
       shared: typeof ok?.shared === "boolean" ? ok.shared : null,
+      dead: ok?.dead === true,
       trial: ok?.trial === "repair" || ok?.trial === "pending" ? ok.trial : null,
     };
   }
@@ -450,7 +453,7 @@ export function useFreee() {
   const nowMs = Date.now();
   const sending = running || isSending(record, nowMs, settings.sendingStaleSeconds);
   const importWait = importHeld(record, nowMs) ? record.importHold : null;
-  return { record, status, missing: answer.missing, shared: answer.shared ?? null, trial: answer.trial ?? null, canConnect: showConnect(answer), settings, sending, importWait, started: hasStarted(record), refresh, disconnect, importStatements, register, check };
+  return { record, status, missing: answer.missing, shared: answer.shared ?? null, dead: answer.dead === true, trial: answer.trial ?? null, canConnect: showConnect(answer), settings, sending, importWait, started: hasStarted(record), refresh, disconnect, importStatements, register, check };
 }
 
 /** 記録だけ（サーバーには聞かない）。経理の明細の行で、送っている間は選びを止めるのに使う（固定した明細は isFixed で） */

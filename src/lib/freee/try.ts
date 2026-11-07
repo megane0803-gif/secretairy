@@ -19,7 +19,7 @@ import type { CardUse, StatementAccount } from "../data/types";
 import { siteCheck } from "../server/site";
 import { sourceBucket, sourceHash, sourceIp } from "../server/source";
 import { freeeClient, FreeeExpired, FreeeOutOfTime, isOpen, type FreeeClient, type WalletTxn } from "./api";
-import { FREEE_KV, kv, kvAccess, markKvExpired, StoreDown, withWriteLock, type KvCtx, type KvToken, type StillHeld } from "./kv";
+import { currentGen, FREEE_KV, genMovedPast, kv, kvAccess, markKvExpired, StoreDown, withWriteLock, type KvCtx, type KvToken, type StillHeld } from "./kv";
 import { lookupById, markIn, pickBankAccount, pickCardAccount } from "./match";
 import { envProblems, json, kvCtxOf, openRows, prepareOne, readRange, todayIn, writeOne, type FreeeDeps, type ReadAccount } from "./server";
 import type { TryInfo, TryPhase } from "./tryClient";
@@ -168,6 +168,8 @@ async function tryUnder(request: Request, deps: FreeeDeps, c: KvCtx, action: Kin
   let note: RestoreResult | "busy" | null = null;
   if (restoreDue(trial, deps.now(), deps.settings)) {
     const r = await withWriteLock(c, async (until, held) => {
+      // 印を取った後に、つないだ回の番号を読み直す（鍵を受け取った後にオーナーが外していたら、書かない）
+      if (genMovedPast(await currentGen(c.store), tok.gen)) return "expired" as const;
       // 5分をこえたかは、印を取った後に読み直した記録で決め直す（印の外の古い記録で決めない）
       const fresh = await loadTrial(c.store);
       if (!restoreDue(fresh, deps.now(), deps.settings)) return { result: null, trial: fresh };
@@ -260,6 +262,9 @@ async function registerUnderLock(
   const { id, use } = target;
   const s = deps.settings;
   const now = deps.now();
+  // 印を取った後に、つないだ回の番号を読み直す。鍵の番号より進んでいたら（鍵を受け取った後にオーナーが外した）書かない。
+  // 外す側は印を放す前に番号を進めるので、印を取った後のこの読みで必ず見える
+  if (genMovedPast(await currentGen(c.store), tok.gen)) return fail("not-connected", TRY_MESSAGES.notConnected, 200);
   // 印の中で、もう一度記録を読む（印を取る前に、ほかの呼び出しが書いたかもしれない）。5分をこえたかもこの記録で決める
   let trial = await loadTrial(c.store);
   if (trial.repair) return answer(id, "refused", TRY_MESSAGES.repair);
@@ -277,7 +282,7 @@ async function registerUnderLock(
   }
   if (trial.items.length) {
     const left = Math.max(1, minutesLeft(trial, now, s));
-    if (trial.by !== sender) return answer(id, "refused", `ほかの人が試しています（あと ${left}分で元に戻ります）`);
+    if (trial.by !== sender) return answer(id, "refused", `ほかの人が試しています（あと ${left}分たった後に、次にだれかが経理のタブを開いた時に元に戻ります）`);
     if (trial.items.some((i) => i.id === id)) return answer(id, "refused", `この明細はもう試しました（あと ${left}分たった後に、次にだれかが経理のタブを開いた時に元に戻ります）`);
     if (trial.items.length >= s.try.maxItemsPerTrial) return answer(id, "refused", `1回に試せるのは${s.try.maxItemsPerTrial}件までです（あと ${left}分たった後に、次にだれかが経理のタブを開いた時に元に戻ります）`);
   }
@@ -337,6 +342,8 @@ async function registerUnderLock(
     return answer(id, "failed", TRY_MESSAGES.readFailed);
   }
 
+  // 置く前に、持ち時間と印を確かめる（送れないのに「書くかもしれない」を置かない・印を失った後は置き場に書かない）
+  if (!api.canSend() || !(await held())) return answer(id, "failed", "持ち時間が足りないので送りませんでした（何も書いていません）。もう一度押してください");
   // 書く前に、置き場に「書くかもしれない明細の番号」を置く（置けなければ書かない）
   trial = {
     ...trial,
@@ -351,11 +358,6 @@ async function registerUnderLock(
     trial = { ...trial, items: trial.items.filter((i) => i.id !== id) };
     await saveTrial(c.store, s, trial);
   };
-  // 書く直前に、印がまだ自分の物か（期限の後に書かない）
-  if (!(await held())) {
-    await drop();
-    return answer(id, "failed", "持ち時間が足りないので送りませんでした（何も書いていません）。もう一度押してください");
-  }
   const w = await writeOne(api, tok, use, p.txn, p.line);
   if (w.kind === "registered") {
     trial = { ...trial, items: trial.items.map((i) => (i.id === id ? { ...i, dealIds: w.dealIds, step: "written" as const } : i)), lastWriteAt: deps.now() };

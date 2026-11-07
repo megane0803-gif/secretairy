@@ -6,7 +6,7 @@
 //   - 書く時の印：来た人の登録・元に戻す・オーナーの「明細を入れる」と登録が、同じ1つの印を取る（取れなければ「少し待ってから」）
 // 鍵の中身は、返事・ログ・画面に出さない。お客様の記録・台帳・日誌はここに置かない。
 
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { KvStore } from "../line/store";
 import type { FreeeSettings } from "../settings";
 import { FreeeRejected, refreshAccessToken, type FetchLike } from "./api";
@@ -16,6 +16,8 @@ export const FREEE_KV = {
   token: "freee:kv:token",
   gen: "freee:kv:gen",
   refreshLock: "freee:kv:refresh-lock",
+  /** freee が延ばすのを断った鍵の印（その鍵の中身のハッシュ。鍵の場所には触らない。つなぎ直すと鍵の中身が変わるので自然に外れる） */
+  dead: "freee:kv:dead",
   /** 書く時の「同時に1回」の印（来た人の登録・元に戻す・オーナーの明細を入れる・登録で1つ） */
   writeLock: "freee:write-lock",
   /** 元に戻す記録（来た人が登録した明細と取引の番号・最後に書いた時刻・要復旧の印） */
@@ -64,8 +66,22 @@ export async function currentGen(store: KvStore): Promise<number> {
 }
 
 /** 番号を1つ進める（つなぐ・つなぎを外す） */
+/** つないだ回の番号の鍵の期限：置き場の鍵・記録より必ず長く（鍵だけが残って番号が 0 から数え直しにならないように） */
+const genDays = (c: KvCtx) => days(Math.max(c.settings.try.kvTokenDays, c.settings.try.trialKeepDays) * 4);
+
+/** 番号を1つ進める（つなぐ・つなぎを外す）。期限も付け直す（incr は最初に作った時にしか期限を付けないため） */
 export async function advanceGen(c: KvCtx): Promise<number> {
-  return kv(() => c.store.incr(FREEE_KV.gen, days(Math.max(c.settings.try.kvTokenDays, c.settings.try.trialKeepDays) * 4)));
+  const n = await kv(() => c.store.incr(FREEE_KV.gen, genDays(c)));
+  await kv(() => c.store.expire(FREEE_KV.gen, genDays(c)));
+  return n;
+}
+
+/** 鍵の中身のハッシュ（延ばせなかった印に使う。鍵そのものは置かない） */
+const deadMark = (raw: string) => createHash("sha256").update(raw).digest("hex").slice(0, 32);
+
+/** この鍵は freee が延ばすのを断った鍵か（印が今の鍵の中身と合う） */
+export async function isDeadToken(c: KvCtx, raw: string): Promise<boolean> {
+  return (await kv(() => c.store.get(FREEE_KV.dead))) === deadMark(raw);
 }
 
 function parseToken(x: unknown): KvToken | null {
@@ -89,7 +105,14 @@ async function writeToken(c: KvCtx, t: KvToken): Promise<string | null> {
   const raw = seal(c.cookieKey, "kv-token", t, c.random);
   try {
     const ok = await c.store.set(FREEE_KV.token, raw, { ex: days(c.settings.try.kvTokenDays) });
-    return ok ? raw : null;
+    if (!ok) return null;
+    // 鍵を書くたびに、番号の鍵の期限も付け直す（鍵の期限より必ず長く。番号が無ければ何もしない）
+    try {
+      await c.store.expire(FREEE_KV.gen, genDays(c));
+    } catch {
+      // 付け直せなくても、鍵より4倍長い期限が残っている
+    }
+    return raw;
   } catch {
     return null;
   }
@@ -144,6 +167,8 @@ export async function kvAccess(c: KvCtx & { fetch: FetchLike; clientId: string; 
   if (!got) return { ok: false, why: "none" };
   let { token: t } = got;
   let raw = got.raw;
+  // freee が延ばすのを断った鍵：freee を呼ばずに「つながっていない」（オーナーがつなぎ直すまで）
+  if (await isDeadToken(c, raw)) return { ok: false, why: "none" };
   const seen = await currentGen(c.store);
   // 鍵の番号より新しい番号が読めたら、もう外された（つなぎ直された）鍵。古い番号しか読めない時は鍵の番号を使う
   if (t.companyId !== c.companyId || genMovedPast(seen, t.gen)) return { ok: false, why: "none" };
@@ -161,7 +186,9 @@ export async function kvAccess(c: KvCtx & { fetch: FetchLike; clientId: string; 
     // 印を取る前に、ほかの呼び出しが延ばし終えていたかもしれない（読み直す）
     const again = await readKvToken(c);
     if (!again || again.token.companyId !== c.companyId || genMovedPast(again.token.gen, gen) || genMovedPast(await currentGen(c.store), gen)) return { ok: false, why: "none" };
-    if (again.token.gen < gen) return { ok: true, token: t }; // 古い写しが読めた：前に読んだ鍵のまま
+    // 古い写しが読めた：前に読んだ鍵のまま（切れていたら使わない。少し待ってから）
+    if (again.token.gen < gen) return t.expiresAt > c.now() ? { ok: true, token: t } : { ok: false, why: "busy" };
+    if (again.raw !== raw && (await isDeadToken(c, again.raw))) return { ok: false, why: "none" };
     t = again.token;
     raw = again.raw;
     if (t.expiresAt - margin > c.now()) return { ok: true, token: t };
@@ -172,8 +199,14 @@ export async function kvAccess(c: KvCtx & { fetch: FetchLike; clientId: string; 
       ans = await refreshAccessToken({ fetch: c.fetch, settings: c.settings, clientId: c.clientId, clientSecret: c.clientSecret, refreshToken: t.refreshToken });
     } catch (e) {
       if (e instanceof FreeeRejected) {
-        // 消さない：ほかの呼び出しがもう延ばして新しい鍵を置いたのに、こちらは古い写しを読んで古い更新用の鍵を送ったのかもしれない
-        // （消すと、その新しい鍵まで消してしまう）。この呼び出しはつながっていない扱い。本当に使えなければ、オーナーがつなぎ直す
+        // 鍵は消さない：ほかの呼び出しがもう延ばして新しい鍵を置いたのに、こちらは古い写しを読んで古い更新用の鍵を送ったのかもしれない
+        // （消すと、その新しい鍵まで消してしまう）。かわりに、この鍵の中身のハッシュを「延ばせなかった」の印に置く。
+        // 今の鍵の中身と合う時だけ効くので、新しい鍵には効かない。次からは freee を呼ばずに「つながっていない」。つなぎ直すと外れる
+        try {
+          await c.store.set(FREEE_KV.dead, deadMark(raw), { ex: days(c.settings.try.kvTokenDays) });
+        } catch {
+          // 置けなくても、この呼び出しはつながっていない扱い
+        }
         return { ok: false, why: "none" };
       }
       // 返事が無い：更新用の鍵が使われたかどうか分からない。今の鍵が切れていなければそれを使う（次に延ばす時に freee が決める）

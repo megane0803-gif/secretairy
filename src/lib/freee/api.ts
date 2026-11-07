@@ -116,6 +116,11 @@ export function freeeClient(p: { fetch: FetchLike; settings: FreeeSettings; acce
   };
 
   return {
+    /** いま送れるか（持ち時間が残っているか）。送る前の一歩を記録に置く前に確かめる（送れないのに一歩だけ残さない） */
+    canSend(): boolean {
+      return !(p.deadline != null && now() + settings.timeoutSeconds * 1000 > p.deadline);
+    },
+
     /** 口座一覧（GET /api/1/walletables） */
     async walletables(companyId: number): Promise<Walletable[]> {
       const b = (await call("GET", "/api/1/walletables", { query: { company_id: companyId } })) as { walletables?: unknown };

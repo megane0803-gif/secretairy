@@ -761,7 +761,7 @@ describe("freee：試した物を数分後に元の形に戻す", () => {
     at(clock.now + 60_000);
     const other = await bodyOf(await reg(deps, p.id, "private", "10.0.0.2"));
     assert.equal(other.result, "refused");
-    assert.equal(other.reason, "ほかの人が試しています（あと 4分で元に戻ります）");
+    assert.equal(other.reason, "ほかの人が試しています（あと 4分たった後に、次にだれかが経理のタブを開いた時に元に戻ります）");
     const rd = await bodyOf(await read(deps, "10.0.0.2"));
     assert.equal(rd.trial.phase, "holding");
     assert.equal(rd.trial.mine, false);
@@ -1413,5 +1413,220 @@ describe("freee：要復旧で止める所", () => {
     const b = await bodyOf(await reg(deps, f.txnOf(SHOP_ITEM.no)!.id, "shop"));
     assert.notEqual(b.result, "registered", JSON.stringify(b));
     assert.ok(!f.calls.some((c) => c.path.includes("create_deal")), "freee に送らない");
+  });
+});
+
+// ---- 送っていない一歩を「送った」とみなさない・外した後に書かない・延ばせなかった印・番号の鍵の期限 ----
+
+/** 置き場の書き込みに手を入れる（中身の文字に hit が入る書き込みの時に onSet を呼ぶ） */
+function hookedStore(mem: ReturnType<typeof memoryStore>, p: { hit?: (k: string, v: string) => boolean; onSet?: () => void | Promise<void>; failSet?: boolean; onGet?: (k: string) => void }): KvStore & { trialWrites: number } {
+  const st = {
+    ...mem,
+    trialWrites: 0,
+    get: async (k: string) => {
+      p.onGet?.(k);
+      return mem.get(k);
+    },
+    set: async (k: string, v: string, o: { ex: number; nx?: boolean }) => {
+      if (k === FREEE_KV.trial) st.trialWrites++;
+      if (p.hit?.(k, v)) {
+        await p.onSet?.();
+        if (p.failSet) throw new Error("down");
+      }
+      return mem.set(k, v, o);
+    },
+  };
+  return st;
+}
+
+/** 私用の取引を登録して、5分をこえさせる（取引を消すと 404 が返る・消しても明細は戻らない freee） */
+async function privateTried(settings: FreeeSettings = base) {
+  const f = new FakeFreee();
+  const mem = memoryStore(() => clock.now);
+  await connected(f, mem);
+  f.addAllSeed();
+  f.reopenOnDealDelete = false;
+  f.privateDeleteStatus = 404;
+  const t = f.txnOf(PRIVATE_ITEM.no)!;
+  assert.equal((await bodyOf(await reg(makeDeps(f, mem, settings), t.id, "private"))).result, "registered");
+  at(clock.now + holdMs + 1);
+  return { f, mem, t };
+}
+
+const deletingSet = (k: string, v: string) => k === FREEE_KV.trial && /"deleting":\d+/.test(v);
+
+describe("freee：送っていない一歩を、次の回に「送った」とみなさない", () => {
+  test("取引を消す一歩を置いた後、送る前に持ち時間が切れた → 一歩を外す。次の回の1回目の 404 は要復旧", async () => {
+    const settings: FreeeSettings = { ...base, serverBudgetSeconds: 60, timeoutSeconds: 10 };
+    const { f, mem, t } = await privateTried(settings);
+    // 一歩を置く書き込みの間に、時計が持ち時間の終わり近くまで進む（送る前に持ち時間が切れる）
+    const store = hookedStore(mem, { hit: deletingSet, onSet: () => void (clock.now += 55_000) });
+    // この回は持ち時間を使い切ったので、一覧は読めずに区切る
+    await read(makeDeps(f, store, settings), "10.0.9.1");
+    assert.equal((await loadTrial(mem)).restoring, true);
+    assert.ok(!f.calls.some((c) => c.method === "DELETE"), "送っていない");
+    assert.equal((await loadTrial(mem)).items[0].deleting, null, "置いた一歩は外した");
+    const r2 = await bodyOf(await read(makeDeps(f, mem, settings), "10.0.9.2"));
+    assert.equal(r2.trial.phase, "repair", "1回目の 404 は要復旧");
+    assert.ok(!f.calls.some((c) => c.method === "DELETE" && c.path.startsWith("/api/1/wallet_txns/")), "明細を消さない");
+    assert.ok(!f.calls.some((c) => c.method === "POST" && c.path === "/api/1/wallet_txns"), "作り直さない");
+    assert.ok(f.txns.includes(t));
+  });
+
+  test("印の確かめが false（置き場の GET が一時エラー）の時は、一歩を置かない。次の回の1回目の 404 は要復旧", async () => {
+    const { f, mem, t } = await privateTried();
+    let fail = true;
+    const store = hookedStore(mem, {
+      onGet: (k) => {
+        if (k === FREEE_KV.writeLock && fail) {
+          fail = false;
+          throw new Error("down");
+        }
+      },
+    });
+    const r1 = await bodyOf(await read(makeDeps(f, store), "10.0.9.3"));
+    assert.equal(r1.trial.phase, "restoring");
+    assert.equal((await loadTrial(mem)).items[0].deleting, null, "一歩は置かない");
+    assert.ok(!f.calls.some((c) => c.method === "DELETE"));
+    assert.equal((await bodyOf(await read(makeDeps(f, mem), "10.0.9.4"))).trial.phase, "repair");
+    assert.ok(f.txns.includes(t), "明細を消さない");
+  });
+
+  test("一歩の保存が一度失敗した時は、一歩を外して区切る。次の回の1回目の 404 は要復旧", async () => {
+    const { f, mem, t } = await privateTried();
+    const store = hookedStore(mem, { hit: deletingSet, failSet: true });
+    const r1 = await bodyOf(await read(makeDeps(f, store), "10.0.9.5"));
+    assert.equal(r1.trial.phase, "restoring");
+    assert.equal((await loadTrial(mem)).items[0].deleting, null, "外した形を書いた");
+    assert.ok(!f.calls.some((c) => c.method === "DELETE"));
+    assert.equal((await bodyOf(await read(makeDeps(f, mem), "10.0.9.6"))).trial.phase, "repair");
+    assert.ok(f.txns.includes(t));
+  });
+
+  test("作り直しの一歩を置いた後、送る前に止まった → 次の回はふつうに作り直す（要復旧にしない）", async () => {
+    const settings: FreeeSettings = { ...base, serverBudgetSeconds: 60, timeoutSeconds: 10 };
+    const f = new FakeFreee();
+    const mem = memoryStore(() => clock.now);
+    await connected(f, mem);
+    f.addAllSeed();
+    f.reopenOnDealDelete = false;
+    assert.equal((await bodyOf(await reg(makeDeps(f, mem, settings), f.txnOf(SHOP_ITEM.no)!.id, "shop"))).result, "registered");
+    at(clock.now + holdMs + 1);
+    const store = hookedStore(mem, { hit: (k, v) => k === FREEE_KV.trial && v.includes('"recreating"'), onSet: () => void (clock.now += 55_000) });
+    await read(makeDeps(f, store, settings), "10.0.9.7");
+    assert.equal((await loadTrial(mem)).restoring, true);
+    assert.equal((await loadTrial(mem)).items[0].step, "txn-deleted", "作り直しの一歩は外した");
+    assert.ok(!f.calls.some((c) => c.method === "POST" && c.path === "/api/1/wallet_txns"), "作っていない");
+    assert.equal((await bodyOf(await read(makeDeps(f, mem, settings), "10.0.9.8"))).trial.phase, "free");
+    assert.equal(f.txnOf(SHOP_ITEM.no)!.status, 1, "ふつうに作り直した");
+  });
+
+  test("印を失った後は置き場に書かない（元に戻す・来た人の登録）", async () => {
+    // 元に戻す：取引を消した直後に、ほかの呼び出しが印を取った
+    const f = new FakeFreee();
+    const mem = memoryStore(() => clock.now);
+    await connected(f, mem);
+    f.addAllSeed();
+    f.reopenOnDealDelete = false;
+    assert.equal((await bodyOf(await reg(makeDeps(f, mem), f.txnOf(SHOP_ITEM.no)!.id, "shop"))).result, "registered");
+    at(clock.now + holdMs + 1);
+    // 取引を消した後、明細を消す一歩の前の確かめで印を失ったと分かる
+    let stolen = false;
+    const steal = hookedStore(mem, {
+      hit: (k, v) => k === FREEE_KV.trial && v.includes('"deals-gone"') && !stolen,
+      onSet: async () => {
+        stolen = true;
+        await mem.del(FREEE_KV.writeLock);
+        await mem.set(FREEE_KV.writeLock, "someone-else", { ex: 120 });
+      },
+    });
+    await read(makeDeps(f, steal), "10.0.9.9");
+    const writesAfter = steal.trialWrites;
+    assert.ok(stolen);
+    const t = await loadTrial(mem);
+    assert.equal(t.items[0].step, "deals-gone", "印を失う前の一歩まで");
+    assert.ok(!f.calls.some((c) => c.method === "DELETE" && c.path.startsWith("/api/1/wallet_txns/")), "印を失った後は送らない");
+    assert.equal(writesAfter, 3, "印を失った後は置き場に書かない（restoring・deleting・deals-gone の3回だけ）");
+
+    // 来た人の登録：書く前の確かめで印を失ったと分かったら、「書くかもしれない」も置かない
+    const g = new FakeFreee();
+    const m2 = memoryStore(() => clock.now);
+    await connected(g, m2);
+    g.addAllSeed();
+    const orig = g.fetch;
+    g.fetch = async (input, init) => {
+      if (new URL(input).pathname.startsWith("/api/1/taxes")) await m2.set(FREEE_KV.writeLock, "someone-else", { ex: 120 });
+      return orig(input, init);
+    };
+    const s2 = hookedStore(m2, {});
+    const b = await bodyOf(await reg(makeDeps(g, s2), g.txnOf(SHOP_ITEM.no)!.id, "shop"));
+    assert.notEqual(b.result, "registered");
+    assert.equal(s2.trialWrites, 0, "置き場に書かない");
+    assert.ok(!g.calls.some((c) => c.path.includes("create_deal")));
+  });
+});
+
+describe("freee：外した後に、来た人の書き込みが入らない", () => {
+  test("鍵を受け取った後・印を取る前に外した時、freee に書かない", async () => {
+    const f = new FakeFreee();
+    const mem = memoryStore(() => clock.now);
+    await connected(f, mem);
+    f.addAllSeed();
+    let done = false;
+    const store = hookedStore(mem, {
+      hit: (k) => k === FREEE_KV.writeLock && !done,
+      onSet: async () => {
+        done = true;
+        // オーナーが「つなぎを外す」を押し終えた（印を取って番号を進め、鍵を消して印を放した）
+        const r = await handleDisconnect(ownerReq("/api/freee/disconnect", { cookie: ownerCookie(f.access) }), makeDeps(f, mem));
+        assert.equal(r.status, 200);
+      },
+    });
+    const b = await bodyOf(await reg(makeDeps(f, store), f.txnOf(SHOP_ITEM.no)!.id, "shop"));
+    assert.equal(b.code, "not-connected");
+    assert.equal(f.writes().length, 0, "freee に書かない");
+    assert.equal((await loadTrial(mem)).items.length, 0);
+  });
+});
+
+describe("freee：延ばすのを断られた鍵で、freee を呼び続けない", () => {
+  test("断られた後の2回目からは freee を呼ばない・オーナーの画面に出る・つなぎ直すと試せるに戻る", async () => {
+    const f = new FakeFreee();
+    const mem = memoryStore(() => clock.now);
+    await connected(f, mem, { expiresAt: clock.now - 1 });
+    f.refuseRefresh = true;
+    assert.equal((await bodyOf(await read(makeDeps(f, mem), "10.7.0.1"))).code, "not-connected");
+    assert.equal(f.tokenCalls("refresh_token"), 1);
+    for (let i = 0; i < 5; i++) assert.equal((await bodyOf(await read(makeDeps(f, mem), "10.7.0.1"))).code, "not-connected");
+    assert.equal(f.tokenCalls("refresh_token"), 1, "2回目からは freee を呼ばない");
+    assert.ok(await mem.get(FREEE_KV.token), "鍵の場所には触らない");
+    const st = await handleStatus(ownerReq("/api/freee/status", { method: "GET", cookie: ownerCookie(f.access) }), makeDeps(f, mem));
+    const sb = await bodyOf(st);
+    assert.equal(sb.dead, true);
+    assert.equal(sb.shared, false);
+    // つなぎ直す
+    f.refuseRefresh = false;
+    f.addAllSeed();
+    assert.equal((await reconnect(f, makeDeps(f, mem))).headers.get("location"), "/accounting?freee=connected#freee");
+    assert.equal((await read(makeDeps(f, mem), "10.7.0.2")).status, 200, "試せるに戻る");
+    const st2 = await bodyOf(await handleStatus(ownerReq("/api/freee/status", { method: "GET", cookie: ownerCookie(f.access) }), makeDeps(f, mem)));
+    assert.equal(st2.dead, false);
+    assert.equal(st2.shared, true);
+  });
+});
+
+describe("freee：つないだ回の番号が戻らない", () => {
+  test("番号を進める時と鍵を書く時に、番号の鍵の期限を付け直す（鍵より長く）", async () => {
+    const mem = memoryStore(() => clock.now);
+    const c = ctxOf(mem);
+    await advanceGen(c);
+    const genTtl = Math.max(base.try.kvTokenDays, base.try.trialKeepDays) * 4 * 86_400_000;
+    // 番号の鍵の期限の少し前に、つないだ（鍵を書いた）
+    at(T0 + genTtl - 86_400_000);
+    assert.ok(await putKvToken(c, { accessToken: "a", refreshToken: "r", companyId: COMPANY, expiresAt: clock.now + 3600_000 }));
+    // 最初の期限を過ぎても、番号は 0 に戻らない
+    at(T0 + genTtl + 86_400_000);
+    assert.equal(await currentGen(mem), 2);
+    assert.ok(await readKvToken(c), "鍵より番号の方が長く残る");
   });
 });
