@@ -179,6 +179,12 @@ export type AdSettings = {
   report: { maxKeptWords: number; listCount: number };
   /** 広告の言葉の門：AI の文（案の理由・一言のまとめ）に入れない言葉（だれかを責める言い方・言い切り） */
   gateWords: string[];
+  /**
+   * 本物の検索広告へ渡す形（src/lib/ads/connect.ts。今はつないでいない）。作り物の名前だけ（本物の名前・番号は入れない）。
+   * campaign = 店の広告（キャンペーン）の名前 / adGroup = 足す先の広告グループの名前 /
+   * maxPasteChars = 貼られた結果の文字の大きさの上限 / maxItems = 渡す中身・読む結果の数の上限
+   */
+  connect: { campaign: string; adGroup: string; maxPasteChars: number; maxItems: number };
 };
 
 export function getAdSettings(): AdSettings {

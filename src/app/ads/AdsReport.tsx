@@ -7,6 +7,7 @@
 
 import { BigNumber, MiniColumns } from "@/components/parts";
 import { addedRows, totalOf, townIn, WEEK_LABELS, weeklyTotals, yen, type AdTableRow } from "@/lib/ads/report";
+import { realMarkedNos } from "@/lib/ads/connect";
 import { useAds } from "@/lib/ads/useAds";
 
 /** 足した言葉の行（広告を出す言葉の一覧の下。数はまだ無いので「—」） */
@@ -125,7 +126,10 @@ export function AdsWeeks() {
 
 /** 「広告の管理画面」と、広告を出す言葉・お客さんが調べた言葉の2つの一覧 */
 export function AdsReport() {
-  const { table, settings } = useAds();
+  const { table, settings, state } = useAds();
+  // 「本物に反映済み」の印（くわしくの中で結果を読み込んだ物だけ。無ければ何も出さない）
+  const real = realMarkedNos(state);
+  const realTag = (no: number) => (real.has(no) ? <span className="tag ok">本物に反映済み</span> : null);
   const stopped = table.keywords.filter((r) => r.off);
   const excluded = table.searchTerms.filter((r) => r.off);
   // 足した言葉（数はまだ無い。週ごとの合計・止める案には入れない）
@@ -144,12 +148,14 @@ export function AdsReport() {
             <li key={r.no} className={r.off ? "off" : undefined}>
               {r.no}番 {r.text}
               <span className={r.off ? "tag offtag" : "tag ok"}>{r.off ? "止めた" : "出している"}</span>
+              {r.off && realTag(r.no)}
             </li>
           ))}
           {added.map((r) => (
             <li key={`added-${r.no}`}>
               — {r.text}
               <span className="tag ok">足した</span>
+              {realTag(r.no)}
               <small className="hint">（フレーズ一致・数はまだ無い）</small>
             </li>
           ))}
@@ -163,6 +169,7 @@ export function AdsReport() {
               <li key={r.no}>
                 {r.no}番 {r.text}
                 <span className="tag offtag">外した</span>
+                {realTag(r.no)}
               </li>
             ))}
           </ul>

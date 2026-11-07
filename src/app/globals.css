@@ -950,6 +950,16 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .ad-fix { display: flex; flex-wrap: wrap; gap: 6px; }
 .ad-fix input { flex: 1 1 160px; min-width: 0; font: inherit; font-size: 0.9rem; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
 .ad-review { display: flex; flex-direction: column; gap: 8px; }
+.ad-connect > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ad-connect-json {
+  margin: 0; max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.78rem; line-height: 1.5;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text);
+}
+.ad-connect-paste { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ad-connect-paste textarea {
+  width: 100%; box-sizing: border-box; font-family: ui-monospace, monospace; font-size: 0.8rem; padding: 6px 8px; resize: vertical;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text);
+}
 .ad-review .btn.big { font-size: 1.05rem; padding: 10px 14px; }
 /* 押せない時の理由と次に頼める日時は、ボタンのすぐ下にふつうの字の大きさで（小さい hint にしない） */
 .ad-review-why { margin: 0; font-size: 1rem; font-weight: 400; color: var(--text); overflow-wrap: anywhere; }

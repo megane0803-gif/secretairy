@@ -12,5 +12,11 @@
     "maxKeptWords": 5,
     "listCount": 8
   },
+  "connect": {
+    "campaign": "もちの木 検索",
+    "adGroup": "売りのメニュー",
+    "maxPasteChars": 20000,
+    "maxItems": 50
+  },
   "gateWords": ["のせい", "責任", "失敗", "ミス", "悪い", "下手", "ダメ", "だめ", "怠", "絶対", "必ず", "確実", "代行", "業者"]
 }
