@@ -34,23 +34,40 @@ export function storeEnv(env: Record<string, string | undefined> = process.env):
   return url && token ? { url: url.replace(/\/+$/, ""), token } : null;
 }
 
-/** Upstash の REST の窓口で動かす（依存を増やさないため fetch だけで書く） */
-export function upstashStore(conf = storeEnv()): KvStore {
+/** Upstash の書いた所の印の見出し（返事に付いてくる・次の呼び出しに付けると、その書き込みの後の所から読む） */
+export const SYNC_TOKEN_HEADER = "upstash-sync-token";
+
+/**
+ * Upstash の REST の窓口で動かす（依存を増やさないため fetch だけで書く）。
+ * Upstash は、書くのは元の所・読むのは写しから、のことがある（置いた直後の GET が null で返ることがある）。
+ * そこで、返事の見出し upstash-sync-token を覚え、この置き場の次の呼び出しに付ける（Upstash の公式の部品の「Read Your Writes」と同じ）。
+ * 返事ごとに新しい値に替え、返事に無ければ前の値のまま。最初の呼び出しには付けない。
+ * 覚えるのはこの置き場の中だけ（置き場は窓口の1回の呼び出しごとに作る。プロセス全体では共有しない＝ほかの呼び出しと混ぜない）。
+ * なので効くのは「同じ置き場の中で、書いた直後に読む時」だけ。別々に作った置き場の間では引き継がない
+ * （例：試験10問の startRun と evalGate は別々に置き場を作るので、そこには効かない）。
+ * token を付けるのは、送る窓口（/pipeline）の呼び出し全部。
+ */
+export function upstashStore(conf = storeEnv(), fetchFn: typeof fetch = (input, init) => fetch(input, init)): KvStore {
   if (!conf) throw new NoStoreError("Redis の環境変数がありません");
   const { url, token } = conf;
+  let syncToken: string | null = null;
 
   async function pipeline(cmds: (string | number)[][]): Promise<unknown[]> {
     let res: Response;
     try {
-      res = await fetch(`${url}/pipeline`, {
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+      if (syncToken) headers[SYNC_TOKEN_HEADER] = syncToken;
+      res = await fetchFn(`${url}/pipeline`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(cmds.map((c) => c.map(String))),
         cache: "no-store",
       });
     } catch {
       throw new NoStoreError("Redis につながりません");
     }
+    const next = res.headers.get(SYNC_TOKEN_HEADER);
+    if (next) syncToken = next;
     if (!res.ok) throw new NoStoreError(`Redis が ${res.status} を返しました`);
     const out = (await res.json()) as { result?: unknown; error?: string }[];
     return out.map((r) => {
