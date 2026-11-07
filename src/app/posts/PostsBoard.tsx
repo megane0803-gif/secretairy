@@ -3,6 +3,7 @@
 // 発信のタブ：③見て、手で直して「下書きを保存」（PostsDraft。真ん中の列の「下書きを作る」の下）と、
 // 保存した下書きを種類ごとに並べる所（PostsSaved。右の列）。
 // 保存はオーナーのボタンだけ（isTrusted で確かめる）。承認の箱は通さない。送信・公開はしない。
+// 保存できた時だけ、③の下書きの欄と②の材料の欄を空にする（選んだ種類は残す。posts/save.ts）。保存できなかった時は何も消さない。
 // どちらにも「コピー」（クリップボードに入れるだけ。コピーできないブラウザでは文を選ぶ。src/lib/copy.ts）。
 
 import { useState } from "react";
@@ -18,8 +19,9 @@ import { KEPT_AFTER_FAIL } from "@/lib/posts/redo";
 import { withHandEdit } from "@/lib/posts/team/state";
 import { COULD_NOT_WRITE } from "@/lib/posts/write";
 import { draftName } from "@/lib/posts/draftName";
-import { savedByKind, withSavedPost } from "@/lib/posts/state";
-import { usePosts } from "@/lib/posts/usePosts";
+import { savedByKind } from "@/lib/posts/state";
+import { browserPostsStore, usePosts } from "@/lib/posts/usePosts";
+import { deskAfterSave, savedNote, savePostDraft } from "@/lib/posts/save";
 import type { PostInsert, PostsSettings } from "@/lib/settings";
 
 /** 入れた物（ブログのリンクの印は「リンクは印だけ」の ✓ と同じなので出さない） */
@@ -49,8 +51,8 @@ function firstLine(text: string): string {
 /** ③ 見て、手で直して保存（真ん中の列。「下書きを作る」のすぐ下） */
 export function PostsDraft({ settings, data, memos }: { settings: PostsSettings; data: BookData; memos: PostMemo[] }) {
   const desk = usePostsDesk();
-  const posts = usePosts();
-  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  // draftId：どの下書きの時の1文か（保存して空にした後に新しい下書きを作ったら、前の1文はその下書きのカードに出さない）
+  const [note, setNote] = useState<{ ok: boolean; text: string; kindLabel?: string; draftId?: string } | null>(null);
   const draft = desk.draft;
   const kindOf = (id: string) => settings.kinds.find((k) => k.id === id);
   const kind = draft ? kindOf(draft.kind) : null;
@@ -59,24 +61,25 @@ export function PostsDraft({ settings, data, memos }: { settings: PostsSettings;
   const save = (e: React.MouseEvent) => {
     // 🔒 人のボタンだけ
     if (!e.nativeEvent.isTrusted || !draft || !kind) return;
-    const r = withSavedPost(posts.state, draft, {
-      id: `po-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-      nowIso: new Date().toISOString(),
-      gateWords: settings.gateWords,
-      maxPerKind: settings.maxSavedPerKind,
-    });
+    const r = savePostDraft(
+      { ...browserPostsStore, journal: writeJournal },
+      {
+        draft,
+        kindLabel: kind.label,
+        id: `po-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+        nowIso: new Date().toISOString(),
+        gateWords: settings.gateWords,
+        maxPerKind: settings.maxSavedPerKind,
+      },
+    );
     if (!r.ok) {
-      setNote({ ok: false, text: r.reason });
-      if (r.code === "dup") writeJournal({ who: "プログラム", text: `${draftName(kind.label)}：同じ文はもう保存してあるので、二重に保存しなかった` });
-      if (r.code === "words") writeJournal({ who: "プログラム", text: `${draftName(kind.label)}：手で直した文に使わない言葉があったので、保存しなかった` });
+      // 保存できなかった時は何も消さない（下書きも材料もそのまま）
+      setNote({ ok: false, text: r.reason, draftId: draft.id });
       return;
     }
-    posts.update(() => r.state);
-    writeJournal({
-      who: "オーナー",
-      text: `${draftName(kind.label)}を保存した（${[...r.post.text].length}字${draft.handEdited ? "・手で直した" : ""}${(draft.version ?? 0) > 0 ? `・補佐の直しを${draft.version}つ入れた` : ""}。送信・公開はしていない）`,
-    });
-    setNote({ ok: true, text: `保存しました（${kind.label}）。` });
+    // 保存できた時だけ、③の下書きと②の材料を空にする（選んだ種類は残す）
+    setPostsDesk((s) => deskAfterSave(s, draft.kind));
+    setNote({ ok: true, text: savedNote(kind.label, "右"), kindLabel: kind.label });
   };
 
   const drop = (e: React.MouseEvent) => {
@@ -167,7 +170,7 @@ export function PostsDraft({ settings, data, memos }: { settings: PostsSettings;
                 やめる
               </button>
             </div>
-            {note && (
+            {note && note.draftId === draft.id && (
               <p className={note.ok ? "checked" : "problems"} role="status">
                 {note.ok && <span aria-hidden>✓ </span>}
                 {note.text}
@@ -195,9 +198,11 @@ export function PostsDraft({ settings, data, memos }: { settings: PostsSettings;
         <p className="karte-wait">{desk.busy ? "下書きを作っています…" : "①で種類を選び、②で材料を入れて「下書きを作る」を押すと、ここに下書きが出ます。"}</p>
       )}
       {!draft && note?.ok && (
-        <p className="checked" role="status">
+        <p className="checked posts-saved-note" role="status">
           <span aria-hidden>✓ </span>
-          {note.text}
+          {/* 保存した下書きの欄は、PC は右の列・スマホはこのページの下 */}
+          <span className="posts-where-pc">{note.kindLabel ? savedNote(note.kindLabel, "右") : note.text}</span>
+          <span className="posts-where-sp">{note.kindLabel ? savedNote(note.kindLabel, "下") : note.text}</span>
         </p>
       )}
     </section>

@@ -90,6 +90,8 @@ describe("3. 色は3つの変数で、使う所は台帳・AI の手順・日誌
       "src/app/home/HomeSummary.tsx",
       "src/app/home/BriefNotes.tsx",
       "src/app/home/AiJobs.tsx",
+      // ホームの上の行の「日報を入れる」の横の「人」の札（人が押すボタンと分かるように。AI の仕事のボタンと分ける。直しK）
+      "src/app/home/HomeDailyOpen.tsx",
       "src/components/parts.tsx",
       "src/lib/actors.ts",
       "src/lib/book/timetable.ts",

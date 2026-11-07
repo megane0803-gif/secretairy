@@ -1567,8 +1567,24 @@ html.dragging, html.dragging * { cursor: col-resize !important; user-select: non
 .pending-row > :not(.pending) { flex: 1 1 260px; min-width: 0; }
 .ai-jobs-run { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .ai-jobs-run .ai-jobs-top { margin: 0; min-height: 44px; }
+/* 発信：保存できた時の1文の「右の／下の」（保存した下書きの欄は PC は右の列・スマホはページの下。PostsBoard.tsx） */
+.posts-where-sp { display: none; }
+@media (max-width: 1023.98px) {
+  .posts-where-pc { display: none; }
+  .posts-where-sp { display: inline; }
+}
+
+/* ホーム：AI の仕事のボタンの横に「日報を入れる」（人のボタン。塗らないふつうのボタン＋「人」の札。HomeDailyOpen.tsx）。並ばない幅では折り返す */
+.home-top-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; min-width: 0; }
+.home-top-actions > .ai-jobs-run { flex: 0 1 290px; }
+.home-daily-open { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 44px; flex: 0 1 auto; min-width: 0; }
+.home-daily-btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; text-decoration: none; }
 @media (max-width: 1023.98px) {
   .pending-row { flex-direction: column; align-items: stretch; }
+  .home-top-actions { flex-direction: column; align-items: stretch; }
+  .home-top-actions > .ai-jobs-run { flex: none; }
+  .home-daily-open { flex-wrap: nowrap; }
+  .home-daily-btn { flex: 1 1 auto; }
   .pending-row > :not(.pending) { flex: none; }
   .ai-jobs-run .ai-jobs-top > .btn.primary { width: 100%; }
 }
@@ -1815,6 +1831,35 @@ h3.section-title { font-size: 1rem; }
 .daybar.daily { box-shadow: inset 0 2px 0 var(--accent); }
 .acct-table tr.missing td { color: var(--warn); }
 .acct-missing { min-height: 36px; color: var(--warn); border-color: var(--warn); }
+/* 内訳（技術・店販）：月の大きい数字の下の1行・その日を押した時・表の売上の下（数はプログラム。daily.ts の summarizeMonth） */
+.acct-split-month { margin: 4px 0 12px; font-weight: 700; overflow-wrap: anywhere; }
+.acct-split-month .hint { font-weight: 400; margin-left: 4px; }
+.acct-split-day { margin-left: 6px; color: var(--muted); font-size: 0.9rem; }
+.acct-split-cell { display: block; color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+
+/* 「日報を入れる」は、スマホの幅では見出し「経理」のすぐ下（登録の欄より上。TabPage の beside の DailyOpenTop）に1つだけ。
+   売上の欄の中のボタン（acct-daily-in）はスマホでは出さない。PC の幅は今まで通り（見出しの下のボタンは出さない・承認待ちの1行は横いっぱい） */
+.acct-daily-top { display: none; }
+@media (min-width: 1024px) {
+  .pending-row:has(> .acct-daily-top) { display: block; }
+}
+@media (max-width: 1023.98px) {
+  .acct-daily-in { display: none; }
+  .acct-daily-top { display: block; }
+  .acct-daily-top .acct-daily-open { width: 100%; }
+  /* 並び：承認待ち → 見出し → 日報を入れる → 右の列（登録の欄）→ ページの中身（枠の TabFrame は直さず、ここで並べ替える） */
+  .page.right-first-sp > .page-main > .pending-row:has(> .acct-daily-top) { display: contents; }
+  .page.right-first-sp > .page-main > .pending-row:has(> .acct-daily-top) > .pending { order: -5; }
+  .page.right-first-sp:has(.acct-daily-top) > .page-main > .page-head { order: -4; }
+  .page.right-first-sp > .page-main > .pending-row > .acct-daily-top { order: -3; }
+}
+
+/* 1枚の「1日の売上の内訳」（なくてもよい欄。DailySheet.tsx） */
+.daily-split { border: 0; margin: 0; padding: 10px 0 0; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.daily-split legend { font-weight: 700; padding: 0; margin-bottom: 4px; }
+.daily-split .daily-label { font-weight: 600; }
+.daily-split-sum { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 8px; margin: 0; }
+.daily-split-sum strong { font-size: 1.1rem; white-space: nowrap; }
 
 .daily-sheet {
   border: 1px solid var(--line);
