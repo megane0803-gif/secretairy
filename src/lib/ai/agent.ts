@@ -7,7 +7,9 @@
 // 「?」を全角の「？」にそろえる。
 // お客様に伝えない理由（rules/tellable.ts）で断るときは、AI に文を作らせず、プログラムが
 // 「その時間はお受けできません」＋道具が確かめた代わりの候補で返す（AI に理由の中身も返事の番も渡さない）。
-// AI の文は、送る前に返事の門（innerGate.ts）を通す。伝えない種類のルールの言葉があれば、決まった文に差し替える。
+// お客様に出す AI の文は、道具を呼ばずに終わった最後の回の文だけ。道具を呼んだ回に AI が書いた文（作業の文）は捨てる（AI の手順にも出さない）。
+// 最後の回の文が空なら、プログラムの決まった文（fixedReply）で返す。
+// AI の文は、送る前に返事の門（innerGate.ts）を通す。伝えない種類のルールの言葉・英語の作業の文があれば、決まった文に差し替える。
 // サーバーはここで受け取った物を残さない。答えは emit で流して返すだけ。
 
 import type Anthropic from "@anthropic-ai/sdk";
@@ -16,7 +18,7 @@ import type { AiSettings } from "../settings";
 import { dateConflict } from "./dates";
 import type { ReplyModel } from "./model";
 import { INTERNAL_REFUSAL } from "../rules/tellable";
-import { innerWordsHit } from "./innerGate";
+import { innerWordsHit, workTextHit } from "./innerGate";
 import { alsoBooking, priceAnswer } from "./prices";
 import { ASK_SHOP_REPLY, errandLine, promisesShop, shownCandidates } from "./replies";
 import { reserveSystem, type ConvHold } from "./reservePrompt";
@@ -119,10 +121,15 @@ export async function runReserve({ ctx, history, model, limits, emit: send }: Ru
     said += d;
     emit({ t: "text", d });
   };
-  let aiText = "";
+  // AI の文は回ごとに分けて持つ。お客様に出すのは、道具を呼ばずに終わった最後の回の文だけ
+  let roundText = "";
   const say = (d: string) => {
-    aiText += d;
+    roundText += d;
   };
+  /** 道具を呼ばずに終わった最後の回の、AI の文 */
+  let aiText = "";
+  /** 止めた時の決まった文（上限・長すぎ・断られた）。あれば、空でも決まった文に替えない */
+  let stopText: string | null = null;
   if (price) {
     emit({ t: "step", step: { kind: "price", text: price.step } });
     sayNow(price.text);
@@ -153,6 +160,7 @@ export async function runReserve({ ctx, history, model, limits, emit: send }: Ru
   // 道具を呼ぶ回数の上限＋最後に答える1回まで。それ以上は回さない
   for (let round = 0; round <= limits.maxToolCalls + 1; round++) {
     const overLimit = calls >= limits.maxToolCalls;
+    roundText = "";
     const turn = await model.turn(
       {
         system,
@@ -165,19 +173,22 @@ export async function runReserve({ ctx, history, model, limits, emit: send }: Ru
       say,
     );
     if (turn.stop === "refusal") {
-      say(LIMIT_REPLY);
+      // 断られた回の文は使わない。決まった一言で返す
+      stopText = LIMIT_REPLY;
       break;
     }
     messages.push({ role: "assistant", content: turn.assistant });
-    if (turn.stop === "max_tokens" && turn.toolCalls.length === 0) {
-      say("（長くなったので、ここで止めました）");
+    if (turn.toolCalls.length === 0) {
+      // 道具を呼ばずに終わった回：この回の文がお客様への返事
+      aiText = roundText;
+      if (turn.stop === "max_tokens") stopText = "（長くなったので、ここで止めました）";
       break;
     }
-    if (turn.toolCalls.length === 0) break;
+    // 道具を呼んだ回の文（作業の文）は、ここで捨てる
     if (overLimit) {
       // 上限のあとでまだ道具を呼ぼうとした → 止めて、決まった一言で返す
       emit({ t: "step", step: { kind: "limit", text: `道具を呼ぶ回数の上限（${limits.maxToolCalls}回）に来たので止めた` } });
-      say(LIMIT_REPLY);
+      stopText = LIMIT_REPLY;
       break;
     }
 
@@ -239,14 +250,21 @@ export async function runReserve({ ctx, history, model, limits, emit: send }: Ru
     messages.push({ role: "user", content: results });
   }
 
-  // 返事の門：AI の文に、伝えない種類のルールの文や「○分あける」の形があれば、決まった文に差し替える
-  let reply = programReply ?? aiText;
-  if (programReply === null) {
+  // 返事の門：AI の文に、伝えない種類のルールの文や「○分あける」の形、英語の作業の文があれば、決まった文に差し替える。
+  // 最後の回の文が空（止めた時の決まった文も無い）なら、黙って終わらず決まった文で返す
+  const fixed = () => fixedReply(ctx, { held: heldSlot, reason: lastReason?.text, combo: lastReason?.combo, candidates: latest ?? [] });
+  let reply: string;
+  if (programReply !== null) reply = programReply;
+  else {
     const hit = innerWordsHit(aiText, ctx.rules);
     if (hit) {
-      reply = fixedReply(ctx, { held: heldSlot, reason: lastReason?.text, combo: lastReason?.combo, candidates: latest ?? [] });
+      reply = fixed();
       emit({ t: "step", step: { kind: "reject", text: `返事に店の中の決まりの言葉（${hit}）があったので、決まった文に差し替えた` } });
-    }
+    } else if (workTextHit(aiText)) {
+      reply = fixed();
+      emit({ t: "step", step: { kind: "reject", text: "返事に英語の作業の文があったので、決まった文に差し替えた" } });
+    } else if (stopText !== null) reply = aiText + stopText;
+    else reply = aiText.trim() ? aiText : fixed();
   }
   if (reply) sayNow(reply);
 
