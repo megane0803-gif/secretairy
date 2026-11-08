@@ -32,7 +32,7 @@
 1. In the booking chat on the **予約** (Bookings) tab, ask something like 「来週の土曜にカットをお願いします」 ("A cut next Saturday, please") → the AI offers open slots; pick one (for example 「1つ目で」 (the first one)) → the AI places a tentative hold. (If the AI cannot be reached, switch to 「決まった返事（AI なし）」 (Fixed replies (no AI)) and try the same flow with the example sentences on the screen.)
 2. In the approval box on the **ホーム** (Home) tab, press 「承認」 (Approve) on that hold → it goes into the ledger as confirmed. The decision was a person's button.
 3. On the **広告** (Ads) tab, press 「AI に見直してもらう」 (Ask AI to review) → one proposal to pause or exclude appears in the approval box (the right column of the Ads tab, and Home); an add proposal may come with it → when you press 「承認」 (Approve), on the live app that one change is really sent to a Google Ads test account (no ads are shown and no money moves), and the list read back from it is shown. A review proposal can be made only once every 7 days, so to try again, press 「最初に戻す」 (Reset to the start) on Home.
-4. On the **経理** (Accounting) tab, mark statement lines as 「店用」 (Shop) or 「私用」 (Personal) and register them. If the 「だれでも試せます」 (Anyone can try) panel is shown, you can really register in a freee test business; if it is not, you can try the same flow with the statement lines inside the app.
+4. On the **経理** (Accounting) tab, mark statement lines as 「店用」 (Shop) or 「私用」 (Personal) and register them. If the 「テスト用の事業所で試す」 (Try it with the test business) panel is shown, you can really register in a freee test business; if it is not, you can try the same flow with the statement lines inside the app.
 5. On the **ルール** (Rules) tab, write a rule in words such as 「カラーの後は15分あける」 ("leave 15 minutes after a color") and the AI fills in the fields for adding it. Adding it is a person's 「足す」 (Add) button. (This field is shown only when the AI can be reached.)
 
 If you get stuck, 「最初に戻す」 (Reset to the start) on Home returns everything in this browser to the starting state.
@@ -43,10 +43,10 @@ If you get stuck, 「最初に戻す」 (Reset to the start) on Home returns eve
 <summary>Short notes per screen (what you see, what each button does, which button a person decides with)</summary>
 
 - **ホーム** (Home)
-  - The morning summary (today's bookings, pending approvals, ToDo, free time) and the top three things to do. The right column has the approval box, 「LINE とつなぐ」 (Connect with LINE) and the log.
-  - Rows in the approval box are decided with 「承認」 (Approve), 「直す」 (Revise) and 「見送り」 (Skip); the owner's button decides. On an ad proposal row, 「チームの会議にかける」 (Take it to the team meeting) lets you read the AI team's views.
-  - 「AI の仕事をまとめて動かす」 (Run the AI jobs together) runs, one at a time and only when pressed, a booking request, new statement lines, an ad review, a memo and a booking from the booking site (the AI does not confirm anything).
-  - 「翌日へ」 (Next day) moves the date forward one day. 「最初に戻す」 (Reset to the start) resets this browser only when you press 「最初に戻す」 once more.
+  - The morning summary (today's bookings, pending approvals, ToDo, free time) and the top three things to do. The right column has the approval box, the log and 「LINE とつなぐ」 (Connect with LINE).
+  - Rows in the approval box are decided with 「承認」 (Approve), 「直す」 (Revise) and 「見送り」 (Skip); the owner's button decides (rows for ad add proposals and undo proposals have only 「承認」 (Approve) and 「見送り」 (Skip)). On a regular ad proposal row, 「チームの会議にかける」 (Take it to the team meeting) lets you read the AI team's views.
+  - 「AI の仕事をまとめて動かす」 (Run the AI jobs together) runs, one at a time and only when pressed, a booking request, new statement lines, an ad review, a memo and a booking from the booking site (the AI does not confirm anything; only a booking from the booking site goes in as confirmed, as a booking the client decided).
+  - 「翌日へ」 (Next day) moves today forward by one business day (closed days are skipped). 「最初に戻す」 (Reset to the start) resets this browser only when you press 「最初に戻す」 once more.
 - **予約** (Bookings)
   - A one-week ledger (timetable), a month calendar, the booking site (part of the app) and the booking chat.
   - Ask in the booking chat and the AI offers open slots. Choosing one, for example with 「1つ目で」 (the first one), places a tentative hold. Confirming is 「承認」 (Approve) in the approval box.
@@ -59,7 +59,7 @@ If you get stuck, 「最初に戻す」 (Reset to the start) on Home returns eve
 - **広告** (Ads)
   - Four weeks of numbers (made up) and the ad management screen inside the app.
   - 「AI に見直してもらう」 (Ask AI to review) puts a proposal to pause or exclude (sometimes with an add proposal) in the approval box. When you press 「承認」 (Approve), on the live app that one change is sent to the Google Ads test account and the list read back is shown. A review proposal can be made only once every 7 days.
-  - 「テスト用アカウントから読み直す」 (Re-read from the test account) shows the current state of the test account.
+  - On the live app (when connected to the test account), 「テスト用アカウントから読み直す」 (Re-read from the test account) shows the current state of the test account.
 - **経理** (Accounting)
   - October sales and daily reports (「日報を入れる」 (Enter the daily report)). A list of card and bank statement lines.
   - Lines are sorted by an automatic rule per seller; lines with no rule are marked 「店用」 (Shop) or 「私用」 (Personal) by a person, then 「会計に登録」 (Register in accounting) (no AI is used).
@@ -68,8 +68,8 @@ If you get stuck, 「最初に戻す」 (Reset to the start) on Home returns eve
   - Memos, things to talk about next visit from charts, ad check dates, 「別の日時を案内」 (offer another date and time) from bookings and more line up in one list, split into boxes by kind (the program decides the order).
   - Write in 「思いついたことを一言メモ」 (Quick memo) and press 「投げる」 (Send); the AI rewrites it as a short task and adds it. A person marks items as done.
 - **発信** (Posts)
-  - Choose a kind (a message to clients, a blog post, a social media post), enter the material and press 「下書きを作る」 (Make a draft) → the AI writes a draft (dates and numbers are filled in by the program).
-  - Edit it by hand and press 「下書きを保存」 (Save draft) (nothing is sent or published). 「チームに読んでもらう」 (Have the team read it) shows the AI team's suggested fixes, and the owner chooses each one with 「入れる」 (Apply) or 「入れない」 (Don't apply).
+  - Choose a kind (a message to clients, a blog post, a social media post), enter the material and press 「下書きを作る」 (Make a draft) → the AI writes a draft (the AI does not write dates or numbers; the program fills in the dates of free slots and days off).
+  - 「チームに読んでもらう」 (Have the team read it) on the draft card shows the AI team's suggested fixes, and the owner chooses each one with 「入れる」 (Apply) or 「入れない」 (Don't apply). Then edit it by hand and press 「下書きを保存」 (Save draft) (nothing is sent or published).
 - **ルール** (Rules)
   - The list of rules (when rules conflict, the stricter one wins; the two 🔒 locked rules cannot be loosened). Add rules in the 「ルールを足す」 (Add a rule) panel; adding is a person's 「足す」 (Add).
   - Write something like 「カラーの後は15分あける」 ("leave 15 minutes after a color") in 「言葉で書いて欄を埋める（AI）」 (Fill in the fields from a sentence (AI)) and press 「欄を埋める」 (Fill in) → the AI fills in the fields for adding it (shown only when the AI can be reached; it does not save).
