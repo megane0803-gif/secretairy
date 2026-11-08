@@ -1989,49 +1989,84 @@ describe("直しX：来た人のふつうの流れは上限に当たらない", 
 });
 
 describe("直しX：元に戻す途中の一時的な断りが続いたら、要復旧に上げる", () => {
-  test(`同じ断りが続けて決めた回数（freee.try.maxTransientRounds）続いたら要復旧。それまでは「元に戻しています」`, async () => {
+  const N = base.try.maxTransientRounds;
+  /** 2件（店用と私用）を試して、5分たった形 */
+  async function twoTried() {
     const f = new FakeFreee();
     const store = memoryStore(() => clock.now);
     await connected(f, store);
     f.addAllSeed();
     const deps = makeDeps(f, store);
+    assert.equal((await bodyOf(await reg(deps, f.txnOf(SHOP_ITEM.no)!.id, "shop", "10.50.0.1"))).result, "registered");
     assert.equal((await bodyOf(await reg(deps, f.txnOf(PRIVATE_ITEM.no)!.id, "private", "10.50.0.1"))).result, "registered");
+    const [a, b] = (await loadTrial(store)).items.map((i) => i.dealIds![0]);
     at(clock.now + holdMs + 1000);
-    f.refuseAlways = { method: "DELETE", path: /^\/api\/1\/deals\//, status: 409 };
-    const N = base.try.maxTransientRounds;
-    assert.ok(N >= 2);
-    for (let i = 1; i < N; i++) {
-      at(clock.now + 61_000);
-      assert.equal((await bodyOf(await read(deps, `10.50.1.${i}`))).trial.phase, "restoring", `${i}`);
-      assert.equal((await loadTrial(store)).refusals, i);
-    }
-    at(clock.now + 61_000);
-    assert.equal((await bodyOf(await read(deps, "10.50.2.1"))).trial.phase, "repair");
-    assert.equal((await loadTrial(store)).repair, true);
-    // オーナーの画面に出る（今の形）
-    const st = await bodyOf(await handleStatus(ownerReq("/api/freee/status", { method: "GET", cookie: ownerCookie(f.access) }), deps));
-    assert.equal(st.trial, "repair");
+    let n = 0;
+    const round = async (gap = 61_000) => {
+      at(clock.now + gap);
+      return (await bodyOf(await read(deps, `10.50.${1 + Math.floor(n / 200)}.${n++ % 200}`))).trial.phase as string;
+    };
+    return { f, store, deps, a, b, round };
+  }
+  const dealPath = (id: number) => new RegExp(`^/api/1/deals/${id}$`);
+
+  test("429 で何回区切られても要復旧にならない（待てば通るので数えない）", async () => {
+    const w = await twoTried();
+    w.f.refuseAlways = { method: "DELETE", path: dealPath(w.a), status: 429 };
+    // 全体の1時間の数に当てないよう、間をあけて呼ぶ
+    for (let i = 0; i < N * 3; i++) assert.equal(await w.round(5 * 60_000), "restoring", `${i}`);
+    assert.equal((await loadTrial(w.store)).repair, false);
+    assert.equal((await loadTrial(w.store)).refusals, undefined);
+    w.f.refuseAlways = null;
+    assert.equal(await w.round(5 * 60_000), "free", "429 が止めば元に戻る");
   });
 
-  test("一時的な断りの後に、ほかの終わり方（持ち時間など）か元に戻り終わった時は、数え直す", async () => {
-    const f = new FakeFreee();
-    const store = memoryStore(() => clock.now);
-    await connected(f, store);
-    f.addAllSeed();
-    const deps = makeDeps(f, store);
-    assert.equal((await bodyOf(await reg(deps, f.txnOf(PRIVATE_ITEM.no)!.id, "private", "10.51.0.1"))).result, "registered");
-    at(clock.now + holdMs + 1000);
-    f.refuseOnce = { method: "DELETE", path: /^\/api\/1\/deals\//, status: 429 };
-    assert.equal((await bodyOf(await read(deps, "10.51.1.1"))).trial.phase, "restoring");
-    assert.equal((await loadTrial(store)).refusals, 1);
-    // 返事が途切れた回は、一時的な断りではない：数を0に戻す
-    f.refuseOnce = null;
-    f.dropOn = "delete_deal";
-    at(clock.now + 61_000);
-    await read(deps, "10.51.1.2");
-    assert.equal((await loadTrial(store)).refusals, undefined);
-    f.dropOn = null;
-    at(clock.now + 61_000);
-    assert.equal((await bodyOf(await read(deps, "10.51.1.3"))).trial.phase, "free");
+  for (const status of [409, 423]) {
+    test(`${status} で一歩も進まずに続けて決めた回数（freee.try.maxTransientRounds）区切られたら要復旧。それまでは「元に戻しています」`, async () => {
+      const w = await twoTried();
+      w.f.refuseAlways = { method: "DELETE", path: dealPath(w.a), status };
+      assert.ok(N >= 2);
+      for (let i = 1; i < N; i++) {
+        assert.equal(await w.round(), "restoring", `${i}`);
+        assert.equal((await loadTrial(w.store)).refusals, i);
+      }
+      assert.equal(await w.round(), "repair");
+      assert.equal((await loadTrial(w.store)).repair, true);
+      // オーナーの画面に出る（今の形）
+      const st = await bodyOf(await handleStatus(ownerReq("/api/freee/status", { method: "GET", cookie: ownerCookie(w.f.access) }), w.deps));
+      assert.equal(st.trial, "repair");
+    });
+  }
+
+  test("途中で一歩進んだ回があれば、数を0に戻す（進んでいる間は要復旧に上げない）", async () => {
+    const w = await twoTried();
+    // 1件目の取引を消す所で、一歩も進まずに N-1 回
+    w.f.refuseAlways = { method: "DELETE", path: dealPath(w.a), status: 409 };
+    for (let i = 1; i < N; i++) assert.equal(await w.round(), "restoring");
+    assert.equal((await loadTrial(w.store)).refusals, N - 1);
+    // 1件目は消せた（一歩進んだ）が、2件目で 409：数は0に戻る
+    w.f.refuseAlways = { method: "DELETE", path: dealPath(w.b), status: 409 };
+    assert.equal(await w.round(), "restoring", "進んだ回は要復旧に上げない");
+    assert.equal((await loadTrial(w.store)).refusals, undefined);
+    // その後は、また一歩も進まない回だけを数える
+    for (let i = 1; i < N; i++) {
+      assert.equal(await w.round(), "restoring");
+      assert.equal((await loadTrial(w.store)).refusals, i);
+    }
+    assert.equal(await w.round(), "repair");
+  });
+
+  test("ほかの終わり方（返事が途切れた）の回も、数を0に戻す", async () => {
+    const w = await twoTried();
+    w.f.refuseAlways = { method: "DELETE", path: dealPath(w.a), status: 423 };
+    assert.equal(await w.round(), "restoring");
+    assert.equal((await loadTrial(w.store)).refusals, 1);
+    w.f.refuseAlways = null;
+    w.f.dropOn = "delete_deal";
+    await w.round();
+    assert.equal((await loadTrial(w.store)).refusals, undefined);
+    w.f.dropOn = null;
+    assert.equal(await w.round(), "free");
   });
 });
+

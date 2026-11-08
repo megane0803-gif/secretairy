@@ -57,8 +57,9 @@ export type Trial = {
   /** 元に戻し始めた（終わるまで登録させない） */
   restoring: boolean;
   /**
-   * 元に戻す回が、freee の一時的な断り（429・409・423）で区切られて終わった回数（続けて。ほかの終わり方で0に戻す）。
-   * freee.try.maxTransientRounds に届いたら要復旧に上げる（断りが続いて「元に戻しています」のまま止まり続けないように）
+   * 元に戻す回が、一歩も進まずに freee の 409・423 で区切られて終わった回数（続けて）。freee.try.maxTransientRounds に届いたら要復旧に上げる
+   * （断りが続いて「元に戻しています」のまま止まり続けないように）。429（回数が多いので少し待って）は待てば通るので数えない。
+   * その回の中で一歩でも進んだ時と、ほかの終わり方の時は0に戻す
    */
   refusals?: number;
 };
@@ -117,6 +118,13 @@ export function parseTrial(raw: string | null): Trial {
     restoring: d.restoring === true,
     ...(typeof d.refusals === "number" && Number.isSafeInteger(d.refusals) && d.refusals > 0 ? { refusals: d.refusals } : {}),
   };
+}
+
+/** 一時的な断りの数を置きかえる（0 なら欄を外す） */
+function withRefusals(t: Trial, n: number): Trial {
+  const { refusals: _drop, ...rest } = t;
+  void _drop;
+  return n > 0 ? { ...rest, refusals: n } : rest;
 }
 
 /** 取引の番号が分からない明細があるか（返事が途切れた・置き場に書けなかった。消す・作り直すもしない） */
@@ -276,6 +284,8 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
     await save();
   }
   const prefix = c.settings.markPrefix;
+  // この回の中で一歩でも進んだか（取引を消せた・明細を消せた・作り直せた）。進んでいる間は、一時的な断りを数えない
+  let progressed = false;
   try {
     // 1. 記録にある取引だけを消す
     for (const item of t.items) {
@@ -300,6 +310,7 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
         }
         item.dealIds = item.dealIds.slice(1);
         item.deleting = null;
+        progressed = true;
         if (item.dealIds.length === 0 && item.step === "written") item.step = "deals-gone";
         await save();
       }
@@ -339,6 +350,7 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
         if (x && isOriginal(c.seed, prefix, s, x, w, c.companyId)) {
           item.id = x.id;
           item.step = "recreated";
+          progressed = true;
           await save();
           continue;
         }
@@ -366,10 +378,12 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
           if (!(e.status === 404 && resumed)) return repair();
         }
         item.step = "txn-deleted";
+        progressed = true;
         await save();
       } else if (item.step === "txn-deleting") {
         // 消した返事が途切れた次の回：記録の番号の明細が見つからない → 消えた扱い
         item.step = "txn-deleted";
+        progressed = true;
         await save();
       } else if (item.step !== "txn-deleted") {
         // 自分で消していないのに見つからない → 自分では決めない
@@ -395,6 +409,7 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
       item.id = made.id;
       item.step = "recreated";
       created = true;
+      progressed = true;
       await save();
     }
 
@@ -418,19 +433,19 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
       throw e;
     }
     // 一時的な断り 429／409／423（読む所でも。置いた一歩は外してある）：区切る（次の回に、記録の一歩から続ける）。
-    // 同じ形で続けて maxTransientRounds 回区切られたら、要復旧に上げる（オーナーの画面に出る）
+    // 一歩も進まずに 409・423 で区切られた回が続けて maxTransientRounds 回になったら、要復旧に上げる（オーナーの画面に出る）。
+    // 429 は待てば通るので数えない。この回の中で一歩でも進んでいれば、数を0に戻す
     if (isTransientRefusal(e)) {
-      const n = (t.refusals ?? 0) + 1;
-      t = { ...t, refusals: n };
+      const counted = (e as FreeeRejected).status !== 429;
+      const n = progressed ? 0 : (t.refusals ?? 0) + (counted ? 1 : 0);
+      t = withRefusals(t, n);
       if (n >= c.settings.try.maxTransientRounds) return repair();
       await save();
       return { result: "partial", trial: t };
     }
     // 持ち時間が足りない（送る前に止めた。一歩は外してある）・返事が途切れた（一歩は残す）：区切る（次の回に、記録の一歩から続ける）
     if (e instanceof FreeeOutOfTime || !(e instanceof FreeeRejected)) {
-      const { refusals: _drop, ...rest } = t;
-      void _drop;
-      t = rest;
+      t = withRefusals(t, 0);
       await save();
       return { result: "partial", trial: t };
     }
