@@ -1803,7 +1803,7 @@ describe("直しX：freee の一時的な断り（429・409・423）は、元に
   });
 });
 
-describe("直しX：同じ送り元が、元に戻るたびにすぐまた登録して試しを独り占めできない", () => {
+describe("直しX：同じ送り元の続けての登録には数がある", () => {
   test("同じ送り元の1時間の登録の数をこえたら、元に戻った後はほかの人が登録できる", async () => {
     const f = new FakeFreee();
     const store = memoryStore(() => clock.now);
@@ -1886,7 +1886,7 @@ describe("直しX：鍵を延ばす時の一時的な断り・5xx・通信切れ
   }
 });
 
-describe("直しX：同じ送り元の上限をこえた呼び出しは、元に戻す処理を動かさず、書く時の印も取らない", () => {
+describe("直しX：同じ送り元の上限をこえた呼び出しは、何もせずに断る", () => {
   /** 書く時の印を取ろうとした回数を数える置き場 */
   function spied(mem: ReturnType<typeof memoryStore>) {
     const tries = { n: 0 };
@@ -1952,7 +1952,7 @@ describe("直しX：同じ送り元の上限をこえた呼び出しは、元に
   });
 });
 
-describe("直しX：来た人のふつうの流れは、同じ回線から数人でも上限に当たらない", () => {
+describe("直しX：来た人のふつうの流れは上限に当たらない", () => {
   test("3人が同じ送り元から、開く・タブの行き来・登録・読み直し・5分後に見に戻るを1時間のうちに続けても 429 にならない", async () => {
     const f = new FakeFreee();
     const store = memoryStore(() => clock.now);

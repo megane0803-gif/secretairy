@@ -872,7 +872,7 @@ describe("オーナーだけ（合言葉）", () => {
     assert.equal((await bodyOf(await handleLiveSend(sendAt(payloadOf([STOP]), PASS, "198.51.100.91"), w.deps))).ok, true);
   });
 
-  test("直しX：窓口全体の数は、たくさんの送り元から一度に来た時のための大きい数・長い区切り", async () => {
+  test("直しX：窓口全体の止めは、送り元ごとの数よりずっと大きい（たくさんの送り元から一度に来た時のため）", async () => {
     const w = await prepared();
     const p = live.passcode;
     assert.ok(p.allWindowSeconds > p.wrongWindowSeconds && p.wideMaxWrong > p.maxWrong);
@@ -2384,7 +2384,7 @@ describe("README", () => {
     assert.match(proof, /確かめていないこと：回数の上限を本番で使い切ること・連打・日付が変わった後の最初の1回/);
     assert.doesNotMatch(proof, /まだ呼んでいません|上の表には入れていません/);
     assert.match(proof, /「書けるか」は、環境変数とオーナー用の合言葉の設定があるかから決めた札で、Google に書けたことの確かめではありません/);
-    assert.match(proof, /合言葉なしで送った時も、その送り元の間違いの数に1つ足す作り/);
+    assert.match(proof, /間違いは送り元ごとに数えます/);
     assert.doesNotMatch(proof, /100%|必ず|すぐ反映|数を使わない/);
     assert.doesNotMatch(sec, /100%|必ず|すぐ反映/);
     assert.doesNotMatch(sec, /出せる広告です/);
