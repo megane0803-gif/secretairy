@@ -1,6 +1,6 @@
 <h1 align="center">SecretAIry（シークレタリー）</h1>
 
-<p align="center">English version: <a href="README.en.md">README.en.md</a></p>
+<p align="center">English version (summary): <a href="README.en.md">README.en.md</a></p>
 
 <p align="center">
   1人で営業する美容室では、施術も、予約・カルテ・広告・経理などの事務も、全部オーナー1人の仕事です。施術中は手が離せないので事務は営業の後になり、全部を1人でこなすのは大変です。<br>
