@@ -1,6 +1,8 @@
-// README を提出の形に読むテスト（直しN）。外は呼ばない。
-// 入口の塊（中央寄せ・本番を開く・デモ動画は準備中で文字だけ・写真は押すと本番）・「ナレーションは合成音声です」の行・
-// 30秒で分かる要点・畳んだ節の形・デモ動画の素材の表・データの置き場所の「実際の店で使う時」と「次に作る物」の一番上の行。
+// README を提出の形に読むテスト（直しN・直しN2）。外は呼ばない。
+// 入口の塊（中央寄せ・本番を開く・デモ動画は決めた URL へのリンク・写真は押すと本番）・「ナレーションは合成音声です」の行・
+// GitHub で消える・壊れる書き方（裸の URL のすぐ後ろの全角の文字）・
+// 30秒で分かる要点・畳んだ節の形・デモ動画の素材の表・動画で見られると書く所・AI の窓口の回数の止め・ライセンス・
+// データの置き場所の「実際の店で使う時」と「次に作る物」の一番上の行。
 
 import assert from "node:assert/strict";
 import { readFileSync, statSync } from "node:fs";
@@ -10,6 +12,8 @@ import { describe, test } from "node:test";
 const ROOT = join(__dirname, "..", "..", "..");
 const readme = readFileSync(join(ROOT, "README.md"), "utf8");
 const SITE = "https://secretairy.vercel.app";
+/** デモ動画（YouTube）。オーナーが渡した URL だけを使い、作らない・短くしない・ほかに変えない */
+const VIDEO = "https://youtu.be/Lw1JhyqQ7bQ";
 
 /** 見出し（行の頭から）で区切った1つの節。次の同じ深さか浅い見出しの前まで */
 function section(heading: string): string {
@@ -37,10 +41,11 @@ describe("README：入口の塊（一番上・中央寄せ）", () => {
     assert.ok(who >= 0 && trouble > who && what > trouble, pitch);
   });
 
-  test("本番を開くリンクと、デモ動画は準備中で文字だけ（リンクにしない）", () => {
-    assert.ok(top.indexOf("デモ動画：準備中") > top.indexOf("本番を開く"));
+  test("本番を開くリンクの後に、「デモ動画」の文字で決めた URL を開くリンク（準備中の言い方は残さない）", () => {
     assert.ok(top.includes(`<a href="${SITE}"><b>本番を開く（${SITE}）</b></a>`));
-    assert.doesNotMatch(top, /<a [^>]*>[^<]*(<b>)?デモ動画/, "デモ動画はまだリンクにしない");
+    const link = top.indexOf(`<a href="${VIDEO}"><b>デモ動画</b></a>`);
+    assert.ok(link > top.indexOf("本番を開く"), "デモ動画のリンクは本番を開くの後");
+    assert.doesNotMatch(readme, /デモ動画[^\n]*準備中/, "デモ動画はもう準備中ではない");
     assert.doesNotMatch(readme, /提出の前にここにリンクを入れます/);
   });
 
@@ -52,13 +57,20 @@ describe("README：入口の塊（一番上・中央寄せ）", () => {
     assert.ok(statSync(join(ROOT, m[2])).size < 300 * 1024, "写真は小さく縮める");
   });
 
-  test("「デモ動画：準備中」は1か所だけで、すぐ下の行が「ナレーションは合成音声です」", () => {
-    assert.equal(readme.split("デモ動画：準備中").length - 1, 1);
-    assert.match(readme, /デモ動画：準備中(<br>)?\s*\n\s*(<sub>)?ナレーションは合成音声です/);
+  test("デモ動画のリンクは1か所だけ（ほかの動画の URL を置かない）で、すぐ下の行が「ナレーションは合成音声です」", () => {
+    assert.equal(readme.split(VIDEO).length - 1, 1);
+    assert.deepEqual(readme.match(/https?:\/\/(?:www\.|m\.)?(?:youtu\.be|youtube\.com)\/[^\s"'<>)）]*/g), [VIDEO]);
+    assert.match(readme, /<a href="https:\/\/youtu\.be\/Lw1JhyqQ7bQ"><b>デモ動画<\/b><\/a>(<br>)?\s*\n\s*(<sub>)?ナレーションは合成音声です/);
   });
 
   test("GitHub が消す物（style・iframe・script）と、見えない HTML のコメントを使わない", () => {
     assert.doesNotMatch(readme, /<style|<iframe|<script|<!--/i);
+  });
+
+  test("裸の URL のすぐ後ろに全角の文字を続けない（GitHub が続きまで URL と読み、リンクが壊れる。<…> で囲む）", () => {
+    const outsideLinks = readme.replace(/<a\b[^>]*>[\s\S]*?<\/a>/g, "");
+    const broken = outsideLinks.match(/https?:\/\/[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+(?=[^\x00-\x7F])/g);
+    assert.equal(broken, null, String(broken));
   });
 });
 
@@ -124,5 +136,44 @@ describe("README：データの置き場所の「実際の店で使う時」", (
     const next = section("## 次に作る物");
     const first = next.split("\n").find((l) => l.startsWith("- "))!;
     for (const w of ["サーバーに保存してオーナーがログイン", "店ごとに中身を分け", "控えを持つ", "今はデモとして、ブラウザごとに保存", "(#実際の店で使う時)"]) assert.ok(first.includes(w), w);
+  });
+});
+
+describe("README：動画で見られると書く所は、動画に映っている物だけ", () => {
+  const claims = readme.split(/[。\n]/).filter((x) => x.includes("動画で"));
+
+  test("経理は、来た人の欄で未処理の明細を読み、1件を店用にして登録する様子（オーナーがつなぐ所・明細を入れる所は動画に無い）", () => {
+    assert.ok(readme.includes("来た人の欄で、freee のテスト事業所の未処理の明細を読み、1件を店用にして登録する様子は、デモ動画で見られます。"));
+    assert.doesNotMatch(readme, /明細を入れて、freee から読んだカードと銀行の明細が一覧に出て/);
+  });
+
+  test("動画に映っていない物（つなぐ所・明細を入れる所・元に戻る所・Google 広告の画面）を「動画で」と書かない", () => {
+    assert.ok(claims.length >= 2, claims.join("\n"));
+    for (const c of claims) assert.doesNotMatch(c, /つな|明細を入れ|元に戻|Google 広告の画面|準備中/, c);
+  });
+});
+
+describe("README：AI の窓口の回数の止め", () => {
+  test("本番で確かめた形で書き、「確かめていない」と書かない", () => {
+    const guard = readme.split("\n").find((l) => l.startsWith("- AI の窓口（`/api/ai/`）："));
+    assert.ok(guard, "だれでも呼べる窓口の守りの、AI の窓口の行");
+    assert.doesNotMatch(guard, /確かめていません/);
+    for (const w of ["2026-11-08 14:14", "1〜10回目は 404", "11回目と12回目は 429"]) assert.ok(guard.includes(w), w);
+    const unchecked = section("### 確かめていない範囲");
+    assert.doesNotMatch(unchecked, /AI の窓口の回数の上限/);
+    assert.match(unchecked, /AI の窓口（`\/api\/ai\/`）の回数の止めは、本番で[^。]*効いているのを確かめました/);
+  });
+
+  test("Firewall の止めは AI の窓口の行にだけ書く（広告と経理の試しの窓口の行には書かない）", () => {
+    const lines = readme.split("\n").filter((l) => l.includes("Firewall"));
+    assert.ok(lines.length > 0);
+    for (const l of lines) assert.doesNotMatch(l, /\/api\/ads\/|\/api\/freee\//, l);
+  });
+});
+
+describe("README：ライセンス", () => {
+  test("MIT で確定（仮の言い方を残さない）", () => {
+    assert.equal(section("## ライセンス").trim(), "[MIT](LICENSE)。");
+    assert.doesNotMatch(readme, /仮に置いています|後で変えることがあります/);
   });
 });
