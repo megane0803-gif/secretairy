@@ -56,6 +56,11 @@ export type Trial = {
   broken: boolean;
   /** 元に戻し始めた（終わるまで登録させない） */
   restoring: boolean;
+  /**
+   * 元に戻す回が、freee の一時的な断り（429・409・423）で区切られて終わった回数（続けて。ほかの終わり方で0に戻す）。
+   * freee.try.maxTransientRounds に届いたら要復旧に上げる（断りが続いて「元に戻しています」のまま止まり続けないように）
+   */
+  refusals?: number;
 };
 
 export const EMPTY_TRIAL: Trial = { v: 1, by: null, items: [], lastWriteAt: null, repair: false, broken: false, restoring: false };
@@ -110,6 +115,7 @@ export function parseTrial(raw: string | null): Trial {
     repair: d.repair === true || bad,
     broken: d.broken === true || bad,
     restoring: d.restoring === true,
+    ...(typeof d.refusals === "number" && Number.isSafeInteger(d.refusals) && d.refusals > 0 ? { refusals: d.refusals } : {}),
   };
 }
 
@@ -411,9 +417,20 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
       await save();
       throw e;
     }
-    // 持ち時間が足りない（送る前に止めた。一歩は外してある）・返事が途切れた（一歩は残す）・
-    // 一時的な断り 429／409／423（読む所でも。置いた一歩は外してある）：区切る（次の回に、記録の一歩から続ける）
-    if (e instanceof FreeeOutOfTime || !(e instanceof FreeeRejected) || isTransientRefusal(e)) {
+    // 一時的な断り 429／409／423（読む所でも。置いた一歩は外してある）：区切る（次の回に、記録の一歩から続ける）。
+    // 同じ形で続けて maxTransientRounds 回区切られたら、要復旧に上げる（オーナーの画面に出る）
+    if (isTransientRefusal(e)) {
+      const n = (t.refusals ?? 0) + 1;
+      t = { ...t, refusals: n };
+      if (n >= c.settings.try.maxTransientRounds) return repair();
+      await save();
+      return { result: "partial", trial: t };
+    }
+    // 持ち時間が足りない（送る前に止めた。一歩は外してある）・返事が途切れた（一歩は残す）：区切る（次の回に、記録の一歩から続ける）
+    if (e instanceof FreeeOutOfTime || !(e instanceof FreeeRejected)) {
+      const { refusals: _drop, ...rest } = t;
+      void _drop;
+      t = rest;
       await save();
       return { result: "partial", trial: t };
     }

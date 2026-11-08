@@ -638,8 +638,8 @@ describe("freee：来た人の窓口（読む・登録する・読み直す）",
 
 describe("freee：来た人の窓口の上限", () => {
   test("設定の数：登録と読むで別（同じ送り元・広い束・全体の1分・1時間・1日）。数の約束を満たす。5分で元に戻す", () => {
-    assert.deepEqual(base.try.register, { source: { day: 10, hour: 2, minute: 2 }, wide: { day: 20, hour: 5 }, site: { minute: 6, hour: 6, day: 144 } });
-    assert.deepEqual(base.try.read, { source: { day: 30, hour: 5, minute: 5 }, wide: { day: 60, hour: 12 }, site: { minute: 10, hour: 16, day: 384 } });
+    assert.deepEqual(base.try.register, { source: { day: 10, hour: 4, minute: 2 }, wide: { day: 20, hour: 5 }, site: { minute: 6, hour: 6, day: 144 } });
+    assert.deepEqual(base.try.read, { source: { day: 30, hour: 15, minute: 6 }, wide: { day: 60, hour: 16 }, site: { minute: 10, hour: 17, day: 408 } });
     assert.equal(callLimitsProblem(base.try.register), null);
     assert.equal(callLimitsProblem(base.try.read), null);
     assert.equal(base.try.holdSeconds, 300);
@@ -693,7 +693,7 @@ describe("freee：来た人の窓口の上限", () => {
       at(T0 + 3_600_000);
       assert.ok(ok(await call(deps, "10.4.4.4")), "次の時には通る");
     }
-    // 1時間（全体）：使い切っても、次の時には通る（止まるのは長くて1時間）
+    // 1時間（全体）：全体の上限は1時間ごとにも分けている
     {
       const { deps } = await fresh();
       for (let i = 0; i < L.site.hour; i++) {
@@ -707,7 +707,7 @@ describe("freee：来た人の窓口の上限", () => {
       at(T0 + 3_600_000);
       assert.ok(ok(await call(deps, "10.3.3.3")), "次の時には通る");
     }
-    // 1日（全体）：1日の数は1時間の割り振りの24倍以上（1時間ずつ使い切っても1日の数には届かない）。届いていたら止める
+    // 1日（全体）：届いていたら止める
     {
       const { st, deps } = await fresh();
       assert.ok(L.site.day >= L.site.hour * 24);
@@ -1949,5 +1949,89 @@ describe("直しX：同じ送り元の上限をこえた呼び出しは、元に
     assert.ok(tries.n > before, "書く時の印を取って元に戻した");
     assert.equal((await loadTrial(mem)).items.length, 0, "元に戻した");
     assert.equal(f.txnOf(SHOP_ITEM.no)!.status, 1);
+  });
+});
+
+describe("直しX：来た人のふつうの流れは、同じ回線から数人でも上限に当たらない", () => {
+  test("3人が同じ送り元から、開く・タブの行き来・登録・読み直し・5分後に見に戻るを1時間のうちに続けても 429 にならない", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    const deps = makeDeps(f, store);
+    const IP = "203.0.113.30";
+    const open = () => read(deps, IP);
+    const statuses: number[] = [];
+    const did = async (r: Promise<Response>) => statuses.push((await r).status);
+    // 開いた時の読むを省くのは、この画面で少し前に読めたばかりの時だけ（それより後のタブの行き来は読む）
+    const reuse = base.try.openReuseSeconds * 1000;
+    const ids = [SHOP_ITEM.no, PRIVATE_ITEM.no];
+    at(T0);
+    for (let p = 0; p < 3; p++) {
+      const start = T0 + p * 18 * 60_000;
+      at(start);
+      await did(open()); // 開く
+      at(start + reuse + 30_000);
+      await did(open()); // ほかのタブから戻る（少し前に読んだのより後）
+      at(start + reuse + 60_000);
+      const t = f.txnOf(ids[p % 2])!;
+      await did(reg(deps, t.id, p % 2 ? "private" : "shop", IP)); // 登録
+      await did(open()); // 登録の後の読み直し
+      at(start + reuse + 60_000 + holdMs + 30_000);
+      await did(open()); // 5分後に見に戻る（ここで元に戻る）
+      at(start + reuse + 60_000 + holdMs + 90_000);
+      await did(open()); // 「読み直す」
+    }
+    assert.ok(clock.now < T0 + 3_600_000, "1時間のうち");
+    assert.ok(!statuses.includes(429), JSON.stringify(statuses));
+    assert.equal((await loadTrial(store)).items.length, 0, "元に戻っている");
+  });
+});
+
+describe("直しX：元に戻す途中の一時的な断りが続いたら、要復旧に上げる", () => {
+  test(`同じ断りが続けて決めた回数（freee.try.maxTransientRounds）続いたら要復旧。それまでは「元に戻しています」`, async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    const deps = makeDeps(f, store);
+    assert.equal((await bodyOf(await reg(deps, f.txnOf(PRIVATE_ITEM.no)!.id, "private", "10.50.0.1"))).result, "registered");
+    at(clock.now + holdMs + 1000);
+    f.refuseAlways = { method: "DELETE", path: /^\/api\/1\/deals\//, status: 409 };
+    const N = base.try.maxTransientRounds;
+    assert.ok(N >= 2);
+    for (let i = 1; i < N; i++) {
+      at(clock.now + 61_000);
+      assert.equal((await bodyOf(await read(deps, `10.50.1.${i}`))).trial.phase, "restoring", `${i}`);
+      assert.equal((await loadTrial(store)).refusals, i);
+    }
+    at(clock.now + 61_000);
+    assert.equal((await bodyOf(await read(deps, "10.50.2.1"))).trial.phase, "repair");
+    assert.equal((await loadTrial(store)).repair, true);
+    // オーナーの画面に出る（今の形）
+    const st = await bodyOf(await handleStatus(ownerReq("/api/freee/status", { method: "GET", cookie: ownerCookie(f.access) }), deps));
+    assert.equal(st.trial, "repair");
+  });
+
+  test("一時的な断りの後に、ほかの終わり方（持ち時間など）か元に戻り終わった時は、数え直す", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    const deps = makeDeps(f, store);
+    assert.equal((await bodyOf(await reg(deps, f.txnOf(PRIVATE_ITEM.no)!.id, "private", "10.51.0.1"))).result, "registered");
+    at(clock.now + holdMs + 1000);
+    f.refuseOnce = { method: "DELETE", path: /^\/api\/1\/deals\//, status: 429 };
+    assert.equal((await bodyOf(await read(deps, "10.51.1.1"))).trial.phase, "restoring");
+    assert.equal((await loadTrial(store)).refusals, 1);
+    // 返事が途切れた回は、一時的な断りではない：数を0に戻す
+    f.refuseOnce = null;
+    f.dropOn = "delete_deal";
+    at(clock.now + 61_000);
+    await read(deps, "10.51.1.2");
+    assert.equal((await loadTrial(store)).refusals, undefined);
+    f.dropOn = null;
+    at(clock.now + 61_000);
+    assert.equal((await bodyOf(await read(deps, "10.51.1.3"))).trial.phase, "free");
   });
 });

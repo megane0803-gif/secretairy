@@ -35,7 +35,7 @@ function counter(limits: CallLimits) {
 
 describe("直しX：数え方の約束（4つの窓口の設定）", () => {
   for (const [name, l] of CONFIGS) {
-    test(`${name}：1日は1時間の24倍以上・IPv4 の番地10個と /48 1つでは1日の全体に届かない・細かい単位ほど小さい`, () => {
+    test(`${name}：設定の数の約束（callLimitsProblem）を満たす`, () => {
       assert.equal(callLimitsProblem(l), null);
       assert.ok(l.site.day >= l.site.hour * 24);
       assert.ok(l.source.day * 10 < l.site.day);
@@ -51,14 +51,14 @@ describe("直しX：数え方の約束（4つの窓口の設定）", () => {
     assert.match(callLimitsProblem({ ...ok, source: { ...ok.source, day: 15 }, wide: { ...ok.wide, day: 30 } })!, /10倍/);
     assert.match(callLimitsProblem({ ...ok, wide: { ...ok.wide, day: 144 } })!, /広い束/);
     assert.match(callLimitsProblem({ ...ok, source: { ...ok.source, minute: 0 } })!, /1以上/);
-    assert.match(callLimitsProblem({ ...ok, source: { ...ok.source, hour: 3 }, wide: { ...ok.wide, hour: 5 } })!, /3分の1/);
+    assert.match(callLimitsProblem({ ...ok, source: { ...ok.source, hour: 6 }, wide: { ...ok.wide, hour: 6 } })!, /1つの送り元で、全体の1時間を使い切れる/);
     assert.match(callLimitsProblem({ ...ok, wide: { ...ok.wide, hour: 6 } })!, /使い切れる/);
   });
 });
 
 describe("直しX：少ない送り元では、その日の全体を使い切れない", () => {
   for (const [name, l] of CONFIGS) {
-    test(`${name}：IPv4 の番地10個が1日じゅう送り続けても、全体の1日に届かず、ほかの人は通る`, async () => {
+    test(`${name}：1つの送り元・1つの /48 だけでは、全体の上限を使い切れない（IPv4・ほかの人は通る）`, async () => {
       const c = counter(l);
       const ips = Array.from({ length: 10 }, (_, i) => `198.51.100.${i + 1}`);
       // 1分ごとに10個の番地から送る（24時間。1分の数より細かく送っても、先に送り元の数で止まる）
@@ -72,7 +72,7 @@ describe("直しX：少ない送り元では、その日の全体を使い切れ
       assert.equal(await c.call("203.0.113.50"), "ok", "ほかの送り元は通る");
     });
 
-    test(`${name}：IPv6 の /48 1つが /64 を変えながら送り続けても、全体の1日に届かず、ほかの人は通る`, async () => {
+    test(`${name}：1つの送り元・1つの /48 だけでは、全体の上限を使い切れない（IPv6・/64 を変えても）`, async () => {
       const c = counter(l);
       let n = 0;
       for (let t = 0; t < 86_400_000; t += 60_000) {
@@ -104,7 +104,7 @@ describe("直しX：少ない送り元では、その日の全体を使い切れ
       }
     });
 
-    test(`${name}：たくさんの送り元に1時間の数を使い切られても、止まるのは長くてその時の終わりまで（1日の数には届かない）`, async () => {
+    test(`${name}：全体の上限は、1日に加えて1時間ごとにも分けている`, async () => {
       const c = counter(l);
       let n = 0;
       for (let h = 0; h < 24; h++) {

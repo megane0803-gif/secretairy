@@ -39,15 +39,17 @@
       "kvTokenDays": 30,
       "trialKeepDays": 30,
       "maxRequestChars": 300,
+      "maxTransientRounds": 6,
+      "openReuseSeconds": 120,
       "register": {
-        "source": { "day": 10, "hour": 2, "minute": 2 },
+        "source": { "day": 10, "hour": 4, "minute": 2 },
         "wide": { "day": 20, "hour": 5 },
         "site": { "minute": 6, "hour": 6, "day": 144 }
       },
       "read": {
-        "source": { "day": 30, "hour": 5, "minute": 5 },
-        "wide": { "day": 60, "hour": 12 },
-        "site": { "minute": 10, "hour": 16, "day": 384 }
+        "source": { "day": 30, "hour": 15, "minute": 6 },
+        "wide": { "day": 60, "hour": 16 },
+        "site": { "minute": 10, "hour": 17, "day": 408 }
       }
     }
   }

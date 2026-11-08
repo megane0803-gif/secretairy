@@ -40,8 +40,8 @@
     "daily": { "setup": 5, "send": 20, "stop": 10 },
     "passcode": { "minChars": 16, "maxChars": 200, "maxWrong": 5, "wrongWindowSeconds": 600, "wideMaxWrong": 20, "allMaxWrong": 1000, "allWindowSeconds": 3600 },
     "read": {
-      "source": { "day": 20, "hour": 6, "minute": 4 },
-      "wide": { "day": 60, "hour": 15 },
+      "source": { "day": 40, "hour": 12, "minute": 5 },
+      "wide": { "day": 80, "hour": 18 },
       "site": { "minute": 10, "hour": 20, "day": 480 }
     },
     "try": {

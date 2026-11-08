@@ -2,9 +2,8 @@
 // 経理の来た人の試し（src/lib/freee/try.ts）が、どれもここを通す（2つ作らない）。
 //   - 数えるのは置き場（Upstash）で、先に足してから比べる（同時に来ても数えもれが無い）
 //   - 順は、同じ送り元（1日 → 1時間 → 1分）→ 広い束（IPv6 の /48。1日 → 1時間）→ サイト全体（1分 → 1時間 → 1日）。
-//     こえたらそこで止め、先の数は足さない（少ない送り元が送り続けても、全体の数はその送り元の上限までしか増えない）
-//   - サイト全体の1日の数は、1時間ごとにも割り振る（site.hour）。1日の数を site.hour × 24 以上にしておくと、1日の数には届かず、
-//     使い切られても止まるのはその時の終わりまで（長くて1時間）
+//     こえたらそこで止め、先の数は足さない
+//   - 全体の上限は、1日に加えて1時間ごとにも分ける（site.hour）
 //   - 送り元は日ごとの塩と合わせたハッシュ（src/lib/server/source.ts の sourceHashes）だけを鍵に入れる（生の IP は入れない）
 
 /** 1つの窓口の上限（config/ に置く。コードに数を書かない） */
@@ -89,9 +88,8 @@ export function shopClock(timeZone: string, nowMs: number): { date: string; hour
 
 /**
  * 上限の数の約束（config の確かめ。テストで全部の窓口に当てる）：
- * - 1日の数は1時間の割り振りの24倍以上（1日の数に届かない＝使い切られても止まるのは長くて1時間）
- * - IPv4 の番地10個（同じ送り元の1日 × 10）と IPv6 の /48 1つ（広い束の1日）では、1日の全体に届かない
- * - 1つの送り元は全体の1時間の3分の1まで・/48 1つでは全体の1時間を使い切れない（1つの束が1時間ずつ散らして送っても、ほかの人を止めない）
+ * - 1日と1時間の数がそろっている
+ * - 1つの送り元・1つの /48 だけでは、全体の上限を使い切れない
  * - 細かい単位ほど小さい（送り元 ≦ 広い束・1分 ≦ 1時間 ≦ 1日）
  */
 export function callLimitsProblem(l: CallLimits): string | null {
@@ -102,7 +100,7 @@ export function callLimitsProblem(l: CallLimits): string | null {
   if (l.source.day * 10 >= l.site.day) return "同じ送り元の1日の10倍が、全体の1日に届く";
   if (l.wide.day >= l.site.day) return "広い束の1日が、全体の1日に届く";
   if (l.source.day > l.wide.day || l.source.hour > l.wide.hour) return "送り元の数が広い束より大きい";
-  if (l.source.hour * 3 > l.site.hour) return "1つの送り元で、全体の1時間の3分の1より多く使える";
+  if (l.source.hour >= l.site.hour) return "1つの送り元で、全体の1時間を使い切れる";
   if (l.wide.hour >= l.site.hour) return "広い束1つで、全体の1時間を使い切れる";
   if (l.source.minute > l.source.hour || l.source.hour > l.source.day || l.wide.hour > l.wide.day) return "送り元の細かい単位が大きい";
   if (l.site.minute > l.site.hour || l.site.hour > l.site.day) return "全体の細かい単位が大きい";

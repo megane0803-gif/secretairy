@@ -876,10 +876,10 @@ describe("オーナーだけ（合言葉）", () => {
     const w = await prepared();
     const p = live.passcode;
     assert.ok(p.allWindowSeconds > p.wrongWindowSeconds && p.wideMaxWrong > p.maxWrong);
-    // 区切りの長さの中で、IPv4 の番地10個・/48 1つが間違えられる数より、ずっと大きい（少ない送り元では全体の止めに届かない）
+    // 窓口全体の止めは、送り元ごとの数より、ずっと大きい
     const per = p.allWindowSeconds / p.wrongWindowSeconds;
-    assert.ok(p.allMaxWrong > 10 * p.maxWrong * per * 2, "IPv4 の番地10個の2倍より大きい");
-    assert.ok(p.allMaxWrong > p.wideMaxWrong * per * 5, "/48 1つの5倍より大きい");
+    assert.ok(p.allMaxWrong > 10 * p.maxWrong * per * 2, "送り元ごとの数より、ずっと大きい");
+    assert.ok(p.allMaxWrong > p.wideMaxWrong * per * 5, "広い束ごとの数より、ずっと大きい");
     // 送り元を変えながら全体の上限まで間違える（1つの送り元は上限より少なく）
     for (let i = 0; i < p.allMaxWrong; i++) await handleLiveSetup(setupAt(`wrong-${i}-xxxxxxxxxxxx`, `10.${(i >> 8) & 255}.${i & 255}.1`), w.deps);
     const right = await bodyOf(await handleLiveSend(sendReq(payloadOf([STOP])), w.deps));
@@ -953,6 +953,20 @@ describe("置き場（1日の上限・動いている印）", () => {
     const soon = readFailedAfter("send", { ok: false, code: "limit", message: "「読み直す」が続いたので、しばらく（長くて1時間）待ってから押してください" });
     assert.doesNotMatch(soon, /明日/);
     assert.match(soon, /しばらく（長くて1時間）待ってから押してください。$/);
+  });
+
+  test("直しX：オーナーがふつうに用意・送るを続けても、送った後の読み直しは上限に当たらない", async () => {
+    const w = await prepared();
+    const IP = "203.0.113.40";
+    // 1時間のうちに、送る（と送った後の読み直し）を10回・手で読み直す数回
+    for (let i = 0; i < 10; i++) {
+      clock += 4 * 60_000;
+      assert.equal((await handleLiveSend(sendAt(payloadOf([STOP]), PASS, IP), w.deps)).status, 200, `送る ${i}`);
+      assert.equal((await handleLiveRead(readReq(IP), w.deps)).status, 200, `送った後の読み直し ${i}`);
+    }
+    for (let i = 0; i < 2; i++) assert.equal((await handleLiveRead(readReq(IP), w.deps)).status, 200, `手で読み直す ${i}`);
+    // 1日の送るの上限まで送っても、送った後の読み直しの1日の数に届かない
+    assert.ok(live.read.source.day >= live.daily.send + live.daily.setup + 10);
   });
 
   test("直しX：読み直すと試すの数え方は同じ部品（src/lib/server/limits.ts の countCall）", () => {
@@ -2321,7 +2335,7 @@ describe("README", () => {
     const readme = readFileSync("README.md", "utf8");
     for (const old of [/窓口全体で10分に5回/, /窓口全体の間違いの数/, /IPv6 は前の半分（\/64）でまとめる/, /IPv6 は前の半分 \/64 で1つ/, /サイト全体100回/, /1日100回（サイト全体）/, /読み直す60回/, /1日600回/, /同じ送り元から1日10回/])
       assert.doesNotMatch(readme, old, String(old));
-    for (const now of ["送り元ごとに区切りつきで数え", "ずっと大きい止めとして残しています", "同じ送り元・同じ広い束・サイト全体の順に数え", "少ない送り元ではその日の全体を使い切れない数"]) assert.ok(readme.includes(now), now);
+    for (const now of ["送り元ごとに区切りつきで数え", "ずっと大きい止めとして残しています", "同じ送り元・同じ広い束・サイト全体の順に数え", "1つの送り元・1つの /48 だけでは、全体の上限を使い切れない数", "1日に加えて1時間ごとにも分けています", "もう1つ広い /48 でまとめて数える", "`live.read`"]) assert.ok(readme.includes(now), now);
   });
 
   test("直しU：だれでも試せる道（元に戻してから1件・テスト用アカウントの中だけ・店の広告に届かない理由・オーナーの送るとの違い・窓口の守りの表）", () => {

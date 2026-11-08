@@ -384,6 +384,10 @@ export type FreeeTrySettings = {
   kvTokenDays: number;
   trialKeepDays: number;
   maxRequestChars: number;
+  /** 元に戻す回が、freee の一時的な断りで続けてこの回数区切られたら、要復旧に上げる */
+  maxTransientRounds: number;
+  /** 来た人が経理のタブを開いた時、この秒数の中に読んだばかりなら、開いた時の読むを省く（「読み直す」は省かない） */
+  openReuseSeconds: number;
   register: TryLimits;
   read: TryLimits;
 };
