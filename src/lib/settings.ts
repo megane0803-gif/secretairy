@@ -705,6 +705,11 @@ export type BriefAiSettings = {
   maxRequestChars: number;
   /** ブラウザに残しておく答えの数（材料ごと。古い物から消す。brief/cache.ts） */
   maxCachedAnswers: number;
+  /**
+   * 画面が AI の窓口（/api/ai/brief）を呼ぶのは、この秒数に1回まで（直しY。brief/pace.ts）。その間に材料が変わったら、たった後にいちばん新しい材料で1回。
+   * 開いた時の1回目と「翌日へ」の後は待たない（/api/ai/ は Vercel の Firewall で1分10回までなので、予約チャットや広告の見直しに回数を残す）
+   */
+  minIntervalSeconds: number;
 };
 
 export function getBriefAiSettings(): BriefAiSettings {

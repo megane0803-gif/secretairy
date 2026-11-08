@@ -4,8 +4,11 @@
 // 1行に「何を・いつ・理由」。ボタンは「承認／直す／見送り」。押すとプログラムが実行する（AI は使わない）。
 // 行には、仮押さえが自動で外れるまでの残り（1時間を切った行は上に・太字）と、同じお客様の同じ日のほかの予約（止めはしない）も出す。
 // 🔒 確定は人：確定は、人が画面のボタンを押したときだけ。押した事（ブラウザの本物の操作か）を確かめてから呼ぶ。
+// 直しY：承認BOXの知らせ（予約の行の「✓ 確定しました」など・広告の行のテスト用アカウントへ送った結果）は、この承認BOXが1つだけ持ち、
+// 次の操作まで出し続ける。ほかの行が残っていても、0件になっても出す（場所は一覧の上。0件の時は「承認待ちはありません」の下）。
+// 予約の行と広告の行の知らせは分けず、新しい操作の知らせに置きかえる（前の操作の知らせは消す）。書けなかった時の1文（failed）は今のまま別。
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { candidateLabel, judgeSlot } from "@/lib/ai/slots";
 import { withApproved, withReleased, type PendingRow } from "@/lib/book/state";
 import { rescheduleTitle } from "@/lib/todo/reschedule";
@@ -19,9 +22,28 @@ import { approvalRowsView, approvalsFor, type ApprovalView } from "@/lib/approva
 import { approveBlocker } from "@/lib/book/approve";
 import { useMinute } from "@/lib/book/useBook";
 import { useApprovals } from "@/lib/useApprovals";
-import { AdApprovalRows } from "./AdApprovalRows";
+import { AdApprovalRows, AdDoneLine, useAdDone, type AdDone } from "./AdApprovalRows";
 import { ApprovalRowNotes } from "./ApprovalRowNotes";
 import { Checked, CustomerName } from "./parts";
+
+/**
+ * 承認BOXの形（直しY）：0件なら「承認待ちはありません」、書けなかった時の1文、知らせの1行（次の操作まで）、行の一覧。
+ * 知らせは、行が残っていても0件でも同じ場所に出す。
+ */
+export function ApprovalBoxFrame({ empty, failed, notice, children }: { empty: boolean; failed: string | null; notice: AdDone | null; children?: ReactNode }) {
+  return (
+    <>
+      {empty && <Checked>承認待ちはありません</Checked>}
+      {failed && (
+        <p className="problems" role="alert">
+          {failed}
+        </p>
+      )}
+      {notice && <AdDoneLine done={notice} where="home" inList={false} />}
+      {!empty && children}
+    </>
+  );
+}
 
 export function ApprovalBox({
   data,
@@ -35,31 +57,16 @@ export function ApprovalBox({
 }) {
   const book = useBook(data);
   const { rules } = useRules(data.seedRules);
-  const [done, setDone] = useState<string | null>(null);
+  // 承認BOXの知らせ（予約の行も広告の行も。新しい操作の知らせに置きかえ、次の操作まで出す。「最初に戻す」で消す）
+  const [done, setDone] = useAdDone(book.state.epoch);
   // ブラウザに書けなかった時の1文（直しA の形：成功の文と日誌は書けた時だけ。行はそのまま残るので、もう一度押せる）
   const [failed, setFailed] = useState<string | null>(null);
-  const failedLine = failed && (
-    <p className="problems" role="alert">
-      {failed}
-    </p>
-  );
   // 行は approvals.ts の1か所で決める（上の帯・朝の要点の数と同じ物）。広告の案も同じ箱に出す
   const queue = approvalsFor(useApprovals(), only);
   // 残り時間は本当の時計で「期限 − 今」。今ある1分ごとの描き直しで変わる
   const nowMs = useMinute() * 60_000;
 
-  if (queue.count === 0)
-    return (
-      <>
-        <Checked>承認待ちはありません</Checked>
-        {failedLine}
-        {done && (
-          <p className="hint" role="status">
-            {done}
-          </p>
-        )}
-      </>
-    );
+  if (queue.count === 0) return <ApprovalBoxFrame empty failed={failed} notice={done} />;
 
   // 確定しない時（休みの日・開始の時刻を過ぎた。book/approve.ts）：台帳は書かず、理由を出して日誌に1行
   const refuse = (what: string, blocked: string) => {
@@ -98,8 +105,7 @@ export function ApprovalBox({
   };
 
   return (
-    <>
-      {failedLine}
+    <ApprovalBoxFrame empty={false} failed={failed} notice={done}>
       <ul className={compact ? "approvals compact" : "approvals"}>
         {/* 行の順と行に足す物（残り・同じ日の予約）は approvals.ts の1か所（approvalRowsView） */}
         {approvalRowsView(queue.reservations, { nowMs, booked: book.booked }).map(({ row, notes, soon }) => {
@@ -159,7 +165,7 @@ export function ApprovalBox({
             </li>
           );
         })}
-        {only !== "reservations" && <AdApprovalRows seedRules={data.seedRules} />}
+        {only !== "reservations" && <AdApprovalRows seedRules={data.seedRules} done={done} onDone={setDone} />}
         {!compact && (
           <li className="hint">
             承認＝確定して台帳に入ります。直す・見送り＝お客様の了解なしに時間は変えないので、仮押さえを外して ToDo に「別の日時を案内」を足します。
@@ -167,6 +173,6 @@ export function ApprovalBox({
           </li>
         )}
       </ul>
-    </>
+    </ApprovalBoxFrame>
   );
 }

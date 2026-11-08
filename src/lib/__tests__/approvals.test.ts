@@ -217,7 +217,7 @@ describe("承認BOX：行に足す物の1か所", () => {
 describe("承認BOX：ブラウザに書けなかった時", () => {
   test("承認・直す・見送りとも update の ok を見てから日誌と成功の1行。書けなければ SAVE_FAILED_MESSAGE", () => {
     const box = readFileSync(new URL("../../components/ApprovalBox.tsx", import.meta.url), "utf8");
-    const press = box.slice(box.indexOf("const press = "), box.indexOf("return (\n    <>"));
+    const press = box.slice(box.indexOf("const press = "), box.indexOf("return (\n    <ApprovalBoxFrame"));
     const blocks = press.split("} else {");
     assert.equal(blocks.length, 2);
     for (const b of blocks) {

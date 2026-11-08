@@ -16,9 +16,9 @@ import { useAds } from "@/lib/ads/useAds";
 import { SAVE_FAILED_MESSAGE } from "@/lib/browser";
 import { writeJournal, type JournalWho } from "@/lib/journal";
 import { getMenus } from "@/lib/settings";
-import { GateChecks, LIVE_BUSY_TITLE, startTry, type AdDone } from "./AdApprovalRows";
+import { GateChecks, LIVE_BUSY_TITLE, startTry, type AdDoneSet } from "./AdApprovalRows";
 
-export function AdAddRow({ p, onDone, liveBusy = false }: { p: AdAddProposal; onDone?: (d: AdDone) => void; liveBusy?: boolean }) {
+export function AdAddRow({ p, onDone, liveBusy = false }: { p: AdAddProposal; onDone?: AdDoneSet; liveBusy?: boolean }) {
   const ads = useAds();
   const [note, setNote] = useState<string | null>(null);
 
