@@ -22,6 +22,31 @@
 </p>
 
 <p align="center">
+  Jump to a scene:
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=47">Home (0:47)</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=57">Booking (0:57)</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=71">LINE (1:11)</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=77">Client notes (1:17)</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=92">AI jobs (1:32)</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=106">Ads (1:46)</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=122">Accounting (2:02)</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=133">Posts (2:13)</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=143">ToDo (2:23)</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=150">Rules (2:30)</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=163">AI cost (2:43)</a>
+</p>
+
+<p align="center">
   <a href="https://secretairy.vercel.app"><img src="docs/images/home.png" width="560" alt="SecretAIry home screen (after a reset; the approval box is at the top right)"></a>
 </p>
 

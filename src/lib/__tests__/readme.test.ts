@@ -16,6 +16,19 @@ const SITE = "https://secretairy.vercel.app";
 const VIDEO = "https://youtu.be/Lw1JhyqQ7bQ";
 /** デモ動画のサムネイル（YouTube が出している、この動画の表紙の画像） */
 const THUMB = "https://img.youtube.com/vi/Lw1JhyqQ7bQ/maxresdefault.jpg";
+/** デモ動画の場面（秒・日本語の名前・英語の名前）。秒は動画を作った側が完成版のファイルで測った値。作らない・変えない */
+const SCENES: [number, string, string][] = [
+  [47, "ホーム", "Home"], [57, "予約", "Booking"], [71, "LINE", "LINE"], [77, "カルテ", "Client notes"],
+  [92, "AI の仕事", "AI jobs"], [106, "広告", "Ads"], [122, "経理", "Accounting"], [133, "発信", "Posts"],
+  [143, "ToDo", "ToDo"], [150, "ルール", "Rules"], [163, "AI の費用", "AI cost"],
+];
+const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+/** 場面へのリンク（?t= がつく物）。動画の URL の数とは別に数える */
+const SCENE_RE = /https:\/\/youtu\.be\/Lw1JhyqQ7bQ\?t=\d+/g;
+const sceneLinks = (text: string) => text.match(SCENE_RE) ?? [];
+const withoutScenes = (text: string) => text.replace(SCENE_RE, "");
+/** YouTube の動画の URL（youtu.be・youtube.com。画像の img.youtube.com は入れない） */
+const allVideoUrls = (text: string) => text.match(/https?:\/\/(?:www\.|m\.)?(?:youtu\.be|youtube\.com)\/[^\s"'<>)）]*/g) ?? [];
 
 /** 見出し（行の頭から）で区切った1つの節。次の同じ深さか浅い見出しの前まで */
 function section(heading: string): string {
@@ -60,8 +73,8 @@ describe("README：入口の塊（一番上・中央寄せ）", () => {
   });
 
   test("デモ動画のリンクは文字のリンクとサムネイルの2か所（どちらも同じ URL・ほかの動画の URL を置かない）で、文字のリンクのすぐ下の行が「ナレーションは合成音声です」", () => {
-    assert.equal(readme.split(VIDEO).length - 1, 2);
-    assert.deepEqual(readme.match(/https?:\/\/(?:www\.|m\.)?(?:youtu\.be|youtube\.com)\/[^\s"'<>)）]*/g), [VIDEO, VIDEO]);
+    assert.equal(withoutScenes(readme).split(VIDEO).length - 1, 2, "場面へのリンク（?t=）は別に数える");
+    assert.deepEqual(withoutScenes(readme).match(/https?:\/\/(?:www\.|m\.)?(?:youtu\.be|youtube\.com)\/[^\s"'<>)）]*/g), [VIDEO, VIDEO]);
     assert.deepEqual(readme.match(/https?:\/\/[a-z.]*youtube\.com\/[^\s"'<>)）]*/g), [THUMB], "動画の画像は YouTube が出している表紙の画像だけ");
     assert.match(readme, /<a href="https:\/\/youtu\.be\/Lw1JhyqQ7bQ"><b>デモ動画<\/b><\/a>(<br>)?\s*\n\s*(<sub>)?ナレーションは合成音声です/);
   });
@@ -74,6 +87,17 @@ describe("README：入口の塊（一番上・中央寄せ）", () => {
     assert.equal(m[3], "640");
     assert.ok(top.indexOf(m[0]) > top.indexOf(`<a href="${VIDEO}"><b>デモ動画</b></a>`), "文字のリンクの後");
     assert.ok(top.indexOf(m[0]) < top.indexOf('<img src="docs/images/home.png"'), "ホームの写真の前");
+  });
+
+  test("場面へのリンク：サムネイルのすぐ下・ホームの写真の前に中央の1段・決めた秒の11か所・どれも同じ動画の ID", () => {
+    const thumb = top.indexOf(THUMB);
+    const m = top.slice(thumb).match(/<\/p>\n\n<p align="center">\n  動画の場面へ：\n([\s\S]*?)\n<\/p>/);
+    assert.ok(m, "サムネイルの段のすぐ後の中央の1段");
+    assert.ok(top.indexOf(m[0], thumb) < top.indexOf('<img src="docs/images/home.png"'), "ホームの写真の前");
+    const links = [...m[1].matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map((x) => [x[1], x[2]]);
+    assert.deepEqual(links, SCENES.map(([sec, ja]) => [`${VIDEO}?t=${sec}`, `${ja}（${clock(sec)}）`]));
+    assert.deepEqual(sceneLinks(readme), SCENES.map(([sec]) => `${VIDEO}?t=${sec}`), "場面へのリンクは入口の11か所だけ");
+    for (const url of allVideoUrls(readme)) assert.ok(url.startsWith(VIDEO), url);
   });
 
   test("GitHub が消す物（style・iframe・script）と、見えない HTML のコメントを使わない", () => {
@@ -243,7 +267,11 @@ describe("README.en.md（英語の要約版）", () => {
 
   test("入口：本番・デモ動画（同じ URL）・すぐ下に「Narration is synthesized speech」・写真は同じ物で押すと本番", () => {
     assert.ok(en.includes(`<a href="${SITE}">`));
-    assert.equal(en.split(VIDEO).length - 1, 2, "文字のリンクとサムネイルの2か所・どちらも同じ URL");
+    assert.equal(withoutScenes(en).split(VIDEO).length - 1, 2, "文字のリンクとサムネイルの2か所・どちらも同じ URL（場面へのリンクは別に数える）");
+    const scenes = SCENES.map(([sec, , name]) => `<a href="${VIDEO}?t=${sec}">${name} (${clock(sec)})</a>`).join("\n  ｜\n  ");
+    assert.ok(en.includes(`<p align="center">\n  Jump to a scene:\n  ${scenes}\n</p>`), "場面へのリンクを日本語版と同じ秒・英語の名前で");
+    assert.deepEqual(sceneLinks(en), SCENES.map(([sec]) => `${VIDEO}?t=${sec}`));
+    for (const url of allVideoUrls(en)) assert.ok(url.startsWith(VIDEO), url);
     assert.ok(en.includes(`<a href="${VIDEO}"><img src="${THUMB}" width="640" alt="Open the demo video (YouTube, 2:58)"><br>▶ Demo video (2:58)</a>`));
     assert.match(en, /<a href="https:\/\/youtu\.be\/Lw1JhyqQ7bQ"><b>Demo video<\/b><\/a>(<br>)?\s*\n\s*(<sub>)?Narration is synthesized speech/);
     assert.match(en, /<a href="https:\/\/secretairy\.vercel\.app"><img src="docs\/images\/home\.png"/);
