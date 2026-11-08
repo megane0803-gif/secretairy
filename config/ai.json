@@ -60,7 +60,7 @@
     "maxTwinEdits": 2,
     "maxPicks": 3,
     "maxLineChars": 80,
-    "maxDraftChars": 700,
+    "maxDraftChars": 1200,
     "maxRequestChars": 30000
   },
   "recording": {
