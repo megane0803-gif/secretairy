@@ -15,6 +15,10 @@
 </p>
 
 <p align="center">
+  <a href="https://youtu.be/Lw1JhyqQ7bQ"><img src="https://img.youtube.com/vi/Lw1JhyqQ7bQ/maxresdefault.jpg" width="640" alt="デモ動画（YouTube・2分58秒）を開く"><br>▶ デモ動画（2分58秒）</a>
+</p>
+
+<p align="center">
   <a href="https://secretairy.vercel.app"><img src="docs/images/home.png" width="560" alt="SecretAIry のホーム（最初に戻した後の画面。右上が承認BOX）"></a>
 </p>
 

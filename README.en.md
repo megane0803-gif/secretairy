@@ -18,6 +18,10 @@
 </p>
 
 <p align="center">
+  <a href="https://youtu.be/Lw1JhyqQ7bQ"><img src="https://img.youtube.com/vi/Lw1JhyqQ7bQ/maxresdefault.jpg" width="640" alt="Open the demo video (YouTube, 2:58)"><br>▶ Demo video (2:58)</a>
+</p>
+
+<p align="center">
   <a href="https://secretairy.vercel.app"><img src="docs/images/home.png" width="560" alt="SecretAIry home screen (after a reset; the approval box is at the top right)"></a>
 </p>
 
