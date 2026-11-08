@@ -1,5 +1,7 @@
 <h1 align="center">SecretAIry（シークレタリー）</h1>
 
+<p align="center">English version: <a href="README.en.md">README.en.md</a></p>
+
 <p align="center">
   1人で営業する美容室のオーナーは、施術中は手が離せず、予約の問い合わせ・カルテ・広告の見直しが後回しになります。<br>
   SecretAIry は、予約の仮押さえ・カルテの案・広告の見直しの案・発信の下書きまでを AI 秘書が作り、AI は確定せず、決めるのはいつも人のボタン、という作品です。
@@ -14,6 +16,30 @@
 
 <p align="center">
   <a href="https://secretairy.vercel.app"><img src="docs/images/home.png" width="560" alt="SecretAIry のホーム（最初に戻した後の画面。右上が承認BOX）"></a>
+</p>
+
+<p align="center">
+  <a href="#5分で試すなら">5分で試すなら</a>
+  ｜
+  <a href="#使い方ガイドタブごと">使い方ガイド</a>
+  ｜
+  <a href="#できること">できること</a>
+  ｜
+  <a href="#ai-のチーム">AI のチーム</a>
+  ｜
+  <a href="#この期間中に作成">この期間中に作成</a>
+  ｜
+  <a href="#動かし方">動かし方</a>
+  ｜
+  <a href="#データの置き場所">データの置き場所</a>
+  ｜
+  <a href="#claude-code-の使い分け">Claude Code の使い分け</a>
+  ｜
+  <a href="#試験10問">試験10問</a>
+  ｜
+  <a href="#提出前の確かめ">提出前の確かめ</a>
+  ｜
+  <a href="#使った物と権利">使った物と権利</a>
 </p>
 
 ## 30秒で分かる要点
