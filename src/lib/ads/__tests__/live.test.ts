@@ -861,10 +861,25 @@ describe("オーナーだけ（合言葉）", () => {
     assert.equal((await bodyOf(await handleLiveSend(sendAt(payloadOf([STOP]), PASS, "2001:db8:8:1::1"), w2.deps))).ok, true);
   });
 
+  test("直しX：1つの送り元から同時にたくさん間違えても、全体の数に入るのはその送り元の上限まで（ほかの送り元は止めない）", async () => {
+    const w = await prepared();
+    const p = live.passcode;
+    const rs = await Promise.all(Array.from({ length: 60 }, (_, i) => handleLiveSetup(setupAt(`wrong-${i}-xxxxxxxxxxxx`, "198.51.100.90"), w.deps)));
+    assert.ok(rs.every((r) => r.status === 401 || r.status === 429));
+    const all = (w.store as ReturnType<typeof memoryStore>).keys().filter((k) => k.startsWith("ads:live:pw:all:"));
+    assert.equal(all.length, 1);
+    assert.equal(await w.store!.get(all[0]), String(p.maxWrong));
+    assert.equal((await bodyOf(await handleLiveSend(sendAt(payloadOf([STOP]), PASS, "198.51.100.91"), w.deps))).ok, true);
+  });
+
   test("直しX：窓口全体の数は、たくさんの送り元から一度に来た時のための大きい数・長い区切り", async () => {
     const w = await prepared();
     const p = live.passcode;
-    assert.ok(p.allMaxWrong >= p.maxWrong * 10 && p.allWindowSeconds > p.wrongWindowSeconds && p.wideMaxWrong > p.maxWrong);
+    assert.ok(p.allWindowSeconds > p.wrongWindowSeconds && p.wideMaxWrong > p.maxWrong);
+    // 区切りの長さの中で、IPv4 の番地10個・/48 1つが間違えられる数より、ずっと大きい（少ない送り元では全体の止めに届かない）
+    const per = p.allWindowSeconds / p.wrongWindowSeconds;
+    assert.ok(p.allMaxWrong > 10 * p.maxWrong * per * 2, "IPv4 の番地10個の2倍より大きい");
+    assert.ok(p.allMaxWrong > p.wideMaxWrong * per * 5, "/48 1つの5倍より大きい");
     // 送り元を変えながら全体の上限まで間違える（1つの送り元は上限より少なく）
     for (let i = 0; i < p.allMaxWrong; i++) await handleLiveSetup(setupAt(`wrong-${i}-xxxxxxxxxxxx`, `10.${(i >> 8) & 255}.${i & 255}.1`), w.deps);
     const right = await bodyOf(await handleLiveSend(sendReq(payloadOf([STOP])), w.deps));
@@ -913,7 +928,7 @@ describe("置き場（1日の上限・動いている印）", () => {
     const L = live.read;
     let ok = 0;
     for (let i = 0; i < L.source.day + 5; i++) {
-      clock += 7 * 60_000; // 1分・1時間の上限に当てない
+      clock += 11 * 60_000; // 1分・1時間の上限に当てない
       const r = await handleLiveRead(readReq("198.51.100.77"), w.deps);
       if (r.status === 200) ok++;
       else {

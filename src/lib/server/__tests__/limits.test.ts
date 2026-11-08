@@ -45,12 +45,14 @@ describe("直しX：数え方の約束（4つの窓口の設定）", () => {
   }
 
   test("約束を破る設定は callLimitsProblem が見つける", () => {
-    const ok: CallLimits = { source: { day: 10, hour: 3, minute: 2 }, wide: { day: 20, hour: 6 }, site: { minute: 6, hour: 6, day: 144 } };
+    const ok: CallLimits = { source: { day: 10, hour: 2, minute: 2 }, wide: { day: 20, hour: 5 }, site: { minute: 6, hour: 6, day: 144 } };
     assert.equal(callLimitsProblem(ok), null);
     assert.match(callLimitsProblem({ ...ok, site: { ...ok.site, day: 100 } })!, /24倍/);
     assert.match(callLimitsProblem({ ...ok, source: { ...ok.source, day: 15 }, wide: { ...ok.wide, day: 30 } })!, /10倍/);
     assert.match(callLimitsProblem({ ...ok, wide: { ...ok.wide, day: 144 } })!, /広い束/);
     assert.match(callLimitsProblem({ ...ok, source: { ...ok.source, minute: 0 } })!, /1以上/);
+    assert.match(callLimitsProblem({ ...ok, source: { ...ok.source, hour: 3 }, wide: { ...ok.wide, hour: 5 } })!, /3分の1/);
+    assert.match(callLimitsProblem({ ...ok, wide: { ...ok.wide, hour: 6 } })!, /使い切れる/);
   });
 });
 
@@ -82,6 +84,24 @@ describe("直しX：少ない送り元では、その日の全体を使い切れ
       c.at(DAY0 + 86_400_000 - 30 * 60_000);
       assert.equal(await c.call("2001:db8:bb:1::1"), "ok", "ほかの /48 は通る");
       assert.equal(await c.call("2001:db8:aa:ffff::1"), "wide-day", "同じ /48 は止まる");
+    });
+
+    test(`${name}：1つの送り元・1つの /48 が、上限まで1時間ずつ散らして送っても、どの時もほかの人は通る`, async () => {
+      for (const kind of ["v4", "v6"] as const) {
+        const c = counter(l);
+        let n = 0;
+        const ip = () => (kind === "v4" ? "198.51.100.1" : `2001:db8:cc:${(n++ % 65535).toString(16)}::1`);
+        for (let h = 0; h < 24; h++) {
+          const start = DAY0 + h * 3_600_000;
+          // 時の頭に、その束の1時間の数まで（1分の数に当てないよう分をずらす）
+          for (let i = 0; i < l.wide.hour + 5; i++) {
+            c.at(start + Math.floor(i / l.source.minute) * 60_000);
+            await c.call(ip());
+          }
+          c.at(start + 59 * 60_000);
+          assert.equal(await c.call(`203.0.113.${h + 1}`), "ok", `${kind} ${h}時の終わりも、ほかの人は通る`);
+        }
+      }
     });
 
     test(`${name}：たくさんの送り元に1時間の数を使い切られても、止まるのは長くてその時の終わりまで（1日の数には届かない）`, async () => {

@@ -631,8 +631,8 @@ describe("freee：来た人の窓口（読む・登録する・読み直す）",
 
 describe("freee：来た人の窓口の上限", () => {
   test("設定の数：登録と読むで別（同じ送り元・広い束・全体の1分・1時間・1日）。数の約束を満たす。5分で元に戻す", () => {
-    assert.deepEqual(base.try.register, { source: { day: 10, hour: 3, minute: 2 }, wide: { day: 20, hour: 6 }, site: { minute: 6, hour: 6, day: 144 } });
-    assert.deepEqual(base.try.read, { source: { day: 30, hour: 15, minute: 6 }, wide: { day: 60, hour: 30 }, site: { minute: 10, hour: 16, day: 384 } });
+    assert.deepEqual(base.try.register, { source: { day: 10, hour: 2, minute: 2 }, wide: { day: 20, hour: 5 }, site: { minute: 6, hour: 6, day: 144 } });
+    assert.deepEqual(base.try.read, { source: { day: 30, hour: 5, minute: 5 }, wide: { day: 60, hour: 12 }, site: { minute: 10, hour: 16, day: 384 } });
     assert.equal(callLimitsProblem(base.try.register), null);
     assert.equal(callLimitsProblem(base.try.read), null);
     assert.equal(base.try.holdSeconds, 300);
@@ -792,6 +792,8 @@ describe("freee：試した物を数分後に元の形に戻す", () => {
     const deps = makeDeps(f, store);
     const a = f.txnOf(SHOP_ITEM.no)!;
     const p = f.txnOf(PRIVATE_ITEM.no)!;
+    // 時の終わりの近くで始める（3件目を次の時に押して、同じ送り元の1時間の数ではなく「決めた件数」で断られるのを見る）
+    at(T0 + 57 * 60_000);
     assert.equal((await bodyOf(await reg(deps, a.id, "shop", "10.0.0.1"))).result, "registered");
     at(clock.now + 60_000);
     const other = await bodyOf(await reg(deps, p.id, "private", "10.0.0.2"));
@@ -804,6 +806,7 @@ describe("freee：試した物を数分後に元の形に戻す", () => {
     // 同じ人の2件目は登録できる（決めた件数まで）
     assert.equal((await bodyOf(await reg(deps, p.id, "private", "10.0.0.1"))).result, "registered");
     const third = items.find((i) => sideOf(i) === "expense" && i.no !== SHOP_ITEM.no && i.no !== PRIVATE_ITEM.no && !seed.rules.some((r) => r.merchantId === i.merchantId))!;
+    at(T0 + 60 * 60_000 + 1000);
     assert.equal((await bodyOf(await reg(deps, f.txnOf(third.no)!.id, "shop", "10.0.0.1"))).result, "refused");
     assert.equal(f.deals.size, 2);
     // 5分（最後に書いた時から）をこえた後の最初の呼び出し：元に戻してから登録する
@@ -1163,7 +1166,7 @@ describe("freee：数え方は同じ送り元 → 1分 → 1日（1つの送り�
     await connected(f, store);
     const deps = makeDeps(f, store);
     const N = base.try.read.source.day;
-    const spaced = (i: number) => T0 + i * 5 * 60_000; // 1分・1時間の上限に当てない
+    const spaced = (i: number) => T0 + i * 13 * 60_000; // 1分・1時間の上限に当てない
     for (let i = 0; i < N; i++) {
       at(spaced(i));
       assert.equal((await read(deps, `2001:db8:1:2::${(i + 1).toString(16)}`)).status, 200, `${i}`);
@@ -1826,10 +1829,10 @@ describe("直しX：同じ送り元が、元に戻るたびにすぐまた登録
     const deps = makeDeps(f, store);
     const L = base.try.read;
     for (let i = 0; i < L.wide.day; i++) {
-      at(T0 + i * 4 * 60_000); // 全体の1時間の割り振りに当てない
+      at(T0 + i * 6 * 60_000); // 広い束と全体の1時間に当てない
       assert.equal((await read(deps, `2001:db8:9:${(i + 1).toString(16)}::1`)).status, 200, `${i}`);
     }
-    at(T0 + L.wide.day * 4 * 60_000);
+    at(T0 + L.wide.day * 6 * 60_000);
     const over = await read(deps, "2001:db8:9:ffff::1");
     assert.equal(over.status, 429);
     assert.equal((await bodyOf(over)).message, TRY_MESSAGES.senderLimit);

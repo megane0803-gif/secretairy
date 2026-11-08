@@ -168,7 +168,7 @@ const ALL_LOCKED_MESSAGE = "オーナー用の合言葉のまちがいが続い�
 /**
  * オーナー用の合言葉。間違いの数は送り元ごと（日ごとの塩と合わせたハッシュ・だれでも試すと同じ束）に、wrongWindowSeconds 秒の区切りで数える。
  * IPv6 は /48 でも数え（wideMaxWrong）、窓口全体は allWindowSeconds 秒の区切りで allMaxWrong 回まで（たくさんの送り元から一度に来た時の止め）。
- * 間違えた時は先に incr で足す（期限は足すのと同じ1回で付く）。どれかが上限に届いたら、その区切りが終わるまで、その送り元は
+ * 間違えた時は先に incr で足す（期限は足すのと同じ1回で付く）。送り元 → /48 → 全体の順で、こえたらそこで止めて先は足さない。どれかが上限に届いたら、その区切りが終わるまで、その送り元は
  * 合っている合言葉でも受けない（どちらにも同じ文を返す＝合っているかを漏らさない）。ほかの送り元は止めない。
  */
 async function owner(d: LiveDeps, given: unknown, request: Request): Promise<Response | null> {
@@ -188,11 +188,14 @@ async function owner(d: LiveDeps, given: unknown, request: Request): Promise<Res
   if ((await num(all)) >= p.allMaxWrong) return fail("locked", ALL_LOCKED_MESSAGE, 429);
   if ((await num(src)) >= p.maxWrong || (await num(wide)) >= p.wideMaxWrong) return fail("locked", LOCKED_MESSAGE, 429);
   if (r !== "ok") {
+    // 送り元 → /48 → 全体の順に足し、こえたらそこで止めて先は足さない（同時に送られても、1つの送り元から全体に入るのは maxWrong 回まで）
     const n = await kv(() => store.incr(src, p.wrongWindowSeconds * 2));
+    if (n > p.maxWrong) return fail("locked", LOCKED_MESSAGE, 429);
     const w = wide ? await kv(() => store.incr(wide, p.wrongWindowSeconds * 2)) : 0;
+    if (w > p.wideMaxWrong) return fail("locked", LOCKED_MESSAGE, 429);
     const a = await kv(() => store.incr(all, p.allWindowSeconds * 2));
     if (a > p.allMaxWrong) return fail("locked", ALL_LOCKED_MESSAGE, 429);
-    return n > p.maxWrong || w > p.wideMaxWrong ? fail("locked", LOCKED_MESSAGE, 429) : fail("wrong", "オーナー用の合言葉がちがいます", 401);
+    return fail("wrong", "オーナー用の合言葉がちがいます", 401);
   }
   return null;
 }
