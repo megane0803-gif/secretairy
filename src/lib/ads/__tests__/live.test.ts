@@ -2317,6 +2317,13 @@ describe("鍵の扱い（リポジトリ・設定）", () => {
 });
 
 describe("README", () => {
+  test("直しX：上限と合言葉の間違いの数え方は今の作り（前の数え方を残さない・段ごとの数を並べない）", () => {
+    const readme = readFileSync("README.md", "utf8");
+    for (const old of [/窓口全体で10分に5回/, /窓口全体の間違いの数/, /IPv6 は前の半分（\/64）でまとめる/, /IPv6 は前の半分 \/64 で1つ/, /サイト全体100回/, /1日100回（サイト全体）/, /読み直す60回/, /1日600回/, /同じ送り元から1日10回/])
+      assert.doesNotMatch(readme, old, String(old));
+    for (const now of ["送り元ごとに区切りつきで数え", "ずっと大きい止めとして残しています", "同じ送り元・同じ広い束・サイト全体の順に数え", "少ない送り元ではその日の全体を使い切れない数"]) assert.ok(readme.includes(now), now);
+  });
+
   test("直しU：だれでも試せる道（元に戻してから1件・テスト用アカウントの中だけ・店の広告に届かない理由・オーナーの送るとの違い・窓口の守りの表）", () => {
     const readme = readFileSync("README.md", "utf8");
     const sec = readme.slice(readme.indexOf("#### だれでも試せる道（直しU。合言葉なし）"), readme.indexOf("- **何を**（オーナーの操作）"));
@@ -2363,7 +2370,7 @@ describe("README", () => {
     assert.match(proof, /確かめていないこと：回数の上限を本番で使い切ること・連打・日付が変わった後の最初の1回/);
     assert.doesNotMatch(proof, /まだ呼んでいません|上の表には入れていません/);
     assert.match(proof, /「書けるか」は、環境変数とオーナー用の合言葉の設定があるかから決めた札で、Google に書けたことの確かめではありません/);
-    assert.match(proof, /合言葉なしで送った時も、間違いの数に1つ足す作り/);
+    assert.match(proof, /合言葉なしで送った時も、その送り元の間違いの数に1つ足す作り/);
     assert.doesNotMatch(proof, /100%|必ず|すぐ反映|数を使わない/);
     assert.doesNotMatch(sec, /100%|必ず|すぐ反映/);
     assert.doesNotMatch(sec, /出せる広告です/);
