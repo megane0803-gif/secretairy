@@ -1531,8 +1531,8 @@ describe("画面の印（直しR の読み込みと同じ道）", () => {
     // 作品の中の承認（approveAd・approveAdd）は窓口より先に・窓口に依らずに効く
     assert.ok(rows.indexOf("approveAd(a, b, x.id") < rows.indexOf("startTry({ kind: x.action"));
     assert.ok(add.indexOf("approveAdd(a, p.id") < add.indexOf('startTry({ kind: "add"'));
-    // ホームの承認BOX（standalone でない時）も知らせの1行を出す
-    assert.match(rows, /<AdRevertRow onDone=\{setDone\} \/>\n        \{done && \(/);
+    // ホームの承認BOX（standalone でない時）も知らせの1行を出す（直しY：知らせを持つのは承認BOX。0件の時も ApprovalBox が出す）
+    assert.match(rows, /<AdRevertRow onDone=\{setDone\} \/>\n        \{done && <AdDoneLine done=\{done\} where="home" inList \/>\}/);
     for (const f of ["src/components/AdRevertRow.tsx", "src/lib/line/apply.ts", "src/components/LineBridge.tsx", "src/lib/ads/verdict.ts"]) {
       const s = readFileSync(f, "utf8");
       assert.doesNotMatch(s, /startTry|tryAfterApprove|liveTry|tryOne|\/api\/ads\/live\/try/, f);

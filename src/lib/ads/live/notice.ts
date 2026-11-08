@@ -1,6 +1,7 @@
 // 広告の案を承認した時の知らせの1行（画面に依らない形。直しU・docs/SPEC.md §1.7.8）。
 // 広告のタブの承認の行と、ホームの承認BOXの行（止める・外す・足す）が同じ文を出す。LINE のボタンの承認と戻す案は試さない。
 // サービスの名前は書かない（画面に出すのは、つながっている時の札だけ）。「100%」「必ず」「すぐ反映」は書かない。
+// 直しY：知らせは次の操作まで出し続ける（承認待ちが0件になっても・ほかの行が残っていても）。試すの返事は、その知らせがまだ出ている時だけ入れる（beginTry）。
 
 import type { LiveTried } from "./panel";
 import type { TryKind } from "./wire";
@@ -24,6 +25,31 @@ export const MONEY_NOTE = "広告は出ず、お金は動きません";
 export const HOME_LIST_NOTE = "一覧は広告のタブで見られます。";
 
 const bare = (s: string) => s.replace(/。$/, "");
+
+/** 承認BOXの広告の行の知らせ：決まった文（見送り・戻す案など）か、承認した1件（試した結果は流れの tried から） */
+export type AdDone = string | Approved;
+
+/** 知らせを変える（前の知らせから決める形も受ける。React の setState と同じ形） */
+export type AdDoneSet = (next: AdDone | null | ((prev: AdDone | null) => AdDone | null)) => void;
+
+/** 試すの窓口をどうしたか（usePanel.ts の tryAfterApprove） */
+export type TryRoute = NonNullable<Approved["route"]>;
+
+/**
+ * 承認した後に1回だけ試し、知らせに入れる（直しU・直しY）。知らせは試す前に「送っています」の形で出し、
+ * 返事が来たら、その知らせがまだ出ている時だけ（ほかの操作の知らせに変わっていない・「最初に戻す」で消えていない）どうしたかを入れる。
+ * 知らせを持つのは、行が0件になっても外れない部品（ホームは承認BOX・広告のタブは広告の行の箱。AdApprovalRows.tsx の useAdDone）。
+ */
+export async function beginTry(a: Approved, set: AdDoneSet, tryOne: (it: { kind: TryKind; no: number; text: string }) => Promise<TryRoute>): Promise<void> {
+  set(a);
+  const route = await tryOne({ kind: a.kind, no: a.no, text: a.text });
+  set((prev) => (prev === a ? { ...a, route } : prev));
+}
+
+/** 知らせの1行の文（決まった文はそのまま。承認した1件は approvedNotice） */
+export function adDoneText(d: AdDone, tried: LiveTried | null, where: "ads" | "home"): string {
+  return typeof d === "string" ? d : approvedNotice(d, tried, where);
+}
 
 /** 承認した時の知らせ（where = 広告のタブか、ホームの承認BOXか） */
 export function approvedNotice(a: Approved, tried: LiveTried | null, where: "ads" | "home"): string {

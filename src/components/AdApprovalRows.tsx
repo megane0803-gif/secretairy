@@ -8,9 +8,11 @@
 // 直しU：承認（止める・外す・足す）の後に、テスト用の広告アカウントを元の形に戻してからその1件を送る窓口を1回呼ぶ（tryAfterApprove。
 // つないでいない時は呼ばない）。窓口がうまくいかなくても、作品の中の承認は今どおり効く。窓口を呼んでいる間（流れが動いている間）は
 // 広告の「承認」を押せない。知らせは広告のタブとホームの承認BOXで同じ1行（approvedNotice）。戻す案（AdRevertRow）からは呼ばない。
+// 直しY：知らせは次の操作まで出し続ける（承認待ちが0件になっても・ほかの行が残っていても）。持つのは、行が0件になっても外れない部品
+// （ホームは承認BOX＝ApprovalBox が持って渡す・広告のタブはこの部品が持つ。useAdDone）。「最初に戻す」で消す。
 
 import { useState } from "react";
-import { approvedNotice, type Approved } from "@/lib/ads/live/notice";
+import { adDoneText, beginTry, type AdDone, type AdDoneSet, type Approved } from "@/lib/ads/live/notice";
 import { tryAfterApprove, useLivePanel } from "@/lib/ads/live/usePanel";
 import { askAdsReview } from "@/lib/ads/client";
 import { checkDraft, proposalLabel, type GateCheck } from "@/lib/ads/gate";
@@ -57,26 +59,65 @@ function after(a: AdAction): string {
   return a === "stop" ? "止める" : "外す（この言葉では出さない）";
 }
 
-/** 承認の行の知らせ：決まった文か、承認した1件（試した結果は流れの tried から） */
-export type AdDone = string | Approved;
+/** 承認の行の知らせ：決まった文か、承認した1件（試した結果は流れの tried から。形は lib/ads/live/notice.ts） */
+export type { AdDone, AdDoneSet };
 
 /** 窓口を呼んでいる間（流れが動いている間）は広告の「承認」を押せない */
 export const LIVE_BUSY_TITLE = "テスト用の広告アカウントに送っている間は押せません";
 
-/** 承認した後に1回だけ試し、どうしたかを知らせに入れる */
-export function startTry(a: Approved, setDone: (d: AdDone) => void) {
-  setDone(a);
-  void tryAfterApprove({ kind: a.kind, no: a.no, text: a.text }).then((route) => setDone({ ...a, route }));
+/** 承認した後に1回だけ試し、どうしたかを知らせに入れる（その知らせがまだ出ている時だけ。lib/ads/live/notice.ts の beginTry） */
+export function startTry(a: Approved, setDone: AdDoneSet) {
+  void beginTry(a, setDone, tryAfterApprove);
 }
 
-export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: Rule[]; standalone?: boolean }) {
+/**
+ * 広告の行の知らせを持つ（直しY）。持つのは、行が0件になっても外れない部品（ホームは承認BOX・広告のタブは広告の行の箱）。
+ * 次の操作の知らせに変わるまで出し続ける。「最初に戻す」（台帳の印 epoch が変わった）で消す（遅れて届いた試すの返事でも戻らない）。
+ */
+export function useAdDone(epoch: string | undefined): [AdDone | null, AdDoneSet] {
+  const [done, setDone] = useState<AdDone | null>(null);
+  const [seen, setSeen] = useState(epoch ?? "");
+  if (seen !== (epoch ?? "")) {
+    setSeen(epoch ?? "");
+    setDone(null);
+  }
+  return [done, setDone];
+}
+
+/** 知らせの1行（承認BOXの一覧の中は li、一覧が無い時は p）。試した結果はこの画面に1つの流れ（usePanel.ts）から読む */
+export function AdDoneLine({ done, where, inList }: { done: AdDone; where: "ads" | "home"; inList: boolean }) {
+  const live = useLivePanel();
+  const text = adDoneText(done, live.view.tried, where);
+  return inList ? (
+    <li className="hint" role="status">
+      {text}
+    </li>
+  ) : (
+    <p className="hint" role="status">
+      {text}
+    </p>
+  );
+}
+
+export function AdApprovalRows({
+  seedRules,
+  standalone = false,
+  done: heldDone,
+  onDone,
+}: {
+  seedRules: Rule[];
+  standalone?: boolean;
+  /** ホームの承認BOXが持つ知らせ（渡された時はそれを使う。行が0件になってこの部品が外れても、知らせは承認BOXに残る） */
+  done?: AdDone | null;
+  onDone?: AdDoneSet;
+}) {
   const ads = useAds();
   const bookState = useBookState();
   const { rules } = useRules(seedRules);
   const live = useLivePanel();
   const liveBusy = !!live.view.busy;
-  const [doneRaw, setDone] = useState<AdDone | null>(null);
-  const done = doneRaw === null ? null : typeof doneRaw === "string" ? doneRaw : approvedNotice(doneRaw, live.view.tried, standalone ? "ads" : "home");
+  const own = useAdDone(bookState.state.epoch);
+  const [done, setDone]: [AdDone | null, AdDoneSet] = onDone ? [heldDone ?? null, onDone] : own;
   const [fixOpen, setFixOpen] = useState(false);
   const [fixText, setFixText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -266,11 +307,7 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
         {row}
         {adds}
         <AdRevertRow onDone={setDone} />
-        {done && (
-          <li className="hint" role="status">
-            {done}
-          </li>
-        )}
+        {done && <AdDoneLine done={done} where="home" inList />}
       </>
     );
   return (
@@ -284,11 +321,8 @@ export function AdApprovalRows({ seedRules, standalone = false }: { seedRules: R
       ) : (
         <p className="checked">✓ 広告の案の承認待ちはありません</p>
       )}
-      {done && (!row || adds.length > 0) && (
-        <p className="hint" role="status">
-          {done}
-        </p>
-      )}
+      {/* 知らせは、行が残っていても0件になっても、次の操作まで出す（直しY） */}
+      {done && <AdDoneLine done={done} where="ads" inList={false} />}
     </>
   );
 }

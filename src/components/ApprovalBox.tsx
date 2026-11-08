@@ -4,6 +4,8 @@
 // 1行に「何を・いつ・理由」。ボタンは「承認／直す／見送り」。押すとプログラムが実行する（AI は使わない）。
 // 行には、仮押さえが自動で外れるまでの残り（1時間を切った行は上に・太字）と、同じお客様の同じ日のほかの予約（止めはしない）も出す。
 // 🔒 確定は人：確定は、人が画面のボタンを押したときだけ。押した事（ブラウザの本物の操作か）を確かめてから呼ぶ。
+// 直しY：広告の行の知らせ（テスト用アカウントへ送った結果）は、この承認BOXが持つ。最後の行を承認して0件になり、広告の行の部品が
+// 外れても、知らせは次の操作まで出し続ける（0件の時は「承認待ちはありません」の下に出す）。
 
 import { useState } from "react";
 import { candidateLabel, judgeSlot } from "@/lib/ai/slots";
@@ -19,7 +21,7 @@ import { approvalRowsView, approvalsFor, type ApprovalView } from "@/lib/approva
 import { approveBlocker } from "@/lib/book/approve";
 import { useMinute } from "@/lib/book/useBook";
 import { useApprovals } from "@/lib/useApprovals";
-import { AdApprovalRows } from "./AdApprovalRows";
+import { AdApprovalRows, AdDoneLine, useAdDone } from "./AdApprovalRows";
 import { ApprovalRowNotes } from "./ApprovalRowNotes";
 import { Checked, CustomerName } from "./parts";
 
@@ -38,6 +40,8 @@ export function ApprovalBox({
   const [done, setDone] = useState<string | null>(null);
   // ブラウザに書けなかった時の1文（直しA の形：成功の文と日誌は書けた時だけ。行はそのまま残るので、もう一度押せる）
   const [failed, setFailed] = useState<string | null>(null);
+  // 広告の行の知らせ（広告の行の部品が0件で外れても、ここに残す。「最初に戻す」で消す）
+  const [adDone, setAdDone] = useAdDone(book.state.epoch);
   const failedLine = failed && (
     <p className="problems" role="alert">
       {failed}
@@ -58,6 +62,7 @@ export function ApprovalBox({
             {done}
           </p>
         )}
+        {only !== "reservations" && adDone && <AdDoneLine done={adDone} where="home" inList={false} />}
       </>
     );
 
@@ -159,7 +164,7 @@ export function ApprovalBox({
             </li>
           );
         })}
-        {only !== "reservations" && <AdApprovalRows seedRules={data.seedRules} />}
+        {only !== "reservations" && <AdApprovalRows seedRules={data.seedRules} done={adDone} onDone={setAdDone} />}
         {!compact && (
           <li className="hint">
             承認＝確定して台帳に入ります。直す・見送り＝お客様の了解なしに時間は変えないので、仮押さえを外して ToDo に「別の日時を案内」を足します。
