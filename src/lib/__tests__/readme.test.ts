@@ -1,5 +1,5 @@
 // README を提出の形に読むテスト（直しN・直しN2）。外は呼ばない。
-// 入口の塊（中央寄せ・本番を開く・デモ動画は決めた URL へのリンク・写真は押すと本番）・「ナレーションは合成音声です」の行・
+// 入口の塊（中央寄せ・本番を開く・デモ動画は決めた URL へのリンクとサムネイル・写真は押すと本番）・「ナレーションは合成音声です」の行・
 // GitHub で消える・壊れる書き方（裸の URL のすぐ後ろの全角の文字）・
 // 30秒で分かる要点・畳んだ節の形・デモ動画の素材の表・動画で見られると書く所・AI の窓口の回数の止め・ライセンス・
 // データの置き場所の「実際の店で使う時」と「次に作る物」の一番上の行。
@@ -14,6 +14,8 @@ const readme = readFileSync(join(ROOT, "README.md"), "utf8");
 const SITE = "https://secretairy.vercel.app";
 /** デモ動画（YouTube）。オーナーが渡した URL だけを使い、作らない・短くしない・ほかに変えない */
 const VIDEO = "https://youtu.be/Lw1JhyqQ7bQ";
+/** デモ動画のサムネイル（YouTube が出している、この動画の表紙の画像） */
+const THUMB = "https://img.youtube.com/vi/Lw1JhyqQ7bQ/maxresdefault.jpg";
 
 /** 見出し（行の頭から）で区切った1つの節。次の同じ深さか浅い見出しの前まで */
 function section(heading: string): string {
@@ -57,10 +59,21 @@ describe("README：入口の塊（一番上・中央寄せ）", () => {
     assert.ok(statSync(join(ROOT, m[2])).size < 300 * 1024, "写真は小さく縮める");
   });
 
-  test("デモ動画のリンクは1か所だけ（ほかの動画の URL を置かない）で、すぐ下の行が「ナレーションは合成音声です」", () => {
-    assert.equal(readme.split(VIDEO).length - 1, 1);
-    assert.deepEqual(readme.match(/https?:\/\/(?:www\.|m\.)?(?:youtu\.be|youtube\.com)\/[^\s"'<>)）]*/g), [VIDEO]);
+  test("デモ動画のリンクは文字のリンクとサムネイルの2か所（どちらも同じ URL・ほかの動画の URL を置かない）で、文字のリンクのすぐ下の行が「ナレーションは合成音声です」", () => {
+    assert.equal(readme.split(VIDEO).length - 1, 2);
+    assert.deepEqual(readme.match(/https?:\/\/(?:www\.|m\.)?(?:youtu\.be|youtube\.com)\/[^\s"'<>)）]*/g), [VIDEO, VIDEO]);
+    assert.deepEqual(readme.match(/https?:\/\/[a-z.]*youtube\.com\/[^\s"'<>)）]*/g), [THUMB], "動画の画像は YouTube が出している表紙の画像だけ");
     assert.match(readme, /<a href="https:\/\/youtu\.be\/Lw1JhyqQ7bQ"><b>デモ動画<\/b><\/a>(<br>)?\s*\n\s*(<sub>)?ナレーションは合成音声です/);
+  });
+
+  test("サムネイル：文字のリンクの後・ホームの写真の前に中央の1段・押すと同じ動画・画像のすぐ下に「▶ デモ動画（2分58秒）」", () => {
+    const m = top.match(/<p align="center">\s*<a href="([^"]+)"><img src="([^"]+)" width="(\d+)" alt="デモ動画（YouTube・2分58秒）を開く"><br>▶ デモ動画（2分58秒）<\/a>\s*<\/p>/);
+    assert.ok(m, "サムネイルをリンクで包み、中央に出す");
+    assert.equal(m[1], VIDEO);
+    assert.equal(m[2], THUMB);
+    assert.equal(m[3], "640");
+    assert.ok(top.indexOf(m[0]) > top.indexOf(`<a href="${VIDEO}"><b>デモ動画</b></a>`), "文字のリンクの後");
+    assert.ok(top.indexOf(m[0]) < top.indexOf('<img src="docs/images/home.png"'), "ホームの写真の前");
   });
 
   test("GitHub が消す物（style・iframe・script）と、見えない HTML のコメントを使わない", () => {
@@ -230,7 +243,8 @@ describe("README.en.md（英語の要約版）", () => {
 
   test("入口：本番・デモ動画（同じ URL）・すぐ下に「Narration is synthesized speech」・写真は同じ物で押すと本番", () => {
     assert.ok(en.includes(`<a href="${SITE}">`));
-    assert.equal(en.split(VIDEO).length - 1, 1);
+    assert.equal(en.split(VIDEO).length - 1, 2, "文字のリンクとサムネイルの2か所・どちらも同じ URL");
+    assert.ok(en.includes(`<a href="${VIDEO}"><img src="${THUMB}" width="640" alt="Open the demo video (YouTube, 2:58)"><br>▶ Demo video (2:58)</a>`));
     assert.match(en, /<a href="https:\/\/youtu\.be\/Lw1JhyqQ7bQ"><b>Demo video<\/b><\/a>(<br>)?\s*\n\s*(<sub>)?Narration is synthesized speech/);
     assert.match(en, /<a href="https:\/\/secretairy\.vercel\.app"><img src="docs\/images\/home\.png"/);
     assert.ok(en.includes("The app's screens are in Japanese."));
