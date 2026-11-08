@@ -1,5 +1,6 @@
 // README を提出の形に読むテスト（直しN・直しN2）。外は呼ばない。
 // 入口の塊（中央寄せ・本番を開く・デモ動画は決めた URL へのリンク・写真は押すと本番）・「ナレーションは合成音声です」の行・
+// GitHub で消える・壊れる書き方（裸の URL のすぐ後ろの全角の文字）・
 // 30秒で分かる要点・畳んだ節の形・デモ動画の素材の表・動画で見られると書く所・AI の窓口の回数の止め・ライセンス・
 // データの置き場所の「実際の店で使う時」と「次に作る物」の一番上の行。
 
@@ -64,6 +65,12 @@ describe("README：入口の塊（一番上・中央寄せ）", () => {
 
   test("GitHub が消す物（style・iframe・script）と、見えない HTML のコメントを使わない", () => {
     assert.doesNotMatch(readme, /<style|<iframe|<script|<!--/i);
+  });
+
+  test("裸の URL のすぐ後ろに全角の文字を続けない（GitHub が続きまで URL と読み、リンクが壊れる。<…> で囲む）", () => {
+    const outsideLinks = readme.replace(/<a\b[^>]*>[\s\S]*?<\/a>/g, "");
+    const broken = outsideLinks.match(/https?:\/\/[A-Za-z0-9\-._~:/?#@!$&*+,;=%]+(?=[^\x00-\x7F])/g);
+    assert.equal(broken, null, String(broken));
   });
 });
 
