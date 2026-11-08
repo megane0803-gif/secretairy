@@ -861,7 +861,7 @@ describe("オーナーだけ（合言葉）", () => {
     assert.equal((await bodyOf(await handleLiveSend(sendAt(payloadOf([STOP]), PASS, "2001:db8:8:1::1"), w2.deps))).ok, true);
   });
 
-  test("直しX：1つの送り元から同時にたくさん間違えても、全体の数に入るのはその送り元の上限まで（ほかの送り元は止めない）", async () => {
+  test("直しX：1つの送り元から同時にたくさん間違えても、ほかの送り元は止まらない", async () => {
     const w = await prepared();
     const p = live.passcode;
     const rs = await Promise.all(Array.from({ length: 60 }, (_, i) => handleLiveSetup(setupAt(`wrong-${i}-xxxxxxxxxxxx`, "198.51.100.90"), w.deps)));
