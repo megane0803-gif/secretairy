@@ -35,8 +35,8 @@ describe("README：入口の塊（一番上・中央寄せ）", () => {
 
   test("題名のすぐ下に、だれが・何に困っている → 作品が何をする、の順の1段", () => {
     const pitch = top.slice(top.indexOf("</h1>"), top.indexOf("本番を開く"));
-    const who = pitch.indexOf("1人で営業する美容室のオーナー");
-    const trouble = pitch.indexOf("後回し");
+    const who = pitch.indexOf("1人で営業する美容室");
+    const trouble = pitch.indexOf("全部を1人でこなすのは大変");
     const what = pitch.indexOf("AI 秘書");
     assert.ok(who >= 0 && trouble > who && what > trouble, pitch);
   });
@@ -81,6 +81,17 @@ describe("README：30秒で分かる要点と畳んだ節", () => {
     assert.ok(readme.indexOf("## 30秒で分かる要点") < readme.indexOf("## だれが・どんな場面で困るか"));
     // 細かい例は後半へ
     assert.ok(readme.indexOf("## 現場の決まりの例：店の中の都合はお客様に言わない") > readme.indexOf("## できること"));
+  });
+
+  test("「5分で試すなら」のすぐ後に、畳んだ「使い方ガイド（タブごと）」があり、8つのタブを1つずつ説明する", () => {
+    const five = readme.indexOf("### 5分で試すなら");
+    const guide = readme.indexOf("\n### 使い方ガイド（タブごと）\n");
+    assert.ok(five >= 0 && guide > five, "ガイドは5分で試すならの後");
+    assert.ok(guide < readme.indexOf("## だれが・どんな場面で困るか"), "ガイドは次の節の前");
+    const sec = section("### 使い方ガイド（タブごと）");
+    assert.match(sec, /^\s*<details>\n<summary>[^<\n]+<\/summary>/);
+    const tabs = [...sec.matchAll(/^- \*\*([^*]+)\*\*$/gm)].map((m) => m[1]);
+    assert.deepEqual(tabs, ["ホーム", "予約", "カルテ", "広告", "経理", "ToDo", "発信", "ルール"]);
   });
 
   test("<details> は全部 <summary> を持って閉じている", () => {
@@ -175,5 +186,60 @@ describe("README：ライセンス", () => {
   test("MIT で確定（仮の言い方を残さない）", () => {
     assert.equal(section("## ライセンス").trim(), "[MIT](LICENSE)。");
     assert.doesNotMatch(readme, /仮に置いています|後で変えることがあります/);
+  });
+});
+
+/** GitHub が見出しから作る飛び先の名前（英字は小文字・記号は消す・空白は -） */
+function slug(heading: string): string {
+  return heading.trim().toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s/g, "-");
+}
+
+describe("README：言葉の切りかえと目次の横並び", () => {
+  const top = readme.slice(0, readme.indexOf("## 30秒で分かる要点"));
+
+  test("題名のすぐ下に、英語版へのリンク", () => {
+    assert.match(readme, /^<h1 align="center">[^\n]+<\/h1>\n\n<p align="center">English version: <a href="README\.en\.md">README\.en\.md<\/a><\/p>\n/);
+  });
+
+  test("入口の塊（写真）のすぐ下に目次の横並び。どのリンクも今ある見出しに飛ぶ", () => {
+    const photo = top.indexOf('<img src="docs/images/home.png"');
+    const m = top.slice(photo).match(/<\/p>\n\n<p align="center">\n([\s\S]*?)\n<\/p>/);
+    assert.ok(m, "写真の段のすぐ後に、中央寄せの1段");
+    const links = [...m[1].matchAll(/<a href="#([^"]+)">([^<]+)<\/a>/g)].map((x) => x[1]);
+    assert.ok(links.length >= 6, links.join(","));
+    const anchors = new Set([...readme.matchAll(/^#{2,3} (.+)$/gm)].map((x) => slug(x[1])));
+    for (const a of links) assert.ok(anchors.has(a), `見出しが無い：#${a}`);
+    for (const a of ["5分で試すなら", "使い方ガイドタブごと", "できること", "データの置き場所", "使った物と権利"]) assert.ok(links.includes(a), a);
+  });
+});
+
+describe("README.en.md（英語の要約版）", () => {
+  const en = readFileSync(join(ROOT, "README.en.md"), "utf8");
+
+  test("一番上の階層にあり、題名のすぐ下に日本語版へのリンク", () => {
+    assert.ok(statSync(join(ROOT, "README.en.md")).isFile());
+    assert.match(en, /^<h1 align="center">SecretAIry<\/h1>\n\n<p align="center">日本語版: <a href="README\.md">README\.md<\/a><\/p>\n/);
+  });
+
+  test("入口：本番・デモ動画（同じ URL）・すぐ下に「Narration is synthesized speech」・写真は同じ物で押すと本番", () => {
+    assert.ok(en.includes(`<a href="${SITE}">`));
+    assert.equal(en.split(VIDEO).length - 1, 1);
+    assert.match(en, /<a href="https:\/\/youtu\.be\/Lw1JhyqQ7bQ"><b>Demo video<\/b><\/a>(<br>)?\s*\n\s*(<sub>)?Narration is synthesized speech/);
+    assert.match(en, /<a href="https:\/\/secretairy\.vercel\.app"><img src="docs\/images\/home\.png"/);
+    assert.ok(en.includes("The app's screens are in Japanese."));
+  });
+
+  test("訳す節だけがあり、最後に日本語の README へのリンク", () => {
+    const heads = [...en.matchAll(/^## (.+)$/gm)].map((x) => x[1]);
+    assert.deepEqual(heads, ["The point in 30 seconds", "What it can do", "The AI team", "How Claude and Claude Code are used", "Made during the event", "License"]);
+    assert.match(en, /### Try it in 5 minutes/);
+    assert.match(en, /### Guide by tab/);
+    assert.match(en, /\[MIT\]\(LICENSE\)\./);
+    assert.match(en.trimEnd(), /are in the Japanese README: \[README\.md\]\(README\.md\)\.$/);
+  });
+
+  test("言い切りを強めない・鍵や番号を書かない", () => {
+    assert.doesNotMatch(en, /100%|guarantee|never fail|always works/i);
+    assert.doesNotMatch(en, /sk-ant-|_KEY|PASSCODE|CUSTOMER_ID|FREEE_|1分10回|per minute/);
   });
 });
