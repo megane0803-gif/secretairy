@@ -19,7 +19,7 @@ import type { PostDraft } from "../deskStore";
 import { fillPost, periodOf, postFacts } from "../facts";
 import { BLOG_LINK_MARK, CLOSED_MARK, gatePost, OPENINGS_MARK } from "../gate";
 import { scriptPostsModel } from "../script";
-import { runWrite } from "../write";
+import { bodyChars, maxCharsOf, runWrite } from "../write";
 import { askPostsTeam, postTeamRequestFor, regatePostTeam, runLimitsOf } from "../team/client";
 import { checkReplaced, editableSentences, factsIn, hashText, sentencesOf } from "../team/gate";
 import { meetPost } from "../team/meet";
@@ -427,10 +427,116 @@ describe("野党の見出し「〜所」（カードの見出しと日誌の行�
   });
 });
 
+/**
+ * ブログの形の下書き（題・「## 」の見出し4つ・見出しの下に段落2つ・段落のあいだは1行あける。config/posts.json の blog の指示と同じ形）。
+ * 本文の字数（印と空白はのぞく。bodyChars）がちょうど body 字になるまで、1回だけ出てくる文を足す（数字・使わない言葉は入れない）
+ */
+function blogText(body: number): string {
+  const subjects = ["冬の髪", "朝のスタイリング", "家でのお手入れ", "お店のヘッドスパ", "ドライヤーの使い方", "シャンプーの泡立て", "タオルの使い方", "寝る前のひと手間", "季節の変わり目の髪", "お店の窓ぎわの席", "毛先のまとまり", "冬の帽子とマフラー", "お店で流している音楽", "仕上がりのイメージ"];
+  const tails = ["について、お店でよくうかがうお話をまとめました。", "は、少しの工夫で手ざわりが変わります。", "を、この冬にゆっくり見なおしてみませんか。", "のことを、スタッフといっしょに考えています。"];
+  const pool = subjects.flatMap((s) => tails.map((t) => `${s}${t}`));
+  const title = "冬の髪の乾燥とヘッドスパ";
+  const heads = ["## 冬の髪と乾燥", "## お店のヘッドスパ", "## 家でのお手入れ", "## お店の雰囲気"];
+  const parts: string[][] = heads.map(() => []);
+  let left = body - bodyChars(title) - heads.reduce((n, h) => n + bodyChars(h), 0);
+  for (let i = 0; left > 0; i++) {
+    const s = [...pool[i]];
+    const piece = s.length <= left ? s.join("") : `${s.slice(0, left - 1).join("")}。`;
+    parts[i % heads.length].push(piece);
+    left -= [...piece].length;
+  }
+  const lines = [title, ""];
+  heads.forEach((h, i) => {
+    const half = Math.ceil(parts[i].length / 2);
+    lines.push(h, parts[i].slice(0, half).join(""), "", parts[i].slice(half).join(""), "");
+  });
+  return lines.join("\n").trim();
+}
+
+describe("7. ブログの長さの下書き（直しY）", () => {
+  test("上限は、どの種類の多い方の長さ（目安 ×（1 ＋ lengthSlack）。ブログは1080字）よりも長い（改行・見出しの「## 」の分も入る）", () => {
+    for (const k of settings.kinds) assert.ok(maxCharsOf(k, settings.lengthSlack)! < TL.maxDraftChars, k.id);
+  });
+
+  test("ブログの多い方の長さの下書きもチームにかけられる（画面・窓口・会議。Claude は3回まで）", async () => {
+    const max = maxCharsOf(blog, settings.lengthSlack)!;
+    const text = blogText(max);
+    assert.equal(bodyChars(text), max, "本文はブログの多い方の長さ");
+    assert.ok([...text].length > 700 && [...text].length <= TL.maxDraftChars, "前の上限（700字）より長く、今の上限に入る（改行・空白も数える）");
+    const d = await makeDraft({ topic: "冬の髪の乾燥とヘッドスパ" }, { raw: text, kind: blog });
+    assert.equal(d.text, text, "ブログは日付を入れない");
+    assert.ok(canMeetPost(d, TL.maxDraftChars).ok);
+    assert.ok(withPostTeamStarted(d, "pt-1", "now", "ai", TL.maxDraftChars).team, "会議を始める");
+    const parsed = parsePostTeamRequest({ mode: "ai", kind: "blog", text: d.text, pieces: d.pieces ?? [], memos, rules: [] }, settings.kinds, TL.maxDraftChars, getMenus().map((m) => m.id));
+    assert.ok(parsed.ok, "窓口も受ける");
+
+    // Claude の代わり：ブログの文を直す答え（分身1つ・野党1つ・補佐は2つとも選ぶ）
+    const sentences = editableSentences(d.text, d.pieces ?? []);
+    const a = sentences.find((s) => s.startsWith("冬の髪について"))!;
+    const b = sentences.find((s) => s.startsWith("お店のヘッドスパは"))!;
+    assert.ok(a && b);
+    const w = fakeClaude({
+      twin: { edits: [{ from: a, to: "冬の髪について、お店でよく聞くお話をまとめました。" }] },
+      opposition: { stance: "against", concern: "unclear", why: "何が変わるのかが、読む人には分かりにくいところです。", from: b, to: "お店のヘッドスパは、髪をやさしく洗い上げるメニューです。" },
+      aide: { picks: [{ no: 1, reason: "オーナーの言い方に近づくからです。" }, { no: 2, reason: "読む人に伝わりやすくなるからです。" }] },
+    });
+    const r = await runPostTeam(inputOf(d, blog), w, limits, "ai");
+    assert.ok(r, "長すぎるとは言わない");
+    assert.equal(w.seen.length, 3, "分身・野党・補佐の3回");
+    assert.ok(w.seen.length <= TL.maxCalls);
+    assert.deepEqual(r.candidates.map((c) => c.from), [a, b]);
+    assert.deepEqual(r.aide?.picks.map((p) => p.no), [1, 2]);
+    // 分身と野党には下書きを切り捨てずに渡す
+    for (const req of w.seen.filter((x) => x.role !== "aide")) assert.ok(req.user.includes(d.text), req.role);
+
+    // 画面から窓口に送る（1回だけ。送る大きさは窓口の上限に入る）
+    const old = globalThis.fetch;
+    const sent: string[] = [];
+    globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+      sent.push(String(init?.body));
+      return new Response(JSON.stringify({ ok: true, result: r }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+    try {
+      const asked = await askPostsTeam(d, { kind: blog, memos, rules, gateWords: words, limits: TL });
+      assert.equal(asked.ok, true);
+      assert.equal(asked.ok && asked.local, false, "画面の中の決まった返事に切りかえない");
+      assert.equal(asked.ok && asked.result.candidates.length, 2);
+      assert.equal(sent.length, 1);
+      assert.ok(sent[0].length <= TL.maxRequestChars, `送る大きさ ${sent[0].length}字`);
+    } finally {
+      globalThis.fetch = old;
+    }
+  });
+
+  test("AI につながらない時（決まった返事）も、ブログの長さの下書きで声を出す", async () => {
+    const d = await makeDraft({ topic: "冬の髪の乾燥とヘッドスパ" }, { raw: blogText(maxCharsOf(blog, settings.lengthSlack)!), kind: blog });
+    const r = await meetPost(
+      inputOf(d, blog),
+      "ai",
+      () => {
+        throw new NoAiError("鍵がありません");
+      },
+      limits,
+    );
+    assert.ok(r, "長すぎるとは言わない");
+    assert.equal(r.mode, "script");
+    assert.equal(r.noAi, true);
+    assert.equal(r.calls, 0, "Claude は呼ばない");
+    assert.ok(r.opposition, "野党の声");
+    assert.ok(r.candidates.length > 0 && r.aide, "補佐の声");
+  });
+});
+
 describe("7. 長すぎる下書き", () => {
   test("「長すぎるのでチームにかけられません」で、呼ばない（切り捨てない）", async () => {
-    const long = `${"ヘッドスパのお知らせです。".repeat(60)}`;
-    assert.ok([...long].length > TL.maxDraftChars);
+    // 上限より1字長い（上限の数は config/ai.json の postsTeam.maxDraftChars から作る）
+    const unit = "ヘッドスパのお知らせです。";
+    const base = unit.repeat(Math.ceil(TL.maxDraftChars / [...unit].length));
+    const long = `${[...base].slice(0, TL.maxDraftChars).join("")}。`;
+    assert.equal([...long].length, TL.maxDraftChars + 1);
+    const exact = await makeDraft({ topic: "冬" }, { raw: [...long].slice(0, TL.maxDraftChars).join(""), kind: blog });
+    assert.equal([...exact.text].length, TL.maxDraftChars);
+    assert.ok(canMeetPost(exact, TL.maxDraftChars).ok, "ちょうど上限の長さは通る");
     const d = await makeDraft({ topic: "冬の髪の乾燥とヘッドスパ" }, { raw: long, kind: blog });
     const can = canMeetPost(d, TL.maxDraftChars);
     assert.equal(can.ok, false);

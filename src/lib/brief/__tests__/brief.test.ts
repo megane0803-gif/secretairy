@@ -21,6 +21,7 @@ import { getBriefAiSettings, getBriefLimits, getKarteHeadings } from "../../sett
 import { resolveSeedTodos, todoItems } from "../../todo/items";
 import { gateBrief, gateBriefLine } from "../gate";
 import { briefKey, briefMaterial, fillMarks } from "../items";
+import { briefShown, shownBriefNotes } from "../pace";
 import { briefSystem } from "../prompt";
 import { BriefRefusedError, runBrief } from "../run";
 import { parseBriefRequest, type BriefItem } from "../wire";
@@ -177,7 +178,11 @@ describe("流れ（決まった返事・置きかえた書く物）", () => {
 
   test("AI が使えない時は欄ごと出さない（画面の部品は答えが無ければ何も描かない）", () => {
     const ui = readFileSync(join(ROOT, "src/app/home/BriefNotes.tsx"), "utf8");
-    assert.match(ui, /if \(!key \|\| !value \|\| lines\.length === 0\) return null;/);
+    assert.match(ui, /if \(!key \|\| lines\.length === 0\) return null;/);
     assert.match(ui, /\/api\/ai\/brief/);
+    // 答え無し（つながらない・混んでいた）は、前に出した一言があっても出さない（直しY。brief/pace.ts）
+    const last = { today: "2026-11-05", lines: ["10:00 青木様 カットのご希望を聞く"] };
+    const m = { items: [{ mark: "【予約1】", kind: "reservation" as const, text: "メニュー：カット" }], labels: { "【予約1】": "10:00 青木様 カット" } };
+    assert.deepEqual(briefShown({ today: "2026-11-05", resolved: true, lines: shownBriefNotes(null, m, limits) }, last), []);
   });
 });

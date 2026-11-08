@@ -114,7 +114,9 @@ describe("直しA 10：朝の要点の AI の一言は、同じ材料なら開�
   test("上限の数は config/ai.json（brief.maxCachedAnswers）。画面は briefAnswer を通し、窓口を直に呼ばない", () => {
     assert.ok(getBriefLimits().maxCachedAnswers >= 1);
     const src = readFileSync("src/app/home/BriefNotes.tsx", "utf8");
-    assert.match(src, /briefAnswer\(key, \{ memory: cache, ask, max: limits\.maxCachedAnswers \}\)/);
+    // 画面は、覚え（cache）と上限の数を、呼ぶ間合いの部品（brief/pace.ts。直しY）に渡す。部品が briefAnswer を通す
+    assert.match(src, /memory: cache,\n\s+max: limits\.maxCachedAnswers,/);
+    assert.match(readFileSync("src/lib/brief/pace.ts", "utf8"), /briefAnswer\(key, \{ memory: deps\.memory, ask, max: deps\.max \}\)/);
     assert.doesNotMatch(src, /fetch\(/);
     assert.match(src, /if \(value && fresh\)/, "日誌は AI が答えた時だけ");
   });
