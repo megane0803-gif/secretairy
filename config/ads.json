@@ -37,9 +37,22 @@
     "lockSeconds": 120,
     "tokenSeconds": 3600,
     "tokenReuseMarginSeconds": 300,
-    "daily": { "setup": 5, "send": 20, "read": 60, "stop": 10 },
-    "passcode": { "minChars": 16, "maxChars": 200, "maxWrong": 5, "wrongWindowSeconds": 600 },
-    "try": { "maxRequestChars": 1024, "day": 100, "minute": 6, "perSourceDay": 10, "resetMarkDays": 90 }
+    "daily": { "setup": 5, "send": 20, "stop": 10 },
+    "passcode": { "minChars": 16, "maxChars": 200, "maxWrong": 5, "wrongWindowSeconds": 600, "wideMaxWrong": 20, "allMaxWrong": 100, "allWindowSeconds": 3600 },
+    "read": {
+      "source": { "day": 20, "hour": 10, "minute": 4 },
+      "wide": { "day": 60, "hour": 20 },
+      "site": { "minute": 10, "hour": 10, "day": 240 }
+    },
+    "try": {
+      "maxRequestChars": 1024,
+      "resetMarkDays": 90,
+      "limits": {
+        "source": { "day": 10, "hour": 5, "minute": 5 },
+        "wide": { "day": 30, "hour": 10 },
+        "site": { "minute": 6, "hour": 15, "day": 360 }
+      }
+    }
   },
   "gateWords": ["のせい", "責任", "失敗", "ミス", "悪い", "下手", "ダメ", "だめ", "怠", "絶対", "必ず", "確実", "代行", "業者"]
 }

@@ -16,6 +16,7 @@ import posts from "@config/posts.json";
 import jobs from "@config/jobs.json";
 import reminder from "@config/reminder.json";
 import { TAB_IDS, TABS, type TabDef, type TabId } from "./tabs";
+import type { CallLimits } from "./server/limits";
 
 export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 export type Hours = { open: string; close: string } | null;
@@ -222,9 +223,17 @@ export type AdsLiveSettings = {
   lockSeconds: number;
   tokenSeconds: number;
   tokenReuseMarginSeconds: number;
-  daily: { setup: number; send: number; read: number; stop: number };
-  passcode: { minChars: number; maxChars: number; maxWrong: number; wrongWindowSeconds: number };
-  try: { maxRequestChars: number; day: number; minute: number; perSourceDay: number; resetMarkDays: number };
+  /** オーナーの「用意」「送る」「止める」の1日の上限 */
+  daily: { setup: number; send: number; stop: number };
+  /**
+   * オーナー用の合言葉の間違い。同じ送り元（今の束）ごとに wrongWindowSeconds 秒の区切りで maxWrong 回まで・IPv6 の /48 は wideMaxWrong 回まで。
+   * 窓口全体は、たくさんの送り元から一度に来た時のために allWindowSeconds 秒の区切りで allMaxWrong 回まで
+   */
+  passcode: { minChars: number; maxChars: number; maxWrong: number; wrongWindowSeconds: number; wideMaxWrong: number; allMaxWrong: number; allWindowSeconds: number };
+  /** 「読み直す」の上限（だれでも試すと同じ数え方。src/lib/server/limits.ts） */
+  read: CallLimits;
+  /** だれでも試すの上限（オーナーの daily とは別に数える） */
+  try: { maxRequestChars: number; resetMarkDays: number; limits: CallLimits };
 };
 
 export function getAdSettings(): AdSettings {
@@ -355,8 +364,8 @@ export type FreeeSettings = {
   try: FreeeTrySettings;
 };
 
-/** 回数の上限：1日（全体・店の日付）・1分（全体）・同じ送り元から1日 */
-export type TryLimits = { daily: number; perMinute: number; perSenderDaily: number };
+/** 回数の上限：同じ送り元・広い束（IPv6 の /48）・サイト全体（1分・1時間の割り振り・1日）。数え方は src/lib/server/limits.ts */
+export type TryLimits = CallLimits;
 
 /**
  * 来た人がそのまま試せる窓口（config/accounting.json の freee.try）。

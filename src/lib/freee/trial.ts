@@ -201,6 +201,13 @@ export type RestoreResult = "done" | "partial" | "repair";
 
 /** 印の期限が来ていた（書く前に区切る。この後は置き場に書かない） */
 class LockLost extends Error {}
+
+/**
+ * freee の一時的な断り（429 回数の上限・409 ぶつかり・423 ほかが使っている）。その一歩は受けられていないので、
+ * 要復旧にせず区切り、次の回に続ける（置いた一歩は外す）。400・401・403・404 など、続けても変わらない断りは今どおり。
+ */
+export const TRANSIENT_REFUSALS: readonly number[] = [409, 423, 429];
+export const isTransientRefusal = (e: unknown): boolean => e instanceof FreeeRejected && TRANSIENT_REFUSALS.includes(e.status);
 /** 一歩を記録に置けなかった（送っていない。一歩は外して区切る） */
 class StepNotPlaced extends Error {}
 
@@ -225,7 +232,8 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
   };
   /**
    * 一歩（取引を消す・明細を消す・作り直す）の順：① 持ち時間と印を確かめる（一歩を置く前）② 一歩を記録に置く ③ 送る。
-   * 送っていないと分かる止まり方（持ち時間が足りない・印を失った・一歩を置けなかった・鍵を受けられなかった 401）では、
+   * 送っていないと分かる止まり方（持ち時間が足りない・印を失った・一歩を置けなかった・鍵を受けられなかった 401・
+   * 一時的な断り 429／409／423）では、
    * その一歩を記録に残さない（置いていたら外す）。一歩を残すのは、送った後に返事が途切れた時（送ったか分からない時）だけ。
    * place：この回に一歩を置くか（前の回に送った一歩が残っている時は置かない＝そのまま）。undo：置いた一歩を外す。
    */
@@ -249,8 +257,8 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
     try {
       return await call();
     } catch (e) {
-      // 送る前に止めた（持ち時間）・鍵を受けられなかった：送っていないので、置いた一歩を外す
-      if (place && (e instanceof FreeeOutOfTime || e instanceof FreeeExpired)) {
+      // 送る前に止めた（持ち時間）・鍵を受けられなかった・一時的な断り：受けられていないので、置いた一歩を外す
+      if (place && (e instanceof FreeeOutOfTime || e instanceof FreeeExpired || isTransientRefusal(e))) {
         undo();
         await save();
       }
@@ -280,7 +288,8 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
             () => c.api.deleteDeal(id, c.companyId),
           );
         } catch (e) {
-          if (!(e instanceof FreeeRejected)) throw e;
+          // 一時的な断りは区切り（下の catch で partial）
+          if (!(e instanceof FreeeRejected) || isTransientRefusal(e)) throw e;
           // 1回目の 404・ほかの 400 台：消せない（元に戻せない）→ 要復旧。前の回に送った後の 404 だけ「もう無い」
           if (!(e.status === 404 && resumed)) return repair();
           // 前の回の一歩が残っていた 404：本当に消えたかは、手順3で明細が未処理に戻ったかで確かめる
@@ -350,7 +359,7 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
             () => c.api.deleteWalletTxn(x.id, c.companyId),
           );
         } catch (e) {
-          if (!(e instanceof FreeeRejected)) throw e;
+          if (!(e instanceof FreeeRejected) || isTransientRefusal(e)) throw e;
           if (!(e.status === 404 && resumed)) return repair();
         }
         item.step = "txn-deleted";
@@ -405,8 +414,9 @@ export async function restoreTrial(c: RestoreCtx): Promise<{ result: RestoreResu
       await save();
       throw e;
     }
-    // 持ち時間が足りない（送る前に止めた。一歩は外してある）・返事が途切れた（一歩は残す）：区切る（次の回に、記録の一歩から続ける）
-    if (e instanceof FreeeOutOfTime || !(e instanceof FreeeRejected)) {
+    // 持ち時間が足りない（送る前に止めた。一歩は外してある）・返事が途切れた（一歩は残す）・
+    // 一時的な断り 429／409／423（読む所でも。置いた一歩は外してある）：区切る（次の回に、記録の一歩から続ける）
+    if (e instanceof FreeeOutOfTime || !(e instanceof FreeeRejected) || isTransientRefusal(e)) {
       await save();
       return { result: "partial", trial: t };
     }

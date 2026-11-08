@@ -24,6 +24,8 @@ export const FREEE_KV = {
   trial: "freee:try:trial",
   salt: (date: string) => `freee:try:salt:${date}`,
   count: (kind: "register" | "read" | "restore", scope: string) => `freee:try:n:${kind}:${scope}`,
+  /** 来た人の回数の鍵の頭（鍵の形は src/lib/server/limits.ts の callKeys。全体の1日は count(kind, "day:<日付>") と同じ） */
+  countPrefix: (kind: "register" | "read") => `freee:try:n:${kind}`,
 };
 
 /** 置き場（KV）が読めない・書けない（数えられない・鍵を確かめられないので、受けない） */

@@ -5,8 +5,11 @@
 // - 本番のサイトか・受ける形・Origin は共通の守り（src/lib/server/site.ts の siteCheck。freee と同じ物）
 // - 鍵と2つの番号の3つのどれかが無い・プレビューの時は、止めて「テスト用の広告アカウントにつないでいません」（エラーにしない）
 // - 書く「用意」「送る」は、Origin に加えてオーナー用の合言葉（GOOGLE_ADS_OWNER_PASSCODE。16文字より短い・無いなら動かない）が合う時だけ。
-//   比べ方は共通（src/lib/server/passcode.ts。試験と同じ物）。間違いの数は窓口全体で1つ（10分に maxWrong 回まで。こえたら合っていても受けない）
-// - 1日の上限（用意・送る・読み直す・止めるの数）と間違いの数は置き場（KvStore。LINE と同じ Upstash）で、先に incr で足してから比べる。
+//   比べ方は共通（src/lib/server/passcode.ts。試験と同じ物）。間違いの数は送り元（塩と合わせたハッシュ・だれでも試すと同じ束）ごとに、
+//   10分の区切りで maxWrong 回まで（IPv6 の /48 は wideMaxWrong 回まで）。届いた送り元だけ、その区切りの間は合っていても受けない。
+//   窓口全体の数は、たくさんの送り元から一度に来た時のための、ずっと大きい数（allMaxWrong）・長い区切り（allWindowSeconds）の止めとして残す
+// - 1日の上限（用意・送る・止めるの数）と間違いの数は置き場（KvStore。LINE と同じ Upstash）で、先に incr で足してから比べる。
+//   「読み直す」の上限は、だれでも試すと同じ数え方（src/lib/server/limits.ts。同じ送り元・広い束・全体の1分・1時間・1日）
 //   置き場が無い・読めない時は、数えられないので動かさない（サーバーの記憶だけで数えない）
 // - 「用意」「送る」は「動いている印」（SET NX＋期限）を取れた時だけ（取れなければ「いま送っています」）
 // - 番号はリクエストから受け取らない（環境変数の数字だけの値）。書き込む前に毎回テスト用アカウントかを確かめる（api.ts の mutate の入口）
@@ -16,7 +19,8 @@
 // だれでも試す窓口（try。直しU）：合言葉は要らない。来た人が承認した1件を、テスト用アカウントを「元の形」に戻してから送る。
 // - ブラウザから受け取るのは種類と番号の2つだけ。言葉はサーバーが最初の表（trial.ts）から引く（好きな文字を書かせない）
 // - 書けるのは、テスト用アカウントの作品のキャンペーン・広告グループの中だけ。中身は表の1件と、元の形に戻す操作だけ
-// - 同時に1回の印はオーナーの「用意」「送る」と同じ（withLock）。上限はオーナーの daily とは別に数える（try の day・minute・perSourceDay）
+// - 同時に1回の印はオーナーの「用意」「送る」と同じ（withLock）。上限はオーナーの daily とは別に数える（try の limits。
+//   同じ送り元 → 広い束（IPv6 の /48）→ 全体の1分・1時間の割り振り・1日。数え方は src/lib/server/limits.ts）
 // - 送り元は Vercel が付ける送り元の IP（x-real-ip、無ければ x-vercel-forwarded-for）だけを、日ごとの塩（KV に置き2日で消える）と
 //   合わせたハッシュにして数える。生の IP・ハッシュは KV のキーのほかに置かず、返事にもログにも出さない
 // - Origin の確かめは、ほかのサイトからの呼び出しを止めるための物で、人の確かめではない（直に呼ばれても上の上限で止める）
@@ -28,7 +32,8 @@ import { shopNow } from "../../calendar";
 import type { KvStore } from "../../line/store";
 import { checkPasscode, passcodeUsable } from "../../server/passcode";
 import { siteCheck } from "../../server/site";
-import { sourceBucket, sourceHash, sourceIp } from "../../server/source";
+import { countCall, shopClock, type CallCount, type CallLimits } from "../../server/limits";
+import { sourceBucket, sourceHash, sourceHashes, sourceIp } from "../../server/source";
 
 export { sourceBucket, sourceHash, sourceIp };
 import type { AdsLiveSettings } from "../../settings";
@@ -98,14 +103,18 @@ const fail = (code: string, message: string, status: number): Response => json({
 
 export const LIVE_KEY = {
   lock: "ads:live:lock",
-  wrong: "ads:live:passwrong",
-  /** 間違いが上限に届いた時から wrongWindowSeconds 秒、合っていても受けない印 */
-  locked: "ads:live:passlock",
-  day: (date: string, kind: "setup" | "send" | "read" | "stop") => `ads:live:day:${date}:${kind}`,
-  /** だれでも試す窓口の数（オーナーの day とは別）。どれも DAY_SECONDS（2日）か2分で消える */
+  /** 合言葉の間違いの数（送り元ごと・IPv6 の /48 ごと・窓口全体）。区切りの番号 window を鍵に入れる（区切りが変われば数は0から） */
+  wrong: (window: number, hash: string) => `ads:live:pw:src:${window}:${hash}`,
+  wrongWide: (window: number, hash: string) => `ads:live:pw:wide:${window}:${hash}`,
+  wrongAll: (window: number) => `ads:live:pw:all:${window}`,
+  day: (date: string, kind: "setup" | "send" | "stop") => `ads:live:day:${date}:${kind}`,
+  /** 「読み直す」とだれでも試すの数の鍵の頭（鍵の形は src/lib/server/limits.ts の callKeys） */
+  readPrefix: "ads:live:read",
+  tryPrefix: "ads:live:try",
+  /** だれでも試す窓口の数（オーナーの day とは別）。callKeys の鍵の名前を、前と同じ形で出す */
   tryDay: (date: string) => `ads:live:try:day:${date}`,
   tryMinute: (minute: number) => `ads:live:try:min:${minute}`,
-  /** 送り元ごとの数。hash は日ごとの塩と送り元の IP のハッシュ（生の IP は入れない） */
+  /** 送り元ごとの1日の数。hash は日ごとの塩と送り元の IP のハッシュ（生の IP は入れない） */
   trySource: (date: string, hash: string) => `ads:live:try:src:${date}:${hash}`,
   /** 日ごとの塩（サーバーが作る。2日で消える） */
   trySalt: (date: string) => `ads:live:try:salt:${date}`,
@@ -154,31 +163,42 @@ async function readBody(request: Request, max: number): Promise<Record<string, u
 
 const NO_STORE_MESSAGE = "数を数える置き場につながらないので、動かしません";
 const LOCKED_MESSAGE = "オーナー用の合言葉を何回もまちがえたので、10分ほど待ってからもう一度押してください";
+const ALL_LOCKED_MESSAGE = "オーナー用の合言葉のまちがいが続いているので、しばらく（長くて1時間）待ってからもう一度押してください";
 
 /**
- * オーナー用の合言葉。間違いの数は窓口全体で1つ（だれが間違えても同じ数に足す）。
- * 間違えた時は先に incr で足す。上限（maxWrong）に届いたら、その時から wrongWindowSeconds 秒の「受けない印」を置き、
- * 印がある間は、合っている合言葉でも受けない（どちらにも同じ文を返す＝合っているかを漏らさない）。
+ * オーナー用の合言葉。間違いの数は送り元ごと（日ごとの塩と合わせたハッシュ・だれでも試すと同じ束）に、wrongWindowSeconds 秒の区切りで数える。
+ * IPv6 は /48 でも数え（wideMaxWrong）、窓口全体は allWindowSeconds 秒の区切りで allMaxWrong 回まで（たくさんの送り元から一度に来た時の止め）。
+ * 間違えた時は先に incr で足す（期限は足すのと同じ1回で付く）。どれかが上限に届いたら、その区切りが終わるまで、その送り元は
+ * 合っている合言葉でも受けない（どちらにも同じ文を返す＝合っているかを漏らさない）。ほかの送り元は止めない。
  */
-async function owner(d: LiveDeps, given: unknown): Promise<Response | null> {
+async function owner(d: LiveDeps, given: unknown, request: Request): Promise<Response | null> {
   const p = d.settings.passcode;
   if (!passcodeUsable(d.env.ownerPasscode, p.minChars))
     return fail("no-passcode", "オーナー用の合言葉が設定されていないので、用意と送るは動きません", 503);
   const store = d.store!;
   const r = checkPasscode(given, d.env.ownerPasscode, { maxChars: p.maxChars, minChars: p.minChars });
-  if (await kv(() => store.get(LIVE_KEY.locked))) return fail("locked", LOCKED_MESSAGE, 429);
+  const now = d.now();
+  const win = Math.floor(now / (p.wrongWindowSeconds * 1000));
+  const allWin = Math.floor(now / (p.allWindowSeconds * 1000));
+  const who = sourceHashes(await saltOf(d, today(d)), sourceIp(request));
+  const src = LIVE_KEY.wrong(win, who.narrow);
+  const wide = who.wide ? LIVE_KEY.wrongWide(win, who.wide) : null;
+  const all = LIVE_KEY.wrongAll(allWin);
+  const num = async (k: string | null) => (k ? Number((await kv(() => store.get(k))) ?? 0) : 0);
+  if ((await num(all)) >= p.allMaxWrong) return fail("locked", ALL_LOCKED_MESSAGE, 429);
+  if ((await num(src)) >= p.maxWrong || (await num(wide)) >= p.wideMaxWrong) return fail("locked", LOCKED_MESSAGE, 429);
   if (r !== "ok") {
-    const n = await kv(() => store.incr(LIVE_KEY.wrong, p.wrongWindowSeconds));
-    if (n >= p.maxWrong) await kv(() => store.set(LIVE_KEY.locked, "1", { ex: p.wrongWindowSeconds, nx: true }));
-    return n > p.maxWrong ? fail("locked", LOCKED_MESSAGE, 429) : fail("wrong", "オーナー用の合言葉がちがいます", 401);
+    const n = await kv(() => store.incr(src, p.wrongWindowSeconds * 2));
+    const w = wide ? await kv(() => store.incr(wide, p.wrongWindowSeconds * 2)) : 0;
+    const a = await kv(() => store.incr(all, p.allWindowSeconds * 2));
+    if (a > p.allMaxWrong) return fail("locked", ALL_LOCKED_MESSAGE, 429);
+    return n > p.maxWrong || w > p.wideMaxWrong ? fail("locked", LOCKED_MESSAGE, 429) : fail("wrong", "オーナー用の合言葉がちがいます", 401);
   }
-  const n = Number((await kv(() => store.get(LIVE_KEY.wrong))) ?? 0);
-  if (n >= p.maxWrong) return fail("locked", LOCKED_MESSAGE, 429);
   return null;
 }
 
 /** 1日の上限：先に足してから比べる（同時に来ても数えもれが無い） */
-async function underDaily(d: LiveDeps, kind: "setup" | "send" | "read"): Promise<boolean> {
+async function underDaily(d: LiveDeps, kind: "setup" | "send"): Promise<boolean> {
   const n = await kv(() => d.store!.incr(LIVE_KEY.day(today(d), kind), DAY_SECONDS));
   return n <= d.settings.daily[kind];
 }
@@ -211,7 +231,7 @@ async function writeGate(request: Request, d: LiveDeps): Promise<{ ok: true; bod
   if (body === "big") return { ok: false, response: fail("too-big", "送る物が大きすぎます", 413) };
   if (!body) return { ok: false, response: fail("bad-request", "形がおかしいです", 400) };
   if (!d.store) return { ok: false, response: fail("no-store", NO_STORE_MESSAGE, 503) };
-  const o = await owner(d, body.passcode);
+  const o = await owner(d, body.passcode, request);
   if (o) return { ok: false, response: o };
   return { ok: true, body };
 }
@@ -727,7 +747,8 @@ export async function handleLiveRead(request: Request, d: LiveDeps): Promise<Res
     const g = gate(request, d, "POST");
     if (!g.ok) return g.response;
     if (!d.store) return fail("no-store", NO_STORE_MESSAGE, 503);
-    if (!(await underDaily(d, "read"))) return fail("limit", `今日の「読み直す」は${d.settings.daily.read}回までです`, 429);
+    const over = await underCallLimits(d, request, LIVE_KEY.readPrefix, d.settings.read, READ_LIMIT_MESSAGES);
+    if (over) return over;
     await verifyTestAccount(ctxOf(d));
     const snap = await snapshot(d);
     return json(listOf(d, snap, await resetAtOf(d)));
@@ -811,22 +832,42 @@ async function saltOf(d: LiveDeps, date: string): Promise<string> {
   return salt;
 }
 
+/** 上限に届いた時の文（どこで止まったかごと。数は設定から） */
+type LimitMessages = (hit: Exclude<CallCount, "ok">, l: CallLimits) => string;
+
+const TRY_LIMIT_MESSAGES: LimitMessages = (hit, l) =>
+  hit === "source-day"
+    ? `今日の試しは、同じ送り元から${l.source.day}回までです。明日また試せます`
+    : hit === "wide-day"
+      ? "今日の試しは、同じ所から試せる回数を使い切りました。明日また試せます"
+      : hit === "source-soon"
+        ? "同じ送り元からの試しが続いたので、しばらく（長くて1時間）待ってから試してください"
+        : hit === "site-minute"
+          ? "いま試す人が多いので、1分ほど待ってから試してください"
+          : hit === "site-hour"
+            ? "いま試す人が多いので、しばらく（長くて1時間）待ってから試してください"
+            : `今日の試しは、サイト全体で${l.site.day}回までです。明日また試せます`;
+
+const READ_LIMIT_MESSAGES: LimitMessages = (hit, l) =>
+  hit === "source-day" || hit === "wide-day"
+    ? "今日の「読み直す」は、同じ送り元から押せる回数を使い切りました。明日また押せます"
+    : hit === "site-day"
+      ? `今日の「読み直す」は${l.site.day}回までです`
+      : hit === "site-minute"
+        ? "いま「読み直す」が多いので、1分ほど待ってから押してください"
+        : "「読み直す」が続いたので、しばらく（長くて1時間）待ってから押してください";
+
 /**
- * 試す窓口の上限（先に足してから比べる）。同じ送り元 → 1分 → 1日の順で、こえたらそこで止める。
- * 同時に1回の印を取る前に数える（上限をこえた呼び出しは印を取らない＝連打でオーナーの「用意」「送る」やほかの人の試しを 409 で止めない）。
- * 印が取れずに 409 になった時も、数は戻さない（呼んだ回数として数える）。
+ * 来た人の窓口の上限（先に足してから比べる。src/lib/server/limits.ts の countCall）。同じ送り元 → 広い束 → 全体の1分・1時間・1日の順で、
+ * こえたらそこで止める。だれでも試すは、同時に1回の印を取る前に数える（上限をこえた呼び出しは印を取らない＝連打でオーナーの「用意」「送る」や
+ * ほかの人の試しを 409 で止めない）。印が取れずに 409 になった時も、数は戻さない（呼んだ回数として数える）。
  */
-async function underTryLimits(d: LiveDeps, request: Request): Promise<Response | null> {
+async function underCallLimits(d: LiveDeps, request: Request, prefix: string, limits: CallLimits, message: LimitMessages): Promise<Response | null> {
   const store = d.store!;
-  const t = d.settings.try;
-  const date = today(d);
-  const hash = sourceHash(await saltOf(d, date), sourceBucket(sourceIp(request)));
-  if ((await kv(() => store.incr(LIVE_KEY.trySource(date, hash), DAY_SECONDS))) > t.perSourceDay)
-    return fail("limit", `今日の試しは、同じ送り元から${t.perSourceDay}回までです。明日また試せます`, 429);
-  if ((await kv(() => store.incr(LIVE_KEY.tryMinute(Math.floor(d.now() / 60_000)), 120))) > t.minute)
-    return fail("limit", "いま試す人が多いので、1分ほど待ってから試してください", 429);
-  if ((await kv(() => store.incr(LIVE_KEY.tryDay(date), DAY_SECONDS))) > t.day) return fail("limit", `今日の試しは、サイト全体で${t.day}回までです。明日また試せます`, 429);
-  return null;
+  const clock = shopClock(d.timeZone, d.now());
+  const sender = sourceHashes(await saltOf(d, today(d)), sourceIp(request));
+  const hit = await countCall({ incr: (k, ex) => kv(() => store.incr(k, ex)), prefix, date: today(d), hour: clock.hour, minute: clock.minute, sender }, limits);
+  return hit === "ok" ? null : fail("limit", message(hit, limits), 429);
 }
 
 export async function handleLiveTry(request: Request, d: LiveDeps): Promise<Response> {
@@ -840,7 +881,7 @@ export async function handleLiveTry(request: Request, d: LiveDeps): Promise<Resp
     if (!it.ok) return fail("bad-request", it.message, 400);
     if (!d.store) return fail("no-store", NO_STORE_MESSAGE, 503);
     // 上限は印を取る前に（こえていたら印を取らずに 429）
-    const over = await underTryLimits(d, request);
+    const over = await underCallLimits(d, request, LIVE_KEY.tryPrefix, d.settings.try.limits, TRY_LIMIT_MESSAGES);
     if (over) return over;
     return withLock(d, () => tryOne(d, it.item), TRY_BUSY_MESSAGE);
   });

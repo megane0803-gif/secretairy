@@ -9,15 +9,18 @@
 // 登録できるのは、印のある見本の明細で、印から引いた見本と日付・金額・出金・口座・摘要がちょうど合い、出金で未処理の物だけ。
 //
 // 守り：本番のサイトだけ・Origin（ほかのサイトからは 403。人を確かめる物ではない）・GET は 405・大きさの上限・1回に1件・
-// 書く時は「同時に1回」の印（オーナーの書く窓口・元に戻すと同じ1つ）・回数の上限（登録と読むで別。1日（全体）・1分（全体）・同じ送り元から1日。
-// 店の日付ごと。先に足してから比べる。置き場が使えない時は受けない 503）。送り元は Vercel が付ける IP を日ごとの塩と合わせたハッシュで数え、生の IP は残さない。
+// 書く時は「同時に1回」の印（オーナーの書く窓口・元に戻すと同じ1つ）・回数の上限（登録と読むで別。同じ送り元（1日・1時間・1分）→
+// 広い束（IPv6 の /48）→ 全体（1分・1時間の割り振り・1日）。数え方は広告と共通の src/lib/server/limits.ts。店の日付ごと。
+// 先に足してから比べる。置き場が使えない時は受けない 503）。送り元は Vercel が付ける IP を日ごとの塩と合わせたハッシュで数え、生の IP は残さない。
+// 同じ送り元の1時間の登録の数は、元に戻るたびにすぐまた登録して、試しを長く独り占めしないための物。
 // 窓口の頭で、5分をこえた試しを先に元に戻してから続ける（元に戻すは回数の上限とは別に数え、上限で止めない）。
 // 返事とログには決まった短い理由だけ（freee の生のエラー文・事業所の番号・鍵・IP・ハッシュは出さない）。結果が分からない時は送り直さない。
 
 import { accountOf } from "../accounting/rows";
 import type { CardUse, StatementAccount } from "../data/types";
 import { siteCheck } from "../server/site";
-import { sourceBucket, sourceHash, sourceIp } from "../server/source";
+import { countCall, shopClock } from "../server/limits";
+import { sourceHashes, sourceIp } from "../server/source";
 import { freeeClient, FreeeExpired, FreeeOutOfTime, isOpen, type FreeeClient, type WalletTxn } from "./api";
 import { currentGen, FREEE_KV, genMovedPast, kv, kvAccess, markKvExpired, StoreDown, withWriteLock, type KvCtx, type KvToken, type StillHeld } from "./kv";
 import { lookupById, markIn, pickBankAccount, pickCardAccount } from "./match";
@@ -45,32 +48,33 @@ type Kind = "register" | "read";
 export const senderIp = sourceIp;
 
 /**
- * 日ごとの塩（サーバーが作って置き場に置き、2日で消える）と、送り元の束（IPv4 は1つの番地・IPv6 は /64）を合わせたハッシュ。
+ * 日ごとの塩（サーバーが作って置き場に置き、2日で消える）と、送り元の束（IPv4 は1つの番地・IPv6 は /64 と /48）を合わせたハッシュ。
  * 塩は、置けた（SET NX が true）時は作った値をそのまま使う（置いた直後の GET は、まだ写っていない写しから古い値で返ることがある）。
  * 読むのは、ほかの呼び出しがもう置いていて置けなかった時だけ。生の IP は置き場にも返事にも出さない。
  */
-async function senderHash(deps: FreeeDeps, request: Request, date: string): Promise<string> {
+async function senderHashes(deps: FreeeDeps, request: Request, date: string): Promise<{ narrow: string; wide: string | null }> {
   const store = deps.store!;
   const key = FREEE_KV.salt(date);
   const fresh = deps.random(32).toString("hex");
-  if (await kv(() => store.set(key, fresh, { ex: 2 * 86_400, nx: true }))) return sourceHash(fresh, sourceBucket(sourceIp(request)));
+  if (await kv(() => store.set(key, fresh, { ex: 2 * 86_400, nx: true }))) return sourceHashes(fresh, sourceIp(request));
   const salt = await kv(() => store.get(key));
   if (!salt) throw new StoreDown("塩を置けません");
-  return sourceHash(salt, sourceBucket(sourceIp(request)));
+  return sourceHashes(salt, sourceIp(request));
 }
 
 /**
- * 先に足してから比べる（同時に来ても数えもれが無い）。同じ送り元 → 全体の1分 → 全体の1日の順で、こえたらそこで止め、
- * 先の数は足さない（1つの送り元が送り続けても、全体の数はその送り元の上限までしか増えない。広告のだれでも試すと同じ数え方）。
+ * 先に足してから比べる（同時に来ても数えもれが無い。src/lib/server/limits.ts の countCall・広告のだれでも試すと同じ数え方）。
+ * 同じ送り元 → 広い束 → 全体の1分・1時間・1日の順で、こえたらそこで止め、先の数は足さない。
+ * 同じ送り元・広い束の1日に届いた時は "sender"（「今日はここから…」）、ほかは "limit"（「時間をおいてから」）。
  */
-async function countUnder(deps: FreeeDeps, kind: Kind, date: string, sender: string): Promise<"ok" | "limit" | "sender"> {
+async function countUnder(deps: FreeeDeps, kind: Kind, date: string, sender: { narrow: string; wide: string | null }): Promise<"ok" | "limit" | "sender"> {
   const store = deps.store!;
-  const lim = deps.settings.try[kind];
-  const minute = Math.floor(deps.now() / 60_000);
-  if ((await kv(() => store.incr(FREEE_KV.count(kind, `sender:${date}:${sender}`), 2 * 86_400))) > lim.perSenderDaily) return "sender";
-  if ((await kv(() => store.incr(FREEE_KV.count(kind, `min:${minute}`), 120))) > lim.perMinute) return "limit";
-  if ((await kv(() => store.incr(FREEE_KV.count(kind, `day:${date}`), 2 * 86_400))) > lim.daily) return "limit";
-  return "ok";
+  const clock = shopClock(deps.timeZone, deps.now());
+  const hit = await countCall(
+    { incr: (k, ex) => kv(() => store.incr(k, ex)), prefix: FREEE_KV.countPrefix(kind), date, hour: clock.hour, minute: clock.minute, sender },
+    deps.settings.try[kind],
+  );
+  return hit === "ok" ? "ok" : hit === "source-day" || hit === "wide-day" ? "sender" : "limit";
 }
 
 // ---- 読む ----
@@ -154,8 +158,10 @@ export async function handleTry(request: Request, deps: FreeeDeps): Promise<Resp
 
 async function tryUnder(request: Request, deps: FreeeDeps, c: KvCtx, action: Kind, target: { id: number; use: CardUse } | null): Promise<Response> {
   const date = todayIn(deps.timeZone, deps.now());
-  const sender = await senderHash(deps, request, date);
-  const under = await countUnder(deps, action, date, sender);
+  const senders = await senderHashes(deps, request, date);
+  // 試しの持ち主（trial.by）は今の束（narrow）のハッシュで決める（前と同じ）
+  const sender = senders.narrow;
+  const under = await countUnder(deps, action, date, senders);
   const access = await kvAccess({ ...c, fetch: deps.fetch, clientId: deps.env.clientId!, clientSecret: deps.env.clientSecret!, companyId: deps.env.companyId! });
   if (!access.ok) return access.why === "busy" ? fail("busy", TRY_MESSAGES.wait, 409) : fail("not-connected", TRY_MESSAGES.notConnected, 200);
   const tok = access.token;

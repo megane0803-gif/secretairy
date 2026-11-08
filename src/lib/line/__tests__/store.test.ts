@@ -78,9 +78,9 @@ describe("直しW：upstash-sync-token（書いた直後の読み直しを書い
   test("いくつかの命令を1回で送る時（incr の期限・rpush）も、同じ置き場の続きとして付ける", async () => {
     const f = fakeUpstash(["t1", "t2", "t3"], 1);
     const s = upstashStore(CONF, f.fetchFn);
-    assert.equal(await s.incr("n", 60), 1); // INCR → EXPIRE の2回
+    assert.equal(await s.incr("n", 60), 1); // INCR と EXPIRE を1回で
     await s.rpush("l", "x", 60);
-    assert.deepEqual(f.sent, [null, "t1", "t2"]);
+    assert.deepEqual(f.sent, [null, "t1"]);
   });
 
   test("鍵（Authorization）は今どおり付き、sync token の見出しの名前は Upstash の物", async () => {
@@ -107,5 +107,42 @@ describe("直しW：upstash-sync-token（書いた直後の読み直しを書い
       [null, "t1", null],
     );
     assert.ok(up.calls.every((c) => c.url === `${CONF.url}/pipeline`), "token を付けるのは pipeline の窓口");
+  });
+});
+
+describe("直しX：数の鍵の期限は、足すのと同じ1回で付ける", () => {
+  test("incr は INCR と EXPIRE（NX）を1つの pipeline で送る（2回目からも同じ形・期限は付けなおさない）", async () => {
+    let t = 0;
+    const up = laggingUpstash({ now: () => t });
+    const s = upstashStore(CONF, up.fetch);
+    assert.equal(await s.incr("n", 60), 1);
+    t = 30_000;
+    assert.equal(await s.incr("n", 60), 2);
+    assert.equal(up.calls.length, 2, "1回の incr は1回の呼び出し");
+    for (const c of up.calls) {
+      assert.equal(c.url, `${CONF.url}/pipeline`);
+      assert.deepEqual(c.cmds, [
+        ["INCR", "n"],
+        ["EXPIRE", "n", "60", "NX"],
+      ]);
+    }
+    assert.equal(up.until("n"), 60_000, "期限は最初に付けた時のまま（NX）");
+  });
+
+  test("前に残った期限の無い数にも、次に足した時に期限が付く", async () => {
+    const t = 0;
+    const up = laggingUpstash({ now: () => t });
+    // 前の作り（INCR の後に別に EXPIRE）で、間で落ちて期限の無い数が残った形
+    await up.fetch(`${CONF.url}/pipeline`, { method: "POST", body: JSON.stringify([["INCR", "old"]]) });
+    assert.equal(up.until("old"), Infinity);
+    const s = upstashStore(CONF, up.fetch);
+    assert.equal(await s.incr("old", 600), 2);
+    assert.equal(up.until("old"), 600_000);
+  });
+
+  test("置き場がうまくいかない時は、数を返さずに投げる（数えられないので動かさない）", async () => {
+    const up = laggingUpstash({ now: () => 0, failOn: (c) => c[0] === "EXPIRE" });
+    const s = upstashStore(CONF, up.fetch);
+    await assert.rejects(() => s.incr("n", 60));
   });
 });

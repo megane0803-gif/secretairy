@@ -16,7 +16,7 @@ export interface KvStore {
   del(key: string): Promise<void>;
   /** 読んで、すぐ消す（1回だけ効く物に使う） */
   getdel(key: string): Promise<string | null>;
-  /** 1つ足した数。初めての時だけ期限（秒）を付ける */
+  /** 1つ足した数。期限（秒）が無い時だけ付ける（足すのと同じ1回で送る＝途中で落ちても期限の無い数を残さない） */
   incr(key: string, ex: number): Promise<number>;
   /** 後ろに足し、全体の期限（秒）を付けなおす */
   rpush(key: string, value: string, ex: number): Promise<void>;
@@ -86,10 +86,14 @@ export function upstashStore(conf = storeEnv(), fetchFn: typeof fetch = (input, 
       await one("DEL", k);
     },
     getdel: async (k) => str(await one("GETDEL", k)),
+    // INCR と EXPIRE（NX＝期限がまだ無い時だけ）を1つの pipeline で送る。別々に送ると、その間で落ちた時に期限の無い数が残る
+    // （前に残った期限の無い数にも、次に足した時に期限が付く）
     incr: async (k, ex) => {
-      const n = Number(await one("INCR", k));
-      if (n === 1) await one("EXPIRE", k, Math.max(1, Math.ceil(ex)));
-      return n;
+      const [n] = await pipeline([
+        ["INCR", k],
+        ["EXPIRE", k, Math.max(1, Math.ceil(ex)), "NX"],
+      ]);
+      return Number(n);
     },
     rpush: async (k, v, ex) => {
       await pipeline([

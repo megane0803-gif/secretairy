@@ -10,6 +10,7 @@ import { getFreeeSettings, type FreeeSettings } from "../../settings";
 import { exchangeCode, type WalletTxn } from "../api";
 import { advanceGen, currentGen, FREEE_KV, kvAccess, putKvToken, readKvToken, writeLockSeconds, type KvCtx } from "../kv";
 import { hasMark, markOf } from "../match";
+import { callLimitsProblem } from "../../server/limits";
 import { cookieKeyFrom, seal, unseal } from "../seal";
 import {
   envFrom,
@@ -26,7 +27,7 @@ import {
   type FreeeDeps,
 } from "../server";
 import { handleTry, senderIp, TRY_MESSAGES } from "../try";
-import { loadTrial, parseTrial, seedItemOfMark } from "../trial";
+import { loadTrial, parseTrial, seedItemOfMark, TRANSIENT_REFUSALS } from "../trial";
 
 const base = getFreeeSettings();
 const seed = getAccounting();
@@ -96,6 +97,8 @@ class FakeFreee {
   refuseRefresh = false;
   /** freee を呼ぶたびに時計を進める（ms） */
   tick = 0;
+  /** 1回だけ、この呼び出しに status を返す（一時的な断り 429・409・423 など） */
+  refuseOnce: { method: string; path: RegExp; status: number } | null = null;
 
   fetch = async (input: string, init?: RequestInit): Promise<Response> => {
     clock.now += this.tick;
@@ -119,6 +122,11 @@ class FakeFreee {
     }
     const auth = (init?.headers as Record<string, string> | undefined)?.Authorization;
     if (auth !== `Bearer ${this.access}`) return ok({ message: "unauthorized" }, 401);
+    if (this.refuseOnce && this.refuseOnce.method === method && this.refuseOnce.path.test(url.pathname)) {
+      const st = this.refuseOnce.status;
+      this.refuseOnce = null;
+      return ok({ message: "x" }, st);
+    }
     if (url.pathname === "/api/1/walletables") return ok({ walletables: this.walletables });
     if (url.pathname === "/api/1/account_items") return ok({ account_items: [{ id: 501, name: base.accountItemName, available: true }] });
     if (url.pathname === `/api/1/taxes/companies/${COMPANY}`) return ok({ taxes: [{ code: 136, name: "x", name_ja: base.taxName, available: true }] });
@@ -622,74 +630,101 @@ describe("freee：来た人の窓口（読む・登録する・読み直す）",
 // ---- 3. 上限 ----
 
 describe("freee：来た人の窓口の上限", () => {
-  test("設定の数：登録は1日100・1分6・同じ送り元から1日10、読むは1日600・1分30・同じ送り元から1日100。5分で元に戻す", () => {
-    assert.deepEqual(base.try.register, { daily: 100, perMinute: 6, perSenderDaily: 10 });
-    assert.deepEqual(base.try.read, { daily: 600, perMinute: 30, perSenderDaily: 100 });
+  test("設定の数：登録と読むで別（同じ送り元・広い束・全体の1分・1時間・1日）。数の約束を満たす。5分で元に戻す", () => {
+    assert.deepEqual(base.try.register, { source: { day: 10, hour: 3, minute: 2 }, wide: { day: 20, hour: 6 }, site: { minute: 6, hour: 6, day: 144 } });
+    assert.deepEqual(base.try.read, { source: { day: 30, hour: 15, minute: 6 }, wide: { day: 60, hour: 30 }, site: { minute: 10, hour: 16, day: 384 } });
+    assert.equal(callLimitsProblem(base.try.register), null);
+    assert.equal(callLimitsProblem(base.try.read), null);
     assert.equal(base.try.holdSeconds, 300);
     assert.ok(base.try.lockSeconds > base.serverBudgetSeconds, "印の期限は持ち時間より長い");
   });
 
-  test("登録：1分（全体）・同じ送り元から1日・1日（全体）。先に足してから比べる", async () => {
-    const f = new FakeFreee();
-    const store = memoryStore(() => clock.now);
-    await connected(f, store);
-    f.addAllSeed();
-    const id = f.txnOf(INCOME_ITEM.no)!.id; // 入金（書かない）で数だけ見る
-    let deps = makeDeps(f, store);
-    for (let i = 0; i < 6; i++) assert.notEqual((await reg(deps, id, "shop", `10.0.0.${i}`)).status, 429);
-    assert.equal((await reg(deps, id, "shop", "10.0.0.99")).status, 429, "1分に6回まで（全体）");
-    // 同じ送り元から1日10回
-    const s2 = memoryStore(() => clock.now);
-    await connected(f, s2);
-    deps = makeDeps(f, s2);
-    for (let i = 0; i < 10; i++) {
-      at(T0 + i * 61_000);
-      assert.notEqual((await reg(deps, id, "shop", "10.1.1.1")).status, 429, `${i}`);
+  /** 1つの数え方を、設定の数どおりに確かめる（T0 は店の時の頭。call は送り元を決めて1回呼ぶ） */
+  async function limitsHold(kind: "register" | "read", call: (deps: FreeeDeps, ip: string) => Promise<Response>, ok: (r: Response) => boolean) {
+    const L = base.try[kind];
+    const fresh = async () => {
+      const f = new FakeFreee();
+      const st = memoryStore(() => clock.now);
+      await connected(f, st);
+      f.addAllSeed();
+      return { f, st, deps: makeDeps(f, st) };
+    };
+    // 1分（全体）
+    {
+      const { deps } = await fresh();
+      at(T0);
+      for (let i = 0; i < L.site.minute; i++) assert.ok(ok(await call(deps, `10.0.0.${i}`)), `1分 ${i}`);
+      const r = await call(deps, "10.0.0.99");
+      assert.equal(r.status, 429, "1分（全体）");
+      assert.equal((await bodyOf(r)).message, TRY_MESSAGES.limit);
     }
-    at(T0 + 11 * 61_000);
-    const over = await reg(deps, id, "shop", "10.1.1.1");
-    assert.equal(over.status, 429);
-    assert.equal((await bodyOf(over)).message, TRY_MESSAGES.senderLimit);
-    assert.notEqual((await reg(deps, id, "shop", "10.1.1.2")).status, 429, "ほかの送り元は数えない");
-    // 1日（全体）100回
-    const s3 = memoryStore(() => clock.now);
-    await connected(f, s3);
-    deps = makeDeps(f, s3);
-    for (let i = 0; i < 100; i++) {
-      at(T0 + Math.floor(i / 6) * 61_000);
-      assert.notEqual((await reg(deps, id, "shop", `10.2.${Math.floor(i / 10)}.${i % 10}`)).status, 429, `${i}`);
+    // 同じ送り元の1日（1分・1時間の上限に当てない間をあける）
+    {
+      const { deps } = await fresh();
+      const gap = Math.ceil(60 / L.source.hour + 1) * 60_000;
+      for (let i = 0; i < L.source.day; i++) {
+        at(T0 + i * gap);
+        assert.ok(ok(await call(deps, "10.1.1.1")), `送り元の1日 ${i}`);
+      }
+      at(T0 + L.source.day * gap);
+      const over = await call(deps, "10.1.1.1");
+      assert.equal(over.status, 429);
+      assert.equal((await bodyOf(over)).message, TRY_MESSAGES.senderLimit);
+      assert.ok(ok(await call(deps, "10.1.1.2")), "ほかの送り元は数えない");
     }
-    at(T0 + 20 * 61_000);
-    assert.equal((await reg(deps, id, "shop", "10.3.3.3")).status, 429, "1日に100回まで（全体）");
-    assert.equal(f.writes().length, 0);
+    // 同じ送り元の1時間（1日の上限ではないので「時間をおいて」）。次の時には通る
+    {
+      const { deps } = await fresh();
+      for (let i = 0; i < L.source.hour; i++) {
+        at(T0 + i * 61_000);
+        assert.ok(ok(await call(deps, "10.4.4.4")), `送り元の1時間 ${i}`);
+      }
+      at(T0 + L.source.hour * 61_000);
+      const over = await call(deps, "10.4.4.4");
+      assert.equal(over.status, 429);
+      assert.equal((await bodyOf(over)).message, TRY_MESSAGES.limit);
+      at(T0 + 3_600_000);
+      assert.ok(ok(await call(deps, "10.4.4.4")), "次の時には通る");
+    }
+    // 1時間（全体）：使い切っても、次の時には通る（止まるのは長くて1時間）
+    {
+      const { deps } = await fresh();
+      for (let i = 0; i < L.site.hour; i++) {
+        at(T0 + Math.floor(i / L.site.minute) * 61_000);
+        assert.ok(ok(await call(deps, `10.2.${Math.floor(i / 100)}.${i % 100}`)), `1時間 ${i}`);
+      }
+      at(T0 + 59 * 60_000);
+      const over = await call(deps, "10.3.3.3");
+      assert.equal(over.status, 429, "1時間（全体）");
+      assert.equal((await bodyOf(over)).message, TRY_MESSAGES.limit);
+      at(T0 + 3_600_000);
+      assert.ok(ok(await call(deps, "10.3.3.3")), "次の時には通る");
+    }
+    // 1日（全体）：1日の数は1時間の割り振りの24倍以上（1時間ずつ使い切っても1日の数には届かない）。届いていたら止める
+    {
+      const { st, deps } = await fresh();
+      assert.ok(L.site.day >= L.site.hour * 24);
+      await st.set(FREEE_KV.count(kind, "day:2026-11-05"), String(L.site.day), { ex: 600 });
+      at(T0);
+      assert.equal((await call(deps, "10.5.5.5")).status, 429, "1日（全体）");
+    }
+  }
+
+  test("登録：同じ送り元（1日・1時間）・全体（1分・1時間・1日）。先に足してから比べる", async () => {
+    // 無い明細の番号（数えた後に「見つかりません」で何も書かない）で、数だけ見る
+    await limitsHold("register", (deps, ip) => reg(deps, 1, "shop", ip), (r) => r.status !== 429);
   });
 
-  test("読む・読み直す：1分30（全体）・同じ送り元から1日100・1日600（全体）。登録とは別に数える", async () => {
+  test("読む・読み直す：同じ送り元（1日・1時間）・全体（1分・1時間・1日）。登録とは別に数える", async () => {
+    await limitsHold("read", (deps, ip) => read(deps, ip), (r) => r.status === 200);
     const f = new FakeFreee();
     const store = memoryStore(() => clock.now);
     await connected(f, store);
-    let deps = makeDeps(f, store);
-    for (let i = 0; i < 30; i++) assert.equal((await read(deps, `10.9.0.${i}`)).status, 200);
+    const deps = makeDeps(f, store);
+    at(T0);
+    for (let i = 0; i < base.try.read.site.minute; i++) assert.equal((await read(deps, `10.9.0.${i}`)).status, 200);
     assert.equal((await read(deps, "10.9.1.1")).status, 429);
     assert.notEqual((await reg(deps, 1, "shop", "10.9.1.1")).status, 429, "登録の数とは別");
-    const s2 = memoryStore(() => clock.now);
-    await connected(f, s2);
-    deps = makeDeps(f, s2);
-    for (let i = 0; i < 100; i++) {
-      at(T0 + Math.floor(i / 30) * 61_000);
-      assert.equal((await read(deps, "10.8.8.8")).status, 200, `${i}`);
-    }
-    at(T0 + 5 * 61_000);
-    assert.equal((await read(deps, "10.8.8.8")).status, 429);
-    const s3 = memoryStore(() => clock.now);
-    await connected(f, s3);
-    deps = makeDeps(f, s3);
-    for (let i = 0; i < 600; i++) {
-      at(T0 + Math.floor(i / 30) * 61_000);
-      assert.equal((await read(deps, `10.${Math.floor(i / 100)}.${i % 100}.1`)).status, 200, `${i}`);
-    }
-    at(T0 + 21 * 61_000);
-    assert.equal((await read(deps, "10.200.0.1")).status, 429);
   });
 
   test("生の IP は置き場にも返事にも残らない（日ごとの塩と合わせたハッシュで数える）", async () => {
@@ -736,7 +771,7 @@ describe("freee：来た人の窓口の上限", () => {
     assert.equal((await bodyOf(await reg(deps, t.id, "shop", "10.5.5.5"))).result, "registered");
     // 読むの1日の上限を使い切った
     const date = "2026-11-05";
-    await store.set(FREEE_KV.count("read", `day:${date}`), String(base.try.read.daily), { ex: 600 });
+    await store.set(FREEE_KV.count("read", `day:${date}`), String(base.try.read.site.day), { ex: 600 });
     at(clock.now + holdMs + 1000);
     const r = await read(deps, "10.6.6.6");
     assert.equal(r.status, 429);
@@ -1109,12 +1144,14 @@ describe("freee：数え方は同じ送り元 → 1分 → 1日（1つの送り�
       at(T0 + i * 61_000);
       await reg(deps, id, "shop", "198.51.100.50");
     }
-    assert.equal(await store.get(FREEE_KV.count("register", "day:2026-11-05")), String(base.try.register.perSenderDaily), "全体の1日はその送り元の上限まで");
+    const regDay = Number(await store.get(FREEE_KV.count("register", "day:2026-11-05")));
+    assert.ok(regDay > 0 && regDay <= base.try.register.source.day, `全体の1日はその送り元の上限まで（${regDay}）`);
     for (let i = 0; i < 200; i++) {
       at(T0 + i * 3_000);
       await read(deps, "198.51.100.50");
     }
-    assert.equal(await store.get(FREEE_KV.count("read", "day:2026-11-05")), String(base.try.read.perSenderDaily));
+    const readDay = Number(await store.get(FREEE_KV.count("read", "day:2026-11-05")));
+    assert.ok(readDay > 0 && readDay <= base.try.read.source.day, `${readDay}`);
     at(T0 + 200 * 61_000);
     assert.notEqual((await reg(deps, id, "shop", "198.51.100.51")).status, 429, "ほかの送り元は通る");
     assert.equal((await read(deps, "198.51.100.51")).status, 200);
@@ -1125,22 +1162,24 @@ describe("freee：数え方は同じ送り元 → 1分 → 1日（1つの送り�
     const store = memoryStore(() => clock.now);
     await connected(f, store);
     const deps = makeDeps(f, store);
-    for (let i = 0; i < base.try.read.perSenderDaily; i++) {
-      at(T0 + Math.floor(i / 25) * 61_000);
+    const N = base.try.read.source.day;
+    const spaced = (i: number) => T0 + i * 5 * 60_000; // 1分・1時間の上限に当てない
+    for (let i = 0; i < N; i++) {
+      at(spaced(i));
       assert.equal((await read(deps, `2001:db8:1:2::${(i + 1).toString(16)}`)).status, 200, `${i}`);
     }
-    at(T0 + 10 * 61_000);
+    at(spaced(N));
     assert.equal((await read(deps, "2001:db8:1:2:ffff:ffff:ffff:ffff")).status, 429, "同じ /64");
     assert.equal((await read(deps, "2001:db8:1:3::1")).status, 200, "違う /64");
     // IPv4 と、それを写した IPv6 は同じ送り元
     const s2 = memoryStore(() => clock.now);
     await connected(f, s2);
     const d2 = makeDeps(f, s2);
-    for (let i = 0; i < base.try.read.perSenderDaily; i++) {
-      at(T0 + Math.floor(i / 25) * 61_000);
+    for (let i = 0; i < N; i++) {
+      at(spaced(i));
       await read(d2, i % 2 ? "192.0.2.80" : "::ffff:192.0.2.80");
     }
-    at(T0 + 10 * 61_000);
+    at(spaced(N));
     assert.equal((await read(d2, "::ffff:192.0.2.80")).status, 429);
   });
 });
@@ -1669,5 +1708,131 @@ describe("freee：送ったか分からない一歩の 404 の後は、明細が
     at(clock.now + holdMs + 1);
     assert.equal((await bodyOf(await read(makeDeps(f, mem), "10.11.0.2"))).trial.phase, "free");
     assert.equal(f.txnOf(SHOP_ITEM.no)!.status, 1);
+  });
+});
+
+describe("直しX：freee の一時的な断り（429・409・423）は、元に戻す途中でも要復旧にしない", () => {
+
+  for (const status of [429, 409, 423]) {
+    test(`取引を消す所で ${status}：区切って次の回に続き、元に戻る`, async () => {
+      const f = new FakeFreee();
+      const store = memoryStore(() => clock.now);
+      await connected(f, store);
+      f.addAllSeed();
+      const deps = makeDeps(f, store);
+      assert.equal((await bodyOf(await reg(deps, f.txnOf(PRIVATE_ITEM.no)!.id, "private"))).result, "registered");
+      at(clock.now + holdMs + 1);
+      f.refuseOnce = { method: "DELETE", path: /^\/api\/1\/deals\//, status };
+      const b1 = await bodyOf(await read(deps));
+      assert.equal(b1.trial.phase, "restoring", "要復旧にしない");
+      const t1 = await loadTrial(store);
+      assert.equal(t1.repair, false);
+      assert.equal(t1.items[0].deleting, null, "受けられなかった一歩は外す（次の回の 404 を「もう無い」と受けない）");
+      const b2 = await bodyOf(await read(deps));
+      assert.equal(b2.trial.phase, "free");
+      assert.equal((await loadTrial(store)).items.length, 0);
+      assert.equal(f.deals.size, 0);
+      assert.equal(f.txnOf(PRIVATE_ITEM.no)!.status, 1);
+    });
+  }
+
+  test("読み直す所で 429：区切って次の回に続き、元に戻る", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    const deps = makeDeps(f, store);
+    assert.equal((await bodyOf(await reg(deps, f.txnOf(SHOP_ITEM.no)!.id, "shop"))).result, "registered");
+    at(clock.now + holdMs + 1);
+    f.refuseOnce = { method: "GET", path: /^\/api\/1\/wallet_txns$/, status: 429 };
+    assert.equal((await bodyOf(await read(deps))).trial.phase, "restoring");
+    assert.equal((await loadTrial(store)).repair, false);
+    assert.equal((await bodyOf(await read(deps))).trial.phase, "free");
+    assert.equal(f.txnOf(SHOP_ITEM.no)!.status, 1);
+  });
+
+  test("作り直す所で 429：一歩は外し、次の回にもう一度作る（2つ作らない・要復旧にしない）", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    f.reopenOnDealDelete = false;
+    const deps = makeDeps(f, store);
+    const desc = f.txnOf(SHOP_ITEM.no)!.description;
+    const marked = () => f.txns.filter((t) => t.description === desc).length;
+    assert.equal((await bodyOf(await reg(deps, f.txnOf(SHOP_ITEM.no)!.id, "shop"))).result, "registered");
+    at(clock.now + holdMs + 1);
+    f.refuseOnce = { method: "POST", path: /^\/api\/1\/wallet_txns$/, status: 429 };
+    assert.equal((await bodyOf(await read(deps))).trial.phase, "restoring");
+    const t = await loadTrial(store);
+    assert.equal(t.repair, false);
+    assert.equal(t.items[0].step, "txn-deleted", "作り直しの一歩（recreating）は残さない");
+    assert.equal(marked(), 0);
+    assert.equal((await bodyOf(await read(deps))).trial.phase, "free");
+    assert.equal(marked(), 1, "見本の明細は1つだけ");
+    assert.equal(f.txnOf(SHOP_ITEM.no)!.status, 1);
+  });
+
+  for (const status of [400, 403]) {
+    test(`続けても変わらない断り ${status} は今どおり要復旧（明細を消さない・作り直さない）`, async () => {
+      const f = new FakeFreee();
+      const store = memoryStore(() => clock.now);
+      await connected(f, store);
+      f.addAllSeed();
+      f.privateDeleteStatus = status;
+      const deps = makeDeps(f, store);
+      assert.equal((await bodyOf(await reg(deps, f.txnOf(PRIVATE_ITEM.no)!.id, "private"))).result, "registered");
+      at(clock.now + holdMs + 1);
+      assert.equal((await bodyOf(await read(deps))).trial.phase, "repair");
+      assert.ok(!f.calls.some((c) => c.method === "DELETE" && c.path.startsWith("/api/1/wallet_txns/")));
+    });
+  }
+
+  test("401 は今どおり一時的な断りにしない（鍵が切れた扱い）", () => {
+    assert.deepEqual([...TRANSIENT_REFUSALS].sort(), [409, 423, 429]);
+  });
+});
+
+describe("直しX：同じ送り元が、元に戻るたびにすぐまた登録して試しを独り占めできない", () => {
+  test("同じ送り元の1時間の登録の数をこえたら、元に戻った後はほかの人が登録できる", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    f.addAllSeed();
+    const deps = makeDeps(f, store);
+    const A = "10.30.0.1";
+    const B = "10.30.0.2";
+    const shop = () => f.txnOf(SHOP_ITEM.no)!.id;
+    at(T0);
+    let n = 0;
+    // A：登録 → 5分たって元に戻る → すぐまた登録 …（1時間の数まで）
+    for (; n < base.try.register.source.hour; n++) {
+      assert.equal((await bodyOf(await reg(deps, shop(), "shop", A))).result, "registered", `${n}`);
+      at(clock.now + holdMs + 61_000);
+    }
+    const over = await reg(deps, shop(), "shop", A);
+    assert.equal(over.status, 429);
+    assert.equal((await bodyOf(over)).message, TRY_MESSAGES.limit);
+    // A は同じ時のうちは試しを始められない。ほかの人（B）は、元に戻った後に登録できる
+    const b = await bodyOf(await reg(deps, shop(), "shop", B));
+    assert.equal(b.result, "registered");
+    assert.ok(clock.now < T0 + 3_600_000, "同じ時のうち");
+  });
+
+  test("IPv6 は /64 を変えても、同じ /48 は広い束の数で止まる（ほかの /48 は通る）", async () => {
+    const f = new FakeFreee();
+    const store = memoryStore(() => clock.now);
+    await connected(f, store);
+    const deps = makeDeps(f, store);
+    const L = base.try.read;
+    for (let i = 0; i < L.wide.day; i++) {
+      at(T0 + i * 4 * 60_000); // 全体の1時間の割り振りに当てない
+      assert.equal((await read(deps, `2001:db8:9:${(i + 1).toString(16)}::1`)).status, 200, `${i}`);
+    }
+    at(T0 + L.wide.day * 4 * 60_000);
+    const over = await read(deps, "2001:db8:9:ffff::1");
+    assert.equal(over.status, 429);
+    assert.equal((await bodyOf(over)).message, TRY_MESSAGES.senderLimit);
+    assert.equal((await read(deps, "2001:db8:a:1::1")).status, 200);
   });
 });
