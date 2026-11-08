@@ -9,7 +9,7 @@
 // つないでいない時は呼ばない）。窓口がうまくいかなくても、作品の中の承認は今どおり効く。窓口を呼んでいる間（流れが動いている間）は
 // 広告の「承認」を押せない。知らせは広告のタブとホームの承認BOXで同じ1行（approvedNotice）。戻す案（AdRevertRow）からは呼ばない。
 // 直しY：知らせは次の操作まで出し続ける（承認待ちが0件になっても・ほかの行が残っていても）。持つのは、行が0件になっても外れない部品
-// （ホームは承認BOX＝ApprovalBox が持って渡す・広告のタブはこの部品が持つ。useAdDone）。「最初に戻す」で消す。
+// （ホームは承認BOX＝ApprovalBox が持って渡し、出すのも承認BOX（予約の行の知らせと同じ1行）・広告のタブはこの部品が持って出す。useAdDone）。「最初に戻す」で消す。
 
 import { useState } from "react";
 import { adDoneText, beginTry, type AdDone, type AdDoneSet, type Approved } from "@/lib/ads/live/notice";
@@ -107,7 +107,7 @@ export function AdApprovalRows({
 }: {
   seedRules: Rule[];
   standalone?: boolean;
-  /** ホームの承認BOXが持つ知らせ（渡された時はそれを使う。行が0件になってこの部品が外れても、知らせは承認BOXに残る） */
+  /** ホームの承認BOXが持つ知らせ（渡された時はそれを使い、出すのも承認BOX。行が0件になってこの部品が外れても、知らせは承認BOXに残る） */
   done?: AdDone | null;
   onDone?: AdDoneSet;
 }) {
@@ -307,7 +307,7 @@ export function AdApprovalRows({
         {row}
         {adds}
         <AdRevertRow onDone={setDone} />
-        {done && <AdDoneLine done={done} where="home" inList />}
+        {/* 知らせは承認BOX（ApprovalBox）が、予約の行の知らせと同じ1行で出す */}
       </>
     );
   return (

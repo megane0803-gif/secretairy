@@ -12,6 +12,7 @@ import { describe, test } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AdApprovalRows, AdDoneLine } from "../../../components/AdApprovalRows";
+import { ApprovalBoxFrame } from "../../../components/ApprovalBox";
 import { approvalQueue, approvalsFor } from "../../approvals";
 import { emptyBook } from "../../book/state";
 import { getAds } from "../../data/seed";
@@ -97,11 +98,11 @@ describe("直しY 1：広告の承認の知らせは、次の操作まで出し�
 
     // 画面：知らせを持つのは承認BOX。0件の時は「承認待ちはありません」の下に同じ1行（AdDoneLine）を出す
     const box_ = read("src/components/ApprovalBox.tsx");
-    assert.match(box_, /const \[adDone, setAdDone\] = useAdDone\(book\.state\.epoch\);/);
-    const empty = box_.slice(box_.indexOf("if (queue.count === 0)"), box_.indexOf("// 確定しない時"));
-    assert.match(empty, /<Checked>承認待ちはありません<\/Checked>/);
-    assert.match(empty, /\{only !== "reservations" && adDone && <AdDoneLine done=\{adDone\} where="home" inList=\{false\} \/>\}/);
-    assert.match(box_, /\{only !== "reservations" && <AdApprovalRows seedRules=\{data\.seedRules\} done=\{adDone\} onDone=\{setAdDone\} \/>\}/);
+    assert.match(box_, /const \[done, setDone\] = useAdDone\(book\.state\.epoch\);/);
+    assert.match(box_, /if \(queue\.count === 0\) return <ApprovalBoxFrame empty failed=\{failed\} notice=\{done\} \/>;/);
+    assert.match(box_, /\{only !== "reservations" && <AdApprovalRows seedRules=\{data\.seedRules\} done=\{done\} onDone=\{setDone\} \/>\}/);
+    const html = renderToStaticMarkup(createElement(ApprovalBoxFrame, { empty: true, failed: null, notice: box.get() }));
+    assert.ok(html.indexOf("承認待ちはありません") >= 0 && html.indexOf("承認待ちはありません") < html.indexOf(`✓ ${row.no}番「${row.text}」を止めました`), html);
     // 広告の行の部品は、渡された知らせを使う（自分の中に持たない）
     const rows = read("src/components/AdApprovalRows.tsx");
     assert.match(rows, /const \[done, setDone\]: \[AdDone \| null, AdDoneSet\] = onDone \? \[heldDone \?\? null, onDone\] : own;/);
@@ -203,10 +204,9 @@ describe("直しY 1：知らせの1行の部品（描いて確かめる）", () 
     assert.equal(renderToStaticMarkup(createElement(AdDoneLine, { done: "見送りました", where: "ads", inList: true })), '<li class="hint" role="status">見送りました</li>');
   });
 
-  test("ホームの広告の行の部品は、承認BOXから渡された知らせを出す（自分の行が無くても）", () => {
-    const html = renderToStaticMarkup(createElement(AdApprovalRows, { seedRules: getSeedRules(), done: a, onDone: () => {} }));
-    assert.equal(html, `<li class="hint" role="status">${approvedNotice(a, null, "home")}</li>`);
-    // 知らせが無ければ何も出さない
-    assert.equal(renderToStaticMarkup(createElement(AdApprovalRows, { seedRules: getSeedRules(), done: null, onDone: () => {} })), "");
+  test("ホームの広告の行の部品は、知らせを自分では出さない（承認BOXが予約の行の知らせと同じ1行で出す）", () => {
+    assert.equal(renderToStaticMarkup(createElement(AdApprovalRows, { seedRules: getSeedRules(), done: a, onDone: () => {} })), "");
+    const html = renderToStaticMarkup(createElement(ApprovalBoxFrame, { empty: false, failed: null, notice: a }, createElement("ul", { className: "approvals" })));
+    assert.equal(html, `<p class="hint" role="status">${approvedNotice(a, null, "home")}</p><ul class="approvals"></ul>`);
   });
 });
