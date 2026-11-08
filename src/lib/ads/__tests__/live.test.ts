@@ -932,6 +932,14 @@ describe("置き場（1日の上限・動いている印）", () => {
     assert.equal((await handleLiveRead(readReq("198.51.100.80"), w.deps)).status, 200);
   });
 
+  test("直しX：送った後の読み直しが1時間・1分の上限の時は「明日」と言わずにサーバーの文（1日の上限は今の1行）", () => {
+    const day = readFailedAfter("send", { ok: false, code: "limit", message: `今日の「読み直す」は${live.read.site.day}回までです` });
+    assert.match(day, new RegExp(READ_LIMIT_NOTE));
+    const soon = readFailedAfter("send", { ok: false, code: "limit", message: "「読み直す」が続いたので、しばらく（長くて1時間）待ってから押してください" });
+    assert.doesNotMatch(soon, /明日/);
+    assert.match(soon, /しばらく（長くて1時間）待ってから押してください。$/);
+  });
+
   test("直しX：読み直すと試すの数え方は同じ部品（src/lib/server/limits.ts の countCall）", () => {
     const src = readFileSync("src/lib/ads/live/server.ts", "utf8");
     assert.match(src, /countCall\(/);
