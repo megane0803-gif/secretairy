@@ -161,7 +161,7 @@ describe("README：AI の窓口の回数の止め", () => {
     for (const w of ["2026-11-08 14:14", "1〜10回目は 404", "11回目と12回目は 429"]) assert.ok(guard.includes(w), w);
     const unchecked = section("### 確かめていない範囲");
     assert.doesNotMatch(unchecked, /AI の窓口の回数の上限/);
-    assert.match(unchecked, /AI の窓口（`\/api\/ai\/`）の回数の止めは、本番で呼んで効いているのを確かめました/);
+    assert.match(unchecked, /AI の窓口（`\/api\/ai\/`）の回数の止めは、本番で[^。]*効いているのを確かめました/);
   });
 
   test("Firewall の止めは AI の窓口の行にだけ書く（広告と経理の試しの窓口の行には書かない）", () => {
