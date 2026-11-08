@@ -35,8 +35,8 @@ describe("README：入口の塊（一番上・中央寄せ）", () => {
 
   test("題名のすぐ下に、だれが・何に困っている → 作品が何をする、の順の1段", () => {
     const pitch = top.slice(top.indexOf("</h1>"), top.indexOf("本番を開く"));
-    const who = pitch.indexOf("1人で営業する美容室のオーナー");
-    const trouble = pitch.indexOf("後回し");
+    const who = pitch.indexOf("1人で営業する美容室");
+    const trouble = pitch.indexOf("全部を1人でこなすのは大変");
     const what = pitch.indexOf("AI 秘書");
     assert.ok(who >= 0 && trouble > who && what > trouble, pitch);
   });
