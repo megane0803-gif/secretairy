@@ -83,7 +83,8 @@
     "maxItems": 30,
     "maxItemChars": 200,
     "maxRequestChars": 30000,
-    "maxCachedAnswers": 20
+    "maxCachedAnswers": 20,
+    "minIntervalSeconds": 60
   },
   "eval": {
     "minIntervalSeconds": 7,
