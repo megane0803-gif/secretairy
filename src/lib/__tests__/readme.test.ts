@@ -83,6 +83,17 @@ describe("README：30秒で分かる要点と畳んだ節", () => {
     assert.ok(readme.indexOf("## 現場の決まりの例：店の中の都合はお客様に言わない") > readme.indexOf("## できること"));
   });
 
+  test("「5分で試すなら」のすぐ後に、畳んだ「使い方ガイド（タブごと）」があり、8つのタブを1つずつ説明する", () => {
+    const five = readme.indexOf("### 5分で試すなら");
+    const guide = readme.indexOf("\n### 使い方ガイド（タブごと）\n");
+    assert.ok(five >= 0 && guide > five, "ガイドは5分で試すならの後");
+    assert.ok(guide < readme.indexOf("## だれが・どんな場面で困るか"), "ガイドは次の節の前");
+    const sec = section("### 使い方ガイド（タブごと）");
+    assert.match(sec, /^\s*<details>\n<summary>[^<\n]+<\/summary>/);
+    const tabs = [...sec.matchAll(/^- \*\*([^*]+)\*\*$/gm)].map((m) => m[1]);
+    assert.deepEqual(tabs, ["ホーム", "予約", "カルテ", "広告", "経理", "ToDo", "発信", "ルール"]);
+  });
+
   test("<details> は全部 <summary> を持って閉じている", () => {
     const opens = readme.match(/^<details>$/gm)?.length ?? 0;
     assert.ok(opens > 0);
