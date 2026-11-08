@@ -2,6 +2,9 @@
 
 <p align="center">日本語版: <a href="README.md">README.md</a></p>
 
+<p align="center"><b>This is an English summary of the main README (Japanese).</b><br>
+  Full details (how to run it, environment variables, where data is kept, how it is protected, production test results and more) are in the <a href="README.md">Japanese README</a>.</p>
+
 <p align="center">
   In a hair salon run by one person, the owner has to do every job alone: the treatments, and also the paperwork such as bookings, client charts (karte), ads and accounting. During a treatment their hands are busy, so the paperwork waits until after business hours, and doing everything alone is hard.<br>
   SecretAIry is an app in which an AI secretary prepares tentative booking holds, chart drafts, ad review proposals and post drafts; the AI does not confirm anything, and the decision is always a person's button.

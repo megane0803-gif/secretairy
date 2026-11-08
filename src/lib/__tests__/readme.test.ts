@@ -197,8 +197,8 @@ function slug(heading: string): string {
 describe("README：言葉の切りかえと目次の横並び", () => {
   const top = readme.slice(0, readme.indexOf("## 30秒で分かる要点"));
 
-  test("題名のすぐ下に、英語版へのリンク", () => {
-    assert.match(readme, /^<h1 align="center">[^\n]+<\/h1>\n\n<p align="center">English version: <a href="README\.en\.md">README\.en\.md<\/a><\/p>\n/);
+  test("題名のすぐ下に、英語版（要約版）へのリンク", () => {
+    assert.match(readme, /^<h1 align="center">[^\n]+<\/h1>\n\n<p align="center">English version \(summary\): <a href="README\.en\.md">README\.en\.md<\/a><\/p>\n/);
   });
 
   test("入口の塊（写真）のすぐ下に目次の横並び。どのリンクも今ある見出しに飛ぶ", () => {
@@ -219,6 +219,13 @@ describe("README.en.md（英語の要約版）", () => {
   test("一番上の階層にあり、題名のすぐ下に日本語版へのリンク", () => {
     assert.ok(statSync(join(ROOT, "README.en.md")).isFile());
     assert.match(en, /^<h1 align="center">SecretAIry<\/h1>\n\n<p align="center">日本語版: <a href="README\.md">README\.md<\/a><\/p>\n/);
+  });
+
+  test("切りかえの行のすぐ下に、要約版であることと、くわしい説明は日本語の README にあることの1段", () => {
+    const m = en.match(/<\/a><\/p>\n\n<p align="center">([\s\S]*?)<\/p>/);
+    assert.ok(m, "切りかえの行のすぐ下の段");
+    assert.match(m[1], /This is an English summary of the main README \(Japanese\)\./);
+    assert.match(m[1], /are in the <a href="README\.md">Japanese README<\/a>\./);
   });
 
   test("入口：本番・デモ動画（同じ URL）・すぐ下に「Narration is synthesized speech」・写真は同じ物で押すと本番", () => {
