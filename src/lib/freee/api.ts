@@ -21,6 +21,13 @@ export class FreeeRejected extends Error {
     super(`freee が受けませんでした（${status}）`);
   }
 }
+/**
+ * freee の一時的な断り（429 回数の上限・409 ぶつかり・423 ほかが使っている）。受けられていないので、続きは次の回にやり直す。
+ * 400・401・403・404 など、続けても変わらない断りは入れない。元に戻す処理（trial.ts）と鍵を延ばす所（kv.ts）が、この1か所で分ける。
+ */
+export const TRANSIENT_REFUSALS: readonly number[] = [409, 423, 429];
+export const isTransientRefusal = (e: unknown): boolean => e instanceof FreeeRejected && TRANSIENT_REFUSALS.includes(e.status);
+
 export class FreeeServerError extends Error {
   constructor(public status: number) {
     super(`freee の返事が途切れました（${status}）`);

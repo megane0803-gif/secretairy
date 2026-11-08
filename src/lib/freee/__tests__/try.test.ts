@@ -95,10 +95,14 @@ class FakeFreee {
   /** 更新の返事の前に（つなぎを外す・遅らせる） */
   beforeRefreshAnswer: (() => Promise<void>) | null = null;
   refuseRefresh = false;
+  /** 延ばす窓口が、この status を返す（"drop" は返事を途切れさせる）。null なら今どおり */
+  refreshAnswer: number | "drop" | null = null;
   /** freee を呼ぶたびに時計を進める（ms） */
   tick = 0;
   /** 1回だけ、この呼び出しに status を返す（一時的な断り 429・409・423 など） */
   refuseOnce: { method: string; path: RegExp; status: number } | null = null;
+  /** 外すまで毎回、この呼び出しに status を返す */
+  refuseAlways: { method: string; path: RegExp; status: number } | null = null;
 
   fetch = async (input: string, init?: RequestInit): Promise<Response> => {
     clock.now += this.tick;
@@ -112,6 +116,8 @@ class FakeFreee {
     if (isToken) {
       const b = body as Record<string, string>;
       if (b.grant_type === "refresh_token") {
+        if (this.refreshAnswer === "drop") throw new TypeError("network");
+        if (this.refreshAnswer !== null) return ok({ error: "x" }, this.refreshAnswer);
         if (this.refuseRefresh || b.refresh_token !== this.refresh) return ok({ error: "invalid_grant" }, 400);
         this.issued++;
         this.access = `acc-${this.issued}`;
@@ -122,6 +128,7 @@ class FakeFreee {
     }
     const auth = (init?.headers as Record<string, string> | undefined)?.Authorization;
     if (auth !== `Bearer ${this.access}`) return ok({ message: "unauthorized" }, 401);
+    if (this.refuseAlways && this.refuseAlways.method === method && this.refuseAlways.path.test(url.pathname)) return ok({ message: "x" }, this.refuseAlways.status);
     if (this.refuseOnce && this.refuseOnce.method === method && this.refuseOnce.path.test(url.pathname)) {
       const st = this.refuseOnce.status;
       this.refuseOnce = null;
@@ -1639,7 +1646,7 @@ describe("freee：延ばすのを断られた鍵で、freee を呼び続けな�
     f.refuseRefresh = true;
     assert.equal((await bodyOf(await read(makeDeps(f, mem), "10.7.0.1"))).code, "not-connected");
     assert.equal(f.tokenCalls("refresh_token"), 1);
-    for (let i = 0; i < 5; i++) assert.equal((await bodyOf(await read(makeDeps(f, mem), "10.7.0.1"))).code, "not-connected");
+    for (let i = 0; i < 5; i++) assert.equal((await bodyOf(await read(makeDeps(f, mem), `10.7.1.${i}`))).code, "not-connected");
     assert.equal(f.tokenCalls("refresh_token"), 1, "2回目からは freee を呼ばない");
     assert.ok(await mem.get(FREEE_KV.token), "鍵の場所には触らない");
     const st = await handleStatus(ownerReq("/api/freee/status", { method: "GET", cookie: ownerCookie(f.access) }), makeDeps(f, mem));
@@ -1837,5 +1844,110 @@ describe("直しX：同じ送り元が、元に戻るたびにすぐまた登録
     assert.equal(over.status, 429);
     assert.equal((await bodyOf(over)).message, TRY_MESSAGES.senderLimit);
     assert.equal((await read(deps, "2001:db8:a:1::1")).status, 200);
+  });
+});
+
+describe("直しX：鍵を延ばす時の一時的な断り・5xx・通信切れでは「延ばせない鍵」の印を付けない", () => {
+  for (const answer of [429, 409, 423, 500, 503, "drop"] as const) {
+    test(`延ばす時に ${answer}：印を付けず、次の回にやり直して延ばせる`, async () => {
+      const f = new FakeFreee();
+      const mem = memoryStore(() => clock.now);
+      // 期限の少し前（延ばす時。今の鍵はまだ使える）
+      await connected(f, mem, { expiresAt: clock.now + 60_000 });
+      f.refreshAnswer = answer;
+      assert.equal((await read(makeDeps(f, mem), "10.8.0.1")).status, 200, "今の鍵がまだ切れていなければそれを使う");
+      assert.equal(await mem.get(FREEE_KV.dead), null, "印は付けない");
+      assert.equal(f.tokenCalls("refresh_token"), 1);
+      // 期限が切れた後の断りでも、印は付けない（その回はつながっていない扱い）
+      at(clock.now + 120_000);
+      const r = await bodyOf(await read(makeDeps(f, mem), "10.8.0.2"));
+      assert.equal(r.code, "not-connected");
+      assert.equal(await mem.get(FREEE_KV.dead), null);
+      assert.equal(f.tokenCalls("refresh_token"), 2, "次の回にもう一度延ばしに行く");
+      // freee が戻れば、次の回に延ばせる
+      f.refreshAnswer = null;
+      assert.equal((await read(makeDeps(f, mem), "10.8.0.3")).status, 200);
+      assert.equal(f.tokenCalls("refresh_token"), 3);
+      assert.equal((await readKvToken(ctxOf(mem)))!.token.refreshToken, f.refresh, "延ばした鍵を置いた");
+    });
+  }
+
+  for (const answer of [400, 401] as const) {
+    test(`延ばす時に ${answer}（続けても変わらない断り）：今どおり印を付け、2回目からは freee を呼ばない`, async () => {
+      const f = new FakeFreee();
+      const mem = memoryStore(() => clock.now);
+      await connected(f, mem, { expiresAt: clock.now - 1 });
+      f.refreshAnswer = answer;
+      assert.equal((await bodyOf(await read(makeDeps(f, mem), "10.9.0.1"))).code, "not-connected");
+      assert.ok(await mem.get(FREEE_KV.dead), "印を付ける");
+      assert.equal((await bodyOf(await read(makeDeps(f, mem), "10.9.0.2"))).code, "not-connected");
+      assert.equal(f.tokenCalls("refresh_token"), 1, "2回目からは freee を呼ばない");
+    });
+  }
+});
+
+describe("直しX：同じ送り元の上限をこえた呼び出しは、元に戻す処理を動かさず、書く時の印も取らない", () => {
+  /** 書く時の印を取ろうとした回数を数える置き場 */
+  function spied(mem: ReturnType<typeof memoryStore>) {
+    const tries = { n: 0 };
+    const store: KvStore = { ...mem, set: async (k, v, o) => (k === FREEE_KV.writeLock && tries.n++, mem.set(k, v, o)) };
+    return { store, tries };
+  }
+
+  test("元に戻すが区切られ続けても、同じ送り元の上限をこえた呼び出しは印を取らず、オーナーの「明細を入れる」「登録」「外す」は止まらない", async () => {
+    const f = new FakeFreee();
+    const mem = memoryStore(() => clock.now);
+    await connected(f, mem);
+    f.addAllSeed();
+    const { store, tries } = spied(mem);
+    const deps = makeDeps(f, store);
+    at(T0);
+    assert.equal((await bodyOf(await reg(deps, f.txnOf(SHOP_ITEM.no)!.id, "shop", "10.40.0.1"))).result, "registered");
+    at(clock.now + holdMs + 1000);
+    // 元に戻すが、freee の一時的な断りで区切られ続ける
+    f.refuseAlways = { method: "DELETE", path: /^\/api\/1\/deals\//, status: 429 };
+    const X = "10.40.0.9";
+    // 上限まで（ここでは元に戻すを試す）
+    let within = 0;
+    for (; within < 50; within++) if ((await read(deps, X)).status === 429) break;
+    assert.ok(within > 0 && within < 50);
+    // 上限をこえた後は、何回呼んでも印を取らない・freee も呼ばない
+    const before = tries.n;
+    const calls = f.calls.length;
+    for (let i = 0; i < 30; i++) {
+      const r = await read(deps, X);
+      assert.equal(r.status, 429);
+      assert.ok([TRY_MESSAGES.limit, TRY_MESSAGES.senderLimit].includes((await bodyOf(r)).message));
+    }
+    assert.equal(tries.n, before, "書く時の印を取らない");
+    assert.equal(f.calls.length, calls, "freee を呼ばない");
+    assert.equal(await mem.get(FREEE_KV.writeLock), null);
+    // オーナーの書く操作は止まらない（409 にならない）
+    const cookie = ownerCookie(f.access);
+    const own = f.txnOf(PRIVATE_ITEM.no)!;
+    assert.equal((await bodyOf(await handleRegister(ownerReq("/api/freee/register", { cookie, body: { id: own.id, use: "private", account: "card", date: own.date, amount: own.amount } }), deps))).result, "registered");
+    assert.notEqual((await handleImport(ownerReq("/api/freee/import", { cookie }), deps)).status, 409);
+    assert.notEqual((await handleDisconnect(ownerReq("/api/freee/disconnect", { cookie }), deps)).status, 409);
+  });
+
+  test("全体の上限をこえただけの新しい送り元が来た時は、今どおり元に戻す", async () => {
+    const f = new FakeFreee();
+    const mem = memoryStore(() => clock.now);
+    await connected(f, mem);
+    f.addAllSeed();
+    const { store, tries } = spied(mem);
+    const deps = makeDeps(f, store);
+    at(T0);
+    assert.equal((await bodyOf(await reg(deps, f.txnOf(SHOP_ITEM.no)!.id, "shop", "10.41.0.1"))).result, "registered");
+    // 読むの全体の1日を使い切った
+    await mem.set(FREEE_KV.count("read", "day:2026-11-05"), String(base.try.read.site.day), { ex: 600 });
+    at(clock.now + holdMs + 1000);
+    const before = tries.n;
+    const r = await read(deps, "10.41.0.2");
+    assert.equal(r.status, 429);
+    assert.equal((await bodyOf(r)).message, TRY_MESSAGES.limit);
+    assert.ok(tries.n > before, "書く時の印を取って元に戻した");
+    assert.equal((await loadTrial(mem)).items.length, 0, "元に戻した");
+    assert.equal(f.txnOf(SHOP_ITEM.no)!.status, 1);
   });
 });

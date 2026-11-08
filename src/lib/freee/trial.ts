@@ -18,7 +18,7 @@ import { accountOf, sideOf } from "../accounting/rows";
 import type { AccountingSeed, CardItem, CardUse, StatementAccount } from "../data/types";
 import type { KvStore } from "../line/store";
 import type { FreeeSettings } from "../settings";
-import { FreeeExpired, FreeeOutOfTime, FreeeRejected, type FreeeClient, type WalletTxn } from "./api";
+import { FreeeExpired, FreeeOutOfTime, FreeeRejected, isTransientRefusal, TRANSIENT_REFUSALS, type FreeeClient, type WalletTxn } from "./api";
 import { FREEE_KV, kv, StoreDown, type StillHeld } from "./kv";
 import { descriptionOf, hasMark, markIn, markOf, pickBankAccount, pickCardAccount, WALLETABLE_TYPE } from "./match";
 
@@ -202,12 +202,9 @@ export type RestoreResult = "done" | "partial" | "repair";
 /** 印の期限が来ていた（書く前に区切る。この後は置き場に書かない） */
 class LockLost extends Error {}
 
-/**
- * freee の一時的な断り（429 回数の上限・409 ぶつかり・423 ほかが使っている）。その一歩は受けられていないので、
- * 要復旧にせず区切り、次の回に続ける（置いた一歩は外す）。400・401・403・404 など、続けても変わらない断りは今どおり。
- */
-export const TRANSIENT_REFUSALS: readonly number[] = [409, 423, 429];
-export const isTransientRefusal = (e: unknown): boolean => e instanceof FreeeRejected && TRANSIENT_REFUSALS.includes(e.status);
+// freee の一時的な断り（429・409・423）は、その一歩が受けられていないので、要復旧にせず区切り、次の回に続ける（置いた一歩は外す）。
+// 分け方は api.ts の isTransientRefusal の1か所（鍵を延ばす所と同じ）
+export { isTransientRefusal, TRANSIENT_REFUSALS };
 /** 一歩を記録に置けなかった（送っていない。一歩は外して区切る） */
 class StepNotPlaced extends Error {}
 

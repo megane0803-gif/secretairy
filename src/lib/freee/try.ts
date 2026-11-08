@@ -13,7 +13,8 @@
 // 広い束（IPv6 の /48）→ 全体（1分・1時間の割り振り・1日）。数え方は広告と共通の src/lib/server/limits.ts。店の日付ごと。
 // 先に足してから比べる。置き場が使えない時は受けない 503）。送り元は Vercel が付ける IP を日ごとの塩と合わせたハッシュで数え、生の IP は残さない。
 // 同じ送り元の1時間の登録の数は、元に戻るたびにすぐまた登録して、試しを長く独り占めしないための物。
-// 窓口の頭で、5分をこえた試しを先に元に戻してから続ける（元に戻すは回数の上限とは別に数え、上限で止めない）。
+// 窓口の頭で、5分をこえた試しを先に元に戻してから続ける（元に戻すは回数の上限とは別に数え、全体の上限で止めない。
+// 同じ送り元の上限をこえた呼び出しは、元に戻す処理を動かさず、書く時の印も取らずに断る）。
 // 返事とログには決まった短い理由だけ（freee の生のエラー文・事業所の番号・鍵・IP・ハッシュは出さない）。結果が分からない時は送り直さない。
 
 import { accountOf } from "../accounting/rows";
@@ -65,16 +66,24 @@ async function senderHashes(deps: FreeeDeps, request: Request, date: string): Pr
 /**
  * 先に足してから比べる（同時に来ても数えもれが無い。src/lib/server/limits.ts の countCall・広告のだれでも試すと同じ数え方）。
  * 同じ送り元 → 広い束 → 全体の1分・1時間・1日の順で、こえたらそこで止め、先の数は足さない。
- * 同じ送り元・広い束の1日に届いた時は "sender"（「今日はここから…」）、ほかは "limit"（「時間をおいてから」）。
+ * 同じ送り元・広い束でこえた時は "source"（1日なら「今日はここから…」、1時間・1分なら「時間をおいてから」）、全体でこえた時は "site"。
  */
-async function countUnder(deps: FreeeDeps, kind: Kind, date: string, sender: { narrow: string; wide: string | null }): Promise<"ok" | "limit" | "sender"> {
+async function countUnder(
+  deps: FreeeDeps,
+  kind: Kind,
+  date: string,
+  sender: { narrow: string; wide: string | null },
+): Promise<{ at: "ok" } | { at: "source"; message: string } | { at: "site" }> {
   const store = deps.store!;
   const clock = shopClock(deps.timeZone, deps.now());
   const hit = await countCall(
     { incr: (k, ex) => kv(() => store.incr(k, ex)), prefix: FREEE_KV.countPrefix(kind), date, hour: clock.hour, minute: clock.minute, sender },
     deps.settings.try[kind],
   );
-  return hit === "ok" ? "ok" : hit === "source-day" || hit === "wide-day" ? "sender" : "limit";
+  if (hit === "ok") return { at: "ok" };
+  if (hit === "source-day" || hit === "wide-day") return { at: "source", message: TRY_MESSAGES.senderLimit };
+  if (hit === "source-soon") return { at: "source", message: TRY_MESSAGES.limit };
+  return { at: "site" };
 }
 
 // ---- 読む ----
@@ -162,6 +171,9 @@ async function tryUnder(request: Request, deps: FreeeDeps, c: KvCtx, action: Kin
   // 試しの持ち主（trial.by）は今の束（narrow）のハッシュで決める（前と同じ）
   const sender = senders.narrow;
   const under = await countUnder(deps, action, date, senders);
+  // 同じ送り元（と同じ /48）の上限をこえた呼び出しは、元に戻す処理を動かさず、書く時の印も取らない（鍵も読まない）。
+  // 全体の上限をこえただけの呼び出しは、下で今どおり元に戻してから断る（元に戻すは来た人の上限で止めない）
+  if (under.at === "source") return fail("limit", under.message, 429);
   const access = await kvAccess({ ...c, fetch: deps.fetch, clientId: deps.env.clientId!, clientSecret: deps.env.clientSecret!, companyId: deps.env.companyId! });
   if (!access.ok) return access.why === "busy" ? fail("busy", TRY_MESSAGES.wait, 409) : fail("not-connected", TRY_MESSAGES.notConnected, 200);
   const tok = access.token;
@@ -189,8 +201,7 @@ async function tryUnder(request: Request, deps: FreeeDeps, c: KvCtx, action: Kin
       trial = r.trial;
     }
   }
-  if (under === "sender") return fail("limit", TRY_MESSAGES.senderLimit, 429);
-  if (under === "limit") return fail("limit", TRY_MESSAGES.limit, 429);
+  if (under.at === "site") return fail("limit", TRY_MESSAGES.limit, 429);
 
   if (action === "read") return tryRead(deps, c, tok, sender, trial, note, range);
   return tryRegister(deps, c, tok, sender, target!, range);

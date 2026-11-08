@@ -9,7 +9,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { KvStore } from "../line/store";
 import type { FreeeSettings } from "../settings";
-import { FreeeRejected, refreshAccessToken, type FetchLike } from "./api";
+import { FreeeRejected, isTransientRefusal, refreshAccessToken, type FetchLike } from "./api";
 import { seal, unseal } from "./seal";
 
 export const FREEE_KV = {
@@ -162,7 +162,8 @@ export type KvAccess = { ok: true; token: KvToken } | { ok: false; why: "none" |
  * - 延ばしている最中（印が取れない）：今の鍵がまだ切れていなければそれを使い、切れていれば busy（少し待ってから）
  * - 延ばした新しい鍵は、使う前に置き場に書く。書けなければ、古い更新用の鍵はもう使えないので、つながっていない扱い（鍵を消す）
  * - 番号が変わっていたら（延ばしている途中につなぎを外された）、延ばした鍵は書かずに捨てる
- * - freee が更新を受けなかった：鍵を消して、つながっていない扱い（自分でつなぎ直そうとしない）
+ * - freee が更新を受けなかった（続けても変わらない断り）：「延ばせない鍵」の印を置き、つながっていない扱い（自分でつなぎ直そうとしない）。
+ * - 一時的な断り（429・409・423）・5xx・返事が無い：印を付けず、次の回にもう一度延ばす
  */
 export async function kvAccess(c: KvCtx & { fetch: FetchLike; clientId: string; clientSecret: string; companyId: number }): Promise<KvAccess> {
   const got = await readKvToken(c);
@@ -200,7 +201,9 @@ export async function kvAccess(c: KvCtx & { fetch: FetchLike; clientId: string; 
     try {
       ans = await refreshAccessToken({ fetch: c.fetch, settings: c.settings, clientId: c.clientId, clientSecret: c.clientSecret, refreshToken: t.refreshToken });
     } catch (e) {
-      if (e instanceof FreeeRejected) {
+      // 一時的な断り（429・409・423）は、5xx・返事が無い時と同じに、印を付けずに次の回にやり直す（下の「返事が無い」の道）。
+      // 印を付けるのは、続けても変わらない断り（400・401 など）の時だけ
+      if (e instanceof FreeeRejected && !isTransientRefusal(e)) {
         // 鍵は消さない：ほかの呼び出しがもう延ばして新しい鍵を置いたのに、こちらは古い写しを読んで古い更新用の鍵を送ったのかもしれない
         // （消すと、その新しい鍵まで消してしまう）。かわりに、この鍵の中身のハッシュを「延ばせなかった」の印に置く。
         // 今の鍵の中身と合う時だけ効くので、新しい鍵には効かない。次からは freee を呼ばずに「つながっていない」。つなぎ直すと外れる
@@ -211,7 +214,8 @@ export async function kvAccess(c: KvCtx & { fetch: FetchLike; clientId: string; 
         }
         return { ok: false, why: "none" };
       }
-      // 返事が無い：更新用の鍵が使われたかどうか分からない。今の鍵が切れていなければそれを使う（次に延ばす時に freee が決める）
+      // 返事が無い・5xx・一時的な断り：更新用の鍵が使われたかどうか分からない（一時的な断りは使われていない）。
+      // 「延ばせない鍵」の印は付けず、今の鍵が切れていなければそれを使う（次の回にもう一度延ばす。次に延ばす時に freee が決める）
       return t.expiresAt > c.now() ? { ok: true, token: t } : { ok: false, why: "none" };
     }
     if (ans.companyId !== null && ans.companyId !== c.companyId) {
