@@ -19,6 +19,31 @@
 </p>
 
 <p align="center">
+  動画の場面へ：
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=47">ホーム（0:47）</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=57">予約（0:57）</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=71">LINE（1:11）</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=77">カルテ（1:17）</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=92">AI の仕事（1:32）</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=106">広告（1:46）</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=122">経理（2:02）</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=133">発信（2:13）</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=143">ToDo（2:23）</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=150">ルール（2:30）</a>
+  ｜
+  <a href="https://youtu.be/Lw1JhyqQ7bQ?t=163">AI の費用（2:43）</a>
+</p>
+
+<p align="center">
   <a href="https://secretairy.vercel.app"><img src="docs/images/home.png" width="560" alt="SecretAIry のホーム（最初に戻した後の画面。右上が承認BOX）"></a>
 </p>
 
