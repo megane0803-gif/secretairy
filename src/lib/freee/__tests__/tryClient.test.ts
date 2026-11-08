@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { Post } from "../run";
-import { phaseLine, readTryAnswer, restoreNote, TRY_PATH, TRY_REGISTERED_NOTE, tryRegister, type TryInfo, type TryPhase } from "../tryClient";
+import { phaseLine, readTryAnswer, restoreNote, reuseOpenRead, TRY_PATH, TRY_REGISTERED_NOTE, tryRegister, type TryInfo, type TryPhase } from "../tryClient";
 
 const NOW = () => "2026-11-05T03:00:00.000Z";
 const info = (items: TryInfo["items"], phase: TryPhase = "holding"): TryInfo => ({ phase, minutes: 5, mine: true, items, holdMinutes: 5, maxItems: 2 });
@@ -68,5 +68,19 @@ describe("freee：来た人の画面の呼び方", () => {
     const lines = [restoreNote(5), ...(["holding", "restoring", "repair"] as const).map((p) => phaseLine(info([], p))!)];
     assert.equal(phaseLine(info([], "repair"))!, "いまは試せません（オーナーが直します）");
     for (const l of lines) for (const w of ["100%", "必ず", "すぐ反映", "戻りました"]) assert.ok(!l.includes(w), `${l}：${w}`);
+  });
+});
+
+describe("直しX：経理のタブを開いた時の読むは、少し前に読めたばかりなら省く", () => {
+  const T = Date.parse("2026-11-05T03:00:00.000Z");
+  test("決めた秒数の中だけ省く（読めていない・元に戻している・要復旧の時は省かない）", () => {
+    assert.equal(reuseOpenRead(null, T, 120, info([])), false, "まだ読めていない");
+    assert.equal(reuseOpenRead(T, T + 60_000, 120, info([])), true);
+    assert.equal(reuseOpenRead(T, T + 120_000, 120, info([])), false, "決めた秒数をこえたら読む");
+    assert.equal(reuseOpenRead(T, T - 1, 120, info([])), false, "時計が戻った時は読む");
+    assert.equal(reuseOpenRead(T, T + 1000, 120, null), false);
+    assert.equal(reuseOpenRead(T, T + 1000, 120, info([], "restoring")), false);
+    assert.equal(reuseOpenRead(T, T + 1000, 120, info([], "repair")), false);
+    assert.equal(reuseOpenRead(T, T + 1000, 120, info([], "free")), true);
   });
 });

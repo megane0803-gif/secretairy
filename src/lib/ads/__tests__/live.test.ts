@@ -9,6 +9,7 @@ import { emptyBook } from "../../book/state";
 import { getAds } from "../../data/seed";
 import { memoryStore, upstashStore, type KvStore } from "../../line/store";
 import { fakeUpstash } from "../../line/__tests__/fakeUpstash";
+import { shopClock } from "../../server/limits";
 import { checkPasscode } from "../../server/passcode";
 import { getAdSettings, getMenus, getShop, getSiteOrigin } from "../../settings";
 import { RESULT_FORMAT, SYNC_FORMAT, SYNC_VERSION, syncPayload, type SyncPayload } from "../connect";
@@ -86,9 +87,10 @@ function world(over: { env?: Record<string, string | undefined>; store?: KvStore
   return { google, store, deps };
 }
 
-function req(path: string, p: { method?: string; origin?: string | null; host?: string; body?: unknown; fetchSite?: string } = {}): Request {
+function req(path: string, p: { method?: string; origin?: string | null; host?: string; body?: unknown; fetchSite?: string; ip?: string } = {}): Request {
   const method = p.method ?? "POST";
   const h = new Headers({ host: p.host ?? HOST });
+  if (p.ip) h.set("x-real-ip", p.ip);
   if (p.origin !== null && method === "POST") h.set("origin", p.origin ?? SITE);
   if (p.fetchSite) h.set("sec-fetch-site", p.fetchSite);
   if (p.body !== undefined) h.set("content-type", "application/json");
@@ -98,7 +100,14 @@ const bodyOf = async (r: Response) => (await r.json()) as Record<string, any>;
 
 const setupReq = (...a: [passcode?: unknown, extra?: Record<string, unknown>]) => req("/api/ads/live/setup", { body: { passcode: a.length ? a[0] : PASS, ...(a[1] ?? {}) } });
 const sendReq = (payload: unknown, ...a: [passcode?: unknown]) => req("/api/ads/live/send", { body: { passcode: a.length ? a[0] : PASS, payload } });
-const readReq = () => req("/api/ads/live/read", { body: {} });
+const readReq = (ip?: string) => req("/api/ads/live/read", { body: {}, ip });
+/** 送り元を決めた「用意」「送る」（合言葉の間違いを送り元ごとに見る用） */
+const setupAt = (passcode: unknown, ip: string) => req("/api/ads/live/setup", { body: { passcode }, ip });
+const sendAt = (payload: unknown, passcode: unknown, ip: string) => req("/api/ads/live/send", { body: { passcode, payload }, ip });
+/** 合言葉の間違いの数を消す（1回ずつ数え直す用） */
+const clearWrong = async (w: { store: KvStore | null }) => {
+  for (const k of (w.store as ReturnType<typeof memoryStore>).keys()) if (k.startsWith("ads:live:pw:")) await w.store!.del(k);
+};
 const tryReq = (body: unknown, h: Record<string, string> = {}) => {
   const r = req("/api/ads/live/try", { body });
   const headers = new Headers(r.headers);
@@ -775,14 +784,13 @@ describe("オーナーだけ（合言葉）", () => {
     const n = w.google.calls.length;
     for (const p of [undefined, "", "ちがう合言葉ちがう合言葉ちがう", 1234, PASS + "x"]) {
       // 間違いの数の上限は下のテストで見る（ここでは1回ずつ数え直す）
-      for (const r of [await handleLiveSetup(setupReq(p), w.deps), (await w.store!.del(LIVE_KEY.wrong), await w.store!.del(LIVE_KEY.locked), await handleLiveSend(sendReq(payloadOf([STOP]), p), w.deps))]) {
+      for (const r of [await handleLiveSetup(setupReq(p), w.deps), (await clearWrong(w), await handleLiveSend(sendReq(payloadOf([STOP]), p), w.deps))]) {
         assert.equal(r.status, 401);
         const text = await r.text();
         assert.equal(JSON.parse(text).code, "wrong");
         clean(text);
       }
-      await w.store!.del(LIVE_KEY.wrong);
-      await w.store!.del(LIVE_KEY.locked);
+      await clearWrong(w);
     }
     assert.equal(w.google.calls.length, n);
   });
@@ -802,7 +810,7 @@ describe("オーナーだけ（合言葉）", () => {
     }
   });
 
-  test("間違いの数は窓口全体で1つ：上限をこえたら、合っている合言葉でも10分は受けない", async () => {
+  test("同じ送り元の間違いは1つに数える：上限をこえたら、その送り元は合っている合言葉でも10分は受けない", async () => {
     const w = await prepared();
     const max = live.passcode.maxWrong;
     for (let i = 0; i < max; i++) assert.equal((await bodyOf(await handleLiveSetup(setupReq(`wrong-${i}-xxxxxxxxxxxx`), w.deps))).code, "wrong");
@@ -817,17 +825,69 @@ describe("オーナーだけ（合言葉）", () => {
     assert.equal((await bodyOf(await handleLiveSend(sendReq(payloadOf([STOP])), w.deps))).ok, true);
   });
 
-  test("受けない10分は、上限に届いた時から数える（最初の間違いからではない）", async () => {
+  test("間違いの数は10分の区切りで数え、区切りが変われば0から（受けないのは長くてその区切りの終わりまで）", async () => {
     const w = await prepared();
     const max = live.passcode.maxWrong;
     const win = live.passcode.wrongWindowSeconds * 1000;
-    await handleLiveSetup(setupReq("wrong-first-xxxxxxxxxx"), w.deps);
-    clock += win - 60_000; // 最初の間違いから9分
-    for (let i = 1; i < max; i++) await handleLiveSetup(setupReq(`wrong-${i}-xxxxxxxxxxxx`), w.deps);
-    clock += 2 * 60_000; // 最初の間違いからは11分・上限に届いてからは2分
+    clock = Math.floor(clock / win) * win + 1000; // 区切りの頭
+    for (let i = 0; i < max; i++) await handleLiveSetup(setupReq(`wrong-${i}-xxxxxxxxxxxx`), w.deps);
+    clock += win - 60_000; // 同じ区切りの中（9分後）
     assert.equal((await bodyOf(await handleLiveSend(sendReq(payloadOf([STOP])), w.deps))).code, "locked");
-    clock += win;
+    clock += 2 * 60_000; // 次の区切り
     assert.equal((await bodyOf(await handleLiveSend(sendReq(payloadOf([STOP])), w.deps))).ok, true);
+    // 数の鍵には区切りの番号が入り、期限が付いている（期限の無い数を残さない）
+    const keys = (w.store as ReturnType<typeof memoryStore>).keys().filter((k) => k.startsWith("ads:live:pw:"));
+    assert.ok(keys.length >= 2 && keys.every((k) => /^ads:live:pw:(src|wide|all):\d+(:[0-9a-f]{32})?$/.test(k)), keys.join());
+  });
+
+  test("直しX：ある送り元の間違いで、ほかの送り元の正しい合言葉は止まらない（同じ送り元は止まる・どちらにも同じ文）", async () => {
+    const w = await prepared();
+    const max = live.passcode.maxWrong;
+    const bad = "198.51.100.66";
+    for (let i = 0; i < max + 3; i++) await handleLiveSetup(setupAt(`wrong-${i}-xxxxxxxxxxxx`, bad), w.deps);
+    // 同じ送り元：合っていても違っていても同じ「受けない」（合っているかを漏らさない）
+    const right = await bodyOf(await handleLiveSend(sendAt(payloadOf([STOP]), PASS, bad), w.deps));
+    const wrong = await bodyOf(await handleLiveSend(sendAt(payloadOf([STOP]), "wrong-again-xxxxxxxx", bad), w.deps));
+    assert.deepEqual(right, wrong);
+    assert.equal(right.code, "locked");
+    // ほかの送り元は、正しい合言葉で送れる
+    assert.equal((await bodyOf(await handleLiveSend(sendAt(payloadOf([STOP]), PASS, "198.51.100.67"), w.deps))).ok, true);
+    // IPv6 の /64 を変えても、同じ /48 の間違いは広い束で数える（ほかの /48 は止まらない）
+    const w2 = await prepared();
+    const wideMax = live.passcode.wideMaxWrong;
+    for (let i = 0; i < wideMax; i++) await handleLiveSetup(setupAt(`wrong-${i}-xxxxxxxxxxxx`, `2001:db8:7:${(i + 1).toString(16)}::1`), w2.deps);
+    const same48 = await bodyOf(await handleLiveSend(sendAt(payloadOf([STOP]), PASS, "2001:db8:7:ffff::1"), w2.deps));
+    assert.equal(same48.code, "locked");
+    assert.equal((await bodyOf(await handleLiveSend(sendAt(payloadOf([STOP]), PASS, "2001:db8:8:1::1"), w2.deps))).ok, true);
+  });
+
+  test("直しX：1つの送り元から同時にたくさん間違えても、ほかの送り元は止まらない", async () => {
+    const w = await prepared();
+    const p = live.passcode;
+    const rs = await Promise.all(Array.from({ length: 60 }, (_, i) => handleLiveSetup(setupAt(`wrong-${i}-xxxxxxxxxxxx`, "198.51.100.90"), w.deps)));
+    assert.ok(rs.every((r) => r.status === 401 || r.status === 429));
+    const all = (w.store as ReturnType<typeof memoryStore>).keys().filter((k) => k.startsWith("ads:live:pw:all:"));
+    assert.equal(all.length, 1);
+    assert.equal(await w.store!.get(all[0]), String(p.maxWrong));
+    assert.equal((await bodyOf(await handleLiveSend(sendAt(payloadOf([STOP]), PASS, "198.51.100.91"), w.deps))).ok, true);
+  });
+
+  test("直しX：窓口全体の止めは、送り元ごとの数よりずっと大きい（たくさんの送り元から一度に来た時のため）", async () => {
+    const w = await prepared();
+    const p = live.passcode;
+    assert.ok(p.allWindowSeconds > p.wrongWindowSeconds && p.wideMaxWrong > p.maxWrong);
+    // 窓口全体の止めは、送り元ごとの数より、ずっと大きい
+    const per = p.allWindowSeconds / p.wrongWindowSeconds;
+    assert.ok(p.allMaxWrong > 10 * p.maxWrong * per * 2, "送り元ごとの数より、ずっと大きい");
+    assert.ok(p.allMaxWrong > p.wideMaxWrong * per * 5, "広い束ごとの数より、ずっと大きい");
+    // 送り元を変えながら全体の上限まで間違える（1つの送り元は上限より少なく）
+    for (let i = 0; i < p.allMaxWrong; i++) await handleLiveSetup(setupAt(`wrong-${i}-xxxxxxxxxxxx`, `10.${(i >> 8) & 255}.${i & 255}.1`), w.deps);
+    const right = await bodyOf(await handleLiveSend(sendReq(payloadOf([STOP])), w.deps));
+    const wrong = await bodyOf(await handleLiveSend(sendReq(payloadOf([STOP]), "wrong-again-xxxxxxxx"), w.deps));
+    assert.equal(right.code, "locked");
+    assert.deepEqual(right, wrong, "合っているかを漏らさない");
+    clock += p.allWindowSeconds * 1000;
+    assert.equal((await bodyOf(await handleLiveSend(sendReq(payloadOf([STOP])), w.deps))).ok, true, "区切りが変われば受ける");
   });
 
   test("合言葉の比べ方は共通（試験の合言葉も同じ関数）", () => {
@@ -863,6 +923,61 @@ describe("置き場（1日の上限・動いている印）", () => {
     assert.equal(await w.store!.get(LIVE_KEY.lock), "other", "ほかの印は消さない");
   });
 
+  test("直しX：読み直すも同じ送り元の数で止める：1つの送り元が使い切っても、ほかの送り元は読み直せる", async () => {
+    const w = await prepared();
+    const L = live.read;
+    let ok = 0;
+    for (let i = 0; i < L.source.day + 5; i++) {
+      clock += 11 * 60_000; // 1分・1時間の上限に当てない
+      const r = await handleLiveRead(readReq("198.51.100.77"), w.deps);
+      if (r.status === 200) ok++;
+      else {
+        const b = await bodyOf(r);
+        assert.equal(b.code, "limit");
+        assert.match(b.message, /同じ送り元/);
+      }
+    }
+    assert.equal(ok, L.source.day);
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: getShop().timezone }).format(new Date(clock));
+    assert.ok(Number(await w.store!.get(`${LIVE_KEY.readPrefix}:day:${day}`)) <= L.source.day, "その送り元の上限までしか全体に足さない");
+    assert.equal((await handleLiveRead(readReq("198.51.100.78"), w.deps)).status, 200, "ほかの送り元は読み直せる");
+    // 1分に続けて押しても、同じ送り元の1分の数で止まる（ほかの送り元は止めない）
+    for (let i = 0; i < L.source.minute; i++) assert.equal((await handleLiveRead(readReq("198.51.100.79"), w.deps)).status, 200);
+    assert.equal((await handleLiveRead(readReq("198.51.100.79"), w.deps)).status, 429);
+    assert.equal((await handleLiveRead(readReq("198.51.100.80"), w.deps)).status, 200);
+  });
+
+  test("直しX：送った後の読み直しが1時間・1分の上限の時は「明日」と言わずにサーバーの文（1日の上限は今の1行）", () => {
+    const day = readFailedAfter("send", { ok: false, code: "limit", message: `今日の「読み直す」は${live.read.site.day}回までです` });
+    assert.match(day, new RegExp(READ_LIMIT_NOTE));
+    const soon = readFailedAfter("send", { ok: false, code: "limit", message: "「読み直す」が続いたので、しばらく（長くて1時間）待ってから押してください" });
+    assert.doesNotMatch(soon, /明日/);
+    assert.match(soon, /しばらく（長くて1時間）待ってから押してください。$/);
+  });
+
+  test("直しX：オーナーがふつうに用意・送るを続けても、送った後の読み直しは上限に当たらない", async () => {
+    const w = await prepared();
+    const IP = "203.0.113.40";
+    // 1時間のうちに、送る（と送った後の読み直し）を10回・手で読み直す数回
+    for (let i = 0; i < 10; i++) {
+      clock += 4 * 60_000;
+      assert.equal((await handleLiveSend(sendAt(payloadOf([STOP]), PASS, IP), w.deps)).status, 200, `送る ${i}`);
+      assert.equal((await handleLiveRead(readReq(IP), w.deps)).status, 200, `送った後の読み直し ${i}`);
+    }
+    for (let i = 0; i < 2; i++) assert.equal((await handleLiveRead(readReq(IP), w.deps)).status, 200, `手で読み直す ${i}`);
+    // 1日の送るの上限まで送っても、送った後の読み直しの1日の数に届かない
+    assert.ok(live.read.source.day >= live.daily.send + live.daily.setup + 10);
+  });
+
+  test("直しX：読み直すと試すの数え方は同じ部品（src/lib/server/limits.ts の countCall）", () => {
+    const src = readFileSync("src/lib/ads/live/server.ts", "utf8");
+    assert.match(src, /countCall\(/);
+    assert.match(src, /LIVE_KEY\.readPrefix, d\.settings\.read/);
+    assert.match(src, /LIVE_KEY\.tryPrefix, d\.settings\.try\.limits/);
+    assert.match(readFileSync("src/lib/freee/try.ts", "utf8"), /countCall\(/);
+    for (const f of ["src/lib/ads/live/server.ts", "src/lib/freee/try.ts"]) assert.doesNotMatch(readFileSync(f, "utf8"), /perSourceDay|perSenderDaily/, f);
+  });
+
   test("同時に2回来ても、片方だけが送る", async () => {
     const w = await prepared();
     const [a, b] = await Promise.all([handleLiveSend(sendReq(payloadOf([EXCLUDE])), w.deps), handleLiveSend(sendReq(payloadOf([EXCLUDE])), w.deps)]);
@@ -875,11 +990,14 @@ describe("置き場（1日の上限・動いている印）", () => {
   test("1日の上限は KvStore で数える（先に足してから比べる。同時に来ても数えもれが無い）", async () => {
     const w = await prepared();
     const day = new Intl.DateTimeFormat("en-CA", { timeZone: getShop().timezone }).format(new Date(clock));
-    const rs = await Promise.all(Array.from({ length: live.daily.read + 3 }, () => handleLiveRead(readReq(), w.deps)));
+    // 読み直す：全体の1分の数（送り元はみな違う）
+    const R = live.read.site.minute;
+    const rs = await Promise.all(Array.from({ length: R + 3 }, (_, i) => handleLiveRead(readReq(`198.51.100.${i + 1}`), w.deps)));
     const codes = await Promise.all(rs.map(async (r) => (await bodyOf(r)).code ?? "ok"));
-    assert.equal(codes.filter((x) => x === "ok").length, live.daily.read);
+    assert.equal(codes.filter((x) => x === "ok").length, R);
     assert.equal(codes.filter((x) => x === "limit").length, 3);
-    assert.equal(await w.store!.get(LIVE_KEY.day(day, "read")), String(live.daily.read + 3));
+    assert.equal(await w.store!.get(`${LIVE_KEY.readPrefix}:min:${Math.floor(clock / 60_000)}`), String(R + 3));
+    assert.equal(await w.store!.get(`${LIVE_KEY.readPrefix}:day:${day}`), String(R), "1分でこえた分は、先の1時間・1日に足さない");
     // 送る
     await w.store!.set(LIVE_KEY.day(day, "send"), String(live.daily.send), { ex: 3600 });
     assert.equal((await bodyOf(await handleLiveSend(sendReq(payloadOf([STOP])), w.deps))).code, "limit");
@@ -1039,7 +1157,7 @@ describe("画面の印（直しR の読み込みと同じ道）", () => {
   });
 
   // ── 直しT：送った後・用意した後に、送る前に読んだ古い一覧を残さない（画面の流れは live/panel.ts） ──
-  const READ_DAY = LIVE_KEY.day(TODAY, "read");
+  const READ_DAY = `${LIVE_KEY.readPrefix}:day:${TODAY}`;
   const readCount = async (w: Awaited<ReturnType<typeof prepared>>) => Number((await w.store!.get(READ_DAY)) ?? 0);
 
   /** 画面の流れを、作り物の Google の窓口につなぐ（合言葉は押した時に渡す） */
@@ -1143,7 +1261,7 @@ describe("画面の印（直しR の読み込みと同じ道）", () => {
     const w = await prepared();
     const p = panelOf(w);
     await readBefore(p);
-    for (let n = await readCount(w); n < live.daily.read; n++) await w.store!.incr(READ_DAY, 86400);
+    for (let n = await readCount(w); n < live.read.site.day; n++) await w.store!.incr(READ_DAY, 86400);
     await p.panel.send(PASS);
     const v = p.panel.view();
     assert.equal(v.read, null, "古い一覧は消す");
@@ -1351,10 +1469,10 @@ describe("画面の印（直しR の読み込みと同じ道）", () => {
     assert.equal(p.panel.view().tried, null, "戻した後は知らせを出さない");
     assert.equal(p.panel.view().read, null, "戻した後は一覧を出さない");
     // 上限：理由つきで「いまは送れませんでした」
-    const p2 = panelOf(w, { try: async () => ({ ok: false, code: "limit", message: `今日の試しは、同じ送り元から${live.try.perSourceDay}回までです。明日また試せます` }) });
+    const p2 = panelOf(w, { try: async () => ({ ok: false, code: "limit", message: `今日の試しは、同じ送り元から${live.try.limits.source.day}回までです。明日また試せます` }) });
     await p2.panel.tryOne({ kind: "stop", no: 7, text: "髪型 流行り" });
     const note = approvedNotice({ kind: "stop", no: 7, text: "髪型 流行り", todo: true, route: "started" }, p2.panel.view().tried, "ads");
-    assert.equal(note, `7番「髪型 流行り」：広告の管理画面には反映しました。テスト用の広告アカウントへは、いまは送れませんでした（今日の試しは、同じ送り元から${live.try.perSourceDay}回までです。明日また試せます）。ToDo に「効いたか見る」を足しました。`);
+    assert.equal(note, `7番「髪型 流行り」：広告の管理画面には反映しました。テスト用の広告アカウントへは、いまは送れませんでした（今日の試しは、同じ送り元から${live.try.limits.source.day}回までです。明日また試せます）。ToDo に「効いたか見る」を足しました。`);
   });
 
   test("直しU：オーナーの印は、試しで元に戻した後なら「比べない側」の1行になる", async () => {
@@ -1444,7 +1562,7 @@ describe("画面の印（直しR の読み込みと同じ道）", () => {
 describe("直しU：だれでも承認したら試す（元の形に戻す → 1件 → 読み直す）", () => {
   const DAY = "2026-11-07";
   const IP = "203.0.113.7";
-  const T = live.try;
+  const T = { ...live.try, perSourceDay: live.try.limits.source.day, minute: live.try.limits.site.minute, day: live.try.limits.site.day };
   type Mem = ReturnType<typeof memoryStore>;
   const SETUP = getAds().keywords.map((k) => k.text);
 
@@ -1512,7 +1630,7 @@ describe("直しU：だれでも承認したら試す（元の形に戻す → 1
     assert.deepEqual(m[0].ops, m[1].ops);
     // 送った後に読み直した（この窓口の中で。「読み直す」の数には足さない）
     assert.ok(w.google.searchCount > s0 + 6);
-    assert.equal(await w.store!.get(LIVE_KEY.day(DAY, "read")), null);
+    assert.equal(await w.store!.get(`${LIVE_KEY.readPrefix}:day:${DAY}`), null);
     const k7 = r1.b.list.keywords.find((k: any) => k.text === "髪型 流行り");
     assert.equal(k7.status, "止めている");
     assert.equal(r1.b.list.negatives.length, 0);
@@ -1735,7 +1853,7 @@ describe("直しU：だれでも承認したら試す（元の形に戻す → 1
     assert.equal(w.google.mutateCalls.length, n);
     // 合言葉の間違いの数には何も足さない（合言葉の欄を付けても読まない）
     await tryBody(w, { kind: "stop", no: 7, passcode: "wrong-wrong-wrong-wrong" });
-    assert.equal(await w.store!.get(LIVE_KEY.wrong), null);
+    assert.deepEqual((w.store as ReturnType<typeof memoryStore>).keys().filter((k) => k.startsWith("ads:live:pw:")), []);
   });
 
   test("同時に1回：オーナーの用意・送ると同じ印。動いている時は書かずに 409「ほかの人が試しています〜」", async () => {
@@ -1761,7 +1879,7 @@ describe("直しU：だれでも承認したら試す（元の形に戻す → 1
     {
       const w = await prepared();
       for (let i = 0; i < T.perSourceDay; i++) {
-        clock += 61_000; // 1分の上限に当てない
+        clock += 13 * 60_000; // 1分・1時間の上限に当てない
         assert.equal((await tryBody(w, { kind: "stop", no: 7 })).status, 200, `${i}`);
       }
       const n = w.google.mutateCalls.length;
@@ -1774,8 +1892,8 @@ describe("直しU：だれでも承認したら試す（元の形に戻す → 1
       clock += 61_000;
       assert.equal((await tryBody(w, { kind: "stop", no: 3 }, { "x-real-ip": "198.51.100.9" })).status, 200);
       // オーナーの数は減らない・合言葉の間違いの数も変わらない
-      for (const k of ["setup", "send", "read", "stop"] as const) assert.equal(await w.store!.get(LIVE_KEY.day(DAY, k)), k === "setup" ? "1" : null, k);
-      assert.equal(await w.store!.get(LIVE_KEY.wrong), null);
+      for (const k of ["setup", "send", "stop"] as const) assert.equal(await w.store!.get(LIVE_KEY.day(DAY, k)), k === "setup" ? "1" : null, k);
+      assert.deepEqual((w.store as Mem).keys().filter((k) => k.startsWith("ads:live:pw:") || k.startsWith(LIVE_KEY.readPrefix)), []);
       assert.equal((await handleLiveRead(readReq(), w.deps)).status, 200);
       assert.equal((await handleLiveSend(sendReq(payloadOf([STOP])), w.deps)).status, 200);
     }
@@ -1804,7 +1922,7 @@ describe("直しU：だれでも承認したら試す（元の形に戻す → 1
   test("送り元：Vercel が付ける IP（x-real-ip、無ければ x-vercel-forwarded-for）だけ。見出しを偽っても数は変わらない・生の IP は KV にもログにも出ない・塩は日ごと", async () => {
     const w = await prepared();
     const mem = w.store as Mem;
-    const srcKeys = () => mem.keys().filter((k) => k.startsWith("ads:live:try:src:"));
+    const srcKeys = () => mem.keys().filter((k) => k.startsWith(`ads:live:try:src:${DAY}:`));
     for (const h of [{}, { "x-forwarded-for": "10.0.0.1" }, { "x-forwarded-for": "10.0.0.2, 10.0.0.3" }, { forwarded: "for=10.0.0.4" }, { "x-client-ip": "10.0.0.5" }, { "cf-connecting-ip": "10.0.0.6" }] as Record<string, string>[]) {
       clock += 61_000;
       await tryBody(w, { kind: "stop", no: 7 }, h);
@@ -1867,7 +1985,7 @@ describe("直しU：だれでも承認したら試す（元の形に戻す → 1
     await w2.store!.set(LIVE_KEY.lock, "owner-is-sending", { ex: live.lockSeconds });
     assert.equal((await tryBody(w2, { kind: "stop", no: 7 })).status, 409);
     const mem = w2.store as Mem;
-    const src = mem.keys().filter((k) => k.startsWith("ads:live:try:src:"));
+    const src = mem.keys().filter((k) => k.startsWith(`ads:live:try:src:${DAY}:`));
     assert.equal(src.length, 1);
     assert.equal(await mem.get(src[0]), "1");
     assert.equal(await mem.get(LIVE_KEY.tryDay(DAY)), "1");
@@ -1885,10 +2003,10 @@ describe("直しU：だれでも承認したら試す（元の形に戻す → 1
     const w = await prepared();
     const mem = w.store as Mem;
     for (let i = 0; i < T.perSourceDay; i++) {
-      clock += 61_000;
+      clock += 13 * 60_000;
       assert.equal((await tryBody(w, { kind: "stop", no: 7 }, { "x-real-ip": `2001:db8:1:2:${(i + 1).toString(16)}::${i + 7}` })).status, 200, `${i}`);
     }
-    assert.equal(mem.keys().filter((k) => k.startsWith("ads:live:try:src:")).length, 1);
+    assert.equal(mem.keys().filter((k) => k.startsWith(`ads:live:try:src:${DAY}:`)).length, 1);
     clock += 61_000;
     const over = await tryBody(w, { kind: "stop", no: 7 }, { "x-real-ip": "2001:db8:1:2:ffff:ffff:ffff:fffe" });
     assert.equal(over.status, 429);
@@ -1897,6 +2015,36 @@ describe("直しU：だれでも承認したら試す（元の形に戻す → 1
     clock += 61_000;
     assert.equal((await tryBody(w, { kind: "stop", no: 7 }, { "x-real-ip": "2001:db8:1:3::1" })).status, 200);
     for (const k of mem.keys()) assert.ok(!k.includes("2001:db8"), k);
+  });
+
+  test("直しX：/64 を変えても同じ /48 は広い束で止まる（全体の1日には届かない・ほかの /48 は試せる）", async () => {
+    const w = await prepared();
+    const L = live.try.limits;
+    let ok = 0;
+    for (let i = 0; i < L.wide.day + 5; i++) {
+      clock += 7 * 60_000; // 1分・1時間の上限に当てない
+      const r = await tryBody(w, { kind: "stop", no: 7 }, { "x-real-ip": `2001:db8:5:${(i + 1).toString(16)}::1` });
+      if (r.status === 200) ok++;
+      else assert.match(r.b.message, /同じ所から/);
+    }
+    assert.equal(ok, L.wide.day);
+    assert.ok(Number(await w.store!.get(LIVE_KEY.tryDay(DAY))) <= L.wide.day);
+    assert.equal((await tryBody(w, { kind: "stop", no: 7 }, { "x-real-ip": "2001:db8:6:1::1" })).status, 200);
+  });
+
+  test("直しX：全体の1時間の割り振り：使い切ったら「しばらく」、次の時には試せる", async () => {
+    const w = await prepared();
+    const L = live.try.limits;
+    const hourKey = (ms: number) => {
+      const c = shopClock(getShop().timezone, ms);
+      return `${LIVE_KEY.tryPrefix}:hour:${c.date}T${c.hour}`;
+    };
+    await w.store!.set(hourKey(clock), String(L.site.hour), { ex: 3600 });
+    const r = await tryBody(w, { kind: "stop", no: 7 }, { "x-real-ip": "198.51.100.40" });
+    assert.equal(r.status, 429);
+    assert.match(r.b.message, /長くて1時間/);
+    clock = Math.floor(clock / 3_600_000) * 3_600_000 + 3_600_000 + 1000;
+    assert.equal((await tryBody(w, { kind: "stop", no: 7 }, { "x-real-ip": "198.51.100.40" })).status, 200);
   });
 
   test("KV が使えない時は書かない（置き場が無い・塩を置けない・戻した時刻を置けない）", async () => {
@@ -2022,6 +2170,8 @@ describe("直しW：日ごとの塩は、置けた時は自分の値をそのま
 
   test("その日の最初の1回（塩を作る時）：置いた直後の GET が null を返しても、503 にならずに通る（塩は自分の値・GET はしない）", async () => {
     const w = await prepared();
+    // 用意（合言葉の間違いを送り元ごとに数えるので塩を作る）の後に、塩だけ消して「その日の最初」にする
+    await w.store!.del(SALT);
     const lag = lagging(w.store!);
     w.deps.store = lag.store;
     const r = await handleLiveTry(tryReq({ kind: "stop", no: 7 }), w.deps);
@@ -2070,6 +2220,8 @@ describe("直しW：書くのは元の所・読むのは写しから、の作り
   /** 本番と同じく、窓口の1回の呼び出しごとに置き場を作る（sync token は呼び出しをまたがない）。呼び出しの間には写しが追いつく */
   async function setupWith(up: ReturnType<typeof fakeUpstash>) {
     const w = await prepared({ store: upstashStore(CONF, up.fetch) });
+    // 用意（合言葉の間違いを送り元ごとに数えるので塩を作る）の後に、塩だけ消して「その日の最初」にする
+    await upstashStore(CONF, up.fetch).del(LIVE_KEY.trySalt(DAY));
     up.catchUp();
     return w;
   }
@@ -2179,6 +2331,13 @@ describe("鍵の扱い（リポジトリ・設定）", () => {
 });
 
 describe("README", () => {
+  test("直しX：上限と合言葉の間違いの数え方は今の作り（前の数え方を残さない・段ごとの数を並べない）", () => {
+    const readme = readFileSync("README.md", "utf8");
+    for (const old of [/窓口全体で10分に5回/, /窓口全体の間違いの数/, /IPv6 は前の半分（\/64）でまとめる/, /IPv6 は前の半分 \/64 で1つ/, /サイト全体100回/, /1日100回（サイト全体）/, /読み直す60回/, /1日600回/, /同じ送り元から1日10回/])
+      assert.doesNotMatch(readme, old, String(old));
+    for (const now of ["送り元ごとに区切りつきで数え", "ずっと大きい止めとして残しています", "同じ送り元・同じ広い束・サイト全体の順に数え", "1つの送り元・1つの /48 だけでは、全体の上限を使い切れない数", "1日に加えて1時間ごとにも分けています", "もう1つ広い /48 でまとめて数える", "`live.read`"]) assert.ok(readme.includes(now), now);
+  });
+
   test("直しU：だれでも試せる道（元に戻してから1件・テスト用アカウントの中だけ・店の広告に届かない理由・オーナーの送るとの違い・窓口の守りの表）", () => {
     const readme = readFileSync("README.md", "utf8");
     const sec = readme.slice(readme.indexOf("#### だれでも試せる道（直しU。合言葉なし）"), readme.indexOf("- **何を**（オーナーの操作）"));
@@ -2225,7 +2384,7 @@ describe("README", () => {
     assert.match(proof, /確かめていないこと：回数の上限を本番で使い切ること・連打・日付が変わった後の最初の1回/);
     assert.doesNotMatch(proof, /まだ呼んでいません|上の表には入れていません/);
     assert.match(proof, /「書けるか」は、環境変数とオーナー用の合言葉の設定があるかから決めた札で、Google に書けたことの確かめではありません/);
-    assert.match(proof, /合言葉なしで送った時も、間違いの数に1つ足す作り/);
+    assert.match(proof, /間違いは送り元ごとに数えます/);
     assert.doesNotMatch(proof, /100%|必ず|すぐ反映|数を使わない/);
     assert.doesNotMatch(sec, /100%|必ず|すぐ反映/);
     assert.doesNotMatch(sec, /出せる広告です/);

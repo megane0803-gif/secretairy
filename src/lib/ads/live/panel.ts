@@ -54,7 +54,8 @@ const MAY_HAVE_CHANGED = new Set(["lost", "unknown", "failed"]);
  */
 export function readFailedAfter(after: "setup" | "send", r: LiveFail): string {
   const head = after === "send" ? "送った結果は「くわしく」の中に出ています。" : "用意した結果は「くわしく」の中に出ています。";
-  if (r.code === "limit") return head + READ_LIMIT_NOTE;
+  // 1日の上限は決まった1行。1時間・1分の上限（「しばらく」「1分ほど」）は、明日と言わずにサーバーの文のまま
+  if (r.code === "limit") return head + (r.message.includes("今日") ? READ_LIMIT_NOTE : `${r.message.replace(/。$/, "")}。`);
   // 返事が届かなかった時の文は「送れたか分かりません」なので、読み直しの所では使わない
   const why = r.code === "lost" ? "返事が届きませんでした" : r.message.replace(/。$/, "");
   return `${head}いまは読み直せませんでした（${why}）`;

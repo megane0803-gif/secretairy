@@ -50,6 +50,8 @@ export function fakeUpstash(o: { now: () => number; honorSyncToken?: boolean; fa
       }
       case "EXPIRE":
         if (!e) return 0;
+        // NX：期限がまだ無い時だけ付ける（Redis 7 の EXPIRE の NX）
+        if (c[3] === "NX" && e.until !== Infinity) return 0;
         e.until = o.now() + Number(c[2]) * 1000;
         return 1;
       case "RPUSH": {

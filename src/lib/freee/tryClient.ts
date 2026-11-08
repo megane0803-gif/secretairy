@@ -102,6 +102,16 @@ export async function tryRegister(post: Post, p: { id: number; use: CardUse; lab
   return { result: "unconfirmed", message: `${p.label}。テスト用の事業所に登録しました。読み直しでは、まだ入ったのを確かめられていません。少し待ってから「読み直す」を押してください`, read: again };
 }
 
+/**
+ * 経理のタブを開いた時の読むを省くか（来た人の窓口の回数を、タブの行き来で使わないように）。
+ * 省くのは、この画面で reuseSeconds 秒の中に読めたばかり（lastOkAt）の時だけ。「読み直す」と登録の後の読み直しは省かない。
+ * 試しの様子が「元に戻しています」「要復旧」の時は省かない（元に戻すのは、次の呼び出しで動くため）。
+ */
+export function reuseOpenRead(lastOkAt: number | null, now: number, reuseSeconds: number, info: TryInfo | null): boolean {
+  if (lastOkAt === null || !info || info.phase === "restoring" || info.phase === "repair") return false;
+  return now >= lastOkAt && now - lastOkAt < reuseSeconds * 1000;
+}
+
 /** 試しの様子の1行（だれかが試している・元に戻している・試せない） */
 export function phaseLine(info: TryInfo): string | null {
   if (info.phase === "repair") return "いまは試せません（オーナーが直します）";

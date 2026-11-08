@@ -25,7 +25,7 @@ import {
   type RunDeps,
 } from "./run";
 import { hasStarted, importHeld, isSending, parseFreee, recordKeys, stateOf, withLinked, type FreeeRecord } from "./state";
-import { tryRead, tryRegister, type TryInfo, type TryRead, type TryRegisterOutcome } from "./tryClient";
+import { reuseOpenRead, tryRead, tryRegister, type TryInfo, type TryRead, type TryRegisterOutcome } from "./tryClient";
 
 export type FreeeStatus = "loading" | "connected" | "none" | "expired" | "off" | "not-set" | "no-company-id" | "wrong-company";
 
@@ -257,9 +257,13 @@ const subscribeTry = (f: () => void) => {
   return () => tryListeners.delete(f);
 };
 
+/** この画面で、来た人の窓口から最後に読めた時刻（画面のメモリの中だけ。開いた時の読むを省くかに使う） */
+let lastTryOkAt: number | null = null;
+
 /** 来た人の読む・読み直すの答えを、一覧と試しの様子に入れる */
 function applyTryRead(r: TryRead): void {
   if (r.kind === "ok") {
+    lastTryOkAt = Date.now();
     setTry({ on: true, info: r.info, line: null });
     setList({ phase: "ok", list: r.list });
   } else if (r.kind === "not-connected") {
@@ -321,7 +325,9 @@ function openAccounting(): Promise<void> {
       if (!rec.linked) writeBrowser(FREEE_KEY, JSON.stringify(withLinked(parseFreee(read()), true)));
       await loadList();
     } else if (a.status === "none" && !rec.linked && !hasStarted(rec)) {
-      // cookie が無い画面（来た人も）：サーバーがつながりを持っていれば、来た人の窓口から読む
+      // cookie が無い画面（来た人も）：サーバーがつながりを持っていれば、来た人の窓口から読む。
+      // この画面で少し前に読めたばかりなら、開いた時の読むは省く（タブの行き来で回数を使わない。「読み直す」は省かない）
+      if (tryState.on && reuseOpenRead(lastTryOkAt, Date.now(), getFreeeSettings().try.openReuseSeconds, tryState.info)) return;
       await tryReload();
       if (!tryState.on) setList({ phase: "idle" });
     } else if (a.status === "expired" || a.status === "none") {
